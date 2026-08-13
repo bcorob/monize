@@ -99,7 +99,7 @@ services:
       - "127.0.0.1:${BACKEND_PORT:-3000}:3000"
     networks:
       - finance-network
-    command: sh -c "npm run build && node dist/db-init.js && node dist/db-migrate.js && if [ \"$$DEMO_MODE\" = 'true' ]; then node dist/database/seed.js; fi && npm run start:dev"
+    command: sh -c "npm ci && npm run build && node dist/db-init.js && node dist/db-migrate.js && if [ \"$$DEMO_MODE\" = 'true' ]; then node dist/database/seed.js; fi && npm run start:dev"
 
   # Frontend (Next.js)
   frontend:
