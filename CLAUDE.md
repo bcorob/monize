@@ -478,6 +478,30 @@ Nested totals need their own answer, too. A per-account total is converted into 
 different conversion graphs, so a portfolio can be complete at the top and
 unconvertible underneath. A global flag cannot speak for a total it did not compute.
 
+### `created_at` cannot order rows written in one transaction
+
+`CURRENT_TIMESTAMP` is **transaction start time** in PostgreSQL, and TypeORM
+leans on that column default rather than sending a per-row value. So every row a
+single transaction writes -- a whole `.mny` import, a whole restore -- carries
+the *same* `created_at`, and any ordering that tiebreaks on it falls through to
+whatever comes next. In the register that was `id`, a random UUID: same-day
+imported rows were listed in an arbitrary order.
+
+Nothing about a stored balance depends on that, which is why it survived; the
+running balance beside it does. A purchase and the transfer that funded it on
+the same day are two rows, and with the debit ordered first the register shows
+the account overdrawn on a day it was never short -- recovering one row later,
+so it reads as a broken balance rather than a broken sort.
+
+When the clock cannot separate two rows, their signs do: **credits are ordered
+before debits, chronologically**, which for a newest-first list means the
+tiebreak runs *opposite* to the list direction. `applyRegisterOrder`
+(`backend/src/transactions/register-order.ts`) is the only place that order is
+written -- and the reason it has to be one place is that three of its four call
+sites are not the register at all, but the queries that sum the rows on previous
+pages to find where page N's running balance starts. A tiebreak added to the
+register alone re-splits the pages under those sums.
+
 ### The difference of two 4dp decimals is not a 4dp decimal
 
 `roundMoney` the delta, not just its operands. `newAmount - oldAmount` on two

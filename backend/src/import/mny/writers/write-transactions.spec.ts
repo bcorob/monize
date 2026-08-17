@@ -107,6 +107,23 @@ describe("writeTransactions", () => {
     });
   });
 
+  it("carries the reference number into the column the register's Ref # reads", async () => {
+    // `transactions.reference_number` is what the register's Ref # column
+    // renders, so a value the mapper decoded has to survive this far to be the
+    // fix issue #1174 asked for. Nothing between here and the mapper asserted
+    // that the field was written at all.
+    const { manager, transactions } = doubles();
+
+    await writeTransactions(manager, "user-1", {
+      ...baseInput,
+      transactions: [transaction({ referenceNumber: "14" })],
+    });
+
+    expect(transactions.insert.mock.calls[0][0][0]).toMatchObject({
+      referenceNumber: "14",
+    });
+  });
+
   it("skips a transaction whose account was excluded from the import", async () => {
     const { manager, transactions } = doubles();
 

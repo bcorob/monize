@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from "fs";
 import { join } from "path";
 
 /**
- * Guards the generated `xx` pseudo-locale (see scripts/i18n-pseudo.mjs).
+ * Guards the generated `xx` pseudo-locale (see backend/scripts/i18n-pseudo.mjs).
  *
  * The frontend ships an `xx` pseudo-locale so untranslated UI strings stand out
  * during QA; the backend must mirror it so server-sent strings (exception
@@ -13,7 +13,7 @@ const localesDir = join(__dirname, "locales");
 const enDir = join(localesDir, "en");
 const xxDir = join(localesDir, "xx");
 
-/** Mirror of pseudoValue in scripts/i18n-pseudo.mjs. */
+/** Mirror of pseudoValue in backend/scripts/i18n-pseudo.mjs. */
 function pseudoValue(value: unknown): unknown {
   if (typeof value === "string") return `[XX-${value}-XX]`;
   if (Array.isArray(value)) return value.map(pseudoValue);

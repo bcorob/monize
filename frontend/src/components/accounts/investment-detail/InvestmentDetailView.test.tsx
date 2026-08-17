@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, act, waitFor, fireEvent } from '@/test/render';
+import { render, screen, act, waitFor } from '@/test/render';
 import { InvestmentDetailView } from './InvestmentDetailView';
 import type { Account } from '@/types/account';
 
@@ -125,12 +125,26 @@ describe('InvestmentDetailView', () => {
     expect(screen.getByText('$100.00')).toBeInTheDocument();
   });
 
-  it('links to the full investments view for this account', async () => {
+  // The header owns both actions now (InvestmentDetailActions), so the body
+  // must not grow a second copy of either.
+  it('renders no action row of its own', async () => {
     await renderView();
+    expect(screen.queryByRole('button', { name: 'Open in Investments' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Refresh Prices' })).not.toBeInTheDocument();
+  });
+
+  it('re-fetches when the header bumps the refresh key', async () => {
+    let rendered: ReturnType<typeof render>;
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Open in Investments' }));
+      rendered = render(<InvestmentDetailView account={brokerage} refreshKey={0} />);
     });
-    expect(mockPush).toHaveBeenCalledWith('/investments?accountId=br-1');
+    await waitFor(() => expect(mockGetPortfolioSummary).toHaveBeenCalledTimes(1));
+
+    await act(async () => {
+      rendered!.rerender(<InvestmentDetailView account={brokerage} refreshKey={1} />);
+    });
+
+    await waitFor(() => expect(mockGetPortfolioSummary).toHaveBeenCalledTimes(2));
   });
 
   it('falls back to a standalone brokerage when there is no pair', async () => {

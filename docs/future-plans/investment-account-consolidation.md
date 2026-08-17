@@ -151,7 +151,7 @@ test insisted:
 | Surface | Linked pair | Standalone (sub-type NULL) | Orphan brokerage | Orphan cash |
 |---|---|---|---|---|
 | Account list | 1 row; combined value; caption "Investments X / Cash Y" | 1 row; market value + own balance | 1 row; market value + own balance; no cash caption | 1 row; own balance; suffix stripped |
-| Row click | `/investments?accountId={brokerageId}` (unchanged) | same | same | `/transactions?accountId=` (unchanged) |
+| Row click | `/accounts/{brokerageId}` | `/transactions?accountId=` (no brokerage sub-type to go on) | `/accounts/{brokerageId}` | `/transactions?accountId=` |
 | Detail `/accounts/{id}` | merged view; a cash-id deep link `router.replace`s to the brokerage id | merged view | merged view | investment detail fallback (as today) |
 | Register toggle in detail | brokerage tab = investment transactions; cash tab = cash half's ledger | cash tab = own ledger | cash tab = own ledger | n/a |
 | Reconcile | targets the cash half | targets self | hidden (own ledger is trade-generated rows only) | targets self |

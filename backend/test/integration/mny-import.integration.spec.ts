@@ -686,6 +686,38 @@ describe("mny writers (integration)", () => {
       expect(row!.status).not.toBe("VOID");
     });
 
+    // The sibling bug, and the same shape of mistake: 0x80 also decided whether
+    // `szId` was a reference, so a loan row's payment number was dropped and the
+    // register's Ref # column was empty for every payment of every loan
+    // (issue #1174). Asserted here rather than at the mapper because Ref # reads
+    // `transactions.reference_number`, and that column is what has to hold it.
+    it("stores a loan-account row's payment number in reference_number", async () => {
+      const { input } = await setup(
+        transactionData({
+          transactions: [
+            mnyTransaction({
+              handle: 1,
+              account: 9,
+              amount: 412.6,
+              flags: 0x80,
+              // Money's packed form: kind digit `0`, then the number Money's
+              // loan register shows as Pmt Num, right-aligned.
+              reference: "0          14",
+            }),
+          ],
+        }),
+      );
+
+      await inTransaction((manager) =>
+        writeTransactions(manager, userId, input),
+      );
+
+      const row = await dataSource.getRepository(Transaction).findOne({
+        where: { userId },
+      });
+      expect(row!.referenceNumber).toBe("14");
+    });
+
     it("writes more rows than one chunk holds", async () => {
       const rows = Array.from({ length: 1200 }, (_, index) =>
         mnyTransaction({

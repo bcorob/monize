@@ -303,7 +303,7 @@ describe("runtimeRoleViolations -- exempt role membership (DR-V2)", () => {
     //
     // A source scan, because the fix is the SHAPE of the predicate: the ownership
     // question has to be asked with the candidate as the subject, not the runtime
-    // role. `rls-elevation-and-role.integration.spec.ts` proves the behaviour.
+    // role. `runtime-role.integration.spec.ts` proves the behaviour.
     const reachableArm = RUNTIME_ROLE_FACTS_SQL.slice(
       RUNTIME_ROLE_FACTS_SQL.indexOf("AND pg_has_role(r.oid, h.oid, 'SET')"),
       RUNTIME_ROLE_FACTS_SQL.indexOf("AS exempt_reachable_contexts"),

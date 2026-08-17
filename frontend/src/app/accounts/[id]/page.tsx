@@ -14,6 +14,7 @@ import { LineOfCreditView } from '@/components/accounts/loan-detail/LineOfCredit
 import { CreditCardDetailView } from '@/components/accounts/credit-card-detail/CreditCardDetailView';
 import { BankingDetailView } from '@/components/accounts/banking-detail/BankingDetailView';
 import { InvestmentDetailView } from '@/components/accounts/investment-detail/InvestmentDetailView';
+import { InvestmentDetailActions } from '@/components/accounts/investment-detail/InvestmentDetailActions';
 import { AssetDetailView } from '@/components/accounts/asset-detail/AssetDetailView';
 import { ForeignCurrencyFeesSection } from '@/components/accounts/shared/ForeignCurrencyFeesSection';
 import { useOnUndoRedo } from '@/hooks/useOnUndoRedo';
@@ -86,6 +87,9 @@ function AccountDetailContent() {
   // Populated by LoanDetailView so the loan's PDF export can live in the shared
   // header, on the same row as View Transactions.
   const loanExportRef = useRef<(() => Promise<void>) | null>(null);
+  // The investment view's Refresh Prices button lives in the shared header, so
+  // the signal to re-fetch the body travels down instead of staying inside it.
+  const [investmentRefreshKey, setInvestmentRefreshKey] = useState(0);
 
   // Until the account loads, assume it has a dedicated page so the register
   // redirect below never fires prematurely.
@@ -261,6 +265,14 @@ function AccountDetailContent() {
           onExport={
             detailView === 'loan' ? () => loanExportRef.current?.() : undefined
           }
+          headerActions={
+            detailView === 'investment' ? (
+              <InvestmentDetailActions
+                account={account}
+                onRefreshComplete={() => setInvestmentRefreshKey((k) => k + 1)}
+              />
+            ) : undefined
+          }
           onBack={() => router.push('/accounts')}
           accounts={accounts}
           onSelectAccount={(id) => router.push(`/accounts/${id}`)}
@@ -271,7 +283,7 @@ function AccountDetailContent() {
             ) : detailView === 'banking' ? (
               <BankingDetailView account={account} />
             ) : detailView === 'investment' ? (
-              <InvestmentDetailView account={account} />
+              <InvestmentDetailView account={account} refreshKey={investmentRefreshKey} />
             ) : detailView === 'asset' ? (
               <AssetDetailView account={account} onAccountChanged={loadData} />
             ) : isRevolving ? (

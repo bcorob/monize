@@ -347,7 +347,8 @@ one pair + one standalone counts as 2 investment accounts (**regression -- fails
 `e2e/tests/joint-accounts.spec.ts`).
 
 **Do:** seed a pair, a standalone and an orphan; walk: the list shows one row with the combined
-value -> row click lands on filtered `/investments` -> Details shows the merged view with a
+value -> row click lands on `/accounts/{brokerageId}` (it landed on a filtered `/investments`
+when this task was written) -> Details shows the merged view with a
 working cash tab -> Edit changes the base name and the cash opening balance -> the transfer
 picker offers the stripped name and the money lands in the cash ledger -> Close from the single
 row closes both halves -> Reopen restores both.

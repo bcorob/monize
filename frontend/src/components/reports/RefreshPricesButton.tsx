@@ -11,11 +11,17 @@ interface RefreshPricesButtonProps {
    */
   onRefreshComplete?: (lastUpdated?: string) => void | Promise<void>;
   className?: string;
+  /**
+   * Defaults to the compact size the report toolbars use; pass `md` where the
+   * button sits beside full-size buttons, as in the account detail header.
+   */
+  size?: 'sm' | 'md' | 'lg';
 }
 
 export function RefreshPricesButton({
   onRefreshComplete,
   className,
+  size = 'sm',
 }: RefreshPricesButtonProps) {
   const t = useTranslations('reports');
   const { isRefreshing, triggerManualRefresh } = usePriceRefresh({
@@ -25,7 +31,7 @@ export function RefreshPricesButton({
   return (
     <Button
       variant="outline"
-      size="sm"
+      size={size}
       onClick={() => triggerManualRefresh()}
       disabled={isRefreshing}
       className={className}

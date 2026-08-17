@@ -532,7 +532,7 @@ function withSuffix(base: string, n: number, maxLen?: number): string {
  * Written as an escape, not as the byte itself: the literal control character
  * used to sit in this file, which made `grep`, `file` and every other text tool
  * classify the source as binary and skip it -- so a source-scanning guard test
- * silently stopped covering it. `src/test/source-bytes.spec.ts` now fails on any
+ * silently stopped covering it. `source-bytes.spec.ts` now fails on any
  * source file carrying a raw control byte.
  */
 const GROUP_SEPARATOR = "\u0000";

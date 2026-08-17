@@ -100,7 +100,7 @@ function warningRow(
     date: row.date,
     amount: row.amount,
     payeeHandle: row.payee,
-    reference: decodeReference(row.reference, row.flags),
+    reference: decodeReference(row.reference),
     memo: row.memo,
   };
 }
@@ -111,8 +111,16 @@ interface Indexes {
   readonly childrenByParent: ReadonlyMap<number, MnyTransaction[]>;
   readonly billTemplates: ReadonlySet<number>;
   readonly transfers: TransferIndex;
+  /**
+   * Rows that are Money's own copy of a trade's cash leg, which Monize writes
+   * from the investment transaction instead. See `tradeCashLegRows`.
+   */
+  readonly tradeCashLegs: ReadonlySet<number>;
   readonly warnings: MnyWarning[];
 }
+
+/** Everything the posting predicate reads before `tradeCashLegs` can exist. */
+type PostingIndexes = Omit<Indexes, "tradeCashLegs">;
 
 function buildIndexes(input: MapTransactionsInput): Indexes {
   const warnings: MnyWarning[] = [];
@@ -154,7 +162,7 @@ function buildIndexes(input: MapTransactionsInput): Indexes {
     ]);
   }
 
-  return {
+  const base: PostingIndexes = {
     byHandle,
     parentOfChild,
     childrenByParent,
@@ -165,19 +173,24 @@ function buildIndexes(input: MapTransactionsInput): Indexes {
     transfers: indexTransfers(input.transactions.transfers, rows),
     warnings,
   };
+
+  return { ...base, tradeCashLegs: tradeCashLegRows(rows, base, input) };
 }
 
 /**
- * Whether a row is a real posting worth importing as a banking transaction.
+ * Whether a row is a posting at all, before the trade-cash-leg rule.
  *
  * Split children, bill templates, recurrence templates (`frq != -1`),
  * loan-payment templates, scheduled instances Money never posted and genuinely
  * orphaned transfer sides are out. Scheduler-posted rows are **in**: they are
  * real postings, and excluding them emptied PR #192's loan accounts.
+ *
+ * Separate from `isImportablePosting` only because `tradeCashLegRows` has to
+ * ask this question in order to answer the other one.
  */
-function isImportablePosting(
+function isPostingRow(
   row: MnyTransaction,
-  indexes: Indexes,
+  indexes: PostingIndexes,
   input: MapTransactionsInput,
 ): boolean {
   const handle = row.handle;
@@ -194,6 +207,82 @@ function isImportablePosting(
     row.account !== null &&
     input.accountKeyByHandle.has(row.account)
   );
+}
+
+/**
+ * Whether a row is a real posting worth importing as a banking transaction:
+ * a posting that Monize is not already writing from somewhere else.
+ */
+function isImportablePosting(
+  row: MnyTransaction,
+  indexes: Indexes,
+  input: MapTransactionsInput,
+): boolean {
+  return (
+    isPostingRow(row, indexes, input) &&
+    !indexes.tradeCashLegs.has(row.handle as number)
+  );
+}
+
+/**
+ * Rows that are Money's own record of the cash half of a trade in the paired
+ * brokerage account.
+ *
+ * Money keeps an investment account's cash in a companion account and writes
+ * the cash side of a trade there as an ordinary `TRN` row, paired to the trade
+ * through `TRN_XFER` -- `act` 1 has one 2,015 times in 2,029 and `act` 3 1,090
+ * times in 1,090. Monize does not need that row: `writeInvestments` creates the
+ * sleeve transaction itself from the investment row's `cashAmount`, and links
+ * the two through `investment_transactions.transaction_id`.
+ *
+ * Importing it anyway put the same payment in the cash register three times --
+ * the purchase, a transfer in and a transfer out -- where Money shows one
+ * (issue #1175). The pair of extra rows is this row plus the counterpart
+ * `buildCashCounterparts` synthesized for it, which for these rows lands in the
+ * row's **own** account.
+ *
+ * That is also why dropping them cannot move a balance: a row belongs to this
+ * set exactly when its synthesized counterpart mirrors it into the same
+ * account, so the two always summed to zero. What changes is the row count, not
+ * the money -- whatever the investment mapper then does with the trade, whether
+ * it writes a cash leg, maps it to an action that moves none, or skips it
+ * outright.
+ *
+ * **Top-level rows only.** A split *leg* in the sleeve pointing at a trade is a
+ * different shape: its parent has already taken the cash out of the sleeve, so
+ * there the synthesized counterpart is what keeps the balance right and must
+ * stay.
+ */
+function tradeCashLegRows(
+  rows: readonly MnyTransaction[],
+  indexes: PostingIndexes,
+  input: MapTransactionsInput,
+): ReadonlySet<number> {
+  const handles = new Set<number>();
+
+  for (const row of rows) {
+    if (!isPostingRow(row, indexes, input)) {
+      continue;
+    }
+    const handle = row.handle as number;
+    const partner = indexes.transfers.partnerByHandle.get(handle);
+    const far =
+      partner === undefined ? undefined : indexes.byHandle.get(partner);
+    if (!far || far.security === null || far.account === null) {
+      continue;
+    }
+
+    const brokerageKey = input.accountKeyByHandle.get(far.account);
+    const cashKey =
+      brokerageKey === undefined
+        ? undefined
+        : input.cashKeyByAccountKey.get(brokerageKey);
+    if (cashKey !== undefined && cashKey === accountKeyOf(row, input)) {
+      handles.add(handle);
+    }
+  }
+
+  return handles;
 }
 
 /**
@@ -214,6 +303,11 @@ function isImportablePosting(
  * So the missing side is synthesized here, in the sleeve, linked to the bank
  * row both ways. The sleeve then nets out: the transfer pays cash in, the
  * trade's own leg takes it out.
+ *
+ * A near side already *in* that sleeve needs none of this, and gets none: those
+ * rows are `tradeCashLegs`, so `isImportablePosting` rejects them and `nearId`
+ * is undefined before the far side is ever looked at. A synthesized row
+ * mirroring its own account is what issue #1175 saw in the register.
  */
 function buildCashCounterparts(
   rows: readonly MnyTransaction[],
@@ -421,14 +515,21 @@ function mapOne(
     // A split parent carries no category of its own: the legs do.
     categoryHandle: splits.length > 0 ? null : row.category,
     description: row.memo,
-    referenceNumber: decodeReference(row.reference, row.flags),
+    referenceNumber: decodeReference(row.reference),
     isTransfer: linkedTransactionId !== null,
     linkedTransactionId,
     splits,
   };
 }
 
-/** Rows a real posting could not be made of, reported once each. */
+/**
+ * Rows a real posting could not be made of, reported once each.
+ *
+ * A `tradeCashLegs` row is not one of them and deliberately raises nothing: it
+ * is a perfectly usable posting that Monize writes from the trade instead, so
+ * counting it as skipped would report data loss that did not happen. Its own
+ * count travels as `MappedTransactions.tradeCashLegs`.
+ */
 function reportUnusable(
   rows: readonly MnyTransaction[],
   indexes: Indexes,
@@ -591,6 +692,7 @@ export function mapTransactions(
     referencedCategories,
     transfersLinked: countPlainTransferPairs(context) + transferSplits,
     skipped: reportUnusable(rows, indexes, input, warnings),
+    tradeCashLegs: indexes.tradeCashLegs.size,
     deferredInvestments: rows.filter(
       (row) =>
         row.security !== null &&

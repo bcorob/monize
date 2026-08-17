@@ -1,7 +1,8 @@
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@/test/render';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, act, waitFor } from '@/test/render';
 import { AccountInfoWidget } from './AccountInfoWidget';
 import { Account } from '@/types/account';
+import type { Transaction } from '@/types/transaction';
 
 vi.mock('@/hooks/useNumberFormat', () => ({
   useNumberFormat: () => ({
@@ -9,6 +10,33 @@ vi.mock('@/hooks/useNumberFormat', () => ({
     formatNumber: (val: number) => String(val),
   }),
 }));
+
+// The loan/mortgage rows derive from the account's payment history, so the two
+// APIs that supply it are stubbed here; non-debt accounts never reach them.
+const getAllTransactions = vi.fn();
+const getAllPages = vi.fn();
+vi.mock('@/lib/transactions', () => ({
+  transactionsApi: {
+    getAll: (...args: unknown[]) => getAllTransactions(...args),
+    getAllPages: (...args: unknown[]) => getAllPages(...args),
+  },
+}));
+
+const getRateChanges = vi.fn();
+vi.mock('@/lib/loan-rate-changes', () => ({
+  loanRateChangesApi: {
+    getAll: (...args: unknown[]) => getRateChanges(...args),
+  },
+}));
+
+beforeEach(() => {
+  getAllTransactions.mockReset().mockResolvedValue({
+    data: [] as Transaction[],
+    pagination: { hasMore: false },
+  });
+  getAllPages.mockReset().mockResolvedValue([] as Transaction[]);
+  getRateChanges.mockReset().mockResolvedValue([]);
+});
 
 const mockPush = vi.fn();
 vi.mock('next/navigation', () => ({
@@ -88,14 +116,17 @@ describe('AccountInfoWidget', () => {
     ['LOAN'],
     ['MORTGAGE'],
     ['LINE_OF_CREDIT'],
-  ] as const)('does not style a positive %s balance in red', (accountType) => {
-    render(
-      <AccountInfoWidget
-        account={makeAccount({ accountType, currentBalance: 250 })}
-        onEdit={vi.fn()}
-        onCollapse={vi.fn()}
-      />,
-    );
+  ] as const)('does not style a positive %s balance in red', async (accountType) => {
+    // LOAN/MORTGAGE load their payment history on mount, so let it settle.
+    await act(async () => {
+      render(
+        <AccountInfoWidget
+          account={makeAccount({ accountType, currentBalance: 250 })}
+          onEdit={vi.fn()}
+          onCollapse={vi.fn()}
+        />,
+      );
+    });
     const amount = screen.getByText('CAD 250.00');
     expect(amount.className).not.toContain('text-red');
     expect(amount.className).toContain('text-gray-900');
@@ -153,14 +184,16 @@ describe('AccountInfoWidget', () => {
     expect(onCollapse).toHaveBeenCalledTimes(1);
   });
 
-  it('links to the account detail page from the details icon', () => {
-    render(
-      <AccountInfoWidget
-        account={makeAccount({ id: 'loan-9', accountType: 'MORTGAGE' })}
-        onEdit={vi.fn()}
-        onCollapse={vi.fn()}
-      />,
-    );
+  it('links to the account detail page from the details icon', async () => {
+    await act(async () => {
+      render(
+        <AccountInfoWidget
+          account={makeAccount({ id: 'loan-9', accountType: 'MORTGAGE' })}
+          onEdit={vi.fn()}
+          onCollapse={vi.fn()}
+        />,
+      );
+    });
     fireEvent.click(screen.getByLabelText('View account details'));
     expect(mockPush).toHaveBeenCalledWith('/accounts/loan-9');
   });
@@ -414,6 +447,90 @@ describe('AccountInfoWidget', () => {
       />,
     );
     expect(screen.queryByText('Next Payment')).not.toBeInTheDocument();
+  });
+
+  describe('mortgage figures', () => {
+    const makeMortgage = (overrides: Partial<Account> = {}) =>
+      makeAccount({
+        id: 'mtg-1',
+        accountType: 'MORTGAGE',
+        name: 'Home Mortgage',
+        openingBalance: -300000,
+        currentBalance: -250000,
+        interestRate: 4.5,
+        paymentAmount: 1800,
+        paymentFrequency: 'MONTHLY',
+        isCanadianMortgage: false,
+        isVariableRate: false,
+        ...overrides,
+      });
+
+    const renderMortgage = async (account: Account) => {
+      await act(async () => {
+        render(<AccountInfoWidget account={account} onEdit={vi.fn()} onCollapse={vi.fn()} />);
+      });
+    };
+
+    /** The value rendered beside a details-list label. */
+    const detailValue = (label: string) =>
+      screen.getByText(label).closest('div')?.querySelector('dd')?.textContent;
+
+    it('shows rate, payment, payoff date and remaining interest for a mortgage', async () => {
+      getAllTransactions.mockResolvedValue({
+        data: [
+          { id: 't1', transactionDate: '2026-05-15', amount: 1800 },
+          { id: 't2', transactionDate: '2026-06-15', amount: 1800 },
+          { id: 't3', transactionDate: '2026-07-15', amount: 1800 },
+        ] as Transaction[],
+        pagination: { hasMore: false },
+      });
+      await renderMortgage(makeMortgage());
+
+      expect(screen.getByText('Interest Rate')).toBeInTheDocument();
+      expect(screen.getByText('4.5%')).toBeInTheDocument();
+      expect(screen.getByText('Current Payment')).toBeInTheDocument();
+      expect(screen.getByText('Est. Payoff')).toBeInTheDocument();
+      expect(screen.getByText('Est. Remaining Interest')).toBeInTheDocument();
+      // Every figure resolved, so none of them reads as unavailable.
+      await waitFor(() => expect(screen.queryByText('N/A')).not.toBeInTheDocument());
+    });
+
+    it('leaves the loan rows off an account type that does not amortize', async () => {
+      await renderMortgage(makeMortgage({ accountType: 'CHEQUING', currentBalance: 500 }));
+
+      expect(screen.queryByText('Current Payment')).not.toBeInTheDocument();
+      expect(screen.queryByText('Est. Payoff')).not.toBeInTheDocument();
+      expect(screen.queryByText('Est. Remaining Interest')).not.toBeInTheDocument();
+      expect(getAllTransactions).not.toHaveBeenCalled();
+      expect(getRateChanges).not.toHaveBeenCalled();
+    });
+
+    // A failed history load is not an empty history: the rows stay, saying the
+    // figures are unavailable rather than projecting from no payments at all.
+    it('shows the loan rows as unavailable when the history fails to load', async () => {
+      getAllTransactions.mockRejectedValue(new Error('network'));
+      await renderMortgage(makeMortgage());
+
+      expect(screen.getByText('Current Payment')).toBeInTheDocument();
+      await waitFor(() => expect(screen.getAllByText('N/A')).toHaveLength(3));
+    });
+
+    it('reports a settled mortgage as paid off with no interest remaining', async () => {
+      await renderMortgage(makeMortgage({ currentBalance: 0 }));
+
+      await waitFor(() => expect(detailValue('Est. Payoff')).toBe('Paid off'));
+      // Nothing is left to pay, so the remaining interest is a known zero --
+      // not "N/A", which would report a finished mortgage as uncomputable.
+      expect(detailValue('Est. Remaining Interest')).toBe('CAD 0.00');
+    });
+
+    it('marks the loan rows busy while the history is loading', async () => {
+      getAllTransactions.mockReturnValue(new Promise(() => {}));
+      await renderMortgage(makeMortgage());
+
+      expect(screen.getAllByLabelText('Loading...')).toHaveLength(3);
+      expect(screen.queryByText('N/A')).not.toBeInTheDocument();
+    });
   });
 
   it('omits optional fields that are absent', () => {

@@ -142,7 +142,7 @@ export const FORBIDDEN_ROLE_MEMBERSHIPS = [
  * The predefined roles a member may safely hold, classified deliberately rather
  * than allowed by omission (DR-RR7-002). Together with
  * `FORBIDDEN_ROLE_MEMBERSHIPS` this covers every PostgreSQL 16 `pg_*` role, and
- * `rls-elevation-and-role.integration.spec.ts` fails when the live catalog holds
+ * `runtime-role.integration.spec.ts` fails when the live catalog holds
  * a `pg_*` predefined role that appears in neither list -- so a future
  * PostgreSQL's new predefined role forces a decision instead of defaulting to
  * safe. These are monitoring or minor-availability capabilities that cross no

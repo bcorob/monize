@@ -2,7 +2,7 @@ import { Logger } from "@nestjs/common";
 
 /**
  * `node-oidc-provider` prints its own notices through `console.info` /
- * `console.warn` (see its `lib/helpers/attention.js`), so they land in the
+ * `console.warn` (see its lib/helpers/attention.js), so they land in the
  * backend log as bare, unprefixed lines while every other line carries the Nest
  * `[Nest] pid - date LEVEL [Context] message` shape. The library exposes no
  * logger hook, so the only place to normalize them is the console itself.

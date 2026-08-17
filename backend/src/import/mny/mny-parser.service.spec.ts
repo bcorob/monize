@@ -64,6 +64,7 @@ describe("computeExpectedBalances", () => {
       transfersLinked: 0,
       skipped: 0,
       deferredInvestments: 0,
+      tradeCashLegs: 0,
       warnings: [],
     };
   }

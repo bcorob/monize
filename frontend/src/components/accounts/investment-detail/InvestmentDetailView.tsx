@@ -1,24 +1,26 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { useTranslations } from 'next-intl';
 import { format } from 'date-fns';
 import { accountsApi } from '@/lib/accounts';
 import { investmentsApi } from '@/lib/investments';
-import { Button } from '@/components/ui/Button';
 import { PortfolioSummaryCard } from '@/components/investments/PortfolioSummaryCard';
 import { AssetAllocationChart } from '@/components/investments/AssetAllocationChart';
 import { InvestmentValueChart } from '@/components/investments/InvestmentValueChart';
 import { GroupedHoldingsList } from '@/components/investments/GroupedHoldingsList';
 import { InvestmentRegisterPanel } from '@/components/investments/InvestmentRegisterPanel';
-import { RefreshPricesButton } from '@/components/reports/RefreshPricesButton';
 import { InvestmentIncomePanel } from './InvestmentIncomePanel';
 import type { Account } from '@/types/account';
 import type { PortfolioSummary, InvestmentTransaction, RealizedGainEntry } from '@/types/investment';
 
 interface InvestmentDetailViewProps {
   account: Account;
+  /**
+   * Bumped by the header's Refresh Prices button to re-fetch. The button lives
+   * on the title row (`InvestmentDetailActions`), so the signal comes in rather
+   * than being raised here.
+   */
+  refreshKey?: number;
 }
 
 function round2(value: number): number {
@@ -31,17 +33,13 @@ function round2(value: number): number {
  * existing portfolio components scoped to the pair's accounts: summary,
  * allocation, value-over-time, holdings, YTD income, and recent transactions.
  */
-export function InvestmentDetailView({ account }: InvestmentDetailViewProps) {
-  const t = useTranslations('accountDetail-investment');
-  const router = useRouter();
-
+export function InvestmentDetailView({ account, refreshKey = 0 }: InvestmentDetailViewProps) {
   const [brokerage, setBrokerage] = useState<Account>(account);
   const [cash, setCash] = useState<Account | null>(null);
   const [summary, setSummary] = useState<PortfolioSummary | null>(null);
   const [dividendInterestYtd, setDividendInterestYtd] = useState(0);
   const [realizedGainsYtd, setRealizedGainsYtd] = useState(0);
   const [loadedForId, setLoadedForId] = useState<string | null>(null);
-  const [reloadKey, setReloadKey] = useState(0);
   const isLoading = loadedForId !== account.id;
 
   useEffect(() => {
@@ -88,23 +86,13 @@ export function InvestmentDetailView({ account }: InvestmentDetailViewProps) {
     return () => {
       cancelled = true;
     };
-  }, [account, reloadKey]);
+  }, [account, refreshKey]);
 
   const accountIds = cash ? [brokerage.id, cash.id] : [brokerage.id];
   const currency = brokerage.currencyCode;
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap justify-end gap-3">
-        <RefreshPricesButton onRefreshComplete={() => setReloadKey((k) => k + 1)} />
-        <Button
-          variant="outline"
-          onClick={() => router.push(`/investments?accountId=${brokerage.id}`)}
-        >
-          {t('openInInvestments')}
-        </Button>
-      </div>
-
       <PortfolioSummaryCard summary={summary} isLoading={isLoading} singleAccountCurrency={currency} />
 
       <div className="grid gap-6 lg:grid-cols-2">

@@ -123,6 +123,31 @@ So when a mapper is about to warn that it cannot represent something, check firs
 right answer is to *create* the row Monize needs rather than to report the mismatch. A warning
 about 3,255 rows the user cannot act on is a sign the mapping is wrong, not that the file is.
 
+### And the same gap read the other way: a row Money *does* store may be one Monize writes anyway
+
+The mirror of the rule above, and the way it goes wrong. When a trade is funded from the
+brokerage's **own** cash companion, Money already has the cash-side row -- an ordinary `TRN` in
+the companion account, paired to the trade through `TRN_XFER`. Monize writes that row itself, from
+the investment transaction's `cashAmount`, so importing Money's copy as well is one payment
+recorded twice.
+
+It presented as three rows in the cash register where Money shows one (issue #1175): the purchase,
+a transfer in and a transfer out. The two extras are Money's row plus the counterpart
+`buildCashCounterparts` synthesized for it, which for this shape lands in that row's *own*
+account -- so they cancelled, every balance reconciled, and nothing in the verification report
+could see it. `tradeCashLegRows` (`map/map-transactions.ts`) names those rows and they are not
+imported; because membership in that set is exactly "its synthesized counterpart mirrored it into
+its own account", dropping the pair cannot move a balance.
+
+Two things generalize. **A counterpart that lands in the account it came from is not a
+counterpart**, whatever the code that built it thinks. And **a pair of rows that cancel is
+invisible to every check that reconciles a total** -- the row count is the assertion that catches
+it, which is why `map/trade-cash-legs.spec.ts` asserts the count and the balance together.
+
+The rule is deliberately confined to *top-level* rows. A split **leg** in the sleeve pointing at a
+trade is a different shape: its parent has already taken the cash out, so there the synthesized
+counterpart is what stops the trade's own leg debiting the sleeve twice, and it stays.
+
 ## Traps
 
 - **Page 0 is obfuscated.** Jet XORs bytes `0x18..0x95` of the header page with a fixed mask. The

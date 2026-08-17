@@ -456,7 +456,8 @@ export class MnyParserService {
       `Parsed ${era} file: ${accounts.accounts.length} accounts, ` +
         `${transactions.transactions.length} transactions, ` +
         `${securities.securities.length} securities, ` +
-        `${investments.transactions.length} investment rows`,
+        `${investments.transactions.length} investment rows, ` +
+        `${transactions.tradeCashLegs} cash rows written by their trade`,
     );
 
     return {

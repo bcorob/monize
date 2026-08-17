@@ -23,6 +23,7 @@ import { AccountsService } from "../accounts/accounts.service";
 import { PayeesService } from "../payees/payees.service";
 import { NetWorthService } from "../net-worth/net-worth.service";
 import { TransactionSplitService } from "./transaction-split.service";
+import { applyRegisterOrder } from "./register-order";
 import {
   assertVoidTransitionAllowedOnRow,
   applyVoidTransitionToMirrorLeg,
@@ -926,17 +927,17 @@ export class TransactionsService {
           "linkedSplits.transferAccount",
           "linkedSplitTransferAccount",
         )
-        .where(this.registerScope("transaction", userId, jointAccountIds))
-        .orderBy(
-          sortBy === "amount"
-            ? "transaction.amount"
-            : sortBy === "payee"
-              ? "transaction.payeeName"
-              : "transaction.transactionDate",
-          sortDirection,
-        )
-        .addOrderBy("transaction.createdAt", sortDirection)
-        .addOrderBy("transaction.id", sortDirection);
+        .where(this.registerScope("transaction", userId, jointAccountIds));
+      applyRegisterOrder(
+        queryBuilder,
+        "transaction",
+        sortDirection,
+        sortBy === "amount"
+          ? "amount"
+          : sortBy === "payee"
+            ? "payeeName"
+            : "transactionDate",
+      );
 
       if (!includeInvestmentBrokerage) {
         queryBuilder.andWhere(
@@ -1418,10 +1419,10 @@ export class TransactionsService {
       .select("t.id")
       .where("t.userId = :userId", { userId })
       .andWhere("t.accountId = :singleAccountId", { singleAccountId })
-      .orderBy("t.transactionDate", "DESC")
-      .addOrderBy("t.createdAt", "DESC")
-      .addOrderBy("t.id", "DESC")
       .limit(skip);
+    // Must stay the register's own order: these rows are the pages above the
+    // one being shown, and their sum is where its running balance starts.
+    applyRegisterOrder(previousPagesQuery, "t", "DESC");
 
     // The window is every row the register lists above this page -- voids
     // included, because they occupy a line each. What is summed out of that
@@ -1598,10 +1599,10 @@ export class TransactionsService {
       .select("t.id")
       .where("t.userId = :userId", { userId })
       .andWhere("t.accountId = :accountId", { accountId })
-      .orderBy("t.transactionDate", "DESC")
-      .addOrderBy("t.createdAt", "DESC")
-      .addOrderBy("t.id", "DESC")
       .limit(skip);
+    // Must stay the register's own order: these rows are the pages above the
+    // one being shown, and their sum is where its running balance starts.
+    applyRegisterOrder(previousPagesQuery, "t", "DESC");
 
     if (filters.startDate) {
       previousPagesQuery.andWhere("t.transactionDate >= :startDate", {
@@ -1674,10 +1675,10 @@ export class TransactionsService {
       .select("t.id")
       .where(`t.id IN (${idsSubquery.getQuery()})`)
       .setParameters(idsSubquery.getParameters())
-      .orderBy("t.transactionDate", "DESC")
-      .addOrderBy("t.createdAt", "DESC")
-      .addOrderBy("t.id", "DESC")
       .limit(skip);
+    // Must stay the register's own order: these rows are the pages above the
+    // one being shown, and their sum is where its running balance starts.
+    applyRegisterOrder(prevIdsQuery, "t", "DESC");
 
     return this.computeSplitAwareSum(m, prevIdsQuery, userId, filters);
   }

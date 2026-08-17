@@ -248,9 +248,18 @@ export function AccountList({ accounts, institutions, brokerageMarketValues, unp
   // Long-press opens a per-row action sheet on mobile (and via right-click).
   const [contextAccount, setContextAccount] = useState<Account | null>(null);
 
+  // An investment row opens the account's own detail page, the same as every
+  // other row opens the thing it names, rather than the portfolio-wide
+  // /investments view filtered to it. Closed accounts included, and they are
+  // the case that was outright broken: `getInvestmentAccounts` filters
+  // `isClosed: false`, so a closed brokerage is absent from the list
+  // /investments matches its `accountId` query against, the filter is silently
+  // dropped and the user lands on whatever selection was already stored. The
+  // full portfolio view stays one click away, from the row's View Transactions
+  // action and from the detail page's own link.
   const handleRowClick = useCallback((account: Account) => {
     if (account.accountSubType === 'INVESTMENT_BROKERAGE') {
-      router.push(`/investments?accountId=${account.id}`);
+      router.push(`/accounts/${account.id}`);
     } else {
       router.push(`/transactions?accountId=${account.id}`);
     }

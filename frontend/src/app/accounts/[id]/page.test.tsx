@@ -361,6 +361,40 @@ describe('AccountDetailPage', () => {
     expect(mockReplace).not.toHaveBeenCalled();
   });
 
+  // The investment actions live on the title row via the shell's headerActions;
+  // the body renders neither, so finding them at all proves the page wired
+  // them into the header.
+  it('renders the investment actions in the shared header', async () => {
+    mockGetById.mockResolvedValue(makeAccount({
+      id: 'brok-1',
+      name: 'TFSA - Brokerage',
+      accountType: 'INVESTMENT',
+      accountSubType: 'INVESTMENT_BROKERAGE',
+      isClosed: false,
+    }));
+
+    await renderPage();
+
+    expect(screen.getByRole('button', { name: 'Refresh' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open in Investments' })).toBeInTheDocument();
+  });
+
+  it('drops the investments link for a closed investment account', async () => {
+    mockGetById.mockResolvedValue(makeAccount({
+      id: 'brok-closed',
+      name: 'Old TFSA - Brokerage',
+      accountType: 'INVESTMENT',
+      accountSubType: 'INVESTMENT_BROKERAGE',
+      isClosed: true,
+      closedDate: '2024-01-01T00:00:00Z',
+    }));
+
+    await renderPage();
+
+    expect(screen.queryByRole('button', { name: 'Open in Investments' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Refresh' })).toBeInTheDocument();
+  });
+
   it('stays put for an unpaired cash account, which has nowhere to redirect', async () => {
     mockGetById.mockResolvedValue(makeAccount({
       id: 'orphan-cash',

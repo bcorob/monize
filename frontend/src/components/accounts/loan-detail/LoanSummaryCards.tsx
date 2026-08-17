@@ -3,6 +3,7 @@
 import { useTranslations } from 'next-intl';
 import { Account } from '@/types/account';
 import { LoanScheduleResult } from '@/lib/loan-schedule';
+import { deriveLoanFigures } from '@/lib/loan-figures';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
 import { useChartDateFormat } from '@/hooks/useChartDateFormat';
 import {
@@ -50,13 +51,19 @@ export function LoanSummaryCards({
     ? t(`loanDetail.frequency.${account.paymentFrequency}` as Parameters<typeof t>[0])
     : null;
 
-  const payoffLabel = baseline?.payoffDate
-    ? formatChartDate(baseline.payoffDate, 'MMM yyyy')
-    : null;
-
   // The stored paymentAmount is often principal-only (separately-booked
   // interest) and stale; prefer the real installment derived from history.
-  const installment = currentInstallment ?? account.paymentAmount ?? null;
+  // `deriveLoanFigures` decides when each figure is known -- the same decision
+  // the transactions Details sidebar shows, made once so the two cannot drift.
+  const figures = deriveLoanFigures({
+    currentBalance: account.currentBalance,
+    currentInstallment: currentInstallment ?? account.paymentAmount ?? null,
+    baseline,
+  });
+
+  const payoffLabel = figures.payoffDate
+    ? formatChartDate(figures.payoffDate, 'MMM yyyy')
+    : null;
 
   const cards: SummaryCardItem[] = [
     {
@@ -78,22 +85,25 @@ export function LoanSummaryCards({
     },
     {
       label: t('loanDetail.summary.payment'),
-      value: installment
-        ? formatCurrency(installment, currency)
-        : t('loanDetail.summary.notSet'),
+      value:
+        figures.currentPayment != null
+          ? formatCurrency(figures.currentPayment, currency)
+          : t('loanDetail.summary.notSet'),
       note: frequencyLabel ?? undefined,
     },
     {
       label: t('loanDetail.summary.estPayoff'),
-      value:
-        Math.abs(account.currentBalance) <= 0.01
-          ? t('loanDetail.summary.paidOff')
-          : payoffLabel ?? t('loanDetail.summary.notAvailable'),
+      value: figures.isSettled
+        ? t('loanDetail.summary.paidOff')
+        : payoffLabel ?? t('loanDetail.summary.notAvailable'),
       valueClass: 'text-purple-600 dark:text-purple-400',
     },
     {
       label: t('loanDetail.summary.estRemainingInterest'),
-      value: baseline ? formatCurrency(baseline.totalInterest, currency) : t('loanDetail.summary.notAvailable'),
+      value:
+        figures.remainingInterest != null
+          ? formatCurrency(figures.remainingInterest, currency)
+          : t('loanDetail.summary.notAvailable'),
       valueClass: 'text-orange-600 dark:text-orange-400',
     },
   ];

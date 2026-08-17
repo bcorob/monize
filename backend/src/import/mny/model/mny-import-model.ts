@@ -173,6 +173,14 @@ export interface MappedTransactions {
    * tables.
    */
   readonly deferredInvestments: number;
+  /**
+   * Money's own cash-sleeve rows for a trade in the paired brokerage account,
+   * which the investment writer creates from the trade itself. Not skipped and
+   * not lost: the row is written, from the other side. Reported because it is
+   * the one number that says how much of a file went through that path, and it
+   * has no other surface -- see `tradeCashLegRows` (issue #1175).
+   */
+  readonly tradeCashLegs: number;
   readonly warnings: readonly MnyWarning[];
 }
 

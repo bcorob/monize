@@ -27,8 +27,8 @@ import { PastImpactSection } from '@/components/accounts/loan-detail/PastImpactS
 import { useLoanRateEditing } from '@/components/accounts/loan-detail/useLoanRateEditing';
 import {
   buildLoanProjectionInput,
-  deriveCurrentInstallment,
   deriveLoanPaymentHistory,
+  resolveCurrentInstallment,
 } from '@/lib/loan-history';
 import { computePastImpact } from '@/lib/loan-past-impact';
 import {
@@ -112,10 +112,10 @@ export function LoanDetailView({
   // payment history, shown on the summary card and used to seed the projection.
   // The stored paymentAmount is often principal-only for separately-booked
   // interest, so it is only a fallback when there is no usable history yet.
-  const currentInstallment = useMemo(() => {
-    const derived = deriveCurrentInstallment(history, account.paymentAmount ?? 0);
-    return derived > 0 ? derived : account.paymentAmount ?? null;
-  }, [history, account.paymentAmount]);
+  const currentInstallment = useMemo(
+    () => resolveCurrentInstallment(history, account.paymentAmount),
+    [history, account.paymentAmount],
+  );
 
   const projectionInput = useMemo(
     () => buildLoanProjectionInput(account, history, rateChanges),

@@ -174,9 +174,13 @@ export function isUnpostedRow(flags: number): boolean {
 }
 
 /**
- * True for a row in a loan or mortgage account. Never a reason to skip a row --
- * these are ordinary postings, and treating the bit as anything else is what
- * this function exists to make obvious.
+ * True for a row in a loan or mortgage account. Never a reason to skip a row,
+ * and never a reason to drop a field either -- these are ordinary postings, and
+ * treating the bit as anything else is what this function exists to make
+ * obvious. It has no production caller: reading it as the void flag emptied
+ * every debt account's balance, and reading it as "hide the reference" emptied
+ * every debt account's Ref. num. column (issue #1174). It stays exported and
+ * tested so the bit keeps a name, not so a third reading can be built on it.
  */
 export function isDebtAccountRow(flags: number): boolean {
   return (flags & MNY_TRANSACTION_FLAG.DEBT_ACCOUNT) !== 0;
@@ -196,15 +200,23 @@ export function isDebtAccountRow(flags: number): boolean {
  * - `0` prefixes a number right-aligned in twelve characters. 1,060 rows, every
  *   one numeric, every one exactly thirteen characters long.
  *
- * A `0` number is dropped for a row in a loan or mortgage account, where it is
- * **Money's instalment counter and not a reference the user wrote**. Two files
- * agree: 657 of those 1,060 sit in debt accounts counting 1, 2, 3 up the
- * payment schedule, and all 461 in Money Plus's own `sample.mny` are the "Home
- * Loan" payment numbers, repeated across each payment's split legs. Neither
- * ever appears on the bank side of the transfer -- the partner row's `szId` is
- * null in all 642 cases -- and Money's loan register has no Num column to show
- * it in. Outside a debt account the same shape is a cheque number, sequential
- * over years against landlords and utilities, and is kept.
+ * **A `0` number in a loan or mortgage account is Money's payment number, and
+ * Money does show it.** It was dropped here for four phases on the opposite
+ * reading -- that it is an instalment counter Money's own register has no
+ * column for -- which left the Ref. num. field empty on every row of every loan
+ * and mortgage account (issue #1174, reported by a user looking at the column
+ * it is displayed in). Money's loan register calls it **Pmt Num**; the
+ * measurements behind the old reading were all correct and only the conclusion
+ * was wrong. 657 of the 1,060 numbers do sit in debt accounts counting 1, 2, 3
+ * up the payment schedule, all 461 in Money Plus's own `sample.mny` are the
+ * "Home Loan" payment numbers, and the bank side of the transfer carries none
+ * of them in any of 642 cases -- which is what a per-loan payment counter looks
+ * like, and is exactly the value the user asked to see.
+ *
+ * So the account a row sits in no longer changes what `szId` decodes to: the
+ * same shape is a cheque number outside a debt account and a payment number
+ * inside one, and both belong in Ref. num. That is why this takes no `flags`
+ * argument -- there is no branch left for one to feed.
  *
  * **Both shapes are matched strictly, and anything else is returned as-is.**
  * A bare `1042` is a cheque number a user typed, not the text `042` behind a
@@ -216,10 +228,7 @@ export function isDebtAccountRow(flags: number): boolean {
 const REFERENCE_TEXT = /^1(\D.*)$/;
 const REFERENCE_NUMBER = /^0\s+(\d+)$/;
 
-export function decodeReference(
-  raw: string | null,
-  flags: number,
-): string | null {
+export function decodeReference(raw: string | null): string | null {
   if (raw === null || raw.trim() === "") {
     return null;
   }
@@ -232,7 +241,7 @@ export function decodeReference(
 
   const number = REFERENCE_NUMBER.exec(raw);
   if (number) {
-    return isDebtAccountRow(flags) ? null : number[1];
+    return number[1];
   }
 
   return trimmed;

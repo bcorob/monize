@@ -319,6 +319,21 @@ export function deriveCurrentInstallment(
 }
 
 /**
+ * The installment to show and to seed a projection with: the real one derived
+ * from history, falling back to the stored contractual payment when there is no
+ * usable history yet (and to null when neither exists). Shared by the loan
+ * detail view and the transactions Details sidebar so both name the same figure
+ * "Current Payment".
+ */
+export function resolveCurrentInstallment(
+  history: LoanHistoryResult,
+  contractualPayment: number | null,
+): number | null {
+  const derived = deriveCurrentInstallment(history, contractualPayment ?? 0);
+  return derived > 0 ? derived : (contractualPayment ?? null);
+}
+
+/**
  * The forward-projection input shared by the loan detail view and the loan
  * reports: a schedule that continues from today's balance at the loan's real
  * current installment. Returns null when the account cannot be projected (no

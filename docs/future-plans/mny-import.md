@@ -567,8 +567,10 @@ real mappers and, in the integration spec, the real INSERT path.
   `frq` decides.
 - **`TRN.szId` packs a kind digit in front of the reference** -- `1` then free text (`1Debit`),
   `0` then a number right-aligned in twelve characters (`0           2`). Imported whole it shows
-  as `1Debit` and `0 2`. The number is Money's instalment counter inside a debt account, where
-  the register has no Num column, and a cheque number everywhere else.
+  as `1Debit` and `0 2`. The number is Money's payment number inside a debt account (its loan
+  register shows it as **Pmt Num**) and a cheque number everywhere else; both are references the
+  user reads, so both are kept. Dropping the debt-account one left Ref. num. blank on every loan
+  and mortgage row until issue #1174.
 - `grftt & 0x100` -> status VOID (imported, excluded from balances by existing logic). **Not**
   `0x80`, which marks a row in a loan or mortgage account: using it voided every loan payment
   and left each debt account frozen at its opening balance.

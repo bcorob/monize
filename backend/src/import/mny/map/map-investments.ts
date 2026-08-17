@@ -118,7 +118,7 @@ function warningRow(
     date: row.date,
     amount: row.amount,
     payeeHandle: row.payee,
-    reference: decodeReference(row.reference, row.flags),
+    reference: decodeReference(row.reference),
     memo: row.memo,
   };
 }

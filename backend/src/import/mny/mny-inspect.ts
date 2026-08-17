@@ -258,7 +258,7 @@ export function mappingSummary(tables: MnyTables): string[] {
     `  split legs:      ${signs(splitAmounts)}`,
     `  investment cash: ${signs(investmentCash)}`,
     `  accounts:        ${accounts.accounts.length} (${accounts.skipped} skipped)`,
-    `  transactions:    ${transactions.transactions.length} (${transactions.transfersLinked} transfers linked, ${transactions.skipped} skipped)`,
+    `  transactions:    ${transactions.transactions.length} (${transactions.transfersLinked} transfers linked, ${transactions.skipped} skipped, ${transactions.tradeCashLegs} cash rows written by their trade)`,
     `  securities:      ${securities.securities.length} (${securities.skipped} skipped as currencies or unusable)`,
     `  investments:     ${investments.transactions.length} (${investments.transfersPaired} share transfers paired, ${investments.skipped} skipped)`,
     "",

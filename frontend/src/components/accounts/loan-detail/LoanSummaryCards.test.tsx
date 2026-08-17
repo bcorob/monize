@@ -126,5 +126,54 @@ describe('LoanSummaryCards', () => {
     );
 
     expect(screen.getByText('Paid off')).toBeInTheDocument();
+    // A settled loan owes no more interest -- a known zero, not "N/A", which
+    // would report a finished loan as one that could not be worked out. The
+    // balance card also reads $0.00, so pick the remaining-interest card by its
+    // own colour rather than by the shared text.
+    const remainingInterest = screen
+      .getAllByText('$0.00')
+      .find((node) => node.className.includes('text-orange-600'));
+    expect(remainingInterest).toBeDefined();
+  });
+
+  // A liability in credit owes nothing either. Taking the magnitude of the
+  // balance read the overpayment as debt of the same size.
+  it('shows Paid off for an overpaid loan sitting in credit', () => {
+    render(
+      <LoanSummaryCards
+        account={makeAccount({ currentBalance: 42 })}
+        startingBalance={10000}
+        currentInstallment={500}
+        baseline={null}
+      />,
+    );
+
+    expect(screen.getByText('Paid off')).toBeInTheDocument();
+  });
+
+  // The schedule stops at its horizon when the installment never amortizes, so
+  // its accumulated interest is the interest over that horizon rather than the
+  // interest remaining -- a subtotal under a total's label.
+  it('withholds the remaining interest when the projection never pays off', () => {
+    const baseline = generateLoanSchedule({
+      startingBalance: 8000,
+      annualRate: 20,
+      paymentAmount: 50,
+      frequency: 'MONTHLY',
+      firstPaymentDate: new Date(2026, 7, 15),
+    });
+    expect(baseline.paidOff).toBe(false);
+
+    render(
+      <LoanSummaryCards
+        account={makeAccount()}
+        startingBalance={10000}
+        currentInstallment={50}
+        baseline={baseline}
+      />,
+    );
+
+    expect(screen.queryByText(`$${baseline.totalInterest.toFixed(2)}`)).not.toBeInTheDocument();
+    expect(screen.getAllByText('N/A').length).toBeGreaterThanOrEqual(2);
   });
 });

@@ -241,15 +241,30 @@ An investment row is identified by carrying a security, not by its action code:
 > - `0` prefixes a number right-aligned in twelve characters, so the value is
 >   always thirteen characters long. 1,060 rows, every one numeric.
 >
-> A `0` number in a loan or mortgage account is Money's instalment counter, not
-> a reference: 657 of the 1,060 sit in debt accounts counting up the payment
-> schedule, all 461 in Money Plus's own `sample.mny` are the Home Loan payment
-> numbers, the bank side of the transfer carries none of them in any of 642
-> cases, and Money's loan register has no Num column to show one in.
+> A `0` number in a loan or mortgage account is Money's **payment number**: 657
+> of the 1,060 sit in debt accounts counting up the payment schedule, all 461 in
+> Money Plus's own `sample.mny` are the Home Loan payment numbers, and the bank
+> side of the transfer carries none of them in any of 642 cases.
 >
 > Both shapes are matched strictly and anything else is passed through, so a
 > cheque number typed as `1042` stays `1042` rather than becoming the text `042`
 > behind a kind digit (`model/mny-model.ts`, `decodeReference`).
+
+> **Correction to the correction.** Those numbers were dropped for four phases,
+> on the added premise that Money's loan register has no column to show one in.
+> It does -- it is called **Pmt Num** -- so the Ref. num. field was empty on
+> every row of every loan and mortgage account until issue #1174, reported by a
+> user reading that column. Every measurement above was right; only the sentence
+> inferred from them was wrong, which is what a per-loan payment counter looks
+> like either way. `decodeReference` no longer takes `grftt` at all: the account
+> a row sits in does not change what `szId` decodes to.
+
+Neither reading of `szId` was ever checkable against the corpus -- no committed
+fixture carries a single non-null value of it. Both the packed shapes and the
+debt-account rule came from files that cannot be committed, and a claim about
+what Money *displays* cannot be measured from the file at all. Where the code
+has to assume something about Money's UI, say so in the comment and expect a
+user to be the one who settles it.
 
 ### The `act` field
 
@@ -471,6 +486,29 @@ counterpart is imported exactly once.
 Both sides exist as separate `TRN` rows with their own amounts. Because the
 pairing is exact, a `.mny` importer must never fall back to matching transfers
 by name and amount the way a QIF importer has to.
+
+### The cash counterpart of a trade, and which side Monize keeps
+
+A trade's `TRN_XFER` partner sits in one of two places, and they need opposite
+treatment:
+
+| Partner sits in | What Money is recording | What Monize does |
+|---|---|---|
+| The brokerage's own cash companion (`ACCT.hacctRel`) | The cash half of the trade | **Drops** the row. `writeInvestments` creates that sleeve transaction from the investment row's `cashAmount` and links the two through `investment_transactions.transaction_id` |
+| Any other account | Cash moving in from outside, where the investment row is *both* the arrival and the trade | Keeps the row and **synthesizes** the sleeve side Money has no row for (`buildCashCounterparts`) |
+
+Importing the first kind put three rows in the cash register where Money shows
+one -- the purchase, plus a transfer in and a transfer out that cancelled
+(issue #1175). The cancellation is why every balance still reconciled: the
+imported row and the counterpart synthesized for it landed in the same account.
+That equivalence is also what makes dropping them safe, and `tradeCashLegRows`
+(`backend/src/import/mny/map/map-transactions.ts`) is written so a row qualifies
+only when it holds.
+
+The rule applies to top-level rows only. A `TRN_SPLIT` **child** in the sleeve
+whose partner is a trade is a third shape: its parent has already moved the cash
+out of the sleeve, so the synthesized counterpart is what keeps the balance
+right there and is kept.
 
 ## LOT (tax lots)
 

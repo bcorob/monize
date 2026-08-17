@@ -1552,7 +1552,10 @@ describe('AccountList', () => {
       expect(mockPush).toHaveBeenCalledWith('/reconcile?accountId=cash-1');
     });
 
-    it('navigates to /investments with accountId for brokerage accounts', () => {
+    // The row names an account, so it opens that account's detail page -- not
+    // the portfolio-wide /investments view filtered to it, which is what the
+    // View Transactions action is for.
+    it('navigates to the account detail page for brokerage accounts', () => {
       const account = createAccount({
         id: 'broker-1',
         name: 'My Brokerage',
@@ -1566,7 +1569,59 @@ describe('AccountList', () => {
 
       fireEvent.click(screen.getByText('My Brokerage'));
 
-      expect(mockPush).toHaveBeenCalledWith('/investments?accountId=broker-1');
+      expect(mockPush).toHaveBeenCalledWith('/accounts/broker-1');
+    });
+
+    // A closed brokerage is filtered out of the /investments account list
+    // (getInvestmentAccounts filters isClosed: false), so the old route
+    // silently dropped the filter and showed the whole portfolio. The detail
+    // page renders a closed account, so the row behaves the same either way.
+    it('navigates to the account detail page for closed brokerage accounts', () => {
+      const account = createAccount({
+        id: 'broker-closed',
+        name: 'Old Brokerage',
+        accountType: 'INVESTMENT',
+        accountSubType: 'INVESTMENT_BROKERAGE',
+        isClosed: true,
+        closedDate: '2024-01-01T00:00:00Z',
+      });
+
+      render(
+        <AccountList accounts={[account]} onEdit={mockOnEdit} defaultCurrency="CAD" convertToDefault={exchangeMocks.convertToDefault} onRefresh={mockOnRefresh} />
+      );
+
+      fireEvent.click(screen.getByText('Old Brokerage'));
+
+      expect(mockPush).toHaveBeenCalledWith('/accounts/broker-closed');
+    });
+
+    // Folded pairs render one row carrying the brokerage id, and that is the
+    // canonical detail URL -- a cash-id link only redirects to it.
+    it('navigates to the brokerage half of a folded pair', () => {
+      const accounts = [
+        createAccount({
+          id: 'broker-1',
+          name: 'RRSP - Brokerage',
+          accountType: 'INVESTMENT',
+          accountSubType: 'INVESTMENT_BROKERAGE',
+          linkedAccountId: 'cash-1',
+        }),
+        createAccount({
+          id: 'cash-1',
+          name: 'RRSP - Cash',
+          accountType: 'INVESTMENT',
+          accountSubType: 'INVESTMENT_CASH',
+          linkedAccountId: 'broker-1',
+        }),
+      ];
+
+      render(
+        <AccountList accounts={accounts} onEdit={mockOnEdit} defaultCurrency="CAD" convertToDefault={exchangeMocks.convertToDefault} onRefresh={mockOnRefresh} />
+      );
+
+      fireEvent.click(screen.getByText('RRSP'));
+
+      expect(mockPush).toHaveBeenCalledWith('/accounts/broker-1');
     });
 
     it('navigates to /transactions with accountId for non-brokerage accounts', () => {

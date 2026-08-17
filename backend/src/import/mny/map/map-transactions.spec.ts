@@ -368,6 +368,33 @@ describe("mapTransactions", () => {
       });
     });
 
+    it("keeps the payment number on a loan-account row", () => {
+      // Issue #1174: the loan side of a mortgage payment is imported as an
+      // ordinary row in the loan account, and its `szId` is Money's "Pmt Num".
+      // Decoding it against `grftt & 0x80` returned null, so the Ref. num.
+      // column was empty for every payment of every loan in the file.
+      const result = mapTransactions(
+        input({
+          transactions: transactionData({
+            transactions: [
+              mnyTransaction({
+                handle: 1,
+                account: 9,
+                amount: 412.6,
+                flags: LOAN_PAYMENT_FLAGS,
+                reference: "0          14",
+              }),
+            ],
+          }),
+        }),
+      );
+
+      expect(result.transactions[0]).toMatchObject({
+        accountKey: "acct-9",
+        referenceNumber: "14",
+      });
+    });
+
     it("gives every transaction a distinct pre-generated id", () => {
       const result = mapTransactions(
         input({

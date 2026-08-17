@@ -16,6 +16,8 @@ import { getOrdinal } from '@/lib/ordinal';
 import { balanceColor } from '@/lib/format';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
 import { useDateFormat } from '@/hooks/useDateFormat';
+import { useChartDateFormat } from '@/hooks/useChartDateFormat';
+import { useLoanProjection } from '@/hooks/useLoanProjection';
 import { InstitutionLogo, InstitutionLogoData } from '@/components/institutions/InstitutionLogo';
 import { InfoTooltip } from '@/components/ui/InfoTooltip';
 import { safeHttpUrl } from '@/lib/safe-url';
@@ -33,6 +35,8 @@ interface AccountInfoWidgetProps {
   institution?: (InstitutionLogoData & { website?: string }) | null;
   /** Scheduled bills/deposits; the soonest for this account is surfaced. */
   scheduledTransactions?: ScheduledTransaction[];
+  /** Bumped by the page on every reload so the loan projection refetches in lockstep. */
+  refreshKey?: number;
   /** Open the shared account edit modal for this account. */
   onEdit: () => void;
   /** Collapse the widget so the chart can use the full width. */
@@ -49,6 +53,7 @@ export function AccountInfoWidget({
   currentBalance,
   institution,
   scheduledTransactions = [],
+  refreshKey,
   onEdit,
   onCollapse,
 }: AccountInfoWidgetProps) {
@@ -57,6 +62,12 @@ export function AccountInfoWidget({
   const router = useRouter();
   const { formatCurrency } = useNumberFormat();
   const { formatDate } = useDateFormat();
+  const formatChartDate = useChartDateFormat();
+  // Loan/mortgage figures: the current installment, the estimated payoff date
+  // and the estimated remaining interest, derived from the account's payment
+  // history exactly as the loan detail page derives them. `idle` for every other
+  // account type, and nothing is fetched for those.
+  const loan = useLoanProjection(account, refreshKey);
 
   // The account number is masked by default and only unmasked while the user
   // holds it open via the eye toggle. The state is intentionally not persisted,
@@ -90,6 +101,8 @@ export function AccountInfoWidget({
     value: string;
     tooltip?: string;
     maskable?: boolean;
+    /** The value is still loading; a placeholder stands in for it. */
+    pending?: boolean;
   }> = [];
   details.push({
     label: t('accountWidget.type'),
@@ -113,6 +126,39 @@ export function AccountInfoWidget({
     details.push({
       label: t('accountWidget.interestRate'),
       value: `${Number(account.interestRate)}%`,
+    });
+  }
+  if (loan.status !== 'idle') {
+    // Every row is rendered even when its value is unknown: dropping one would
+    // make "could not be worked out" look like "does not apply to this loan".
+    const pending = loan.status === 'loading';
+    const unknown = t('accountWidget.notAvailable');
+    details.push({
+      label: t('accountWidget.currentPayment'),
+      value:
+        loan.currentPayment != null
+          ? formatCurrency(loan.currentPayment, account.currencyCode)
+          : unknown,
+      tooltip: t('accountWidget.currentPaymentTooltip'),
+      pending,
+    });
+    details.push({
+      label: t('accountWidget.estPayoff'),
+      value: loan.isSettled
+        ? t('accountWidget.paidOff')
+        : loan.payoffDate
+          ? formatChartDate(loan.payoffDate, 'MMM yyyy')
+          : unknown,
+      pending,
+    });
+    details.push({
+      label: t('accountWidget.estRemainingInterest'),
+      value:
+        loan.remainingInterest != null
+          ? formatCurrency(loan.remainingInterest, account.currencyCode)
+          : unknown,
+      tooltip: t('accountWidget.estRemainingInterestTooltip'),
+      pending,
     });
   }
   if (account.statementSettlementDay) {
@@ -250,7 +296,15 @@ export function AccountInfoWidget({
               {detail.label}
               {detail.tooltip && <InfoTooltip text={detail.tooltip} usePortal />}
             </dt>
-            {detail.maskable ? (
+            {detail.pending ? (
+              <dd
+                aria-busy="true"
+                aria-label={tc('loading')}
+                className="min-w-0 flex items-center justify-end"
+              >
+                <span className="h-4 w-16 rounded bg-gray-200 dark:bg-gray-700 animate-pulse motion-reduce:animate-none" />
+              </dd>
+            ) : detail.maskable ? (
               <dd className="text-gray-900 dark:text-gray-100 min-w-0 flex items-center justify-end gap-1.5">
                 <span className="truncate tracking-wider">
                   {accountNumberVisible

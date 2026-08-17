@@ -161,6 +161,18 @@ one level in. Two bare chevrons a few pixels apart are indistinguishable, so
 `EntitySwitcher` takes `triggerText` and the scenario one reads "Scenario ⌄".
 The bare caret stays the default -- it is unambiguous when it is the only one.
 
+**A detail page's actions sit on the title row, not in a row above the body.**
+`AccountDetailShell` takes `headerActions` for the type-specific ones, beside
+the standard Export/View Transactions/Reconcile/Edit set; the investment view
+had grown its own `flex justify-end` row instead, so that page had two action
+rows and neither was where every other detail page puts one. Type-specific
+actions therefore live in a small component the page passes as `headerActions`
+(`InvestmentDetailActions`), and any signal they need to send the body -- a
+price refresh that the body must re-fetch after -- travels down as a prop
+(`refreshKey`) rather than keeping the button in the body to stay near its own
+state. A button that is `size="sm"` in a report toolbar takes `size="md"` in
+that header, or it stands a few pixels short of everything beside it.
+
 A switcher list too long to scan takes `group` on its items
 (`ReportSwitcher` groups by the section the Reports page files each report
 under, in `REPORT_CATEGORIES` order). Sections follow the order their first
@@ -630,6 +642,29 @@ an outage rather than as a missing case; a response used untrimmed puts last
 month's bars in a month-to-date chart, where they can become its high or low.
 A guard test asserts every member of `INTRADAY_RANGES` maps onto a range the
 endpoint accepts, so a fourth one cannot be added without a mapping.
+
+### A loan's payment, payoff and remaining interest are decided once -- `deriveLoanFigures`
+
+Three figures appear on every amortizing-debt surface (the loan detail page's
+summary cards, the transactions Details sidebar), and each one has a state that
+is neither a number nor "unknown":
+
+- A **settled** debt owes nothing, so its remaining interest is a known **zero**
+  and its payoff is "Paid off" -- not `null`, which reports a finished mortgage
+  as one that could not be worked out. Settled means *nothing outstanding*
+  (`-balance <= 0.01`), so an overpaid loan sitting in credit is settled too;
+  `Math.abs(balance) <= 0.01` read that credit as debt of the same size.
+- A projection that hits its horizon without paying off (`paidOff` false) has no
+  payoff date, and its accumulated interest is the interest over that horizon --
+  a subtotal. Both figures are unknown; printing the horizon's number under
+  "Est. Remaining Interest" is a total's label over a partial sum.
+
+`lib/loan-figures.ts` makes that decision once and both surfaces render its
+output. The data behind it comes from `hooks/useLoanProjection.ts` (which fetches
+the account's history) or from a `baseline` the caller already has -- but never
+from a second copy of the branching. A failed history load is `status: 'error'`
+with every figure unknown, never an empty history, which would project a
+plausible payoff date from no payments at all.
 
 ### An unknown value must not render as a measured zero
 

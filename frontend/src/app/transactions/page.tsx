@@ -1092,6 +1092,7 @@ function TransactionsContent() {
                       currentBalance={retainedWidget.currentBalance}
                       institution={widgetInstitution}
                       scheduledTransactions={scheduledTransactions}
+                      refreshKey={reloadKey}
                       onEdit={() => accountModal.openEdit(retainedWidget.account)}
                       onCollapse={() => setAccountWidgetCollapsed(true)}
                     />
