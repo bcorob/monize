@@ -44,6 +44,10 @@
     "summaryLowest": "最低",
     "summaryMinBalance": "最低結餘",
     "allAccounts": "所有科目",
+    "accountsAriaLabel": "要預測的科目",
+    "totalOfAccounts": "科目總計",
+    "legendAriaLabel": "預測折線",
+    "tooltipTransactionForAccount": "{name} ({account})",
     "unavailableMissingRates": "此預測無法以 {displayCurrency} 顯示：{currencies} 沒有可用匯率，而預測餘額依賴之前的每一天。請新增匯率，或選擇單一貨幣的帳戶。"
   },
   "calendar": {

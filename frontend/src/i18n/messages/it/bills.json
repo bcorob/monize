@@ -44,6 +44,10 @@
     "summaryLowest": "Minimo",
     "summaryMinBalance": "Saldo minimo",
     "allAccounts": "Tutti i conti",
+    "accountsAriaLabel": "Conti della previsione",
+    "totalOfAccounts": "Totale dei conti",
+    "legendAriaLabel": "Linee della previsione",
+    "tooltipTransactionForAccount": "{name} ({account})",
     "unavailableMissingRates": "Questa previsione non può essere mostrata in {displayCurrency}: nessun tasso di cambio disponibile per {currencies}, e un saldo proiettato si basa su ogni giorno precedente. Aggiungi un tasso, oppure scegli un conto a valuta singola."
   },
   "calendar": {

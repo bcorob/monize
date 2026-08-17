@@ -3,6 +3,7 @@ import type { Account } from '@/types/account';
 import type { ScheduledTransaction } from '@/types/scheduled-transaction';
 import {
   buildForecast,
+  buildMultiAccountForecast,
   getForecastSummary,
   getProjectedBalanceAtDate,
   FORECAST_PERIOD_DAYS,
@@ -1430,5 +1431,196 @@ describe('buildForecast — a missing rate withholds the series', () => {
   it('reports no series and no missing currencies for no accounts', () => {
     const result = buildForecast([], [], 'week', 'all', [], convertCadOnly);
     expect(result).toEqual({ points: [], missingCurrencies: [] });
+  });
+});
+
+describe('buildMultiAccountForecast', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2025, 0, 15)); // Jan 15, 2025
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const chequing = makeAccount({ id: 'acc-1', name: 'Chequing', currentBalance: 1000 });
+  const savings = makeAccount({ id: 'acc-2', name: 'Savings', currentBalance: 500 });
+  const on = (
+    result: ReturnType<typeof buildMultiAccountForecast>,
+    date: string,
+  ) => result.points.find(p => p.date === date);
+
+  it('returns one series per selected account, in the order it was given', () => {
+    const result = buildMultiAccountForecast(
+      [chequing, savings], [], 'month', ['acc-2', 'acc-1'],
+    );
+    expect(result.series).toEqual([
+      { accountId: 'acc-2', name: 'Savings' },
+      { accountId: 'acc-1', name: 'Chequing' },
+    ]);
+  });
+
+  it('starts each line at its own balance and the total at their sum', () => {
+    const result = buildMultiAccountForecast(
+      [chequing, savings], [], 'month', ['acc-1', 'acc-2'],
+    );
+    const first = result.points[0];
+    expect(first.balances).toEqual({ 'acc-1': 1000, 'acc-2': 500 });
+    expect(first.balance).toBe(1500);
+  });
+
+  /**
+   * The total is summed from the same rounded per-account figures the lines are
+   * drawn from. Rounding the raw sum instead would put 3000.25 under two lines
+   * reading 1000.13 and 2000.13.
+   */
+  it('totals the rounded per-account figures, not the raw sum', () => {
+    const result = buildMultiAccountForecast(
+      [
+        makeAccount({ id: 'acc-1', name: 'A', currentBalance: 1000.125 }),
+        makeAccount({ id: 'acc-2', name: 'B', currentBalance: 2000.125 }),
+      ],
+      [], 'month', ['acc-1', 'acc-2'],
+    );
+    const first = result.points[0];
+    expect(first.balances).toEqual({ 'acc-1': 1000.13, 'acc-2': 2000.13 });
+    expect(first.balance).toBe(3000.26);
+  });
+
+  it('moves only the account a scheduled transaction belongs to', () => {
+    const transactions = [makeScheduled({
+      id: 'st-1', accountId: 'acc-1', amount: -200,
+      frequency: 'ONCE', nextDueDate: '2025-01-20',
+    })];
+    const result = buildMultiAccountForecast(
+      [chequing, savings], transactions, 'month', ['acc-1', 'acc-2'],
+    );
+    const jan20 = on(result, '2025-01-20');
+    expect(jan20?.balances).toEqual({ 'acc-1': 800, 'acc-2': 500 });
+    expect(jan20?.balance).toBe(1300);
+  });
+
+  it('tags each transaction with the account it moved', () => {
+    const transactions = [makeScheduled({
+      id: 'st-1', name: 'Rent', accountId: 'acc-1', amount: -200,
+      frequency: 'ONCE', nextDueDate: '2025-01-20',
+    })];
+    const result = buildMultiAccountForecast(
+      [chequing, savings], transactions, 'month', ['acc-1', 'acc-2'],
+    );
+    expect(on(result, '2025-01-20')?.transactions).toEqual([
+      { name: 'Rent', amount: -200, scheduledTransactionId: 'st-1', accountId: 'acc-1' },
+    ]);
+  });
+
+  /**
+   * A transfer between two selected accounts is money moving inside the set, so
+   * both lines move and the total does not -- which is what a total of those
+   * accounts means.
+   */
+  it('moves both lines and leaves the total alone for a transfer inside the selection', () => {
+    const transactions = [makeScheduled({
+      id: 'st-1', accountId: 'acc-1', amount: -300,
+      isTransfer: true, transferAccountId: 'acc-2',
+      frequency: 'ONCE', nextDueDate: '2025-01-20',
+    })];
+    const result = buildMultiAccountForecast(
+      [chequing, savings], transactions, 'month', ['acc-1', 'acc-2'],
+    );
+    const jan20 = on(result, '2025-01-20');
+    expect(jan20?.balances).toEqual({ 'acc-1': 700, 'acc-2': 800 });
+    expect(jan20?.balance).toBe(1500);
+  });
+
+  it('takes a transfer out to an unselected account off the total', () => {
+    const outside = makeAccount({ id: 'acc-3', name: 'Outside', currentBalance: 0 });
+    const transactions = [makeScheduled({
+      id: 'st-1', accountId: 'acc-1', amount: -300,
+      isTransfer: true, transferAccountId: 'acc-3',
+      frequency: 'ONCE', nextDueDate: '2025-01-20',
+    })];
+    const result = buildMultiAccountForecast(
+      [chequing, savings, outside], transactions, 'month', ['acc-1', 'acc-2'],
+    );
+    const jan20 = on(result, '2025-01-20');
+    expect(jan20?.balances).toEqual({ 'acc-1': 700, 'acc-2': 500 });
+    expect(jan20?.balance).toBe(1200);
+  });
+
+  it('layers future-dated posted transactions onto their own account', () => {
+    const future: FutureTransaction[] = [
+      { id: 'ft-1', accountId: 'acc-2', name: 'Bonus', amount: 250, date: '2025-01-20' },
+    ];
+    const result = buildMultiAccountForecast(
+      [chequing, savings], [], 'month', ['acc-1', 'acc-2'], future,
+    );
+    const jan20 = on(result, '2025-01-20');
+    expect(jan20?.balances).toEqual({ 'acc-1': 1000, 'acc-2': 750 });
+    expect(jan20?.balance).toBe(1750);
+  });
+
+  it('converts each account through its own currency', () => {
+    const accounts = [
+      makeAccount({ id: 'acc-1', name: 'CAD', currentBalance: 1000, currencyCode: 'CAD' }),
+      makeAccount({ id: 'acc-2', name: 'EUR', currentBalance: 500, currencyCode: 'EUR' }),
+    ];
+    const convert = (amount: number, currency: string) =>
+      currency === 'EUR' ? amount * 2 : amount;
+    const result = buildMultiAccountForecast(
+      accounts, [], 'month', ['acc-1', 'acc-2'], [], convert,
+    );
+    expect(result.points[0].balances).toEqual({ 'acc-1': 1000, 'acc-2': 1000 });
+    expect(result.points[0].balance).toBe(2000);
+  });
+
+  // A projected balance is cumulative: one missing rate makes every later day
+  // wrong, so no line is drawn at all rather than a plausible short one.
+  it('withholds every line and names the currency when one cannot convert', () => {
+    const accounts = [
+      makeAccount({ id: 'acc-1', name: 'CAD', currentBalance: 1000, currencyCode: 'CAD' }),
+      makeAccount({ id: 'acc-2', name: 'EUR', currentBalance: 500, currencyCode: 'EUR' }),
+    ];
+    const convert = (amount: number, currency: string) =>
+      currency === 'EUR' ? null : amount;
+    const result = buildMultiAccountForecast(
+      accounts, [], 'month', ['acc-1', 'acc-2'], [], convert,
+    );
+    expect(result).toEqual({ points: [], series: [], missingCurrencies: ['EUR'] });
+  });
+
+  it('ignores ids with no account behind them', () => {
+    const result = buildMultiAccountForecast(
+      [chequing, savings], [], 'month', ['acc-1', 'gone'],
+    );
+    expect(result.series).toEqual([{ accountId: 'acc-1', name: 'Chequing' }]);
+    expect(result.points[0].balances).toEqual({ 'acc-1': 1000 });
+  });
+
+  it('returns nothing when no selected id matches an account', () => {
+    const result = buildMultiAccountForecast([chequing], [], 'month', ['gone']);
+    expect(result).toEqual({ points: [], series: [], missingCurrencies: [] });
+  });
+
+  it('does not count a repeated id twice', () => {
+    const result = buildMultiAccountForecast(
+      [chequing, savings], [], 'month', ['acc-1', 'acc-1'],
+    );
+    expect(result.series).toEqual([{ accountId: 'acc-1', name: 'Chequing' }]);
+    expect(result.points[0].balance).toBe(1000);
+  });
+
+  it('remaps a scheduled investment onto its funding cash account', () => {
+    const brokerage = makeAccount({ id: 'acc-3', name: 'Brokerage', currentBalance: 0 });
+    const transactions = [makeScheduled({
+      id: 'st-1', accountId: 'acc-3', amount: -400,
+      isInvestment: true, investmentFundingAccountId: 'acc-1',
+      frequency: 'ONCE', nextDueDate: '2025-01-20',
+    } as Partial<ScheduledTransaction>)];
+    const result = buildMultiAccountForecast(
+      [chequing, savings, brokerage], transactions, 'month', ['acc-1', 'acc-2'],
+    );
+    const jan20 = on(result, '2025-01-20');
+    expect(jan20?.balances).toEqual({ 'acc-1': 600, 'acc-2': 500 });
   });
 });

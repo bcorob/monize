@@ -7,6 +7,7 @@ import { Skeleton } from '@/components/ui/LoadingSkeleton';
 import {
   AreaChart,
   Area,
+  ComposedChart,
   LineChart,
   Line,
   XAxis,
@@ -16,7 +17,7 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from 'recharts';
-import { chartColors } from '@/lib/chart-colors';
+import { chartColors, chartSeriesColorAsidePrimary } from '@/lib/chart-colors';
 import { computeBalanceGradient } from '@/lib/balance-history';
 import {
   ChartFlagShadowFilter,
@@ -25,13 +26,15 @@ import {
 } from '@/components/investments/portfolio-chart-utils';
 import { ScheduledTransaction } from '@/types/scheduled-transaction';
 import { Account } from '@/types/account';
-import { Select } from '@/components/ui/Select';
+import { MultiSelect } from '@/components/ui/MultiSelect';
 import { buildAccountDropdownOptions } from '@/lib/account-utils';
 import {
   buildForecast,
+  buildMultiAccountForecast,
   getForecastSummary,
   ForecastPeriod,
   ForecastDataPoint,
+  ForecastAccountSeries,
   FutureTransaction,
   FORECAST_PERIOD_LABELS,
 } from '@/lib/forecast';
@@ -46,25 +49,52 @@ interface CashFlowForecastChartProps {
   isLoading: boolean;
 }
 
+/** One account line, as the chart and its tooltip need it. */
+interface AccountLine {
+  accountId: string;
+  name: string;
+  color: string;
+}
+
+/**
+ * A point on screen. `balances` is present only in multi-account mode, where
+ * `balance` is the total of those per-account figures.
+ */
+type ChartPoint = ForecastDataPoint & { balances?: Record<string, number> };
+
 function CashFlowTooltip({
   active,
   payload,
   formatCurrency,
   formatChartDate,
+  lines = [],
 }: {
   active?: boolean;
-  payload?: Array<{ payload: ForecastDataPoint }>;
+  payload?: Array<{ payload: ChartPoint }>;
   formatCurrency: (v: number) => string;
   formatChartDate: (date: Date | string, pattern: 'MMM d') => string;
+  lines?: AccountLine[];
 }) {
   const t = useTranslations('bills');
   if (active && payload?.[0]) {
     const data = payload[0].payload;
+    const balances = data.balances ?? {};
+    // Every selected account gets a balance at every point, so this only drops
+    // a line the series and the data disagree about -- never a known value.
+    const accountRows = lines.filter(
+      (line) => typeof balances[line.accountId] === 'number',
+    );
+    const accountNames = new Map(lines.map((line) => [line.accountId, line.name]));
     return (
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3 max-w-xs">
         <p className="font-medium text-gray-900 dark:text-gray-100 mb-1">
           {formatChartDate(data.date, 'MMM d')}
         </p>
+        {accountRows.length > 0 && (
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            {t('forecast.totalOfAccounts')}
+          </p>
+        )}
         <p
           className={`text-lg font-semibold ${
             gainLossColor(data.balance)
@@ -72,23 +102,48 @@ function CashFlowTooltip({
         >
           {formatCurrency(data.balance)}
         </p>
+        {accountRows.length > 0 && (
+          <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700 space-y-0.5">
+            {accountRows.map((line) => (
+              <p key={line.accountId} className="flex items-center gap-2 text-sm">
+                <span
+                  aria-hidden="true"
+                  className="inline-block h-2 w-2 shrink-0 rounded-full"
+                  style={{ backgroundColor: line.color }}
+                />
+                <span className="truncate text-gray-700 dark:text-gray-300">{line.name}</span>
+                <span className="ml-auto shrink-0 font-medium text-gray-900 dark:text-gray-100">
+                  {formatCurrency(balances[line.accountId])}
+                </span>
+              </p>
+            ))}
+          </div>
+        )}
         {data.transactions.length > 0 && (
           <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
             <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">
               {t('forecast.tooltipTransactions')}
             </p>
-            {data.transactions.slice(0, 5).map((tx, i) => (
-              <p key={i} className="text-sm text-gray-700 dark:text-gray-300">
-                <span
-                  className={
-                    gainLossColor(tx.amount)
-                  }
-                >
-                  {formatCurrency(tx.amount)}
-                </span>{' '}
-                {tx.name}
-              </p>
-            ))}
+            {data.transactions.slice(0, 5).map((tx, i) => {
+              const accountName = tx.accountId ? accountNames.get(tx.accountId) : undefined;
+              return (
+                <p key={i} className="text-sm text-gray-700 dark:text-gray-300">
+                  <span
+                    className={
+                      gainLossColor(tx.amount)
+                    }
+                  >
+                    {formatCurrency(tx.amount)}
+                  </span>{' '}
+                  {accountName
+                    ? t('forecast.tooltipTransactionForAccount', {
+                        name: tx.name,
+                        account: accountName,
+                      })
+                    : tx.name}
+                </p>
+              );
+            })}
             {data.transactions.length > 5 && (
               <p className="text-xs text-gray-400 dark:text-gray-500">
                 {t('forecast.tooltipMore', { count: data.transactions.length - 5 })}
@@ -104,7 +159,9 @@ function CashFlowTooltip({
 
 const PERIODS: ForecastPeriod[] = ['week', 'month', '90days', '6months', 'year'];
 const STORAGE_KEY_PERIOD = 'cashFlowForecast.period';
-const STORAGE_KEY_ACCOUNT = 'cashFlowForecast.accountId';
+const STORAGE_KEY_ACCOUNTS = 'cashFlowForecast.accountIds';
+/** Pre-multi-select key, holding a single account id or the string 'all'. */
+const STORAGE_KEY_ACCOUNT_LEGACY = 'cashFlowForecast.accountId';
 
 function getStoredPeriod(): ForecastPeriod {
   if (typeof window === 'undefined') return 'month';
@@ -115,9 +172,27 @@ function getStoredPeriod(): ForecastPeriod {
   return 'month';
 }
 
-function getStoredAccountId(): string {
-  if (typeof window === 'undefined') return 'all';
-  return localStorage.getItem(STORAGE_KEY_ACCOUNT) || 'all';
+/**
+ * The stored selection. An empty array means "all accounts", so a user who
+ * never picked one -- and one upgrading from the single-account selector with
+ * 'all' stored -- lands on the same view they had.
+ */
+function getStoredAccountIds(): string[] {
+  if (typeof window === 'undefined') return [];
+  const stored = localStorage.getItem(STORAGE_KEY_ACCOUNTS);
+  if (stored) {
+    try {
+      const parsed: unknown = JSON.parse(stored);
+      if (Array.isArray(parsed)) {
+        return parsed.filter((id): id is string => typeof id === 'string');
+      }
+    } catch {
+      // Unparseable: fall through to the legacy key rather than throwing during
+      // the first render.
+    }
+  }
+  const legacy = localStorage.getItem(STORAGE_KEY_ACCOUNT_LEGACY);
+  return legacy && legacy !== 'all' ? [legacy] : [];
 }
 
 export function CashFlowForecastChart({
@@ -133,7 +208,9 @@ export function CashFlowForecastChart({
   const formatChartDate = useChartDateFormat();
   const { convertToDefault, defaultCurrency } = useExchangeRates();
   const [selectedPeriod, setSelectedPeriod] = useState<ForecastPeriod>(() => getStoredPeriod());
-  const [selectedAccountId, setSelectedAccountId] = useState<string>(() => getStoredAccountId());
+  const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>(() =>
+    getStoredAccountIds(),
+  );
   // High/low value bubbles the user has temporarily dismissed, keyed by the
   // value they marked so a forecast change with a new extreme shows its bubble
   // again. Component-local (not persisted), so it resets on navigation.
@@ -147,31 +224,45 @@ export function CashFlowForecastChart({
 
   // Persist account changes
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_ACCOUNT, selectedAccountId);
-  }, [selectedAccountId]);
+    localStorage.setItem(STORAGE_KEY_ACCOUNTS, JSON.stringify(selectedAccountIds));
+  }, [selectedAccountIds]);
 
   const accountOptions = useMemo(() => {
-    return [
-      { value: 'all', label: t('forecast.allAccounts') },
-      ...buildAccountDropdownOptions(
-        accounts,
-        a => !a.isClosed && a.accountType !== 'ASSET' && a.accountSubType !== 'INVESTMENT_BROKERAGE',
-        a => a.name,
-      ),
-    ];
-  }, [accounts, t]);
+    return buildAccountDropdownOptions(
+      accounts,
+      a => !a.isClosed && a.accountType !== 'ASSET' && a.accountSubType !== 'INVESTMENT_BROKERAGE',
+      a => a.name,
+      // The favourites/rest separator is a disabled row a `<select>` can render
+      // and a checkbox list cannot, so drop it here rather than offering a
+      // selectable rule.
+    ).filter(option => !option.disabled);
+  }, [accounts]);
+
+  /**
+   * The selection, in the picker's own order (favourites first, then
+   * alphabetical) and restricted to accounts still on offer. That order is what
+   * the legend reads and what colours are assigned from, so toggling a checkbox
+   * cannot recolour the lines already drawn.
+   */
+  const orderedAccountIds = useMemo(() => {
+    const selected = new Set(selectedAccountIds);
+    return accountOptions.map(o => o.value).filter(id => selected.has(id));
+  }, [accountOptions, selectedAccountIds]);
+
+  const isMultiAccount = orderedAccountIds.length > 1;
 
   // Determine display currency from selected accounts
   const { chartCurrency, needsConversion } = useMemo(() => {
-    const targetAccounts = selectedAccountId === 'all'
+    const selected = new Set(orderedAccountIds);
+    const targetAccounts = selected.size === 0
       ? accounts.filter(a => !a.isClosed)
-      : accounts.filter(a => a.id === selectedAccountId);
+      : accounts.filter(a => selected.has(a.id));
     const currencies = new Set(targetAccounts.map(a => a.currencyCode));
     return {
       chartCurrency: currencies.size === 1 ? [...currencies][0] : defaultCurrency,
       needsConversion: currencies.size > 1,
     };
-  }, [accounts, selectedAccountId, defaultCurrency]);
+  }, [accounts, orderedAccountIds, defaultCurrency]);
 
   const formatCurrency = useCallback(
     (value: number) => formatCurrencyFull(value, chartCurrency),
@@ -188,17 +279,41 @@ export function CashFlowForecastChart({
     [formatCurrencyFlag, chartCurrency],
   );
 
-  const forecast = useMemo(() => {
-    return buildForecast(
-      accounts, scheduledTransactions, selectedPeriod, selectedAccountId, futureTransactions,
-      needsConversion ? convertToDefault : undefined,
+  const forecast = useMemo<{
+    points: ChartPoint[];
+    series: ForecastAccountSeries[];
+    missingCurrencies: string[];
+  }>(() => {
+    const convert = needsConversion ? convertToDefault : undefined;
+    if (isMultiAccount) {
+      return buildMultiAccountForecast(
+        accounts, scheduledTransactions, selectedPeriod, orderedAccountIds, futureTransactions,
+        convert,
+      );
+    }
+    // One account (or none, meaning all of them) is a single line, and that
+    // line already is the total -- so it keeps the filled-area presentation
+    // unchanged.
+    const single = buildForecast(
+      accounts, scheduledTransactions, selectedPeriod, orderedAccountIds[0] ?? 'all',
+      futureTransactions, convert,
     );
-  }, [accounts, scheduledTransactions, selectedPeriod, selectedAccountId, futureTransactions, needsConversion, convertToDefault]);
+    return { points: single.points as ChartPoint[], series: [], missingCurrencies: single.missingCurrencies };
+  }, [accounts, scheduledTransactions, selectedPeriod, orderedAccountIds, isMultiAccount, futureTransactions, needsConversion, convertToDefault]);
   const forecastData = forecast.points;
   // A projected balance is cumulative, so one missing rate makes every day after
-  // it wrong. `buildForecast` returns no points in that case and names the
+  // it wrong. The forecast builders return no points in that case and name the
   // currencies; the chart says so instead of drawing a plausible line.
   const forecastUnavailable = forecast.missingCurrencies.length > 0;
+
+  const accountLines: AccountLine[] = useMemo(
+    () => forecast.series.map((s, i) => ({
+      accountId: s.accountId,
+      name: s.name,
+      color: chartSeriesColorAsidePrimary(i),
+    })),
+    [forecast.series],
+  );
 
   const summary = useMemo(() => {
     return getForecastSummary(forecastData);
@@ -227,6 +342,24 @@ export function CashFlowForecastChart({
     () => computeBalanceGradient(forecastData.map((point) => point.balance)),
     [forecastData],
   );
+
+  const renderTotalFlagDots = (props: { cx?: number; cy?: number; index?: number }) =>
+    renderMinMaxFlagDots({
+      cx: props.cx,
+      cy: props.cy,
+      index: props.index,
+      flags,
+      pointCount: forecastData.length,
+      highColor: chartColors.income,
+      lowColor: chartColors.expense,
+      highLabel,
+      lowLabel,
+      highDismissed,
+      lowDismissed,
+      onDismissHigh: () => setDismissedHigh(highValue),
+      onDismissLow: () => setDismissedLow(lowValue),
+      dismissLabel: tc('chartFlag.dismiss'),
+    });
 
   if (isLoading) {
     return (
@@ -293,17 +426,41 @@ export function CashFlowForecastChart({
               </button>
             ))}
           </div>
-          {/* Account selector */}
+          {/* Account selector: no selection means every account, as one line */}
           <div className="w-48">
-            <Select
-              value={selectedAccountId}
-              onChange={(e) => setSelectedAccountId(e.target.value)}
-              options={accountOptions}
-              className="text-sm"
+            <MultiSelect
+              ariaLabel={t('forecast.accountsAriaLabel')}
+              placeholder={t('forecast.allAccounts')}
+              options={accountOptions.map(o => ({ value: o.value, label: o.label }))}
+              value={orderedAccountIds}
+              onChange={setSelectedAccountIds}
             />
           </div>
         </div>
       </div>
+
+      {/* Legend: only meaningful once there is more than one line */}
+      {accountLines.length > 0 && forecastData.length > 0 && (
+        <ul
+          aria-label={t('forecast.legendAriaLabel')}
+          className="flex flex-wrap items-center gap-x-4 gap-y-1 mb-3 text-xs"
+        >
+          {([
+            { accountId: '', name: t('forecast.totalOfAccounts'), color: chartColors.primary },
+            ...accountLines,
+          ] as AccountLine[])
+            .map((line) => (
+              <li key={line.accountId} className="flex items-center gap-1.5">
+                <span
+                  aria-hidden="true"
+                  className="inline-block h-2.5 w-2.5 rounded-sm"
+                  style={{ backgroundColor: line.color }}
+                />
+                <span className="text-gray-600 dark:text-gray-300">{line.name}</span>
+              </li>
+            ))}
+        </ul>
+      )}
 
       {/* Chart */}
       {forecastData.length === 0 ? (
@@ -314,6 +471,92 @@ export function CashFlowForecastChart({
              scheduledTransactions.length === 0 ? t('forecast.noScheduled') :
              t('forecast.noMatchingAccount')}
           </p>
+        </div>
+      ) : isMultiAccount ? (
+        <div className="h-72" style={{ minHeight: 288 }}>
+          {totalForecastedTransactions === 0 && (
+            <div className="text-center text-sm text-gray-500 dark:text-gray-400 mb-2">
+              {t('forecast.noUpcoming')}
+            </div>
+          )}
+          <ResponsiveContainer
+            width="100%"
+            height={totalForecastedTransactions === 0 ? '90%' : '100%'}
+            minWidth={0}
+          >
+            {/* top margin leaves headroom for the high-value bubble callout */}
+            <ComposedChart data={forecastData} margin={{ left: 0, right: 8, top: 20, bottom: 0 }}>
+              <defs>
+                <linearGradient id="forecastBalance" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset={0} stopColor={chartColors.primary} stopOpacity={areaGradient.topOpacity} />
+                  <stop offset={areaGradient.zeroOffset} stopColor={chartColors.primary} stopOpacity={0} />
+                  <stop offset={1} stopColor={chartColors.primary} stopOpacity={areaGradient.bottomOpacity} />
+                </linearGradient>
+              </defs>
+              <ChartFlagShadowFilter />
+              <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} />
+              <XAxis
+                dataKey="date"
+                tickFormatter={(value: string) => formatChartDate(value, 'MMM d')}
+                tick={{ fill: chartColors.axis, fontSize: 12 }}
+                tickLine={false}
+                axisLine={{ stroke: chartColors.grid }}
+                interval="preserveStartEnd"
+              />
+              <YAxis
+                tick={{ fill: chartColors.axis, fontSize: 11 }}
+                tickLine={false}
+                axisLine={false}
+                tickFormatter={formatAxis}
+                width="auto"
+                domain={['auto', 'auto']}
+              />
+              <Tooltip
+                content={
+                  <CashFlowTooltip
+                    formatCurrency={formatCurrency}
+                    formatChartDate={formatChartDate}
+                    lines={accountLines}
+                  />
+                }
+              />
+              <ReferenceLine y={0} stroke={chartColors.expense} strokeDasharray="5 5" strokeOpacity={0.5} />
+              {summary.minBalance !== summary.startingBalance && (
+                <ReferenceLine
+                  y={summary.minBalance}
+                  stroke={summary.minBalance < 0 ? chartColors.expense : chartColors.warning}
+                  strokeDasharray="3 3"
+                  strokeOpacity={0.4}
+                />
+              )}
+              {/* The total keeps the single-account fill; the members are lines */}
+              <Area
+                type="monotone"
+                dataKey="balance"
+                name={t('forecast.totalOfAccounts')}
+                stroke={chartColors.primary}
+                strokeWidth={2}
+                fillOpacity={1}
+                fill="url(#forecastBalance)"
+                dot={renderTotalFlagDots}
+                activeDot={{ r: 6, fill: chartColors.primary }}
+              />
+              {accountLines.map((line) => (
+                <Line
+                  key={line.accountId}
+                  type="monotone"
+                  dataKey={`balances.${line.accountId}`}
+                  name={line.name}
+                  stroke={line.color}
+                  strokeWidth={1.5}
+                  fill="none"
+                  dot={false}
+                  connectNulls={false}
+                  activeDot={{ r: 4, fill: line.color }}
+                />
+              ))}
+            </ComposedChart>
+          </ResponsiveContainer>
         </div>
       ) : totalForecastedTransactions === 0 ? (
         <div className="h-72" style={{ minHeight: 288 }}>
@@ -388,24 +631,7 @@ export function CashFlowForecastChart({
                 strokeWidth={2}
                 fillOpacity={1}
                 fill="url(#forecastBalance)"
-                dot={(props: { cx?: number; cy?: number; index?: number }) =>
-                  renderMinMaxFlagDots({
-                    cx: props.cx,
-                    cy: props.cy,
-                    index: props.index,
-                    flags,
-                    pointCount: forecastData.length,
-                    highColor: chartColors.income,
-                    lowColor: chartColors.expense,
-                    highLabel,
-                    lowLabel,
-                    highDismissed,
-                    lowDismissed,
-                    onDismissHigh: () => setDismissedHigh(highValue),
-                    onDismissLow: () => setDismissedLow(lowValue),
-                    dismissLabel: tc('chartFlag.dismiss'),
-                  })
-                }
+                dot={renderTotalFlagDots}
                 activeDot={{ r: 6, fill: chartColors.primary }}
               />
             </AreaChart>

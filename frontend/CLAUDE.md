@@ -2,6 +2,11 @@
 
 Next.js App Router application. All commands run from this directory.
 
+Two cross-layer contracts in `docs/` bind this layer, and both have been violated here before. [`docs/system-invariants.md`](../docs/system-invariants.md) indexes them and records whether the code currently upholds each:
+
+- [`docs/financial-semantics.md`](../docs/financial-semantics.md) -- a figure the server could not compute must not be rendered as a measured one, splits are validated at the storage precision (4dp, not cents), and a stored override price is never replaced by a fresh quote as a side effect of opening a dialog (INV-OCCURRENCE-002).
+- [`docs/verification-contract.md`](../docs/verification-contract.md) -- where a mistake is mechanical, the durable guard is a source scan rather than a test of one component. `src/test/ui-conventions.test.ts` is the pattern; INV-CACHE-001 is owed one, because `invalidateBalanceCaches` drops two cache prefixes and `budgets:` is not among them.
+
 ## Commands
 
 ```bash
@@ -673,7 +678,9 @@ Pick the treatment from what the figure is:
 - **A cumulative series** (a running balance, a forecast) is withheld whole:
   one missing rate invalidates every point after it, so `buildForecast` returns
   no points and names the currencies. A short series there is not a partial
-  answer, it is a wrong one.
+  answer, it is a wrong one. `buildMultiAccountForecast` withholds every line
+  and the total together for the same reason -- the accounts that *did* convert
+  are not a smaller forecast, they are a total labelled as something it is not.
 - **A summary over a series** (`computeBalanceSummary`) refuses when any point
   is unknown. "Minimum" and "goes negative" are claims about all of it.
 
@@ -773,6 +780,8 @@ Colour themes are pure CSS variable overrides in `src/app/themes.css` (`html[dat
 **The tokens cover more than series colour.** `chartColors.grid` and `.axis` carry their own dark overrides, so a `CartesianGrid` using them needs no `dark:stroke-*` class beside it. `chartColors.surface` is the card behind the chart -- use it for the ring around a marker dot, which exists to separate the dot from the line beneath it and so must be the background, not white. `chartColors.neutral` is for unclassified data (an "Other" slice, an item with no colour). `ui-conventions.test.ts` fails on any hex reaching a `fill`, `stroke` or `stopColor` in a component that imports recharts. Two things it deliberately does not police: `summaryCards[].color` for the PDF export, where `pdf-export.ts` parses the string as hex and a `var(...)` would produce NaN, and colour on a *data* field (`color:` on a datum), which is indistinguishable from the PDF case by regex. White drawn on top of a filled shape -- label text inside a coloured flag bubble -- is contrast-on-fill and stays literal; `surface` there would be invisible in dark mode.
 
 **Spending is not an error: default a breakdown to `chartColors.primary`, not `chartColors.expense`.** Red is loud and the app spends it deliberately -- the Monthly Totals chart, where a loss month is the point. A routine breakdown (top categories, paid-from accounts, a seasonality strip) is a magnitude comparison, so its bars take the theme accent, which re-colours per palette because `--chart-primary` follows the theme's blue ramp. Keep `chartColors.income` for genuine inflows so a refund is still distinguishable; that leaves red spent only where it means something. `TopGroupsPanel` and `PayeeSeasonalityPanel` are the worked examples, and both carry a guard test asserting no `bg-`/`text-red|green-N` and no `var(--chart-expense)` survives in their output. Note that `income`/`expense` remain right for a chart genuinely *about* the in/out split -- the rule is about breakdowns that merely happen to be negative.
+
+**A member series drawn beside a total takes `chartSeriesColorAsidePrimary`, not `chartSeriesColor`.** `--chart-1` is the theme accent in every palette in `themes.css`, and so is `--chart-primary` -- so a chart that draws an aggregate line in `chartColors.primary` and starts its members at palette slot 0 hands the first member the total's own colour, in the chart, the legend and the tooltip alike. The helper excludes that slot from the cycle rather than deferring it, because a modulo over the full palette gives it back on the tenth series: the same collision, arriving late. `CashFlowForecastChart`'s "Total of Accounts" line and its per-account lines are the worked example; `chart-colors.test.ts` pins both halves. Use plain `chartSeriesColor` where there is no primary series to collide with.
 
 ## Security Notes
 

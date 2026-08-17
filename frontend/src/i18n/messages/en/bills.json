@@ -44,6 +44,10 @@
     "summaryLowest": "Lowest",
     "summaryMinBalance": "Min Balance",
     "allAccounts": "All Accounts",
+    "accountsAriaLabel": "Accounts to forecast",
+    "totalOfAccounts": "Total of Accounts",
+    "legendAriaLabel": "Forecast lines",
+    "tooltipTransactionForAccount": "{name} ({account})",
     "unavailableMissingRates": "This forecast cannot be shown in {displayCurrency}: no exchange rate is available for {currencies}, and a projected balance builds on every day before it. Add a rate, or pick a single-currency account."
   },
   "calendar": {

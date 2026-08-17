@@ -44,6 +44,10 @@
     "summaryLowest": "最低",
     "summaryMinBalance": "最低残高",
     "allAccounts": "すべての勘定科目",
+    "accountsAriaLabel": "予測する勘定科目",
+    "totalOfAccounts": "勘定科目の合計",
+    "legendAriaLabel": "予測の線",
+    "tooltipTransactionForAccount": "{name} ({account})",
     "unavailableMissingRates": "この予測は {displayCurrency} では表示できません。{currencies} の為替レートがなく、予測残高はそれ以前のすべての日を土台にするためです。レートを追加するか、単一通貨の口座を選んでください。"
   },
   "calendar": {

@@ -135,8 +135,19 @@ function AccountsContent() {
 
   const summary = useMemo(() => {
     const activeAccounts = accounts.filter((a) => !a.isClosed);
-    const assets = activeAccounts.filter((a) => !LIABILITY_TYPES.includes(a.accountType));
-    const liabilities = activeAccounts.filter((a) => LIABILITY_TYPES.includes(a.accountType));
+    // An account the user excluded from net worth contributes to none of the
+    // three money cards. Assets - Liabilities is the Net Worth card beside
+    // them, so dropping the account from one and not the others would leave
+    // the row unable to add up -- and the server's net worth series applies
+    // the same predicate to both sides (net-worth.service.ts's
+    // `exclude_from_net_worth = false`), which is what "it excludes it
+    // elsewhere" refers to. The account count is a count of accounts, not of
+    // money, so it stays over every active account.
+    // A joint account carries the grantee's own overlay in this same field,
+    // so no separate branch is needed for it.
+    const countedAccounts = activeAccounts.filter((a) => !a.excludeFromNetWorth);
+    const assets = countedAccounts.filter((a) => !LIABILITY_TYPES.includes(a.accountType));
+    const liabilities = countedAccounts.filter((a) => LIABILITY_TYPES.includes(a.accountType));
 
     // An account whose contribution is unknown -- a brokerage whose valuation
     // failed -- has no currency to name, so it is excluded by count and kept

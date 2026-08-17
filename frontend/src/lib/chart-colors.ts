@@ -56,3 +56,21 @@ export const CHART_SERIES = [
 export function chartSeriesColor(i: number): string {
   return CHART_SERIES[i % CHART_SERIES.length];
 }
+
+/**
+ * Categorical colour for series `i` in a chart that *also* draws a
+ * `chartColors.primary` series -- a total, a benchmark, an aggregate line the
+ * members sit beside.
+ *
+ * `--chart-1` is the theme accent in every palette, which is what
+ * `--chart-primary` is too, so `chartSeriesColor(0)` would hand the first
+ * member the total's own colour and make the two indistinguishable in the
+ * chart, the legend and the tooltip. The first slot is excluded from the cycle
+ * entirely rather than merely deferred -- a modulo over the full palette gives
+ * it back on the tenth series, which is the same collision arriving late. Use
+ * `chartSeriesColor` when there is no primary series to collide with.
+ */
+export function chartSeriesColorAsidePrimary(i: number): string {
+  const usable = CHART_SERIES.length - 1;
+  return CHART_SERIES[1 + (i % usable)];
+}

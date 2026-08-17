@@ -44,6 +44,10 @@
     "summaryLowest": "Thấp nhất",
     "summaryMinBalance": "Số dư tối thiểu",
     "allAccounts": "Tất cả tài khoản",
+    "accountsAriaLabel": "Tài khoản cần dự báo",
+    "totalOfAccounts": "Tổng các tài khoản",
+    "legendAriaLabel": "Các đường dự báo",
+    "tooltipTransactionForAccount": "{name} ({account})",
     "unavailableMissingRates": "Không thể hiển thị dự báo này bằng {displayCurrency}: không có tỷ giá cho {currencies}, và số dư dự phóng dựa trên mọi ngày trước đó. Hãy thêm tỷ giá, hoặc chọn một tài khoản chỉ dùng một loại tiền tệ."
   },
   "calendar": {

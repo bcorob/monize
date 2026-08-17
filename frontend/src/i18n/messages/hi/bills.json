@@ -44,6 +44,10 @@
     "summaryLowest": "न्यूनतम",
     "summaryMinBalance": "न्यूनतम शेष",
     "allAccounts": "सभी खाते",
+    "accountsAriaLabel": "पूर्वानुमान के लिए खाते",
+    "totalOfAccounts": "खातों का कुल",
+    "legendAriaLabel": "पूर्वानुमान रेखाएँ",
+    "tooltipTransactionForAccount": "{name} ({account})",
     "unavailableMissingRates": "यह पूर्वानुमान {displayCurrency} में नहीं दिखाया जा सकता: {currencies} के लिए कोई विनिमय दर उपलब्ध नहीं है, और अनुमानित शेष उससे पहले के हर दिन पर आधारित होता है। एक दर जोड़ें, या एकल-मुद्रा खाता चुनें।"
   },
   "calendar": {

@@ -44,6 +44,10 @@
     "summaryLowest": "Terendah",
     "summaryMinBalance": "Saldo Min",
     "allAccounts": "Semua Akun",
+    "accountsAriaLabel": "Akun untuk prakiraan",
+    "totalOfAccounts": "Total Akun",
+    "legendAriaLabel": "Garis prakiraan",
+    "tooltipTransactionForAccount": "{name} ({account})",
     "unavailableMissingRates": "Prakiraan ini tidak dapat ditampilkan dalam {displayCurrency}: tidak ada nilai tukar untuk {currencies}, dan saldo proyeksi dibangun dari setiap hari sebelumnya. Tambahkan kurs, atau pilih akun satu mata uang."
   },
   "calendar": {

@@ -44,6 +44,10 @@
     "summaryLowest": "最低",
     "summaryMinBalance": "最低余额",
     "allAccounts": "所有账户",
+    "accountsAriaLabel": "要预测的账户",
+    "totalOfAccounts": "账户合计",
+    "legendAriaLabel": "预测折线",
+    "tooltipTransactionForAccount": "{name} ({account})",
     "unavailableMissingRates": "此预测无法以 {displayCurrency} 显示：{currencies} 没有可用汇率，而预测余额依赖之前的每一天。请添加汇率，或选择单一货币的账户。"
   },
   "calendar": {

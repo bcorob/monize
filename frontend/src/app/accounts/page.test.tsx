@@ -337,6 +337,79 @@ describe('AccountsPage', () => {
     });
   });
 
+  /**
+   * An account flagged out of net worth was rendered into all three money
+   * cards, so the Accounts page reported a net worth that disagreed with every
+   * other surface (the server's net-worth series filters on
+   * `exclude_from_net_worth = false`). The flag governs the three money totals
+   * and not the account count.
+   */
+  describe('an account excluded from net worth', () => {
+    const excludedFixture = [
+      { id: 'acc-1', name: 'Checking', accountType: 'CHECKING', accountSubType: null, currencyCode: 'USD', currentBalance: 5000, isClosed: false, canDelete: true, excludeFromNetWorth: false },
+      { id: 'acc-2', name: 'Vacation Fund', accountType: 'SAVINGS', accountSubType: null, currencyCode: 'USD', currentBalance: 10000, isClosed: false, canDelete: true, excludeFromNetWorth: true },
+      { id: 'acc-3', name: 'Credit Card', accountType: 'CREDIT_CARD', accountSubType: null, currencyCode: 'USD', currentBalance: -2000, isClosed: false, canDelete: true, excludeFromNetWorth: false },
+      { id: 'acc-4', name: 'Store Card', accountType: 'CREDIT_CARD', accountSubType: null, currencyCode: 'USD', currentBalance: -700, isClosed: false, canDelete: true, excludeFromNetWorth: true },
+    ];
+
+    it('leaves an excluded asset out of Net Worth and Total Assets', async () => {
+      mockGetAll.mockResolvedValue(excludedFixture);
+      render(<AccountsPage />);
+      await waitFor(() => {
+        // 5000 only -- the 10000 savings account is excluded.
+        expect(screen.getByTestId('summary-Total Assets')).toHaveTextContent('$5000.00');
+      });
+      // 5000 - 2000; neither excluded account contributes.
+      expect(screen.getByTestId('summary-Net Worth')).toHaveTextContent('$3000.00');
+    });
+
+    it('leaves an excluded liability out of Net Worth and Total Liabilities', async () => {
+      mockGetAll.mockResolvedValue(excludedFixture);
+      render(<AccountsPage />);
+      await waitFor(() => {
+        // 2000 only -- the 700 store card is excluded.
+        expect(screen.getByTestId('summary-Total Liabilities')).toHaveTextContent('$2000.00');
+      });
+    });
+
+    it('still counts an excluded account in Total Active Accounts', async () => {
+      mockGetAll.mockResolvedValue(excludedFixture);
+      render(<AccountsPage />);
+      await waitFor(() => {
+        // The flag is about money, not about how many accounts the user has.
+        expect(screen.getByTestId('summary-Total Active Accounts')).toHaveTextContent('4');
+      });
+    });
+
+    it('leaves an excluded brokerage account out of the totals', async () => {
+      mockGetAll.mockResolvedValue([
+        { id: 'acc-1', name: 'Checking', accountType: 'CHECKING', accountSubType: null, currencyCode: 'USD', currentBalance: 5000, isClosed: false, canDelete: true, excludeFromNetWorth: false },
+        { id: 'acc-5', name: 'Brokerage', accountType: 'INVESTMENT', accountSubType: 'INVESTMENT_BROKERAGE', currencyCode: 'USD', currentBalance: 0, isClosed: false, canDelete: false, excludeFromNetWorth: true },
+      ]);
+      mockGetPortfolioSummary.mockResolvedValue({
+        holdingsByAccount: [
+          { accountId: 'acc-5', totalMarketValue: 50000, cashBalance: 0, unpricedHoldingsCount: 0 },
+        ],
+      });
+      render(<AccountsPage />);
+      await waitFor(() => {
+        expect(screen.getByTestId('summary-Total Assets')).toHaveTextContent('$5000.00');
+      });
+      expect(screen.getByTestId('summary-Net Worth')).toHaveTextContent('$5000.00');
+    });
+
+    it('does not mark the totals partial merely because an account is excluded', async () => {
+      mockGetAll.mockResolvedValue(excludedFixture);
+      render(<AccountsPage />);
+      await waitFor(() => {
+        expect(screen.getByTestId('summary-Net Worth')).toHaveTextContent('$3000.00');
+      });
+      // An account the user chose to leave out is not an unknown value: the
+      // remaining total is complete, so it keeps its measured presentation.
+      expect(screen.getByTestId('summary-Net Worth')).not.toHaveTextContent('partial total');
+    });
+  });
+
   it('handles API error gracefully', async () => {
     const { showErrorToast } = await import('@/lib/errors');
     mockGetAll.mockRejectedValueOnce(new Error('Network error'));

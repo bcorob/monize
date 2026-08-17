@@ -17,12 +17,42 @@ export interface ForecastTransaction {
   name: string;
   amount: number;
   scheduledTransactionId: string;
+  /**
+   * The account the amount moved. Only the multi-account forecast populates it,
+   * because only there can one point carry transactions from more than one
+   * account and the tooltip has to say which.
+   */
+  accountId?: string;
 }
 
 export interface ForecastDataPoint {
   date: string;
   balance: number;
   transactions: ForecastTransaction[];
+}
+
+/** One account's line in a multi-account forecast. */
+export interface ForecastAccountSeries {
+  accountId: string;
+  name: string;
+}
+
+/**
+ * A forecast point covering several accounts at once.
+ *
+ * `balance` is the "Total of Accounts" figure and is the sum of `balances` --
+ * summed from the same rounded per-account values the lines are drawn from, so
+ * the total on screen is exactly the total of the lines on screen rather than a
+ * separately rounded figure that can sit a cent away from them.
+ */
+export interface MultiAccountForecastPoint extends ForecastDataPoint {
+  balances: Record<string, number>;
+}
+
+export interface MultiAccountForecastResult {
+  points: MultiAccountForecastPoint[];
+  series: ForecastAccountSeries[];
+  missingCurrencies: string[];
 }
 
 /**
@@ -240,6 +270,34 @@ function normalizeInvestmentForForecast(
 }
 
 /**
+ * The active scheduled transactions that move `accountId`, each flagged with
+ * whether this account is the *destination* of a transfer -- the stored amount
+ * is the source's (negative), so the destination receives its negation.
+ *
+ * The single-account forecast and every line of the multi-account forecast go
+ * through this, so one account's projection cannot mean two different things
+ * depending on which chart drew it.
+ */
+function scheduledFlowsForAccount(
+  transactions: ScheduledTransaction[],
+  accountId: string,
+): Array<{ transaction: ScheduledTransaction; isInbound: boolean }> {
+  return transactions
+    .filter(
+      t =>
+        t.isActive &&
+        (t.accountId === accountId || (isTransfer(t) && t.transferAccountId === accountId)),
+    )
+    .map(transaction => ({
+      transaction,
+      isInbound:
+        isTransfer(transaction) &&
+        transaction.transferAccountId === accountId &&
+        transaction.accountId !== accountId,
+    }));
+}
+
+/**
  * Build forecast data points for the cash flow chart.
  *
  * futureTransactions: already-posted transactions with a date after today.
@@ -327,18 +385,16 @@ export function buildForecast(
   // Filter scheduled transactions by account
   // For a specific account, include transfers where this account is the destination
   // (transferAccountId) since those represent money coming IN to this account.
-  const relevantTransactions = accountId === 'all'
+  // Inbound transfers (this account is the destination) carry the source's
+  // negative amount, so they are negated below.
+  const relevantFlows = accountId === 'all'
     ? // Only target (non-closed) accounts: a schedule on a closed account is not
       // part of this forecast, and its currency is not in the map, so including
       // it would add an unconverted foreign amount to the running balance.
-      transactions.filter(t => t.isActive && !isTransfer(t) && targetAccountIds.has(t.accountId))
-    : transactions.filter(t => t.isActive && (t.accountId === accountId || (isTransfer(t) && t.transferAccountId === accountId)));
-
-  // Track which transactions are inbound transfers (destination account matches)
-  // so we can negate their amounts (source amount is negative, destination receives positive)
-  const inboundTransferIds = accountId !== 'all'
-    ? new Set(transactions.filter(t => t.isActive && isTransfer(t) && t.transferAccountId === accountId && t.accountId !== accountId).map(t => t.id))
-    : new Set<string>();
+      transactions
+        .filter(t => t.isActive && !isTransfer(t) && targetAccountIds.has(t.accountId))
+        .map(transaction => ({ transaction, isInbound: false }))
+    : scheduledFlowsForAccount(transactions, accountId);
 
   // Generate all occurrences and group by date
   const transactionsByDate = new Map<string, ForecastTransaction[]>();
@@ -354,9 +410,8 @@ export function buildForecast(
     transactionsByDate.set(ft.date, existing);
   }
 
-  for (const tx of relevantTransactions) {
+  for (const { transaction: tx, isInbound } of relevantFlows) {
     const occurrences = generateOccurrences(tx, today, endDate);
-    const isInbound = inboundTransferIds.has(tx.id);
     const txAccountId = isInbound ? (tx.transferAccountId ?? tx.accountId) : tx.accountId;
     for (const occ of occurrences) {
       const existing = transactionsByDate.get(occ.date) || [];
@@ -413,6 +468,167 @@ export function buildForecast(
     return { points: [], missingCurrencies: [...missingRateCurrencies] };
   }
   return { points: dataPoints, missingCurrencies: [] };
+}
+
+/**
+ * Build one forecast line per selected account, plus the "Total of Accounts"
+ * line that is their sum.
+ *
+ * Each line uses the same rules as the single-account forecast
+ * (`scheduledFlowsForAccount`): the account's own schedules, plus transfers
+ * where it is the destination. So a transfer between two selected accounts
+ * moves both lines and nets to zero in the total -- which is what a total of
+ * those accounts means -- while a transfer out to an account that is not
+ * selected leaves the total, as it should.
+ *
+ * Every line shares one y-axis, so every line is in one currency: each
+ * account's balances and amounts are converted into the display currency
+ * through `convertAmount`. As in `buildForecast`, a projected balance is
+ * cumulative, so one missing rate withholds the whole result rather than
+ * drawing a plausible line.
+ *
+ * `accountIds` order is preserved: it is the order the legend reads and the
+ * order colours are assigned in, and the caller -- not this function -- knows
+ * how its account picker sorts.
+ */
+export function buildMultiAccountForecast(
+  accounts: Account[],
+  transactions: ScheduledTransaction[],
+  period: ForecastPeriod,
+  accountIds: string[],
+  futureTransactions: FutureTransaction[] = [],
+  convertAmount?: (amount: number, currencyCode: string) => number | null,
+): MultiAccountForecastResult {
+  const accountsById = new Map(accounts.map(a => [a.id, a]));
+  const normalized = transactions.map(t => normalizeInvestmentForForecast(t, accountsById));
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayKey = formatDateKey(today);
+
+  const days = FORECAST_PERIOD_DAYS[period];
+  const endDate = new Date(today);
+  endDate.setDate(endDate.getDate() + days);
+  const granularity = getGranularity(period);
+
+  const targetAccounts = [...new Set(accountIds)]
+    .map(id => accountsById.get(id))
+    .filter((a): a is Account => a !== undefined);
+
+  if (targetAccounts.length === 0) {
+    return { points: [], series: [], missingCurrencies: [] };
+  }
+
+  // An unknown rate contributes nothing and sets the flag; the whole result is
+  // withheld below rather than reported as a shorter, wrong series.
+  const missingRateCurrencies = new Set<string>();
+  const conv = (amount: number, currencyCode: string): number => {
+    if (!convertAmount) return amount;
+    const converted = convertAmount(amount, currencyCode);
+    if (converted === null) {
+      missingRateCurrencies.add(currencyCode);
+      return 0;
+    }
+    return converted;
+  };
+
+  const startingBalances = new Map<string, number>();
+  const flowsByAccount = new Map<string, Map<string, ForecastTransaction[]>>();
+
+  for (const account of targetAccounts) {
+    startingBalances.set(
+      account.id,
+      conv(Number(account.currentBalance), account.currencyCode),
+    );
+
+    const byDate = new Map<string, ForecastTransaction[]>();
+    const add = (date: string, entry: ForecastTransaction) => {
+      byDate.set(date, [...(byDate.get(date) ?? []), entry]);
+    };
+
+    // currentBalance excludes future-dated posted transactions, so they are
+    // layered onto their own dates -- same as the single-account forecast.
+    for (const ft of futureTransactions) {
+      if (ft.accountId !== account.id || ft.date <= todayKey) continue;
+      add(ft.date, {
+        name: ft.name,
+        amount: conv(ft.amount, account.currencyCode),
+        scheduledTransactionId: ft.id,
+        accountId: account.id,
+      });
+    }
+
+    for (const { transaction, isInbound } of scheduledFlowsForAccount(normalized, account.id)) {
+      for (const occ of generateOccurrences(transaction, today, endDate)) {
+        add(occ.date, {
+          name: transaction.name,
+          amount: conv(isInbound ? -occ.amount : occ.amount, account.currencyCode),
+          scheduledTransactionId: transaction.id,
+          accountId: account.id,
+        });
+      }
+    }
+
+    flowsByAccount.set(account.id, byDate);
+  }
+
+  const running = new Map<string, number>(startingBalances);
+  const points: MultiAccountForecastPoint[] = [];
+  let lastAddedTime: number | null = null;
+
+  for (let dayOffset = 0; dayOffset <= days; dayOffset++) {
+    const currentDate = new Date(today.getTime());
+    currentDate.setDate(today.getDate() + dayOffset);
+    const currentTime = currentDate.getTime();
+    const dateKey = formatDateKey(currentDate);
+
+    const dayTransactions: ForecastTransaction[] = [];
+    for (const account of targetAccounts) {
+      const dayFlows = flowsByAccount.get(account.id)?.get(dateKey);
+      if (!dayFlows) continue;
+      running.set(
+        account.id,
+        dayFlows.reduce((sum, tx) => sum + tx.amount, running.get(account.id) ?? 0),
+      );
+      dayTransactions.push(...dayFlows);
+    }
+
+    const daysSinceLastPoint = lastAddedTime === null
+      ? granularity
+      : Math.floor((currentTime - lastAddedTime) / (1000 * 60 * 60 * 24));
+    const shouldAddPoint = daysSinceLastPoint >= granularity;
+    const isLastDay = dayOffset === days;
+
+    if (shouldAddPoint || dayTransactions.length > 0 || isLastDay) {
+      // Integer cents: the total is summed from the same rounded per-account
+      // figures the lines are drawn from, so the total on screen is exactly the
+      // total of the lines on screen.
+      const balances: Record<string, number> = {};
+      let totalCents = 0;
+      for (const account of targetAccounts) {
+        const cents = Math.round((running.get(account.id) ?? 0) * 100);
+        balances[account.id] = cents / 100;
+        totalCents += cents;
+      }
+      points.push({
+        date: dateKey,
+        balance: totalCents / 100,
+        balances,
+        transactions: dayTransactions,
+      });
+      lastAddedTime = currentTime;
+    }
+  }
+
+  if (missingRateCurrencies.size > 0) {
+    return { points: [], series: [], missingCurrencies: [...missingRateCurrencies] };
+  }
+
+  return {
+    points,
+    series: targetAccounts.map(a => ({ accountId: a.id, name: a.name })),
+    missingCurrencies: [],
+  };
 }
 
 /**
