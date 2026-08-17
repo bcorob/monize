@@ -25,6 +25,7 @@ import { ReportAccountMultiSelect } from '@/components/reports/ReportAccountMult
 import { resolvePdfColor } from '@/components/reports/resolve-pdf-color';
 import { RefreshPricesButton } from '@/components/reports/RefreshPricesButton';
 import { SortableHeader } from '@/components/ui/SortableHeader';
+import { PartialTotal } from '@/components/ui/PartialTotal';
 import { useSortableTable, compareValues } from '@/hooks/useSortableTable';
 import { createLogger } from '@/lib/logger';
 import { aggregateHoldingsBySecurity, AggregatedHolding } from '@/lib/aggregate-holdings';
@@ -86,6 +87,7 @@ const ACCOUNTS_STORAGE_KEY = 'monize-reports-security-type-allocation-accounts';
 
 export function SecurityTypeAllocationReport() {
   const t = useTranslations('reports');
+  const tCommon = useTranslations('common');
   const { formatCurrencyCompact: formatCurrency, formatCurrency: formatCurrencyFull } = useNumberFormat();
   const { defaultCurrency, convertToDefault } = useExchangeRates();
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -131,7 +133,11 @@ export function SecurityTypeAllocationReport() {
     const typeMap = new Map<string, { totalValue: number; holdings: AggregatedHolding[] }>();
     aggregated.forEach((h) => {
       const type = h.securityType || 'OTHER';
-      const converted = convertToDefault(h.marketValue ?? 0, h.currencyCode);
+      // An unpriced holding and an unconvertible one both leave the allocation:
+      // `?? 0` folded the first in as a zero, re-weighting every other type.
+      if (h.marketValue === null || h.marketValue === undefined) return;
+      const converted = convertToDefault(h.marketValue, h.currencyCode);
+      if (converted === null) return;
 
       let existing = typeMap.get(type);
       if (!existing) {
@@ -153,11 +159,20 @@ export function SecurityTypeAllocationReport() {
         percentage: totalValue > 0 ? (data.totalValue / totalValue) * 100 : 0,
         count: data.holdings.length,
         color: getColor(type, colorIndex++),
-        holdings: data.holdings.sort(
-          (a, b) =>
-            convertToDefault(b.marketValue ?? 0, b.currencyCode) -
-            convertToDefault(a.marketValue ?? 0, a.currencyCode),
-        ),
+        holdings: [...data.holdings].sort((a, b) => {
+          // An unpriced or unconvertible holding has an unknown value, not a
+          // zero: it sorts after every known one rather than as the smallest.
+          const value = (h: (typeof data.holdings)[number]) =>
+            h.marketValue === null || h.marketValue === undefined
+              ? null
+              : convertToDefault(h.marketValue, h.currencyCode);
+          const va = value(a);
+          const vb = value(b);
+          if (va === null && vb === null) return 0;
+          if (va === null) return 1;
+          if (vb === null) return -1;
+          return vb - va;
+        }),
       }))
       .sort((a, b) => b.totalValue - a.totalValue);
   }, [holdings, convertToDefault]);
@@ -166,6 +181,28 @@ export function SecurityTypeAllocationReport() {
     () => allocationData.reduce((sum, a) => sum + a.totalValue, 0),
     [allocationData],
   );
+
+  // Holdings the allocation had to leave out (mirrors its exclusion rule): an
+  // unpriced holding, or one with no rate to the display currency. Non-empty
+  // means the total and every percentage are over a subset of the portfolio.
+  const allocationGaps = useMemo(() => {
+    const missing = new Set<string>();
+    let excludedCount = 0;
+    // Iterate the same by-security aggregation the total is built from: a
+    // position summed to a null market value drops as one aggregated holding,
+    // so counting raw lots here would disagree with what actually left the total.
+    for (const h of aggregateHoldingsBySecurity(holdings)) {
+      if (h.marketValue === null || h.marketValue === undefined) {
+        excludedCount += 1;
+        continue;
+      }
+      if (convertToDefault(h.marketValue, h.currencyCode) === null) {
+        missing.add(h.currencyCode);
+        excludedCount += 1;
+      }
+    }
+    return { missingCurrencies: [...missing], excludedCount };
+  }, [holdings, convertToDefault]);
 
   const sortedAllocationData = useMemo(() => {
     const sorted = [...allocationData];
@@ -208,7 +245,7 @@ export function SecurityTypeAllocationReport() {
     await exportToPdf({
       title: t('securityTypeAllocation.pdfTitle'),
       summaryCards: [
-        { label: t('securityTypeAllocation.pdfTotalPortfolio'), value: formatCurrency(totalPortfolioValue, defaultCurrency), color: '#111827' },
+        { label: t('securityTypeAllocation.pdfTotalPortfolio'), value: `${formatCurrency(totalPortfolioValue, defaultCurrency)}${allocationGaps.excludedCount > 0 ? ` ${tCommon('partialTotal.srSuffix')}` : ''}`, color: '#111827' },
         { label: t('securityTypeAllocation.pdfAssetTypes'), value: String(allocationData.length), color: '#111827' },
         { label: t('securityTypeAllocation.pdfTotalHoldings'), value: String(totalHoldings), color: '#111827' },
         { label: t('securityTypeAllocation.pdfLargestType'), value: allocationData[0]?.label || '-', color: '#111827' },
@@ -275,7 +312,12 @@ export function SecurityTypeAllocationReport() {
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-3 sm:p-4">
           <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">{t('securityTypeAllocation.totalPortfolio')}</p>
           <p className="text-lg sm:text-xl font-bold text-gray-900 dark:text-gray-100">
-            {formatCurrency(totalPortfolioValue, defaultCurrency)}
+            <PartialTotal
+              total={{ value: totalPortfolioValue, ...allocationGaps }}
+              displayCurrency={defaultCurrency}
+            >
+              {formatCurrency(totalPortfolioValue, defaultCurrency)}
+            </PartialTotal>
           </p>
         </div>
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-3 sm:p-4">
@@ -419,12 +461,25 @@ export function SecurityTypeAllocationReport() {
                         )}
                       </td>
                       <td className="px-4 py-2 text-sm text-right text-gray-600 dark:text-gray-400">
-                        {formatCurrencyFull(convertToDefault(h.marketValue ?? 0, h.currencyCode), defaultCurrency)}
+                        {(() => {
+                          const value =
+                            h.marketValue === null || h.marketValue === undefined
+                              ? null
+                              : convertToDefault(h.marketValue, h.currencyCode);
+                          return value === null
+                            ? t('securityTypeAllocation.unavailable')
+                            : formatCurrencyFull(value, defaultCurrency);
+                        })()}
                       </td>
                       <td className="px-4 py-2 text-sm text-right text-gray-500 dark:text-gray-500">
-                        {totalPortfolioValue > 0
-                          ? ((convertToDefault(h.marketValue ?? 0, h.currencyCode) / totalPortfolioValue) * 100).toFixed(1)
-                          : '0.0'}%
+                        {(() => {
+                          const value =
+                            h.marketValue === null || h.marketValue === undefined
+                              ? null
+                              : convertToDefault(h.marketValue, h.currencyCode);
+                          if (value === null || totalPortfolioValue <= 0) return '-';
+                          return `${((value / totalPortfolioValue) * 100).toFixed(1)}%`;
+                        })()}
                       </td>
                       <td className="px-4 py-2 text-sm text-right text-gray-500 dark:text-gray-500">
                         {h.quantity}

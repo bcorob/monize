@@ -69,8 +69,10 @@ export type MnyFrequency =
   | 'MONTHLY'
   | 'EVERY2MONTHS'
   | 'QUARTERLY'
+  | 'EVERY4MONTHS'
   | 'SEMIANNUAL'
-  | 'YEARLY';
+  | 'YEARLY'
+  | 'EVERY2YEARS';
 
 /** One detected-active bill in the review step's checkbox list. */
 export interface MnyPreviewBill {

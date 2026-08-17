@@ -202,7 +202,8 @@
     "title": "Mức sử dụng tín dụng theo tài khoản",
     "empty": "Không có tài khoản tín dụng nào được đặt hạn mức.",
     "utilization": "Mức sử dụng",
-    "used": "Đã dùng"
+    "used": "Đã dùng",
+    "noRate": "không có sẵn (không có tỷ giá {currency})"
   },
   "creditUtilizationTotal": {
     "title": "Tổng mức sử dụng tín dụng",

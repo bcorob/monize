@@ -144,9 +144,6 @@
     "defaultMessage": "Error al cargar los datos del informe. Por favor, inténtalo de nuevo.",
     "retry": "Intentar de nuevo"
   },
-  "foreignCurrencyFees": {
-    "noEligibleAccounts": "Ninguna cuenta tiene configurada una comisión por transacción extranjera. Establece un porcentaje de comisión en una cuenta para rastrear aquí sus comisiones en moneda extranjera."
-  },
   "accountBalances": {
     "totalAssets": "Total de activos",
     "totalLiabilities": "Total de pasivos",
@@ -333,7 +330,8 @@
     "tooltipUtilization": "Utilización",
     "tooltipUsed": "Utilizado",
     "tooltipAvailable": "Disponible",
-    "pdfTitle": "Utilización del crédito"
+    "pdfTitle": "Utilización del crédito",
+    "noRate": "Sin tipo"
   },
   "currencyExposure": {
     "empty": "No se encontraron posiciones de inversión. Agrega valores para ver la exposición a divisas.",
@@ -575,20 +573,20 @@
     "topRegion": "Región principal",
     "viewByRegion": "Por región",
     "viewByExchange": "Por bolsa",
+    "viewByCountry": "Por país",
     "regionalAllocation": "Asignación regional",
     "exchangeAllocation": "Asignación por bolsa",
+    "countryAllocation": "Asignación por país (transparencia)",
+    "countryLookThroughNote": "La exposición por país analiza por transparencia los ETF y fondos usando la asignación por país introducida manualmente en cada valor. Las acciones individuales se asignan según el mercado de cotización; lo no clasificado se muestra como «Otros».",
     "colRegion": "Región",
     "colExchange": "Bolsa",
     "colCountry": "País",
     "colHoldings": "Posiciones",
     "colMarketValue": "Valor de mercado",
     "colPortfolioPct": "% de la cartera",
+    "other": "Otros",
     "total": "Total",
-    "holdingCount": "{count, plural, one {# posición} other {# posiciones}}",
-    "viewByCountry": "Por país",
-    "countryAllocation": "Asignación por país (transparencia)",
-    "countryLookThroughNote": "La exposición por país analiza por transparencia los ETF y fondos usando la asignación por país introducida manualmente en cada valor. Las acciones individuales se asignan según el mercado de cotización; lo no clasificado se muestra como «Otros».",
-    "other": "Otros"
+    "holdingCount": "{count, plural, one {# posición} other {# posiciones}}"
   },
   "healthScoreHistory": {
     "pdfTitle": "Historial de puntuación de salud",
@@ -761,7 +759,13 @@
     "actionTransferOut": "Transferencia de salida",
     "actionReinvest": "Reinversión",
     "actionAddShares": "Agregar acciones",
-    "actionRemoveShares": "Eliminar acciones"
+    "actionRemoveShares": "Eliminar acciones",
+    "actionReinvestInterest": "Reinversión de intereses",
+    "actionReinvestCapitalGainShort": "Reinversión de ganancias a corto plazo",
+    "actionReinvestCapitalGainLong": "Reinversión de ganancias a largo plazo",
+    "actionCapitalGainShort": "Ganancia de capital a corto plazo",
+    "actionCapitalGainLong": "Ganancia de capital a largo plazo",
+    "actionRedeem": "Rescate de CD/bono"
   },
   "loanAmortization": {
     "empty": "No se encontraron cuentas de préstamo o hipoteca. Agrega una cuenta de préstamo para ver el historial de pagos.",
@@ -820,6 +824,7 @@
       "maxCompare": "Puedes comparar hasta {max} escenarios.",
       "loadFailed": "No se pudieron cargar los datos de Monte Carlo. Por favor, actualiza la página.",
       "currentValueFailed": "No se pudo obtener el valor actual de la cartera.",
+      "currentValueUnavailable": "No se pudo determinar el valor actual de las cuentas seleccionadas. Introduzca un valor inicial o vuelva a intentarlo cuando haya precios y tipos de cambio disponibles.",
       "holdingStatsFailed": "No se pudieron cargar las estadísticas históricas por posición.",
       "reorderFailed": "No se pudieron reordenar los escenarios."
     },
@@ -1168,7 +1173,8 @@
     "csvColProceeds": "Ingresos por ventas",
     "csvColCostBasis": "Base de costo",
     "csvColGainLoss": "Ganancia/pérdida",
-    "csvColReturn": "Retorno %"
+    "csvColReturn": "Retorno %",
+    "csvNoRate": "Sin tipo"
   },
   "recurringExpenses": {
     "recurringExpenses": "Gastos recurrentes",
@@ -1376,7 +1382,8 @@
     "pdfTotalPortfolio": "Total de la cartera",
     "pdfAssetTypes": "Tipos de activos",
     "pdfTotalHoldings": "Total de posiciones",
-    "pdfLargestType": "Tipo más grande"
+    "pdfLargestType": "Tipo más grande",
+    "unavailable": "No disponible"
   },
   "spendingAnomalies": {
     "highPriority": "Prioridad alta",
@@ -1700,5 +1707,8 @@
     "labelSelectAccount": "Seleccionar cuenta de préstamo",
     "viewTransactions": "Ver transacciones",
     "empty": "No se encontraron cuentas de préstamo, hipoteca o línea de crédito."
+  },
+  "foreignCurrencyFees": {
+    "noEligibleAccounts": "Ninguna cuenta tiene configurada una comisión por transacción extranjera. Establece un porcentaje de comisión en una cuenta para rastrear aquí sus comisiones en moneda extranjera."
   }
 }

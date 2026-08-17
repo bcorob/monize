@@ -1,6 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act, within } from '@/test/render';
 import { InvestmentTransactionList } from './InvestmentTransactionList';
+import { investmentsApi } from '@/lib/investments';
+import { TransactionStatus } from '@/types/transaction';
+import toast from 'react-hot-toast';
+
+vi.mock('@/lib/investments', () => ({
+  investmentsApi: {
+    updateStatus: vi.fn().mockResolvedValue({}),
+  },
+}));
 
 vi.mock('@/hooks/useDateFormat', () => ({
   useDateFormat: () => ({ formatDate: (d: string) => d, dateFormat: 'browser' }),
@@ -26,6 +35,7 @@ describe('InvestmentTransactionList', () => {
     id: 't1', action: 'BUY', transactionDate: '2024-01-15',
     security: { symbol: 'AAPL', name: 'Apple Inc.', currencyCode: 'CAD' },
     quantity: 10, price: 150, totalAmount: 1500,
+    status: TransactionStatus.UNRECONCILED,
     ...overrides,
   });
 
@@ -947,6 +957,122 @@ describe('InvestmentTransactionList', () => {
       const usdLabels = screen.getAllByText('USD');
       // Should appear in both price and total columns
       expect(usdLabels.length).toBeGreaterThanOrEqual(2);
+    });
+  });
+
+  describe('status column', () => {
+    const statusButton = () => screen.getByTitle('Click to cycle status');
+
+    it('renders the Status header cell', () => {
+      render(
+        <InvestmentTransactionList
+          transactions={[makeTx()] as any[]}
+          isLoading={false}
+        />
+      );
+      expect(screen.getByText('Status')).toBeInTheDocument();
+    });
+
+    it('cycles an UNRECONCILED row to CLEARED and notifies the parent', async () => {
+      const onStatusChanged = vi.fn();
+      const tx = makeTx({ status: TransactionStatus.UNRECONCILED });
+      render(
+        <InvestmentTransactionList
+          transactions={[tx] as any[]}
+          isLoading={false}
+          onStatusChanged={onStatusChanged}
+        />
+      );
+
+      await act(async () => {
+        fireEvent.click(statusButton());
+      });
+
+      expect(investmentsApi.updateStatus).toHaveBeenCalledWith(
+        't1',
+        TransactionStatus.CLEARED,
+      );
+      expect(toast.success).toHaveBeenCalledWith('Status changed to Cleared');
+      expect(onStatusChanged).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not call the API for a VOID row -- it explains via a toast instead', async () => {
+      // Adversarial: a naive implementation PATCHes the "next" status for a
+      // VOID row too. VOID is only reachable through the form, so a click must
+      // refuse without writing anything.
+      const onStatusChanged = vi.fn();
+      const tx = makeTx({ status: TransactionStatus.VOID });
+      render(
+        <InvestmentTransactionList
+          transactions={[tx] as any[]}
+          isLoading={false}
+          onStatusChanged={onStatusChanged}
+        />
+      );
+
+      await act(async () => {
+        fireEvent.click(statusButton());
+      });
+
+      expect(toast.error).toHaveBeenCalledWith(
+        'Edit the transaction to change its status from Void',
+      );
+      expect(investmentsApi.updateStatus).not.toHaveBeenCalled();
+      expect(onStatusChanged).not.toHaveBeenCalled();
+    });
+
+    it('surfaces an update failure as a toast and does not notify the parent', async () => {
+      vi.mocked(investmentsApi.updateStatus).mockRejectedValueOnce(
+        new Error('boom'),
+      );
+      const onStatusChanged = vi.fn();
+      const tx = makeTx({ status: TransactionStatus.UNRECONCILED });
+      render(
+        <InvestmentTransactionList
+          transactions={[tx] as any[]}
+          isLoading={false}
+          onStatusChanged={onStatusChanged}
+        />
+      );
+
+      await act(async () => {
+        fireEvent.click(statusButton());
+      });
+      await act(async () => {}); // flush pending rejection handlers
+
+      expect(toast.error).toHaveBeenCalled();
+      expect(onStatusChanged).not.toHaveBeenCalled();
+    });
+
+    it('renders a VOID row dimmed with struck-through cells', () => {
+      const tx = makeTx({ status: TransactionStatus.VOID });
+      render(
+        <InvestmentTransactionList
+          transactions={[tx] as any[]}
+          isLoading={false}
+        />
+      );
+      const row = screen.getByText('2024-01-15').closest('tr')!;
+      expect(row.className).toContain('opacity-50');
+      // The date, shares, price and total cells are struck through.
+      const dateCell = screen.getByText('2024-01-15').closest('td')!;
+      expect(dateCell.className).toContain('line-through');
+      const totalCell = screen.getByText('$1500.00').closest('td')!;
+      expect(totalCell.className).toContain('line-through');
+    });
+
+    it('does not dim or strike a non-VOID row', () => {
+      const tx = makeTx({ status: TransactionStatus.CLEARED });
+      render(
+        <InvestmentTransactionList
+          transactions={[tx] as any[]}
+          isLoading={false}
+        />
+      );
+      const row = screen.getByText('2024-01-15').closest('tr')!;
+      expect(row.className).not.toContain('opacity-50');
+      const dateCell = screen.getByText('2024-01-15').closest('td')!;
+      expect(dateCell.className).not.toContain('line-through');
     });
   });
 });

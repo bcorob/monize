@@ -9,6 +9,14 @@ export interface OidcTokenResult {
   amr?: string[];
   /** "acr" (Authentication Context Class Reference) claim from the ID token. */
   acr?: string;
+  /**
+   * "auth_time" claim: when the end-user actually authenticated, in seconds
+   * since the epoch. Requested via `max_age`, and what separates a fresh
+   * credential prompt from a reused SSO session. Absent when the provider does
+   * not supply it, which the re-authentication flow treats as "not fresh"
+   * rather than as "fine".
+   */
+  auth_time?: number;
 }
 
 @Injectable()
@@ -134,12 +142,18 @@ export class OidcService implements OnModuleInit {
       : undefined;
     const rawAcr = (claims as Record<string, unknown>).acr;
     const acr = typeof rawAcr === "string" ? rawAcr : undefined;
+    const rawAuthTime = (claims as Record<string, unknown>).auth_time;
+    const auth_time =
+      typeof rawAuthTime === "number" && Number.isFinite(rawAuthTime)
+        ? rawAuthTime
+        : undefined;
 
     return {
       access_token: tokens.access_token,
       sub: claims.sub,
       amr,
       acr,
+      auth_time,
     };
   }
 

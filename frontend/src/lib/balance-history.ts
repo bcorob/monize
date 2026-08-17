@@ -4,7 +4,13 @@
  */
 export interface DailyBalancePoint {
   date: string;
-  balance: number;
+  /**
+   * The day's balance, or `null` when it could not be worked out -- a
+   * multi-currency series with a missing rate for one of its accounts. A gap is
+   * not a zero and not a smaller balance, so the chart breaks the line there and
+   * the summary refuses to describe a series it cannot read.
+   */
+  balance: number | null;
 }
 
 export interface BalanceSummary {
@@ -29,9 +35,15 @@ export function computeBalanceSummary(
 ): BalanceSummary | null {
   if (data.length === 0) return null;
 
+  // A summary is a claim about the whole series: start, current, end, minimum,
+  // "goes negative". Every one of those is unanswerable once a day is unknown,
+  // and answering from the days that are known would report a minimum that may
+  // not be the minimum. Refuse instead.
+  if (data.some((d) => d.balance === null)) return null;
+
   const points = data.map((d) => ({
     date: d.date,
-    balance: Math.round(d.balance * 100) / 100,
+    balance: Math.round((d.balance as number) * 100) / 100,
   }));
 
   const startBalance = points[0].balance;

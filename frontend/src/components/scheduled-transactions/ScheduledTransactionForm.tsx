@@ -28,6 +28,7 @@ import { accountsApi } from '@/lib/accounts';
 import { tagsApi } from '@/lib/tags';
 import { ScheduledTransaction, FrequencyType, FREQUENCY_VALUES } from '@/types/scheduled-transaction';
 import { InvestmentAction, Security } from '@/types/investment';
+import { baseInvestmentAction } from '@/lib/investment-actions';
 import { Transaction } from '@/types/transaction';
 import { Payee } from '@/types/payee';
 import { Category } from '@/types/category';
@@ -40,6 +41,7 @@ import { useAccountOptionLabel } from '@/hooks/useMainAccountName';
 import { getErrorMessage } from '@/lib/errors';
 import { useTranslations } from 'next-intl';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
+import { totalFromQuantity, quantityFromTotal, roundPrice, usableClose } from '@/lib/investmentFold';
 import { createLogger } from '@/lib/logger';
 
 import { optionalUuid, optionalString, optionalNumber } from '@/lib/zod-helpers';
@@ -63,6 +65,9 @@ const FUNDING_ACCOUNT_ACTIONS: InvestmentAction[] = ['BUY', 'SELL'];
 
 const SCHEDULABLE_INVESTMENT_ACTIONS: InvestmentAction[] = [
   'BUY', 'SELL', 'DIVIDEND', 'INTEREST', 'CAPITAL_GAIN', 'REINVEST', 'ADD_SHARES', 'REMOVE_SHARES',
+  // Money's distribution vocabulary (issue #1149): schedulable like their base.
+  'REINVEST_INTEREST', 'REINVEST_CAPITAL_GAIN_SHORT', 'REINVEST_CAPITAL_GAIN_LONG',
+  'CAPITAL_GAIN_SHORT', 'CAPITAL_GAIN_LONG', 'REDEEM',
 ];
 
 const buildScheduledTransactionSchema = (t: (key: string) => string) => z.object({
@@ -125,7 +130,7 @@ export function ScheduledTransactionForm({
 }: ScheduledTransactionFormProps) {
   const t = useTranslations('scheduledTransactions');
   const accountOptionLabel = useAccountOptionLabel();
-  const { defaultCurrency, formatCurrency, formatNumber } = useNumberFormat();
+  const { defaultCurrency, formatCurrency, formatNumber, formatPrice } = useNumberFormat();
   const [isLoading, setIsLoading] = useState(false);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -178,13 +183,18 @@ export function ScheduledTransactionForm({
   // BUY/SELL/REINVEST helpers: latest market price (used when Price is blank)
   // and a computed Total Value bound to (qty * price (+/-) commission).
   const [marketPrice, setMarketPrice] = useState<number | null>(null);
+  // True only once a price request completes and returns no usable close -- the
+  // one state that means "this security genuinely has no price history". Kept
+  // apart from marketPrice == null, which is also the loading window and a failed
+  // lookup: a failed lookup is not an empty dataset (frontend/CLAUDE.md).
+  const [priceHistoryEmpty, setPriceHistoryEmpty] = useState(false);
   const [investmentTotalValue, setInvestmentTotalValue] = useState<number | ''>(() => {
     const q = scheduledTransaction?.investmentQuantity;
     const p = scheduledTransaction?.investmentPrice;
     const c = scheduledTransaction?.investmentCommission ?? 0;
     if (q != null && p != null) {
-      const sign = scheduledTransaction?.investmentAction === 'SELL' ? -1 : 1;
-      return Math.round((Number(q) * Number(p) + sign * Number(c)) * 10000) / 10000;
+      const sign = baseInvestmentAction(scheduledTransaction?.investmentAction as InvestmentAction ?? 'BUY') === 'SELL' ? -1 : 1;
+      return totalFromQuantity(Number(q), Number(p), sign, Number(c));
     }
     return '';
   });
@@ -530,50 +540,96 @@ export function ScheduledTransactionForm({
       });
   }, [mode, securities.length, t]);
 
+  // Whether the current action has a Price field the market close can fill. Used
+  // as the fetch dependency instead of the raw action so toggling *within* the
+  // quantity-price set (BUY <-> SELL <-> REINVEST, same security) does not
+  // re-issue the request -- the close is action-independent; only a flip in
+  // price-field applicability changes what the fetch should do.
+  const isQuantityPriceAction = QUANTITY_PRICE_ACTIONS.includes(baseInvestmentAction(investmentAction));
+
   // When the chosen security changes, fetch its most recent close price so we
-  // can auto-fill the Price field and back-derive quantity from Total Value.
+  // can auto-fill the Price field and back-derive quantity from Total Value. Only
+  // a quantity-price action has a Price field to fill; amount-only (DIVIDEND ...)
+  // and quantity-only (ADD_SHARES ...) actions never use a close, so skip the
+  // request for them -- matching the two dialogs, which gate the fetch the same way.
   useEffect(() => {
-    if (mode !== 'investment' || !investmentSecurityId) {
+    if (mode !== 'investment' || !investmentSecurityId || !isQuantityPriceAction) {
       setMarketPrice(null);
+      setPriceHistoryEmpty(false);
       return;
     }
     let cancelled = false;
+    // Reset while the request is in flight: "no price history" is a
+    // completed-empty result, not the loading window and not a failed lookup.
+    setPriceHistoryEmpty(false);
     investmentsApi.getSecurityPrices(investmentSecurityId, { limit: 1 })
       .then((prices) => {
         if (cancelled) return;
-        const latest = prices[0];
-        setMarketPrice(latest ? Number(latest.closePrice) : null);
+        const close = usableClose(prices);
+        setMarketPrice(close ? close.price : null);
+        setPriceHistoryEmpty(close === null);
       })
       .catch((err) => {
         if (cancelled) return;
         setMarketPrice(null);
+        // A failed lookup is not an empty dataset -- leave the hint off.
+        setPriceHistoryEmpty(false);
         logger.warn?.('Failed to fetch latest price', err);
       });
     return () => {
       cancelled = true;
     };
-  }, [mode, investmentSecurityId]);
+  }, [mode, investmentSecurityId, isQuantityPriceAction]);
 
-  // If the user hasn't typed a price, auto-fill from the latest market price
-  // once it arrives. Don't clobber an already-entered price. Uses the
-  // "info from previous render" pattern so we don't violate
-  // react-hooks/set-state-in-effect.
-  const [lastSeenMarketPrice, setLastSeenMarketPrice] = useState<number | null>(null);
-  if (marketPrice !== lastSeenMarketPrice) {
-    setLastSeenMarketPrice(marketPrice);
-    if (
-      marketPrice != null &&
-      (investmentPrice === '' || investmentPrice === 0)
-    ) {
-      setInvestmentPrice(Math.round(marketPrice * 1_000_000) / 1_000_000);
-    }
-  }
+  const investmentSign = baseInvestmentAction(investmentAction) === 'SELL' ? -1 : 1;
 
+  // A close rounded for display (6dp). marketPrice is already null unless it is a
+  // usable positive number (usableClose rejects zero/negative/NaN before it is
+  // set), so a plain null check is all that is needed here.
+  const roundedMarketPrice = marketPrice != null ? roundPrice(marketPrice) : null;
+
+  // The price a keystroke folds against: a typed price, else the market close.
+  // Fall back to the *rounded* close (not raw marketPrice) so a derived quantity
+  // or total is computed from the same 6dp price the field auto-fills and the
+  // placeholder shows -- otherwise a >6dp close would compute against one number
+  // and display another.
   const effectiveInvestmentPrice =
     investmentPrice !== '' && Number(investmentPrice) > 0
       ? Number(investmentPrice)
-      : marketPrice ?? 0;
-  const investmentSign = investmentAction === 'SELL' ? -1 : 1;
+      : roundedMarketPrice ?? 0;
+
+  // If the user hasn't typed a price, auto-fill from the latest market close
+  // once it arrives, and reconcile the rest of the triple: an entered Total
+  // Value is preserved and the quantity re-derived from it (total-first, the way
+  // this form treats a typed total everywhere else), so a close landing after
+  // the user typed a budget does not silently change the amount invested.
+  // Otherwise fill the total from an entered quantity. Uses the "info from
+  // previous render" pattern so we don't violate react-hooks/set-state-in-effect.
+  const [lastSeenMarketPrice, setLastSeenMarketPrice] = useState<number | null>(null);
+  if (marketPrice !== lastSeenMarketPrice) {
+    setLastSeenMarketPrice(marketPrice);
+    // Only a quantity-price action has a Price field to fill, and only a usable
+    // positive close is worth writing -- both guards match the two dialogs, so a
+    // dividend never stores a spurious price and a zero/NaN quote never cascades
+    // into the fold.
+    if (
+      QUANTITY_PRICE_ACTIONS.includes(baseInvestmentAction(investmentAction)) &&
+      roundedMarketPrice != null &&
+      (investmentPrice === '' || investmentPrice === 0)
+    ) {
+      setInvestmentPrice(roundedMarketPrice);
+      const commission = investmentCommission === '' ? 0 : Number(investmentCommission);
+      if (investmentTotalValue !== '') {
+        setInvestmentQuantity(
+          quantityFromTotal(Number(investmentTotalValue), roundedMarketPrice, investmentSign, commission),
+        );
+      } else if (investmentQuantity !== '') {
+        setInvestmentTotalValue(
+          totalFromQuantity(Number(investmentQuantity), roundedMarketPrice, investmentSign, commission),
+        );
+      }
+    }
+  }
 
   const handleTotalValueChange = (raw: number | undefined) => {
     if (raw === undefined) {
@@ -584,9 +640,9 @@ export function ScheduledTransactionForm({
     if (effectiveInvestmentPrice > 0) {
       const commission =
         investmentCommission === '' ? 0 : Number(investmentCommission);
-      const cost = raw - investmentSign * commission;
-      const qty = Math.max(0, cost / effectiveInvestmentPrice);
-      setInvestmentQuantity(Math.round(qty * 100_000_000) / 100_000_000);
+      setInvestmentQuantity(
+        quantityFromTotal(raw, effectiveInvestmentPrice, investmentSign, commission),
+      );
     }
   };
 
@@ -596,8 +652,9 @@ export function ScheduledTransactionForm({
     if (qty !== '' && effectiveInvestmentPrice > 0) {
       const commission =
         investmentCommission === '' ? 0 : Number(investmentCommission);
-      const total = Number(qty) * effectiveInvestmentPrice + investmentSign * commission;
-      setInvestmentTotalValue(Math.round(total * 10_000) / 10_000);
+      setInvestmentTotalValue(
+        totalFromQuantity(Number(qty), effectiveInvestmentPrice, investmentSign, commission),
+      );
     }
   };
 
@@ -610,15 +667,85 @@ export function ScheduledTransactionForm({
       // If the user has a total in mind, keep it and re-derive quantity. Otherwise
       // re-derive total from quantity * price.
       if (investmentTotalValue !== '') {
-        const cost = Number(investmentTotalValue) - investmentSign * commission;
-        const qty = Math.max(0, cost / Number(price));
-        setInvestmentQuantity(Math.round(qty * 100_000_000) / 100_000_000);
+        setInvestmentQuantity(
+          quantityFromTotal(Number(investmentTotalValue), Number(price), investmentSign, commission),
+        );
       } else if (investmentQuantity !== '') {
-        const total =
-          Number(investmentQuantity) * Number(price) + investmentSign * commission;
-        setInvestmentTotalValue(Math.round(total * 10_000) / 10_000);
+        setInvestmentTotalValue(
+          totalFromQuantity(Number(investmentQuantity), Number(price), investmentSign, commission),
+        );
       }
     }
+  };
+
+  // The commission folds into the displayed Total Value and submit persists from
+  // the same formula, so a fee change has to move the shown total too -- otherwise
+  // the user confirms one cash figure while the saved schedule uses another.
+  const handleCommissionChange = (raw: number | undefined) => {
+    const commission = raw ?? '';
+    setInvestmentCommission(commission);
+    if (investmentQuantity !== '' && effectiveInvestmentPrice > 0) {
+      setInvestmentTotalValue(
+        totalFromQuantity(
+          Number(investmentQuantity),
+          effectiveInvestmentPrice,
+          investmentSign,
+          commission === '' ? 0 : Number(commission),
+        ),
+      );
+    }
+  };
+
+  // A BUY folds the commission in with a +sign, a SELL with a -sign, so flipping
+  // the action changes the total even when quantity, price and fee are untouched.
+  // Recompute the shown total with the new sign so it agrees with what submit
+  // will persist.
+  const handleInvestmentActionChange = (nextAction: InvestmentAction) => {
+    setInvestmentAction(nextAction);
+    // Clear fields the new action's UI does not show, so a hidden stale value is
+    // not submitted: a security carried into INTEREST would settle the cash in
+    // the security's currency, and a funding account carried out of BUY/SELL
+    // would misroute it (issue #1154 review).
+    if (!SECURITY_REQUIRED_ACTIONS.includes(nextAction)) {
+      setInvestmentSecurityId('');
+    }
+    if (!FUNDING_ACCOUNT_ACTIONS.includes(nextAction)) {
+      setInvestmentFundingAccountId('');
+    }
+    if (
+      QUANTITY_PRICE_ACTIONS.includes(baseInvestmentAction(nextAction)) &&
+      investmentQuantity !== '' &&
+      effectiveInvestmentPrice > 0
+    ) {
+      const nextSign = baseInvestmentAction(nextAction) === 'SELL' ? -1 : 1;
+      const commission =
+        investmentCommission === '' ? 0 : Number(investmentCommission);
+      setInvestmentTotalValue(
+        totalFromQuantity(Number(investmentQuantity), effectiveInvestmentPrice, nextSign, commission),
+      );
+    }
+  };
+
+  // The auto-filled price belonged to the previously selected security. Clear it
+  // (and the seen-market-price latch) on a security change so the newly chosen
+  // security's close fills the field, rather than the old quote lingering because
+  // the field is non-empty and the auto-fill only writes into an empty one.
+  //
+  // Clear the Total Value too, and keep the quantity: the total was derived from
+  // the *previous* security's price, so it is not a budget to preserve. Leaving
+  // it makes the new security's total-first auto-fill rescale the share count the
+  // user entered (10 shares silently becoming 4 to hold a stale $ total). With
+  // the total cleared the auto-fill falls to its quantity branch and recomputes
+  // the total from the shares at the new price.
+  const handleInvestmentSecurityChange = (securityId: string) => {
+    setInvestmentSecurityId(securityId);
+    setInvestmentPrice('');
+    setInvestmentTotalValue('');
+    setMarketPrice(null);
+    setLastSeenMarketPrice(null);
+    // Clear the previous security's "no history" verdict too, or it would flash
+    // the hint against the newly chosen security until the new fetch resolves.
+    setPriceHistoryEmpty(false);
   };
 
   // Load accounts, categories, active payees on mount
@@ -880,11 +1007,11 @@ export function ScheduledTransactionForm({
         toast.error(t('form.toasts.brokerageAccountRequired'));
         return;
       }
-      if (SECURITY_REQUIRED_ACTIONS.includes(investmentAction) && !investmentSecurityId) {
+      if (SECURITY_REQUIRED_ACTIONS.includes(baseInvestmentAction(investmentAction)) && !investmentSecurityId) {
         toast.error(t('form.toasts.securityRequired'));
         return;
       }
-      if (QUANTITY_PRICE_ACTIONS.includes(investmentAction)) {
+      if (QUANTITY_PRICE_ACTIONS.includes(baseInvestmentAction(investmentAction))) {
         if (!investmentQuantity || Number(investmentQuantity) <= 0) {
           toast.error(t('form.toasts.quantityRequired'));
           return;
@@ -893,13 +1020,17 @@ export function ScheduledTransactionForm({
           toast.error(t('form.toasts.priceRequired'));
           return;
         }
-      } else if (QUANTITY_ONLY_ACTIONS.includes(investmentAction)) {
+      } else if (QUANTITY_ONLY_ACTIONS.includes(baseInvestmentAction(investmentAction))) {
         if (!investmentQuantity || Number(investmentQuantity) <= 0) {
           toast.error(t('form.toasts.quantityRequired'));
           return;
         }
-      } else if (AMOUNT_ONLY_ACTIONS.includes(investmentAction)) {
-        if (investmentTotalAmount === '' || investmentTotalAmount === undefined) {
+      } else if (AMOUNT_ONLY_ACTIONS.includes(baseInvestmentAction(investmentAction))) {
+        if (
+          investmentTotalAmount === '' ||
+          investmentTotalAmount === undefined ||
+          Number(investmentTotalAmount) <= 0
+        ) {
           toast.error(t('form.toasts.totalAmountRequired'));
           return;
         }
@@ -949,10 +1080,10 @@ export function ScheduledTransactionForm({
         const estTotal = investmentTotalAmount === '' ? 0 : Number(investmentTotalAmount);
         const estCommission = investmentCommission === '' ? 0 : Number(investmentCommission);
         let displayAmount = formData.amount;
-        if (QUANTITY_PRICE_ACTIONS.includes(investmentAction)) {
-          const sign = investmentAction === 'SELL' ? 1 : -1;
+        if (QUANTITY_PRICE_ACTIONS.includes(baseInvestmentAction(investmentAction))) {
+          const sign = baseInvestmentAction(investmentAction) === 'SELL' ? 1 : -1;
           displayAmount = sign * (estQty * estPrice + (sign === -1 ? estCommission : -estCommission));
-        } else if (AMOUNT_ONLY_ACTIONS.includes(investmentAction)) {
+        } else if (AMOUNT_ONLY_ACTIONS.includes(baseInvestmentAction(investmentAction))) {
           displayAmount = estTotal;
         } else {
           displayAmount = 0;
@@ -964,10 +1095,25 @@ export function ScheduledTransactionForm({
           transferAccountId: undefined,
           isInvestment: true,
           investmentAction,
-          investmentSecurityId: investmentSecurityId || undefined,
-          investmentFundingAccountId: FUNDING_ACCOUNT_ACTIONS.includes(investmentAction) && investmentFundingAccountId
-            ? investmentFundingAccountId
+          // For an action whose UI has no security field, omit the key rather
+          // than sending null. The backend clears a hidden security on the
+          // action transition (BUY -> INTEREST with the key omitted), so a
+          // fresh switch is still cleaned -- but a deliberately-stored
+          // security-specific INTEREST survives a later presentation-only edit
+          // instead of being destroyed by every save (issue #1154 re-review).
+          // Both membership checks are base-normalized so the Money-vocabulary
+          // refinements (REDEEM, CAPITAL_GAIN_SHORT/LONG, REINVEST_*) behave
+          // exactly as their base action (issue #1149).
+          investmentSecurityId: SECURITY_REQUIRED_ACTIONS.includes(baseInvestmentAction(investmentAction))
+            ? investmentSecurityId || undefined
             : undefined,
+          // Send an explicit null (not undefined) when the action does not use a
+          // funding account, so editing an existing schedule away from BUY/SELL
+          // clears the stored account. Omitting the key would leave the stale
+          // value in place and misroute the posted cash (issue #1154).
+          investmentFundingAccountId: FUNDING_ACCOUNT_ACTIONS.includes(baseInvestmentAction(investmentAction)) && investmentFundingAccountId
+            ? investmentFundingAccountId
+            : null,
           investmentQuantity: investmentQuantity === '' ? undefined : Number(investmentQuantity),
           investmentPrice: investmentPrice === '' ? undefined : Number(investmentPrice),
           investmentCommission: investmentCommission === '' ? undefined : Number(investmentCommission),
@@ -1712,17 +1858,17 @@ export function ScheduledTransactionForm({
             <Select
               label={t('form.actionLabel')}
               value={investmentAction}
-              onChange={(e) => setInvestmentAction(e.target.value as InvestmentAction)}
+              onChange={(e) => handleInvestmentActionChange(e.target.value as InvestmentAction)}
               options={SCHEDULABLE_INVESTMENT_ACTIONS.map(a => ({
                 value: a,
                 label: t(`form.investmentActionLabels.${a}` as Parameters<typeof t>[0]),
               }))}
             />
-            {SECURITY_REQUIRED_ACTIONS.includes(investmentAction) && (
+            {SECURITY_REQUIRED_ACTIONS.includes(baseInvestmentAction(investmentAction)) && (
               <Select
                 label={t('form.securityLabel')}
                 value={investmentSecurityId}
-                onChange={(e) => setInvestmentSecurityId(e.target.value)}
+                onChange={(e) => handleInvestmentSecurityChange(e.target.value)}
                 options={[
                   { value: '', label: t('form.securityPlaceholder') },
                   ...securityOptions,
@@ -1732,7 +1878,7 @@ export function ScheduledTransactionForm({
           </div>
 
           {/* Row 4: Quantity / Price / Commission (action-conditional) */}
-          {QUANTITY_PRICE_ACTIONS.includes(investmentAction) && (
+          {QUANTITY_PRICE_ACTIONS.includes(baseInvestmentAction(investmentAction)) && (
             <>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <NumericInput
@@ -1747,7 +1893,9 @@ export function ScheduledTransactionForm({
                   decimalPlaces={6}
                   min={0}
                   placeholder={
-                    marketPrice != null ? `Latest: ${marketPrice}` : undefined
+                    roundedMarketPrice != null
+                      ? t('form.latestPlaceholder', { price: formatPrice(roundedMarketPrice) })
+                      : undefined
                   }
                   value={investmentPrice === '' ? undefined : investmentPrice}
                   onChange={handlePriceChange}
@@ -1757,7 +1905,7 @@ export function ScheduledTransactionForm({
                   decimalPlaces={4}
                   min={0}
                   value={investmentCommission === '' ? undefined : investmentCommission}
-                  onChange={(value) => setInvestmentCommission(value ?? '')}
+                  onChange={handleCommissionChange}
                 />
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1771,7 +1919,7 @@ export function ScheduledTransactionForm({
                   }
                   onChange={handleTotalValueChange}
                 />
-                {FUNDING_ACCOUNT_ACTIONS.includes(investmentAction) && (
+                {FUNDING_ACCOUNT_ACTIONS.includes(baseInvestmentAction(investmentAction)) && (
                   <div>
                     <Select
                       label={t('form.fundingAccountLabel')}
@@ -1788,7 +1936,7 @@ export function ScheduledTransactionForm({
                   </div>
                 )}
               </div>
-              {investmentSecurityId && marketPrice == null && (
+              {investmentSecurityId && priceHistoryEmpty && investmentPrice === '' && (
                 <p className="-mt-2 text-xs text-gray-500 dark:text-gray-400">
                   {t('form.noPriceHistory')}
                 </p>
@@ -1796,7 +1944,7 @@ export function ScheduledTransactionForm({
             </>
           )}
 
-          {QUANTITY_ONLY_ACTIONS.includes(investmentAction) && (
+          {QUANTITY_ONLY_ACTIONS.includes(baseInvestmentAction(investmentAction)) && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <NumericInput
                 label={t('form.quantityLabel')}
@@ -1808,13 +1956,14 @@ export function ScheduledTransactionForm({
             </div>
           )}
 
-          {AMOUNT_ONLY_ACTIONS.includes(investmentAction) && (
+          {AMOUNT_ONLY_ACTIONS.includes(baseInvestmentAction(investmentAction)) && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <CurrencyInput
                 label={t('form.totalAmountLabel')}
                 prefix={currencySymbol}
                 value={typeof investmentTotalAmount === 'number' ? investmentTotalAmount : undefined}
                 onChange={(value) => setInvestmentTotalAmount(value ?? '')}
+                allowNegative={false}
               />
             </div>
           )}

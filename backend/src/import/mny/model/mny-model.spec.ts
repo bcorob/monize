@@ -1,4 +1,5 @@
 import { AccountType } from "../../../accounts/entities/account.entity";
+import { FREQUENCY_CYCLE_DAYS } from "../../../common/recurrence";
 import { FrequencyType } from "../../../scheduled-transactions/dto/create-scheduled-transaction.dto";
 import { InvestmentAction } from "../../../securities/entities/investment-transaction.entity";
 import { TransactionStatus } from "../../../transactions/entities/transaction.entity";
@@ -196,16 +197,65 @@ describe("mapInvestmentAction", () => {
     [MNY_ACTION.BUY, InvestmentAction.BUY],
     [MNY_ACTION.SELL, InvestmentAction.SELL],
     [MNY_ACTION.DIVIDEND, InvestmentAction.DIVIDEND],
-    [MNY_ACTION.DISTRIBUTION, InvestmentAction.DIVIDEND],
+    [MNY_ACTION.INTEREST, InvestmentAction.INTEREST],
     [MNY_ACTION.REINVEST, InvestmentAction.REINVEST],
+    [MNY_ACTION.REINVEST_INTEREST, InvestmentAction.REINVEST_INTEREST],
     [MNY_ACTION.CONTRIBUTION, InvestmentAction.REINVEST],
     [MNY_ACTION.REINVEST_ALT, InvestmentAction.REINVEST],
     [MNY_ACTION.CAPITAL_GAIN, InvestmentAction.CAPITAL_GAIN],
+    [MNY_ACTION.ST_CAPITAL_GAINS_DIST, InvestmentAction.CAPITAL_GAIN_SHORT],
+    [MNY_ACTION.LT_CAPITAL_GAINS_DIST, InvestmentAction.CAPITAL_GAIN_LONG],
+    [
+      MNY_ACTION.REINVEST_ST_CAPITAL_GAINS,
+      InvestmentAction.REINVEST_CAPITAL_GAIN_SHORT,
+    ],
+    [
+      MNY_ACTION.REINVEST_LT_CAPITAL_GAINS,
+      InvestmentAction.REINVEST_CAPITAL_GAIN_LONG,
+    ],
+    [MNY_ACTION.REDEEM_CD_BOND, InvestmentAction.REDEEM],
     [MNY_ACTION.ADD_SHARES, InvestmentAction.ADD_SHARES],
     [MNY_ACTION.TRANSFER_IN, InvestmentAction.TRANSFER_IN],
     [MNY_ACTION.TRANSFER_OUT, InvestmentAction.TRANSFER_OUT],
   ])("maps act %p to %s", (act, expected) => {
     expect(mapInvestmentAction(act)).toBe(expected);
+  });
+
+  it("maps act 4 to INTEREST, never DIVIDEND", () => {
+    // Money's "Interest" activity lands on tax reports as interest income
+    // (issue #1149); while the code's name was unknown it imported as
+    // DIVIDEND, which misfiled every fixed-income interest payment.
+    expect(mapInvestmentAction(MNY_ACTION.INTEREST)).toBe(
+      InvestmentAction.INTEREST,
+    );
+    expect(mapInvestmentAction(MNY_ACTION.INTEREST)).not.toBe(
+      InvestmentAction.DIVIDEND,
+    );
+  });
+
+  it("preserves Money's income kind rather than collapsing onto a base action", () => {
+    // Issue #1149's point: short- and long-term capital gains are taxed
+    // differently, and reinvested interest is interest. Collapsing these onto
+    // REINVEST/CAPITAL_GAIN/SELL at import time would lose the distinction
+    // permanently -- the refinements behave like their base but keep the kind.
+    expect(mapInvestmentAction(MNY_ACTION.ST_CAPITAL_GAINS_DIST)).not.toBe(
+      InvestmentAction.CAPITAL_GAIN,
+    );
+    expect(mapInvestmentAction(MNY_ACTION.LT_CAPITAL_GAINS_DIST)).not.toBe(
+      InvestmentAction.CAPITAL_GAIN,
+    );
+    expect(mapInvestmentAction(MNY_ACTION.REINVEST_INTEREST)).not.toBe(
+      InvestmentAction.REINVEST,
+    );
+  });
+
+  it("maps act 30 to REDEEM, never REMOVE_SHARES", () => {
+    // "Redeem CD/Bond" is a disposal with real proceeds -- the cash figure,
+    // accrued interest included, has to reach the cash sleeve. REMOVE_SHARES
+    // would zero the total and lose the proceeds (issue #1149).
+    expect(mapInvestmentAction(MNY_ACTION.REDEEM_CD_BOND)).toBe(
+      InvestmentAction.REDEEM,
+    );
   });
 
   it("maps act 16 to REMOVE_SHARES, never SELL", () => {
@@ -219,12 +269,13 @@ describe("mapInvestmentAction", () => {
     );
   });
 
-  it.each([[6], [10], [17], [18], [20], [99]])(
+  it.each([[6], [17], [18], [20], [99]])(
     "returns null for the unknown act %p",
     (act) => {
-      // 10, 17, 18 and 20 all occur in real Money Plus files but open and
-      // close no lot, so nothing says what they do to a position. They are
-      // skipped and warned about rather than guessed at.
+      // 17, 18 and 20 occur in real Money Plus files but open and close no
+      // lot, and nothing names them, so nothing says what they do to a
+      // position. They are skipped and warned about rather than guessed at.
+      // (10 sat in this list until issue #1149 named it "Reinvest Interest".)
       expect(mapInvestmentAction(act)).toBeNull();
     },
   );
@@ -271,20 +322,34 @@ describe("mapInvestmentAction", () => {
   });
 
   it("flags the inferred action codes so mappers can warn", () => {
+    // act 4 is deliberately absent: its cash-only behaviour was measured on
+    // both Money Plus files and issue #1149 supplied Money's name for it, so
+    // nothing about it is assumed any more. The issue-#1149 family (10, 24,
+    // 26, 27, 29, 30) stays flagged until a file measures its TRN_INV shape.
     expect([...MNY_UNCONFIRMED_ACTIONS].sort((a, b) => a - b)).toEqual([
-      MNY_ACTION.DISTRIBUTION,
       MNY_ACTION.REINVEST_ALT,
+      MNY_ACTION.REINVEST_INTEREST,
       MNY_ACTION.CONTRIBUTION,
       MNY_ACTION.CAPITAL_GAIN,
+      MNY_ACTION.ST_CAPITAL_GAINS_DIST,
+      MNY_ACTION.LT_CAPITAL_GAINS_DIST,
+      MNY_ACTION.REINVEST_ST_CAPITAL_GAINS,
+      MNY_ACTION.REINVEST_LT_CAPITAL_GAINS,
+      MNY_ACTION.REDEEM_CD_BOND,
     ]);
   });
 
-  it("knows that dividends carry no TRN_INV row", () => {
+  it("knows that cash distributions carry no TRN_INV row", () => {
     // Iterating TRN_INV instead of TRN drops every cash dividend.
     expect(hasInvestmentDetail(MNY_ACTION.DIVIDEND)).toBe(false);
-    expect(hasInvestmentDetail(MNY_ACTION.DISTRIBUTION)).toBe(false);
+    expect(hasInvestmentDetail(MNY_ACTION.INTEREST)).toBe(false);
+    expect(hasInvestmentDetail(MNY_ACTION.ST_CAPITAL_GAINS_DIST)).toBe(false);
+    expect(hasInvestmentDetail(MNY_ACTION.LT_CAPITAL_GAINS_DIST)).toBe(false);
     expect(hasInvestmentDetail(MNY_ACTION.BUY)).toBe(true);
     expect(hasInvestmentDetail(MNY_ACTION.SELL)).toBe(true);
+    // The reinvested distributions buy shares, so their detail is expected.
+    expect(hasInvestmentDetail(MNY_ACTION.REINVEST_INTEREST)).toBe(true);
+    expect(hasInvestmentDetail(MNY_ACTION.REDEEM_CD_BOND)).toBe(true);
   });
 });
 
@@ -390,99 +455,154 @@ describe("isIncomeCategoryType", () => {
   });
 });
 
+/**
+ * Every cadence Microsoft Money's bill frequency picker offers, with the
+ * `(BILL.frq, BILL.cFrqInst)` pair it stores and the Monize frequency it is.
+ *
+ * This is evidence, not a reference table. Each row was read out of a Money
+ * Plus Sunset file in which one bill per cadence was created with the picker's
+ * own wording written into the payee memo, then cross-checked against the
+ * spacing of the instance dates of that file's own long-running series -- a
+ * `frq` 4 series is 3 months apart, `frq` 2 at 0.5 is 14 days apart, `frq` 3
+ * at 2 is a semi-monthly payroll on the 15th and the last day.
+ *
+ * What it shows is that `cFrqInst` is a **rate** -- occurrences per unit --
+ * and not an interval multiplier. Read the other way round, `frq` 3 at 2 (a
+ * payroll paid twice a month) imports as every two months, and `frq` 3 at 0.5
+ * (the real every-other-month) rounds to 1 and imports as monthly. Both were
+ * live defects; the fractional values are the tell.
+ */
+const MONEY_CADENCES: readonly [string, number, number, FrequencyType][] = [
+  ["Only once", MNY_FREQUENCY.ONCE, 1, FrequencyType.ONCE],
+  ["Daily", MNY_FREQUENCY.DAILY, 1, FrequencyType.DAILY],
+  ["Weekly", MNY_FREQUENCY.WEEKLY, 1, FrequencyType.WEEKLY],
+  ["Every two weeks", MNY_FREQUENCY.WEEKLY, 0.5, FrequencyType.BIWEEKLY],
+  ["Every four weeks", MNY_FREQUENCY.WEEKLY, 0.25, FrequencyType.EVERY4WEEKS],
+  ["Twice a month", MNY_FREQUENCY.MONTHLY, 2, FrequencyType.SEMIMONTHLY],
+  ["Monthly", MNY_FREQUENCY.MONTHLY, 1, FrequencyType.MONTHLY],
+  ["Every other month", MNY_FREQUENCY.MONTHLY, 0.5, FrequencyType.EVERY2MONTHS],
+  ["Every three months", MNY_FREQUENCY.QUARTERLY, 1, FrequencyType.QUARTERLY],
+  [
+    "Every four months",
+    MNY_FREQUENCY.MONTHLY,
+    0.25,
+    FrequencyType.EVERY4MONTHS,
+  ],
+  ["Twice a year", MNY_FREQUENCY.YEARLY, 2, FrequencyType.SEMIANNUAL],
+  ["Yearly", MNY_FREQUENCY.YEARLY, 1, FrequencyType.YEARLY],
+  ["Every other year", MNY_FREQUENCY.YEARLY, 0.5, FrequencyType.EVERY2YEARS],
+];
+
 describe("mapFrequency", () => {
-  it.each([
-    [MNY_FREQUENCY.ONCE, FrequencyType.ONCE],
-    [MNY_FREQUENCY.DAILY, FrequencyType.DAILY],
-    [MNY_FREQUENCY.WEEKLY, FrequencyType.WEEKLY],
-    [MNY_FREQUENCY.MONTHLY, FrequencyType.MONTHLY],
-    [MNY_FREQUENCY.YEARLY, FrequencyType.YEARLY],
-    [MNY_FREQUENCY.EVERY_2_MONTHS, FrequencyType.EVERY2MONTHS],
-    [MNY_FREQUENCY.QUARTERLY, FrequencyType.QUARTERLY],
-    [MNY_FREQUENCY.SEMIANNUAL, FrequencyType.SEMIANNUAL],
-  ])("maps frq %p to %s exactly", (frequency, expected) => {
-    expect(mapFrequency(frequency)).toEqual({
-      frequency: expected,
-      approximate: false,
-    });
-  });
-
-  it.each([
-    [2, FrequencyType.BIWEEKLY],
-    [4, FrequencyType.EVERY4WEEKS],
-  ])(
-    "turns a weekly recurrence every %p weeks into %s",
-    (interval, expected) => {
-      expect(mapFrequency(MNY_FREQUENCY.WEEKLY, interval)).toEqual({
+  it.each(MONEY_CADENCES)(
+    "maps Money's %s (frq=%p cFrqInst=%p) to %s exactly",
+    (_label, frequency, rate, expected) => {
+      expect(mapFrequency(frequency, rate)).toEqual({
         frequency: expected,
         approximate: false,
       });
     },
   );
 
+  it("covers every Monize frequency exactly once", () => {
+    // The two lists are the same length on purpose: EVERY4MONTHS and
+    // EVERY2YEARS were added for the last two picker entries that had no type.
+    // A frequency added here without a Money cadence, or a cadence that starts
+    // sharing a type with another, shows up as a duplicate or a gap.
+    expect(MONEY_CADENCES.map((row) => row[3]).sort()).toEqual(
+      Object.keys(FREQUENCY_CYCLE_DAYS).sort(),
+    );
+  });
+
+  it("reads cFrqInst as a rate, not as an interval (twice a month)", () => {
+    // The defect this replaces: a semi-monthly payroll -- `frq` 3 with two
+    // occurrences per month -- imported as EVERY2MONTHS, a quarter as often.
+    expect(mapFrequency(MNY_FREQUENCY.MONTHLY, 2)?.frequency).toBe(
+      FrequencyType.SEMIMONTHLY,
+    );
+  });
+
   it.each([
-    [2, FrequencyType.EVERY2MONTHS],
-    [3, FrequencyType.QUARTERLY],
-    [6, FrequencyType.SEMIANNUAL],
-    [12, FrequencyType.YEARLY],
+    [MNY_FREQUENCY.WEEKLY, 0.5, FrequencyType.BIWEEKLY],
+    [MNY_FREQUENCY.WEEKLY, 0.25, FrequencyType.EVERY4WEEKS],
+    [MNY_FREQUENCY.MONTHLY, 0.5, FrequencyType.EVERY2MONTHS],
+    [MNY_FREQUENCY.MONTHLY, 0.25, FrequencyType.EVERY4MONTHS],
+    [MNY_FREQUENCY.YEARLY, 0.5, FrequencyType.EVERY2YEARS],
   ])(
-    "turns a monthly recurrence every %p months into %s",
-    (interval, expected) => {
-      expect(mapFrequency(MNY_FREQUENCY.MONTHLY, interval)).toEqual({
+    "keeps the fractional rate frq=%p cFrqInst=%p as %s",
+    (frequency, rate, expected) => {
+      // Rounding a fractional rate to 1 -- which is what an interval reading
+      // does with it -- collapsed all five of these onto their unit, so every
+      // one of them fell due several times more often than the user asked.
+      expect(mapFrequency(frequency, rate)?.frequency).toBe(expected);
+    },
+  );
+
+  it("maps the quarterly unit rather than reporting frq=4 as unknown", () => {
+    // PR #192's table claimed 4 = yearly; issue #1150 refuted that, and the
+    // code was then left unmapped, so every "every three months" bill in a
+    // single-instance series was dropped with an `unusableBill` warning.
+    expect(mapFrequency(MNY_FREQUENCY.QUARTERLY, 1)).toEqual({
+      frequency: FrequencyType.QUARTERLY,
+      approximate: false,
+    });
+  });
+
+  it("maps a yearly bill to YEARLY, not to every two months (issue #1150)", () => {
+    // The regression: `frq` 5 was mapped to EVERY2MONTHS on PR #192's word,
+    // and a Money Plus Sunset file's yearly bills imported six times a year.
+    expect(mapFrequency(5)).toEqual({
+      frequency: FrequencyType.YEARLY,
+      approximate: false,
+    });
+  });
+
+  it.each([
+    // Every three weeks: 21 days. The longest cycle that does not exceed it is
+    // SEMIMONTHLY's 15.22, not BIWEEKLY's 14 -- the rule is purely "longest
+    // that still fires at least as often", and no cadence here is exempt from
+    // it on the grounds of stepping by calendar day rather than by days.
+    [MNY_FREQUENCY.WEEKLY, 1 / 3, FrequencyType.SEMIMONTHLY],
+    // Every five months: between EVERY4MONTHS and SEMIANNUAL.
+    [MNY_FREQUENCY.MONTHLY, 1 / 5, FrequencyType.EVERY4MONTHS],
+    // Every three years: beyond the longest type.
+    [MNY_FREQUENCY.YEARLY, 1 / 3, FrequencyType.EVERY2YEARS],
+    // Twice a day: shorter than the shortest type.
+    [MNY_FREQUENCY.DAILY, 2, FrequencyType.DAILY],
+  ])(
+    "approximates the unrepresentable frq=%p cFrqInst=%p down to %s",
+    (frequency, rate, expected) => {
+      // Down, never up: v1 imports bills with `auto_post = false`, so an extra
+      // reminder is noise where a missed one is a missed payment.
+      expect(mapFrequency(frequency, rate)).toEqual({
         frequency: expected,
-        approximate: false,
+        approximate: true,
       });
     },
   );
 
-  it("maps every-two-months exactly, by code and by interval", () => {
-    // PR #192 mapped this to BIWEEKLY -- every two weeks, not every two
-    // months. Before task B3 Monize had no type for it and the mapper
-    // downgraded to MONTHLY with a warning.
-    const expected = {
-      frequency: FrequencyType.EVERY2MONTHS,
+  it("ignores the rate on a one-off", () => {
+    expect(mapFrequency(MNY_FREQUENCY.ONCE, 4)).toEqual({
+      frequency: FrequencyType.ONCE,
       approximate: false,
-    };
-    expect(mapFrequency(MNY_FREQUENCY.EVERY_2_MONTHS)).toEqual(expected);
-    expect(mapFrequency(MNY_FREQUENCY.MONTHLY, 2)).toEqual(expected);
-  });
-
-  it("maps semiannual exactly, by code and by interval", () => {
-    // PR #192 stretched it to YEARLY, halving the reminders; before B3 the
-    // mapper downgraded to QUARTERLY with a warning.
-    const expected = {
-      frequency: FrequencyType.SEMIANNUAL,
-      approximate: false,
-    };
-    expect(mapFrequency(MNY_FREQUENCY.SEMIANNUAL)).toEqual(expected);
-    expect(mapFrequency(MNY_FREQUENCY.MONTHLY, 6)).toEqual(expected);
-  });
-
-  it("approximates an unrepresentable weekly interval", () => {
-    expect(mapFrequency(MNY_FREQUENCY.WEEKLY, 3)).toEqual({
-      frequency: FrequencyType.WEEKLY,
-      approximate: true,
-    });
-  });
-
-  it("approximates an unrepresentable monthly interval", () => {
-    expect(mapFrequency(MNY_FREQUENCY.MONTHLY, 5)).toEqual({
-      frequency: FrequencyType.MONTHLY,
-      approximate: true,
     });
   });
 
   it.each([[0], [-4], [Number.NaN]])(
-    "treats the nonsensical interval %p as one",
-    (interval) => {
-      expect(mapFrequency(MNY_FREQUENCY.WEEKLY, interval)).toEqual({
+    "treats the nonsensical rate %p as one",
+    (rate) => {
+      expect(mapFrequency(MNY_FREQUENCY.WEEKLY, rate)).toEqual({
         frequency: FrequencyType.WEEKLY,
         approximate: false,
       });
     },
   );
 
-  it.each([[8], [-1], [99]])(
+  // Money's picker is exhausted by the five units above, so a code outside
+  // them is a version or a dialog this repository has not seen. It is reported
+  // (`unusableBill`, with the raw pair) rather than guessed -- and the bill
+  // mapper reads the cadence off the series' own instance dates first.
+  it.each([[6], [7], [8], [-1], [99]])(
     "returns null for the unknown frq %p",
     (frequency) => {
       expect(mapFrequency(frequency)).toBeNull();

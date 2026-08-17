@@ -202,7 +202,8 @@
     "title": "Utilisasi per Akun",
     "empty": "Tidak ada akun kredit dengan batas yang ditetapkan.",
     "utilization": "Utilisasi",
-    "used": "Digunakan"
+    "used": "Digunakan",
+    "noRate": "tidak tersedia (tidak ada kurs {currency})"
   },
   "creditUtilizationTotal": {
     "title": "Total Utilisasi",

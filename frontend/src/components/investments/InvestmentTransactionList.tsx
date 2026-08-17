@@ -5,6 +5,12 @@ import { useTranslations } from 'next-intl';
 import { useDateFormat } from '@/hooks/useDateFormat';
 import { DateInput } from '@/components/ui/DateInput';
 import { InvestmentTransaction } from '@/types/investment';
+import { TransactionStatus } from '@/types/transaction';
+import { investmentsApi } from '@/lib/investments';
+import { getErrorMessage } from '@/lib/errors';
+import { nextCycleStatus } from '@/lib/transaction-status-cycle';
+import { StatusCellButton } from '@/components/transactions/StatusCellButton';
+import toast from 'react-hot-toast';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
 import { useExchangeRates } from '@/hooks/useExchangeRates';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -59,6 +65,12 @@ interface InvestmentTransactionListProps {
   onDelete?: (id: string) => void;
   onEdit?: (transaction: InvestmentTransaction) => void;
   onNewTransaction?: () => void;
+  /**
+   * Called after a status change committed. A VOID crossing moves holdings
+   * and the linked cash balance, so the parent refetches rather than patching
+   * the row locally.
+   */
+  onStatusChanged?: () => void;
   density?: DensityLevel;
   onDensityChange?: (density: DensityLevel) => void;
   filters?: TransactionFilters;
@@ -119,6 +131,13 @@ const ACTION_COLORS: Record<string, string> = {
   REINVEST: 'text-indigo-600 dark:text-indigo-400',
   ADD_SHARES: 'text-teal-600 dark:text-teal-400',
   REMOVE_SHARES: 'text-orange-600 dark:text-orange-400',
+  // Money-vocabulary refinements share their base action's colour.
+  REINVEST_INTEREST: 'text-indigo-600 dark:text-indigo-400',
+  REINVEST_CAPITAL_GAIN_SHORT: 'text-indigo-600 dark:text-indigo-400',
+  REINVEST_CAPITAL_GAIN_LONG: 'text-indigo-600 dark:text-indigo-400',
+  CAPITAL_GAIN_SHORT: 'text-purple-600 dark:text-purple-400',
+  CAPITAL_GAIN_LONG: 'text-purple-600 dark:text-purple-400',
+  REDEEM: 'text-red-600 dark:text-red-400',
 };
 
 interface InvestmentTransactionRowProps {
@@ -134,6 +153,7 @@ interface InvestmentTransactionRowProps {
   getRowHandlers: (tx: InvestmentTransaction) => LongPressRowHandlers;
   onEdit?: (tx: InvestmentTransaction) => void;
   onDeleteClick: (tx: InvestmentTransaction) => void;
+  onCycleStatus: (tx: InvestmentTransaction) => void;
   hasActions: boolean;
 }
 
@@ -150,6 +170,7 @@ const InvestmentTransactionRow = memo(function InvestmentTransactionRow({
   getRowHandlers,
   onEdit,
   onDeleteClick,
+  onCycleStatus,
   hasActions,
 }: InvestmentTransactionRowProps) {
   const t = useTranslations('investments');
@@ -166,6 +187,12 @@ const InvestmentTransactionRow = memo(function InvestmentTransactionRow({
     REINVEST: { label: t('transactionList.actionReinvest'), shortLabel: 'Reinv', color: ACTION_COLORS.REINVEST },
     ADD_SHARES: { label: t('transactionList.actionAddShares'), shortLabel: 'Add', color: ACTION_COLORS.ADD_SHARES },
     REMOVE_SHARES: { label: t('transactionList.actionRemoveShares'), shortLabel: 'Rem', color: ACTION_COLORS.REMOVE_SHARES },
+    REINVEST_INTEREST: { label: t('transactionList.actionReinvestInterest'), shortLabel: 'RInt', color: ACTION_COLORS.REINVEST_INTEREST },
+    REINVEST_CAPITAL_GAIN_SHORT: { label: t('transactionList.actionReinvestCapitalGainShort'), shortLabel: 'RScg', color: ACTION_COLORS.REINVEST_CAPITAL_GAIN_SHORT },
+    REINVEST_CAPITAL_GAIN_LONG: { label: t('transactionList.actionReinvestCapitalGainLong'), shortLabel: 'RLcg', color: ACTION_COLORS.REINVEST_CAPITAL_GAIN_LONG },
+    CAPITAL_GAIN_SHORT: { label: t('transactionList.actionCapitalGainShort'), shortLabel: 'SCap', color: ACTION_COLORS.CAPITAL_GAIN_SHORT },
+    CAPITAL_GAIN_LONG: { label: t('transactionList.actionCapitalGainLong'), shortLabel: 'LCap', color: ACTION_COLORS.CAPITAL_GAIN_LONG },
+    REDEEM: { label: t('transactionList.actionRedeem'), shortLabel: 'Rdm', color: ACTION_COLORS.REDEEM },
   };
   const actionInfo = ACTION_LABELS[tx.action] || {
     label: tx.action,
@@ -179,12 +206,17 @@ const InvestmentTransactionRow = memo(function InvestmentTransactionRow({
     { onEdit, onDeleteClick },
   );
 
+  // Same treatment as the cash register: a VOID row is struck through and
+  // dimmed, because it records something that did not happen.
+  const isVoid = tx.status === TransactionStatus.VOID;
+  const voidText = isVoid ? 'line-through' : '';
+
   return (
     <tr
       {...getRowHandlers(tx)}
-      className={`group hover:bg-gray-100 dark:hover:bg-gray-800 select-none ${density !== 'normal' && index % 2 === 1 ? 'bg-gray-50 dark:bg-table-stripe-dark' : 'bg-white dark:bg-gray-900'} ${onEdit ? 'cursor-pointer' : ''}`}
+      className={`group hover:bg-gray-100 dark:hover:bg-gray-800 select-none ${density !== 'normal' && index % 2 === 1 ? 'bg-gray-50 dark:bg-table-stripe-dark' : 'bg-white dark:bg-gray-900'} ${onEdit ? 'cursor-pointer' : ''} ${isVoid ? 'opacity-50' : ''}`}
     >
-      <td className={`${cellPadding} whitespace-nowrap text-sm text-gray-900 dark:text-gray-100`}>
+      <td className={`${cellPadding} whitespace-nowrap text-sm text-gray-900 dark:text-gray-100 ${voidText}`}>
         {formatDate(tx.transactionDate)}
       </td>
       <td className={`${cellPadding} whitespace-nowrap text-sm text-gray-900 dark:text-gray-100 hidden lg:table-cell`}>
@@ -205,12 +237,12 @@ const InvestmentTransactionRow = memo(function InvestmentTransactionRow({
           </div>
         )}
       </td>
-      <td className={`${cellPadding} whitespace-nowrap text-right text-sm text-gray-900 dark:text-gray-100 hidden sm:table-cell`}>
+      <td className={`${cellPadding} whitespace-nowrap text-right text-sm text-gray-900 dark:text-gray-100 hidden sm:table-cell ${voidText}`}>
         {tx.action === 'SPLIT'
           ? formatSplitRatio(tx.quantity)
           : formatQuantity(tx.quantity ?? 0)}
       </td>
-      <td className={`${cellPadding} whitespace-nowrap text-right text-sm text-gray-900 dark:text-gray-100 hidden md:table-cell`}>
+      <td className={`${cellPadding} whitespace-nowrap text-right text-sm text-gray-900 dark:text-gray-100 hidden md:table-cell ${voidText}`}>
         {tx.action === 'SPLIT' && !tx.price ? (
           '-'
         ) : (
@@ -222,11 +254,18 @@ const InvestmentTransactionRow = memo(function InvestmentTransactionRow({
           </>
         )}
       </td>
-      <td className={`${cellPadding} whitespace-nowrap text-right text-sm font-medium text-gray-900 dark:text-gray-100`}>
+      <td className={`${cellPadding} whitespace-nowrap text-right text-sm font-medium text-gray-900 dark:text-gray-100 ${voidText}`}>
         {formatCurrency(tx.totalAmount, tx.security?.currencyCode)}
         {tx.security?.currencyCode && tx.security.currencyCode !== defaultCurrency && (
           <span className="ml-1 font-normal">{tx.security.currencyCode}</span>
         )}
+      </td>
+      <td className={`${cellPadding} whitespace-nowrap text-center hidden lg:table-cell`}>
+        <StatusCellButton
+          status={tx.status}
+          dense={density === 'dense'}
+          onCycle={() => onCycleStatus(tx)}
+        />
       </td>
       {hasActions && (
         <td className={`${cellPadding} whitespace-nowrap text-right text-sm hidden min-[480px]:table-cell sticky right-0 ${density !== 'normal' && index % 2 === 1 ? 'bg-gray-50 dark:bg-table-stripe-dark' : 'bg-white dark:bg-gray-900'} group-hover:bg-gray-100 dark:group-hover:bg-gray-800`} onClick={(e) => e.stopPropagation()}>
@@ -244,6 +283,7 @@ export function InvestmentTransactionList({
   onDelete,
   onEdit,
   onNewTransaction,
+  onStatusChanged,
   density: propDensity,
   onDensityChange,
   filters,
@@ -265,6 +305,12 @@ export function InvestmentTransactionList({
     { value: 'TRANSFER_OUT', label: t('transactionList.actionTransferOut') },
     { value: 'ADD_SHARES', label: t('transactionList.actionAddShares') },
     { value: 'REMOVE_SHARES', label: t('transactionList.actionRemoveShares') },
+    { value: 'REINVEST_INTEREST', label: t('transactionList.actionReinvestInterest') },
+    { value: 'REINVEST_CAPITAL_GAIN_SHORT', label: t('transactionList.actionReinvestCapitalGainShort') },
+    { value: 'REINVEST_CAPITAL_GAIN_LONG', label: t('transactionList.actionReinvestCapitalGainLong') },
+    { value: 'CAPITAL_GAIN_SHORT', label: t('transactionList.actionCapitalGainShort') },
+    { value: 'CAPITAL_GAIN_LONG', label: t('transactionList.actionCapitalGainLong') },
+    { value: 'REDEEM', label: t('transactionList.actionRedeem') },
   ];
   const { formatCurrency, formatQuantity } = useNumberFormat();
   const { formatDate } = useDateFormat();
@@ -312,6 +358,32 @@ export function InvestmentTransactionList({
   const handleDeleteCancel = useCallback(() => {
     setDeleteConfirm({ isOpen: false, transaction: null });
   }, []);
+
+  // Same cycle as the cash register: UNRECONCILED -> CLEARED -> RECONCILED on
+  // click; VOID is set or cleared only through the form, so a click on a VOID
+  // row explains that instead. Status strings live in the transactions catalog
+  // (shared with the cash register's status cell).
+  const tStatus = useTranslations('transactions');
+  const handleCycleStatus = useCallback(async (tx: InvestmentTransaction) => {
+    const nextStatus = nextCycleStatus(tx.status);
+    if (nextStatus === null) {
+      toast.error(tStatus('list.status.voidError'));
+      return;
+    }
+    try {
+      await investmentsApi.updateStatus(tx.id, nextStatus);
+      const statusLabels: Record<TransactionStatus, string> = {
+        [TransactionStatus.UNRECONCILED]: tStatus('list.status.unreconciled'),
+        [TransactionStatus.CLEARED]: tStatus('list.status.cleared'),
+        [TransactionStatus.RECONCILED]: tStatus('list.status.reconciled'),
+        [TransactionStatus.VOID]: tStatus('list.status.void'),
+      };
+      toast.success(tStatus('list.status.changed', { status: statusLabels[nextStatus] }));
+      onStatusChanged?.();
+    } catch (error) {
+      toast.error(getErrorMessage(error, tStatus('list.status.updateError')));
+    }
+  }, [onStatusChanged, tStatus]);
 
   // Check if any filters are active
   const hasActiveFilters = filters && (filters.symbol || filters.action || filters.startDate || filters.endDate);
@@ -419,6 +491,12 @@ export function InvestmentTransactionList({
     REINVEST: t('transactionList.actionReinvest'),
     ADD_SHARES: t('transactionList.actionAddShares'),
     REMOVE_SHARES: t('transactionList.actionRemoveShares'),
+    REINVEST_INTEREST: t('transactionList.actionReinvestInterest'),
+    REINVEST_CAPITAL_GAIN_SHORT: t('transactionList.actionReinvestCapitalGainShort'),
+    REINVEST_CAPITAL_GAIN_LONG: t('transactionList.actionReinvestCapitalGainLong'),
+    CAPITAL_GAIN_SHORT: t('transactionList.actionCapitalGainShort'),
+    CAPITAL_GAIN_LONG: t('transactionList.actionCapitalGainLong'),
+    REDEEM: t('transactionList.actionRedeem'),
   };
 
   return (
@@ -583,6 +661,9 @@ export function InvestmentTransactionList({
               <th className={`${headerPadding} text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider`}>
                 {t('transactionList.totalColumn')}
               </th>
+              <th className={`${headerPadding} text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden lg:table-cell`}>
+                {tStatus('list.header.status')}
+              </th>
               {(onDelete || onEdit) && (
                 <th className={`${headerPadding} text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden min-[480px]:table-cell sticky right-0 bg-gray-50 dark:bg-gray-800`}>
                   {t('transactionList.actionsColumn')}
@@ -593,12 +674,12 @@ export function InvestmentTransactionList({
           <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
             {transactions.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
+                <td colSpan={9} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
                   {t('transactionList.noTransactionsFiltered')}
                 </td>
               </tr>
             ) : transactions.map((tx, index) => {
-              const colCount = 7 + (onDelete || onEdit ? 1 : 0);
+              const colCount = 8 + (onDelete || onEdit ? 1 : 0);
               return (
                 <Fragment key={tx.id}>
                   {index === futureBoundaryIndex && futureBoundaryIndex > 0 && (
@@ -625,6 +706,7 @@ export function InvestmentTransactionList({
                     getRowHandlers={getRowHandlers}
                     onEdit={onEdit}
                     onDeleteClick={handleDeleteClick}
+                    onCycleStatus={handleCycleStatus}
                     hasActions={!!(onDelete || onEdit)}
                   />
                 </Fragment>

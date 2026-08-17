@@ -188,12 +188,17 @@ export function CashFlowForecastChart({
     [formatCurrencyFlag, chartCurrency],
   );
 
-  const forecastData = useMemo(() => {
+  const forecast = useMemo(() => {
     return buildForecast(
       accounts, scheduledTransactions, selectedPeriod, selectedAccountId, futureTransactions,
       needsConversion ? convertToDefault : undefined,
     );
   }, [accounts, scheduledTransactions, selectedPeriod, selectedAccountId, futureTransactions, needsConversion, convertToDefault]);
+  const forecastData = forecast.points;
+  // A projected balance is cumulative, so one missing rate makes every day after
+  // it wrong. `buildForecast` returns no points in that case and names the
+  // currencies; the chart says so instead of drawing a plausible line.
+  const forecastUnavailable = forecast.missingCurrencies.length > 0;
 
   const summary = useMemo(() => {
     return getForecastSummary(forecastData);
@@ -234,6 +239,25 @@ export function CashFlowForecastChart({
         <div className="h-72 flex items-center justify-center">
           <Skeleton className="w-full h-full" />
         </div>
+      </div>
+    );
+  }
+
+  if (forecastUnavailable) {
+    return (
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-3 sm:p-6 mb-6">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
+          {t('forecast.title')}
+        </h3>
+        <p
+          role="alert"
+          className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-200"
+        >
+          {t('forecast.unavailableMissingRates', {
+            currencies: forecast.missingCurrencies.join(', '),
+            displayCurrency: chartCurrency,
+          })}
+        </p>
       </div>
     );
   }

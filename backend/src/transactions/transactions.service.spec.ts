@@ -13,6 +13,7 @@ import { PayeesService } from "../payees/payees.service";
 import { NetWorthService } from "../net-worth/net-worth.service";
 import { TransactionSplitService } from "./transaction-split.service";
 import { TransactionTransferService } from "./transaction-transfer.service";
+import { ExchangeRateService } from "../currencies/exchange-rate.service";
 import { TransactionReconciliationService } from "./transaction-reconciliation.service";
 import { TransactionAnalyticsService } from "./transaction-analytics.service";
 import { TransactionBulkUpdateService } from "./transaction-bulk-update.service";
@@ -397,6 +398,16 @@ describe("TransactionsService", () => {
         },
         TransactionSplitService,
         TransactionTransferService,
+        {
+          // Transfers resolve a cross-currency rate server-side (audit P5-002).
+          // Nothing in this spec creates a cross-currency transfer, so no rate
+          // needs to be available.
+          provide: ExchangeRateService,
+          useValue: {
+            getRateForDate: jest.fn().mockResolvedValue(null),
+            getLatestRate: jest.fn().mockResolvedValue(null),
+          },
+        },
         TransactionReconciliationService,
         TransactionAnalyticsService,
         TransactionBulkUpdateService,
@@ -512,6 +523,84 @@ describe("TransactionsService", () => {
         "account-1",
         -50,
       );
+    });
+
+    describe("primary currency must match the account (P5-003)", () => {
+      it("rejects a transaction whose currencyCode differs from the account's", async () => {
+        // The account is USD. A request declaring EUR used to be stored
+        // verbatim while the balance was incremented by the raw numeric amount,
+        // so the account moved 100 USD and the row reported 100 EUR. Both
+        // fields persist, so the contradiction survived into every report and
+        // into backups.
+        //
+        // A foreign-currency entry belongs in originalAmount /
+        // originalCurrencyCode / exchangeRate, which the schema models
+        // separately -- which is what shows a mismatched primary code is not an
+        // alternative supported shape.
+        await expect(
+          service.create("user-1", {
+            accountId: "account-1",
+            transactionDate: "2026-01-15",
+            amount: 100,
+            currencyCode: "EUR",
+          } as any),
+        ).rejects.toThrow(/must match the account currency/);
+
+        // Nothing was written and no balance moved.
+        expect(transactionsRepository.save).not.toHaveBeenCalled();
+        expect(accountsService.updateBalance).not.toHaveBeenCalled();
+      });
+
+      it("accepts the account's currency in any casing and stores it canonically", async () => {
+        transactionsRepository.findOne.mockResolvedValue({
+          id: "tx-1",
+          userId: "user-1",
+          accountId: "account-1",
+          amount: -50,
+          status: TransactionStatus.UNRECONCILED,
+          splits: [],
+        });
+
+        await service.create("user-1", {
+          accountId: "account-1",
+          transactionDate: "2026-01-15",
+          amount: -50,
+          currencyCode: "usd",
+        } as any);
+
+        expect(transactionsRepository.create).toHaveBeenCalledWith(
+          expect.objectContaining({ currencyCode: "USD" }),
+        );
+      });
+
+      it("still allows a foreign entry through the original-currency fields", async () => {
+        transactionsRepository.findOne.mockResolvedValue({
+          id: "tx-1",
+          userId: "user-1",
+          accountId: "account-1",
+          amount: -90,
+          status: TransactionStatus.UNRECONCILED,
+          splits: [],
+        });
+
+        await service.create("user-1", {
+          accountId: "account-1",
+          transactionDate: "2026-01-15",
+          amount: -90,
+          currencyCode: "USD",
+          originalAmount: -100,
+          originalCurrencyCode: "EUR",
+          exchangeRate: 0.9,
+        } as any);
+
+        expect(transactionsRepository.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            currencyCode: "USD",
+            originalCurrencyCode: "EUR",
+            originalAmount: -100,
+          }),
+        );
+      });
     });
 
     it("creates a payee from a free-text name when createPayeeIfMissing is set", async () => {
@@ -1267,6 +1356,48 @@ describe("TransactionsService", () => {
         expect.objectContaining({
           originalAmount: -100,
           originalCurrencyCode: "EUR",
+        }),
+      );
+    });
+
+    it("re-normalizes a foreign entry when the row moves to an account in the entry's currency", async () => {
+      // Row in a USD account entered as EUR 100: moving it to a EUR account
+      // makes the "foreign" entry ordinary. Re-labelling currencyCode without
+      // re-normalizing left originalCurrencyCode equal to the new primary
+      // currency beside a stale rate -- a state normalizeFxEntry never
+      // produces (it strips the metadata when the currencies coincide).
+      const fxRow = {
+        ...mockTx,
+        amount: -145.23,
+        currencyCode: "USD",
+        originalAmount: -100,
+        originalCurrencyCode: "EUR",
+        exchangeRate: 1.4523,
+      };
+      transactionsRepository.findOne.mockResolvedValue(fxRow);
+      lockedRow = { ...fxRow };
+      mockQueryRunner.manager.findOne.mockResolvedValueOnce({
+        ...fxRow,
+        accountId: "account-eur",
+      });
+      accountsService.findOne.mockImplementation(
+        async (_userId: string, id: string) =>
+          id === "account-eur"
+            ? { ...mockAccount, id: "account-eur", currencyCode: "EUR" }
+            : { ...mockAccount },
+      );
+
+      await service.update("user-1", "tx-1", {
+        accountId: "account-eur",
+      } as any);
+
+      expect(mockQueryRunner.manager.update).toHaveBeenCalledWith(
+        Transaction,
+        "tx-1",
+        expect.objectContaining({
+          currencyCode: "EUR",
+          originalAmount: null,
+          originalCurrencyCode: null,
         }),
       );
     });
@@ -4822,8 +4953,12 @@ describe("TransactionsService", () => {
         id: "account-1",
         name: "Checking",
       };
+      // addSplit resolves exactly two accounts: the transfer target, then the
+      // parent's own account. The chain previously began with `mockTx` -- a
+      // transaction where an account was expected -- so `targetAccount` was read
+      // as a row with no currencyCode. It went unnoticed while nothing read that
+      // field; the counterpart's amount now depends on it.
       accountsService.findOne
-        .mockResolvedValueOnce(mockTx) // findOne for the main tx
         .mockResolvedValueOnce(targetAccount)
         .mockResolvedValueOnce(sourceAccount);
 
@@ -5273,6 +5408,12 @@ describe("TransactionsService", () => {
         new Date("2026-03-20"),
         "Committed Payee",
         "payee-committed",
+        // The merged call also carries the committed parent's status (read off
+        // the locked row) and the touched-accounts set for the post-commit
+        // net-worth fan-out. Neither is what this test pins down, but the status
+        // is another committed-parent field so it is asserted precisely.
+        { parentStatus: TransactionStatus.UNRECONCILED },
+        expect.any(Set),
       );
     });
   });
@@ -5465,11 +5606,29 @@ describe("TransactionsService", () => {
     });
 
     it("handles exchange rate changes", async () => {
+      // Genuinely cross-currency: a rate only means something when the two
+      // accounts differ in currency, so the destination account says CAD rather
+      // than sharing the source's USD (audit P5-002).
+      const cadSavings = {
+        ...mockAccount,
+        id: "account-2",
+        name: "Savings",
+        currencyCode: "CAD",
+      };
+      accountsService.findOne.mockImplementation((_u: string, id: string) =>
+        Promise.resolve(
+          id === "account-2"
+            ? cadSavings
+            : { ...mockAccount, id: "account-1", name: "Checking" },
+        ),
+      );
+      const cadToTx = { ...toTx, account: cadSavings };
+
       transactionsRepository.findOne
         .mockResolvedValueOnce({ ...fromTx })
-        .mockResolvedValueOnce({ ...toTx })
+        .mockResolvedValueOnce({ ...cadToTx })
         .mockResolvedValueOnce({ ...fromTx })
-        .mockResolvedValueOnce({ ...toTx, amount: 260 });
+        .mockResolvedValueOnce({ ...cadToTx, amount: 260 });
 
       await service.updateTransfer("user-1", "tx-from", {
         exchangeRate: 1.3,
@@ -5485,12 +5644,27 @@ describe("TransactionsService", () => {
       );
     });
 
-    it("handles explicit toAmount override", async () => {
+    it("handles explicit toAmount override for a cross-currency pair", async () => {
+      const cadSavings = {
+        ...mockAccount,
+        id: "account-2",
+        name: "Savings",
+        currencyCode: "CAD",
+      };
+      accountsService.findOne.mockImplementation((_u: string, id: string) =>
+        Promise.resolve(
+          id === "account-2"
+            ? cadSavings
+            : { ...mockAccount, id: "account-1", name: "Checking" },
+        ),
+      );
+      const cadToTx = { ...toTx, account: cadSavings };
+
       transactionsRepository.findOne
         .mockResolvedValueOnce({ ...fromTx })
-        .mockResolvedValueOnce({ ...toTx })
+        .mockResolvedValueOnce({ ...cadToTx })
         .mockResolvedValueOnce({ ...fromTx })
-        .mockResolvedValueOnce({ ...toTx, amount: 250 });
+        .mockResolvedValueOnce({ ...cadToTx, amount: 250 });
 
       await service.updateTransfer("user-1", "tx-from", {
         toAmount: 250,
@@ -5502,6 +5676,17 @@ describe("TransactionsService", () => {
           amount: 250,
         }),
       );
+    });
+
+    it("rejects a toAmount that breaks a same-currency transfer", async () => {
+      // 200 out and 250 in between two USD accounts creates 50 from nothing.
+      transactionsRepository.findOne
+        .mockResolvedValueOnce({ ...fromTx })
+        .mockResolvedValueOnce({ ...toTx });
+
+      await expect(
+        service.updateTransfer("user-1", "tx-from", { toAmount: 250 }),
+      ).rejects.toThrow(/same amount on both sides/);
     });
 
     it("does not modify payee names when custom payeeName is provided", async () => {
@@ -5825,6 +6010,91 @@ describe("TransactionsService", () => {
         userId: "user-1",
       });
       expect(transactionsRepository.remove).not.toHaveBeenCalledWith(linkedTx);
+    });
+
+    it("reverses nothing when the whole VOID split is deleted (RR4-001)", async () => {
+      // `removeParentTransaction` guarded the deleted row and the split parent on
+      // status, and the sibling counterpart loop in the same function did not. So
+      // deleting one leg under a VOID split parent debited every OTHER target
+      // account by its own amount -- money out of nothing, from a plain
+      // `DELETE /transactions/:id`. Every reversal now goes through one
+      // inclusion-aware helper.
+      const linkedTx = {
+        id: "linked-tx-1",
+        userId: "user-1",
+        accountId: "account-2",
+        amount: 40,
+        status: TransactionStatus.VOID,
+        transactionDate: "2020-01-01",
+        isTransfer: true,
+        linkedTransactionId: "tx-parent",
+        splits: [],
+      };
+      splitsRepository.findOne.mockResolvedValue({
+        id: "parent-split-1",
+        transactionId: "tx-parent",
+        linkedTransactionId: "linked-tx-1",
+      });
+
+      const parentTx = {
+        id: "tx-parent",
+        userId: "user-1",
+        accountId: "account-1",
+        amount: -100,
+        status: TransactionStatus.VOID,
+        transactionDate: "2020-01-01",
+      };
+      const siblingLeg = {
+        id: "another-linked-tx",
+        accountId: "account-3",
+        amount: 30,
+        status: TransactionStatus.VOID,
+        transactionDate: "2020-01-01",
+      };
+
+      // The access check reads the named leg through the caller's findOne; the
+      // split parent is then locked on its own and the sibling legs come through
+      // the batch lock reader (both served from the repository mocks, per the
+      // merged parent-before-legs lock ordering). The splits themselves are read
+      // from the scoped manager.
+      transactionsRepository.findOne
+        .mockResolvedValueOnce(linkedTx)
+        .mockResolvedValueOnce(parentTx);
+      transactionsRepository.find.mockResolvedValue([parentTx, siblingLeg]);
+      mockQueryRunner.manager.find.mockResolvedValueOnce([
+        {
+          id: "split-1",
+          transactionId: "tx-parent",
+          linkedTransactionId: "linked-tx-1",
+          transferAccountId: "account-2",
+        },
+        {
+          id: "split-2",
+          transactionId: "tx-parent",
+          linkedTransactionId: "another-linked-tx",
+          transferAccountId: "account-3",
+        },
+      ]);
+
+      await service.removeTransfer("user-1", "linked-tx-1");
+
+      // None of the three rows contributed to a balance, so none is reversed.
+      expect(accountsService.updateBalance).not.toHaveBeenCalled();
+      // All of them are still removed: the record of an event that did not
+      // happen. Rows go via the conditional DELETE (removeLockedTransactionLeg
+      // -> m.delete { id, userId }), not manager.remove(entity).
+      expect(mockQueryRunner.manager.delete).toHaveBeenCalledWith(Transaction, {
+        id: "another-linked-tx",
+        userId: "user-1",
+      });
+      expect(mockQueryRunner.manager.delete).toHaveBeenCalledWith(Transaction, {
+        id: "tx-parent",
+        userId: "user-1",
+      });
+      expect(mockQueryRunner.manager.delete).toHaveBeenCalledWith(Transaction, {
+        id: "linked-tx-1",
+        userId: "user-1",
+      });
     });
   });
 

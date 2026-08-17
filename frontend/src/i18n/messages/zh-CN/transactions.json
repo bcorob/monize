@@ -26,7 +26,8 @@
     "editAria": "编辑收款人",
     "detailsAria": "查看收款人详情",
     "collapseAria": "隐藏收款人信息",
-    "show": "显示收款人信息"
+    "show": "显示收款人信息",
+    "amountUnavailable": "无汇率"
   },
   "categoryWidget": {
     "detailsAria": "查看分类详情",
@@ -47,7 +48,8 @@
     "noTransactions": "此期间没有交易",
     "editAria": "编辑分类",
     "collapseAria": "隐藏分类信息",
-    "show": "显示分类信息"
+    "show": "显示分类信息",
+    "amountUnavailable": "无汇率"
   },
   "accountWidget": {
     "currentBalance": "当前余额",
@@ -110,10 +112,11 @@
       "paidAmount": "支付金额",
       "feePaid": "已付手续费",
       "balance": "余额",
+      "attachments": "附件",
       "status": "状态",
-      "actions": "操作",
-      "attachments": "附件"
+      "actions": "操作"
     },
+    "attachmentsCount": "{count, plural, other {# 个附件}}",
     "today": "今天",
     "export": {
       "button": "导出",
@@ -174,8 +177,7 @@
       "editButton": "编辑",
       "deleteButton": "删除"
     },
-    "itemNamePlural": "笔交易",
-    "attachmentsCount": "{count, plural, other {# 个附件}}"
+    "itemNamePlural": "笔交易"
   },
   "row": {
     "copyOptions": {
@@ -230,6 +232,11 @@
       "currency": "币种",
       "hasAttachments": "附件"
     },
+    "hasAttachmentsOptions": {
+      "any": "任意",
+      "yes": "是",
+      "no": "否"
+    },
     "placeholders": {
       "accounts": "所有账户",
       "payees": "所有收款人",
@@ -240,6 +247,13 @@
       "amountMax": "最大",
       "search": "搜索收款人、分类、金额、标签、描述、参考编号...",
       "tagKeyValue": "例如 usa"
+    },
+    "tagKeyNone": "任意（无键筛选）",
+    "tagKeyOps": {
+      "hasValue": "有值",
+      "noValue": "无值",
+      "contains": "值包含",
+      "notContains": "值不包含"
     },
     "chips": {
       "removeAccount": "移除 {name} 筛选",
@@ -280,18 +294,6 @@
       "yearToDate": "今年至今",
       "lastYear": "去年",
       "custom": "自定义"
-    },
-    "tagKeyNone": "任意（无键筛选）",
-    "tagKeyOps": {
-      "hasValue": "有值",
-      "noValue": "无值",
-      "contains": "值包含",
-      "notContains": "值不包含"
-    },
-    "hasAttachmentsOptions": {
-      "any": "任意",
-      "yes": "是",
-      "no": "否"
     }
   },
   "bulk": {
@@ -399,6 +401,7 @@
       "optionLabel": "{name} ({currency}) — {owner}"
     },
     "crossOwnerLockedNote": "此转账的另一方位于不再与您共享的账户中。其金额、日期和账户已锁定，但您仍可以编辑此交易自身的详细信息。",
+    "transferCategoryNote": "可选。该转账仍不计为收入或支出，但此类别可让它显示在每月类别细分中（例如每月投资缴款）。",
     "amountReceivedNote": "货币兑换后收到的金额",
     "splitTransaction": "拆分交易",
     "splitDisabledDuringTour": "引导式导览期间不可用",
@@ -408,6 +411,7 @@
       "transferUpdated": "转账已更新",
       "transactionCreated": "交易已创建",
       "transactionUpdated": "交易已更新",
+      "attachmentsUploadFailed": "交易已保存，但 {count} 个附件上传失败",
       "saveFailed": "保存交易失败",
       "loadFailed": "加载表单数据失败",
       "splitsNotEqual": "拆分合计（{splitTotal}）必须等于交易金额（{txAmount}）",
@@ -422,13 +426,11 @@
       "categoryCreateFailed": "创建分类失败",
       "tagCreated": "标签\"{name}\"已创建",
       "fxRateRequired": "在保存外币交易前，请输入汇率或换算后的金额。",
-      "attachmentsUploadFailed": "交易已保存，但 {count} 个附件上传失败",
       "jointPayeeCreateNotGranted": "账户所有者未授予您创建收款人的权限。请从其现有收款人中选择。"
     },
     "ariaHistory": "显示近期交易",
     "ariaHistoryForPayee": "显示此收款人的近期交易",
     "historyTitle": "从近期交易快速填充",
-    "transferCategoryNote": "可选。该转账仍不计为收入或支出，但此类别可让它显示在每月类别细分中（例如每月投资缴款）。",
     "currencyPicker": {
       "label": "输入币种",
       "ariaLabel": "更改输入币种",
@@ -440,15 +442,15 @@
       "reactivated": "已重新启用 {code}"
     },
     "fx": {
+      "totalInCurrency": "以 {currency} 计的总额",
+      "rateCaption": "1 {from} = {rate} {to} ({date})",
       "noRateWarning": "未找到 {date} 从 {from} 到 {to} 的汇率。请手动输入换算后的金额。",
       "usingLatestRateHint": "正在使用最新可用汇率（非 {date} 当天）。",
       "displayToggle": {
         "account": "账户",
         "original": "原币种"
       },
-      "rateCaption": "1 {from} = {rate} {to} ({date})",
-      "feeCaption": "包含 {percent}% 境外交易手续费（{fee}）。",
-      "totalInCurrency": "以 {currency} 计的总额"
+      "feeCaption": "包含 {percent}% 境外交易手续费（{fee}）。"
     },
     "jointSplitDisabled": "共享账户中的拆分交易只能由所有者管理"
   },
@@ -473,6 +475,10 @@
     "remaining": "剩余：{symbol}{amount}",
     "needAmount": "需要 {symbol}{amount}（剩余：{symbol}{remaining}）",
     "setTotal": "将合计设为 {symbol}{amount}",
+    "currencyToggle": {
+      "title": "切换拆分金额的显示和编辑货币",
+      "ariaAmountsIn": "以 {code} 显示和编辑拆分金额"
+    },
     "splitLabel": "拆分项 {number}",
     "columns": {
       "type": "类型",
@@ -491,11 +497,7 @@
     "selectAccount": "选择账户...",
     "memoPlaceholder": "可选备注",
     "mobileMemoPlaceholder": "备注",
-    "tagsPlaceholder": "标签...",
-    "currencyToggle": {
-      "title": "切换拆分金额的显示和编辑货币",
-      "ariaAmountsIn": "以 {code} 显示和编辑拆分金额"
-    }
+    "tagsPlaceholder": "标签..."
   },
   "recentPopover": {
     "recentForPayee": "{name} 的近期交易",
@@ -513,7 +515,11 @@
     "quantityPlaceholder": "数量",
     "pricePlaceholder": "价格",
     "commissionPlaceholder": "佣金",
-    "amountPlaceholder": "金额（{currency}）"
+    "amountPlaceholder": "金额（{currency}）",
+    "ratePlaceholder": "每 1 {from} 兑 {to}",
+    "ariaRate": "汇率（每 1 {from} 兑 {to}）",
+    "rateHint": "数量、价格和佣金均以 {from} 计；此汇率将现金影响换算为 {to}。",
+    "rateUnresolved": "没有 {from} 兑 {to} 的汇率。请输入——没有它就无法计算现金影响，且两种货币并不等值。"
   },
   "charts": {
     "balanceHistory": {

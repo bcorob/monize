@@ -31,6 +31,7 @@ import { AuthService } from "./auth.service";
 import { TokenService } from "./token.service";
 import { OidcService } from "./oidc/oidc.service";
 import {
+  isFreshAuthentication,
   isOidcReauthPurpose,
   OidcReauthService,
   OIDC_REAUTH_PENDING_TTL_SECONDS,
@@ -615,12 +616,34 @@ export class AuthController {
       // readPendingMarker), so this is the one place entitled to mint the proof.
       // `state` goes in as well, so the marker has to belong to the round trip
       // that just completed rather than to any earlier one for the same user.
-      const reauthPurpose = this.oidcReauthService.readPendingMarker(
+      const pendingReauthResult = this.oidcReauthService.readPendingMarker(
         pendingReauth,
         result.user.id,
         state,
       );
-      if (reauthPurpose) {
+      if (pendingReauthResult) {
+        const { purpose: reauthPurpose, flowStartedAt } = pendingReauthResult;
+        // The redirect asked for a fresh challenge (`prompt=login`,
+        // `max_age=0`), but a parameter is a request, not a property: a
+        // provider holding a live SSO session may answer without prompting for
+        // anything. `auth_time` reports what actually happened, so it is
+        // checked before the proof exists -- against the flow start, so a warm
+        // session's earlier login cannot satisfy it, and an absent claim is
+        // "not fresh", not "fine". The user stays signed in; only the
+        // destructive action remains locked.
+        if (!isFreshAuthentication(tokenSet.auth_time, flowStartedAt)) {
+          this.logger.warn(
+            `OIDC re-authentication for "${reauthPurpose}" did not produce a ` +
+              `fresh authentication (auth_time=${tokenSet.auth_time ?? "absent"}); ` +
+              "no artifact issued",
+          );
+          res.redirect(
+            `${frontendUrl}/auth/callback?reauth=${encodeURIComponent(
+              reauthPurpose,
+            )}&error=reauth_not_fresh`,
+          );
+          return;
+        }
         const artifact = this.oidcReauthService.issue(
           result.user.id,
           reauthPurpose,

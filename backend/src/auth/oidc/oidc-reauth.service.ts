@@ -1,6 +1,8 @@
 import { Injectable, Logger, UnauthorizedException } from "@nestjs/common";
 import * as jwt from "jsonwebtoken";
 import * as crypto from "crypto";
+import { DataSource } from "typeorm";
+import { withScopedDb } from "../../common/db/scoped-db";
 import { tr } from "../../i18n/translate";
 
 /**
@@ -28,21 +30,22 @@ import { tr } from "../../i18n/translate";
  * JWT_SECRET, which is exactly the property the sentinel lacked.
  *
  * Signing goes through `jsonwebtoken` directly rather than Nest's `JwtService`
- * so this class has no injected dependencies. That is what lets `UsersModule`
- * provide it without importing `AuthModule` -- which it cannot, the two are
- * mutually dependent through `NotificationsModule` (see the module's own comment
- * about `PasswordBreachService`). The spent-id set is module-level rather than
- * per-instance for the same reason: two Nest instances of this class must not
- * mean two independent replay counters.
+ * so this class does not depend on `AuthModule`'s providers. That is what lets
+ * `UsersModule` provide it without importing `AuthModule` -- which it cannot,
+ * the two are mutually dependent through `NotificationsModule` (see the
+ * module's own comment about `PasswordBreachService`). The one injected
+ * dependency is TypeORM's `DataSource`, which the global `TypeOrmModule`
+ * resolves in every module, so re-providing this class stays cheap.
  *
- * Replay: consumed ids are held in memory. On a single replica that makes the
- * artifact strictly one-use. Across replicas it is best-effort -- an artifact
- * could be spent once per replica inside its five-minute window. That residual
- * is bounded and deliberate rather than overlooked: spending it requires the
- * session it was minted for, and that session's holder can simply run the flow
- * again, so the guarantee doing the work here is the IdP challenge, not the
- * counter. Closing it properly needs shared state (a table or a cache), which is
- * a schema decision, not a fix to smuggle into this one.
+ * Replay: a consumed `jti` is a row in `oidc_step_up_claims`, not a field in
+ * this process. A `Map` enforces single use inside one Node process, and this
+ * repo explicitly deploys with several backend replicas -- two destructive
+ * requests carrying the same artifact could be routed to different replicas,
+ * each find its own map empty, and both proceed; with N replicas the same
+ * artifact was accepted up to N times under favourable routing. `INSERT ... ON
+ * CONFLICT DO NOTHING` on the primary key is atomic across every replica:
+ * whoever inserts the row has spent the artifact, and everyone else gets zero
+ * rows back and is refused.
  */
 
 /** The actions an OIDC re-authentication artifact can be minted for. */
@@ -68,6 +71,51 @@ export function isOidcReauthPurpose(
 /** Five minutes: long enough to finish the action, short enough to be useless later. */
 export const OIDC_REAUTH_TTL_SECONDS = 5 * 60;
 
+/**
+ * Clock-drift tolerance, in seconds, applied to `auth_time` comparisons in both
+ * directions -- a genuine fresh authentication can report a timestamp a little
+ * before the flow start (our clock ahead of the IdP's) or a little after `now`.
+ */
+export const OIDC_AUTH_TIME_SKEW_SECONDS = 60;
+
+/**
+ * Whether the provider's asserted authentication happened in response to
+ * *this* re-authentication challenge.
+ *
+ * The authorization request sends `prompt=login` and `max_age=0`, but a
+ * parameter is a request, not a property: providers honour them unevenly, and
+ * one holding a live SSO session can answer the redirect with no credential
+ * prompt at all. `auth_time` is the claim that reports what actually happened,
+ * so the callback checks it before minting anything -- otherwise the
+ * "re-authenticate to continue" step can be satisfied by an unattended browser
+ * whose session was simply still warm.
+ *
+ * Freshness is anchored to when the flow began -- the pending marker's `iat` --
+ * not to `now`. Anchoring to `now` with a fixed window was the subtle hole: a
+ * user who authenticated a few minutes ago for something unrelated leaves a
+ * warm session, and a non-compliant provider answers our `prompt=login` from it
+ * with that *earlier* login's `auth_time`. That timestamp is recent enough to
+ * sit inside any now-relative window, so the check passed exactly against the
+ * providers it exists to defend against. Requiring `auth_time` at or after the
+ * flow start refuses it: a genuine fresh challenge authenticates during the
+ * round trip, so its `auth_time` cannot precede the flow.
+ *
+ * A provider that omits the claim has not answered the question, so an absent
+ * or malformed `auth_time` is "not fresh" rather than "fine". A small skew
+ * absorbs clock drift between us and the IdP in both directions.
+ */
+export function isFreshAuthentication(
+  authTime: number | undefined,
+  flowStartedAt: number,
+  now = Date.now(),
+): boolean {
+  if (typeof authTime !== "number" || !Number.isFinite(authTime)) return false;
+  const nowSeconds = Math.floor(now / 1000);
+  // Implausibly in the future is a provider we cannot reason about: fail closed.
+  if (authTime > nowSeconds + OIDC_AUTH_TIME_SKEW_SECONDS) return false;
+  return authTime >= flowStartedAt - OIDC_AUTH_TIME_SKEW_SECONDS;
+}
+
 const TOKEN_TYPE = "oidc_reauth";
 
 interface OidcReauthPayload {
@@ -85,18 +133,14 @@ interface PendingReauthPayload {
   purpose: string;
   /** SHA-256 of the `state` this marker was minted alongside. See `flowHash`. */
   sth?: string;
+  /** Issued-at, seconds. Set by `jwt.sign`; the flow-start anchor for freshness. */
+  iat?: number;
   exp?: number;
 }
 
 const PENDING_TYPE = "oidc_reauth_pending";
 
 const ALGORITHM = "HS256" as const;
-
-/**
- * jti -> expiry (ms). Module-level so every Nest instance of this service shares
- * one replay counter (see the class comment).
- */
-const consumedJtis = new Map<string, number>();
 
 /**
  * Resolved per call rather than cached: `JwtStrategy` already refuses to start
@@ -166,6 +210,50 @@ function flowHashMatches(presented: string, expected: string): boolean {
 export class OidcReauthService {
   private readonly logger = new Logger(OidcReauthService.name);
 
+  constructor(private readonly dataSource: DataSource) {}
+
+  /**
+   * Claim a `jti`, atomically and across every replica.
+   *
+   * Returns true only for the caller whose INSERT actually created the row.
+   * Expired rows are swept in the same call rather than by a timer -- but the
+   * sweep runs under this request's scoped context, so under `RLS_MODE=on` the
+   * isolation policy limits the DELETE to *this user's* expired rows; at
+   * `RLS_MODE=off` (the default) it removes every expired row. Single-use
+   * safety never depends on the sweep -- the primary-key conflict is what
+   * enforces it -- so an expired row belonging to a user who never steps up
+   * again is only harmless table growth, not a correctness risk. A
+   * system-context retention job is the place to bound that growth; this
+   * statement is best-effort housekeeping.
+   *
+   * `userId` must be the ambient scoped identity -- `consume` enforces
+   * `payload.sub === userId` and every caller runs it as `req.user.id`, so the
+   * INSERT's `user_id` matches `app_current_user_id()` and the isolation
+   * policy's `WITH CHECK` passes. A caller that ever passed a different id would
+   * trip that check and surface as a 500 rather than the clean 401 path; keep
+   * the two the same principal.
+   */
+  private async claimJti(
+    jti: string,
+    userId: string,
+    purpose: OidcReauthPurpose,
+    expiresAt: Date,
+  ): Promise<boolean> {
+    return withScopedDb(this.dataSource, async (m) => {
+      await m.query(
+        `DELETE FROM oidc_step_up_claims WHERE expires_at <= now()`,
+      );
+      const result: { jti: string }[] = await m.query(
+        `INSERT INTO oidc_step_up_claims (jti, user_id, purpose, expires_at)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (jti) DO NOTHING
+         RETURNING jti`,
+        [jti, userId, purpose, expiresAt],
+      );
+      return result.length > 0;
+    });
+  }
+
   /**
    * Signed marker that this user started a re-authentication for this action,
    * in *this* authorization round trip.
@@ -209,7 +297,7 @@ export class OidcReauthService {
     marker: string | undefined,
     authenticatedUserId: string,
     state: string | undefined,
-  ): OidcReauthPurpose | null {
+  ): { purpose: OidcReauthPurpose; flowStartedAt: number } | null {
     if (!marker) return null;
     let payload: PendingReauthPayload;
     try {
@@ -246,7 +334,18 @@ export class OidcReauthService {
       );
       return null;
     }
-    return isOidcReauthPurpose(payload.purpose) ? payload.purpose : null;
+    if (!isOidcReauthPurpose(payload.purpose)) return null;
+    if (typeof payload.iat !== "number") {
+      // Every marker we mint carries an `iat` (jwt.sign adds it), and freshness
+      // is anchored to it. A marker without one is not something we issued, so
+      // fail closed rather than mint with no flow-start reference.
+      this.logger.warn(
+        `OIDC re-auth marker rejected for user ${authenticatedUserId}: ` +
+          "no iat, so the flow start is unknown",
+      );
+      return null;
+    }
+    return { purpose: payload.purpose, flowStartedAt: payload.iat };
   }
 
   /**
@@ -272,14 +371,16 @@ export class OidcReauthService {
    * Every rejection is the same `401` with the same message: which of the checks
    * failed is a fact about the server's secrets and state, and the caller has no
    * legitimate use for it. The reason goes to the log instead.
+   *
+   * Spending happens in `oidc_step_up_claims` *before* the caller acts on the
+   * answer, so two requests racing on one artifact cannot both be told yes --
+   * including when they land on different replicas.
    */
-  consume(
+  async consume(
     userId: string,
     purpose: OidcReauthPurpose,
     token: string | undefined,
-  ): void {
-    this.pruneConsumed();
-
+  ): Promise<void> {
     if (!isNonEmptyString(token)) {
       this.reject(userId, purpose, "no artifact presented");
     }
@@ -317,11 +418,25 @@ export class OidcReauthService {
     if (!payload!.jti) {
       this.reject(userId, purpose, "no jti, so it cannot be spent once");
     }
-    if (consumedJtis.has(payload!.jti)) {
-      this.reject(userId, purpose, "already spent");
+    if (typeof payload!.exp !== "number") {
+      // Every artifact we mint carries an `exp` (issue() sets `expiresIn`). A
+      // token without one never expires at the JWT layer, so once the sweep
+      // dropped its claim row it could be re-claimed -- single use for a token
+      // that never dies. Enforce the invariant rather than trust it, in the
+      // same spirit as the "no jti" refusal above.
+      this.reject(userId, purpose, "no exp, so its lifetime is unbounded");
     }
 
-    consumedJtis.set(payload!.jti, Date.now() + OIDC_REAUTH_TTL_SECONDS * 1000);
+    const expiresAt = new Date(payload!.exp * 1000);
+    const claimed = await this.claimJti(
+      payload!.jti,
+      userId,
+      purpose,
+      expiresAt,
+    );
+    if (!claimed) {
+      this.reject(userId, purpose, "already spent");
+    }
   }
 
   private reject(
@@ -338,12 +453,5 @@ export class OidcReauthService {
         "Re-authenticate with your identity provider to confirm this action.",
       ),
     );
-  }
-
-  private pruneConsumed(): void {
-    const now = Date.now();
-    for (const [jti, expiresAt] of consumedJtis.entries()) {
-      if (expiresAt <= now) consumedJtis.delete(jti);
-    }
   }
 }

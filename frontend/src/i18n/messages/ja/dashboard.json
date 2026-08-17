@@ -202,7 +202,8 @@
     "title": "口座別使用率",
     "empty": "限度額が設定されたクレジット口座がありません。",
     "utilization": "使用率",
-    "used": "使用額"
+    "used": "使用額",
+    "noRate": "利用不可（{currency} のレートなし）"
   },
   "creditUtilizationTotal": {
     "title": "合計使用率",

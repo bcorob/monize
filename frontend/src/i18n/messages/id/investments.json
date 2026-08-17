@@ -38,6 +38,10 @@
     "title": "Ringkasan Portofolio",
     "noData": "Tidak ada data investasi tersedia.",
     "totalPortfolioValue": "Total Nilai Portofolio",
+    "knownPortfolioSubtotal": "Nilai Portofolio (sebagian)",
+    "incompleteHeading": "Angka-angka ini belum lengkap",
+    "incompletePrices": "Tidak ada harga terkini untuk {symbols}, sehingga kepemilikan tersebut tidak termasuk dalam total mana pun di bawah.",
+    "incompleteFx": "Tidak ada nilai tukar untuk {pairs}, sehingga kepemilikan dalam mata uang tersebut tidak termasuk dalam total mana pun di bawah.",
     "values": "Nilai",
     "holdingsValue": "Nilai Kepemilikan",
     "holdingsValueTooltip": "Nilai pasar saat ini dari semua sekuritas yang Anda miliki, berdasarkan harga terbaru yang tersedia.",
@@ -48,9 +52,9 @@
     "netInvested": "Net Diinvestasikan",
     "netInvestedTooltip": "Jumlah bersih uang Anda sendiri yang disetor ke akun investasi. Ini adalah total kontribusi dikurangi penarikan, tidak termasuk keuntungan investasi, dividen, atau bunga yang diperoleh.",
     "costBasis": "Dasar Biaya",
-    "costBasisTooltip": "Total jumlah yang awalnya Anda bayarkan untuk memperoleh investasi, termasuk harga pembelian dan biaya transaksi. Digunakan untuk menghitung keuntungan dan kerugian Anda.",
+    "costBasisTooltip": "Biaya perolehan posisi Anda saat ini, direkonstruksi dari riwayat transaksi: harga beli plus komisi yang dibebankan pada setiap pembelian, masing-masing dikonversi dengan kurs transaksi yang membayarnya. Ditampilkan dalam mata uang tampilan Anda. Digunakan untuk menghitung untung dan rugi.",
     "gainLoss": "Untung/Rugi",
-    "gainLossTooltip": "Keuntungan atau kerugian yang belum direalisasi dari kepemilikan saat ini: Nilai Pasar dikurangi Dasar Biaya. Tidak termasuk keuntungan yang direalisasi dari penjualan sebelumnya atau pendapatan yang diterima.",
+    "gainLossTooltip": "Untung atau rugi yang belum terealisasi atas posisi saat ini: nilai pasar pada harga hari ini dikurangi dasar biaya di atas. Tidak termasuk keuntungan terealisasi dari penjualan sebelumnya, atau dividen dan bunga yang diterima.",
     "returns": "Imbal Hasil",
     "simpleReturn": "Imbal Hasil Sederhana",
     "simpleReturnTooltip": "Total persentase keuntungan atau kerugian dari kepemilikan Anda, dihitung sebagai (Nilai Pasar − Dasar Biaya) ÷ Dasar Biaya. Tidak memperhitungkan waktu kontribusi atau penarikan.",
@@ -59,26 +63,28 @@
     "twrTooltip": "Mengukur seberapa baik kinerja investasi Anda terlepas dari kapan Anda menambah atau menarik uang. Menghilangkan dampak waktu arus kas untuk menampilkan kinerja investasi murni.",
     "cagr": "CAGR",
     "cagrTooltip": "Tingkat Pertumbuhan Tahunan Majemuk. Imbal hasil tahunan Anda berdasarkan Net Diinvestasikan vs. nilai portofolio saat ini, seolah-olah pertumbuhan telah steady setiap tahun.",
-    "notAvailable": "N/A"
+    "notAvailable": "N/A",
+    "unpricedHoldings": "Penilaian sebagian: {count, plural, one {# posisi} other {# posisi}} tidak memiliki harga saat ini ({symbols}), jadi nilai di bawah tidak menyertakannya."
   },
   "assetAllocation": {
     "title": "Alokasi Aset",
     "noData": "Tidak ada data alokasi tersedia.",
+    "knownValueOnly": "Persentase hanya mencakup nilai yang diketahui; beberapa kepemilikan tidak dapat dinilai.",
     "cash": "Tunai",
     "untagged": "Tanpa tag",
     "noTagData": "Tidak ada kepemilikan bertag untuk ditampilkan. Tambahkan tag ke sekuritas Anda untuk melihat eksposur berdasarkan tag.",
+    "noKeyData": "Tidak ada kepemilikan yang memiliki nilai untuk kunci tag ini. Beri tag sekuritas sebagai key:value (mis. country:usa) untuk melihat rincian ini.",
     "noCountryData": "Tidak ada data alokasi negara tersedia.",
+    "keySelectorLabel": "Kunci tag untuk diagregasi",
     "otherCountries": "Negara lainnya",
     "otherAssetClasses": "Kelas aset lainnya",
     "groupBy": {
       "security": "Berdasarkan sekuritas",
       "tag": "Berdasarkan tag",
-      "country": "Berdasarkan negara",
       "tagKey": "Menurut kunci",
+      "country": "Berdasarkan negara",
       "assetClass": "Menurut kelas aset"
-    },
-    "noKeyData": "Tidak ada kepemilikan yang memiliki nilai untuk kunci tag ini. Beri tag sekuritas sebagai key:value (mis. country:usa) untuk melihat rincian ini.",
-    "keySelectorLabel": "Kunci tag untuk diagregasi"
+    }
   },
   "holdingsList": {
     "title": "Kepemilikan",
@@ -93,6 +99,7 @@
   "groupedHoldings": {
     "title": "Kepemilikan berdasarkan Akun",
     "noHoldings": "Tidak ada kepemilikan dalam portofolio Anda.",
+    "accountIncomplete": "Sebagian: total akun ini tidak mencakup kepemilikan yang tidak dapat dinilai dalam {currency}.",
     "accountSummary": "{accounts} akun{accountsPlural} dengan {positions} posisi{positionsPlural}",
     "positionsWithCash": "{count} posisi{plural} + Tunai",
     "positions": "{count} posisi{plural}",
@@ -172,6 +179,12 @@
     "actionReinvest": "Reinvestasi",
     "actionAddShares": "Tambah Lembar",
     "actionRemoveShares": "Hapus Lembar",
+    "actionReinvestInterest": "Reinvestasi Bunga",
+    "actionReinvestCapitalGainShort": "Reinvestasi Keuntungan Modal Jangka Pendek",
+    "actionReinvestCapitalGainLong": "Reinvestasi Keuntungan Modal Jangka Panjang",
+    "actionCapitalGainShort": "Keuntungan Modal Jangka Pendek",
+    "actionCapitalGainLong": "Keuntungan Modal Jangka Panjang",
+    "actionRedeem": "Pencairan CD/Obligasi",
     "allActions": "Semua Tindakan"
   },
   "transactionForm": {
@@ -186,6 +199,12 @@
     "actionReinvest": "Reinvestasi Dividen",
     "actionAddShares": "Tambah Lembar",
     "actionRemoveShares": "Hapus Lembar",
+    "actionReinvestInterest": "Reinvestasi Bunga",
+    "actionReinvestCapitalGainShort": "Reinvestasi Keuntungan Modal Jangka Pendek",
+    "actionReinvestCapitalGainLong": "Reinvestasi Keuntungan Modal Jangka Panjang",
+    "actionCapitalGainShort": "Keuntungan Modal Jangka Pendek",
+    "actionCapitalGainLong": "Keuntungan Modal Jangka Panjang",
+    "actionRedeem": "Pencairan CD/Obligasi",
     "actionTransfer": "Transfer",
     "brokerageAccount": "Akun Perantara",
     "fromAccount": "Dari Akun",
@@ -206,6 +225,7 @@
     "pricePerShare": "Harga per Lembar ({currency})",
     "commissionFees": "Komisi / Biaya ({currency})",
     "description": "Deskripsi (opsional)",
+    "statusLockedToParent": "Transaksi ini merupakan bagian dari transaksi terpisah. Ubah status transaksi terpisah tersebut, agar kedua sisi berubah bersama-sama.",
     "descriptionPlaceholder": "Catatan opsional",
     "splitRatio": "Rasio pemecahan saham",
     "noSplitRatioWarning": "Tidak ada rasio pemecahan saham yang ditetapkan pada transaksi ini. Masukkan rasio seperti yang diumumkan sebelum menyimpan — Monize tidak akan menganggap satu untuk Anda.",
@@ -257,7 +277,10 @@
     "toastAvailableShares": "Hanya {available} lembar tersedia untuk ditransfer",
     "toastSplitRatioRequired": "Rasio pemecahan saham harus lebih dari nol",
     "toastPairedLegError": "Tidak dapat memuat pasangan transfer; buka kembali dan coba lagi",
-    "toastSaveFailed": "Gagal menyimpan transaksi"
+    "toastSaveFailed": "Gagal menyimpan transaksi",
+    "exchangeRateUnresolved": "Tidak ada kurs {from} ke {to}. Masukkan satu, atau total terkonversi, sebelum menyimpan.",
+    "toastExchangeRateRequired": "Masukkan nilai tukar sebelum menyimpan perdagangan lintas mata uang.",
+    "notAvailable": "Tidak tersedia"
   },
   "newTransactionButton": {
     "label": "+ Transaksi Baru",

@@ -228,5 +228,10 @@
     "nothingToRedo": "Немає чого повторити",
     "cannotRedo": "Неможливо повторити цю дію",
     "redoFailed": "Повторення не вдалося"
+  },
+  "partialTotal": {
+    "srSuffix": "(частковий підсумок)",
+    "explanation": "Частковий підсумок: не вдалося врахувати {count, plural, one {# суму} few {# суми} many {# сум} other {# суми}}, тому показане значення їх не включає. Немає курсу до {displayCurrency} для {currencies}.",
+    "explanationExcluded": "Частковий підсумок: не вдалося обчислити {count, plural, one {# суму} few {# суми} many {# сум} other {# суми}}, тому показане значення їх не враховує."
   }
 }

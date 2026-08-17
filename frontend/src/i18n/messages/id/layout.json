@@ -73,7 +73,13 @@
       "TRANSFER_OUT": "Transfer Keluar",
       "REINVEST": "Reinvestasi",
       "ADD_SHARES": "Tambah Lembar",
-      "REMOVE_SHARES": "Hapus Lembar"
+      "REMOVE_SHARES": "Hapus Lembar",
+      "REINVEST_INTEREST": "Reinvestasi Bunga",
+      "REINVEST_CAPITAL_GAIN_SHORT": "Reinvestasi Keuntungan Modal Jangka Pendek",
+      "REINVEST_CAPITAL_GAIN_LONG": "Reinvestasi Keuntungan Modal Jangka Panjang",
+      "CAPITAL_GAIN_SHORT": "Keuntungan Modal Jangka Pendek",
+      "CAPITAL_GAIN_LONG": "Keuntungan Modal Jangka Panjang",
+      "REDEEM": "Pencairan CD/Obligasi"
     },
     "descriptions": {
       "createdAccount": "Akun \"{name}\" dibuat",

@@ -317,7 +317,9 @@
   "monteCarlo": {
     "scenarioNotFound": "{{ id }} senaryosu bulunamadı",
     "scenarioIdsMustBeArray": "scenarioIds bir dizi olmalıdır",
-    "atLeastOneAccountRequired": "En az bir accountId gereklidir"
+    "atLeastOneAccountRequired": "En az bir accountId gereklidir",
+    "currentValueUnavailable": "Seçilen hesapların güncel değeri belirlenemedi, bu nedenle bir simülasyon bu değerden başlayamaz. Bir başlangıç değeri girin veya fiyatlar ve döviz kurları hazır olduğunda yeniden deneyin.",
+    "historicalReturnsUnavailable": "Seçilen hesapların geçmiş getirileri hesaplanamadığı için simülasyon bunları kullanamaz. Beklenen getiri ve volatiliteyi elle girin veya fiyatlar ve döviz kurları hazır olduğunda yeniden deneyin."
   },
   "netWorth": {
     "invalidStartDate": "startDate YYYY-AA-GG biçiminde olmalıdır",
@@ -361,6 +363,7 @@
     "requiresBrokerageAccount": "Zamanlanmış yatırım işlemleri için aracı kurum hesabı gereklidir",
     "notFound": "{{ id }} kimliğine sahip zamanlanmış işlem bulunamadı",
     "occurrenceAlreadyPosted": "Bu tekrar zaten kaydedildi.",
+    "changedConcurrently": "The scheduled transaction changed during the operation. Reload it and retry.",
     "fxPlainOnly": "Farklı bir para birimi yalnızca sade bir zamanlanmış işlemde kullanılabilir; bölünmüş işlem, transfer veya yatırımda kullanılamaz",
     "fxRateUnavailable": "{{ date }} tarihinde {{ from }} biriminden {{ to }} birimine döviz kuru yok. Kaydetmek için tutarı {{ to }} cinsinden girin.",
     "investmentActionRequired": "Zamanlanmış yatırım işlemleri için yatırım eylemi gereklidir",
@@ -396,6 +399,7 @@
     "cannotChangeSplitAccount": "Yatırım bölümünün hesabı değiştirilemez; bölümü kaldırın ve yeni hesaba ekleyin",
     "splitNoFundingAccount": "Yatırım bölümleri ayrı bir fonlama hesabı kullanmaz",
     "cannotChangeSplitDate": "Yatırım bölümünün tarihi değiştirilemez; bunun yerine üst bölünmüş işlem tarihini düzenleyin",
+    "embeddedStatusLocked": "Bu yatırım işlemi, bölünmüş bir işlemin parçasıdır. İki tarafın birlikte değişmesi için bunun yerine bölünmüş işlemin durumunu değiştirin.",
     "invalidAccountUuid": "Geçersiz hesap UUID'si: {{ id }}",
     "startDateFormat": "startDate YYYY-AA-GG biçiminde olmalıdır",
     "endDateFormat": "endDate YYYY-AA-GG biçiminde olmalıdır",
@@ -435,8 +439,10 @@
     "invalidTagKey": "Bir etiket anahtarı (1-100 karakter) gereklidir",
     "assetOptionNameRequired": "Varlık sınıfı adı gerekli.",
     "documentNotFound": "Belge bulunamadı",
+    "embeddedSplitAmountMismatch": "Bu bölünme {{ amount }} kaydediyor, ancak {{ action }} {{ quantity }} @ {{ price }} işlemi {{ rate }} kuruyla {{ expected }} eder. Bu tutarı kullanın veya kastettiğiniz döviz kurunu belirtin.",
     "selectionNotFound": "Seçilen menkul kıymetlerden biri veya birkaçı bulunamadı",
-    "comparisonSelectionEmpty": "Karşılaştırmak için en az bir menkul kıymet veya piyasa endeksi seçin"
+    "comparisonSelectionEmpty": "Karşılaştırmak için en az bir menkul kıymet veya piyasa endeksi seçin",
+    "exchangeRateNotPositive": "Döviz kuru sıfırdan büyük olmalıdır"
   },
   "tags": {
     "notFound": "{{ id }} kimliğine sahip etiket bulunamadı",
@@ -490,15 +496,27 @@
     "transferAmountNegative": "Transfer tutarı negatif olmamalıdır",
     "notATransfer": "İşlem bir transfer değil",
     "splitTransferLegAccountLocked": "Bu transfer, bölünmüş bir işlemin parçasıdır. Hesaplarını değiştirmek için kaynak işlemdeki bölümü düzenleyin.",
+    "splitTransferLegStatusLocked": "Bu transfer, bölünmüş bir işlemin parçasıdır. İki tarafın birlikte değişmesi için, ait olduğu bölünmüş işlemi düzenleyerek iptal edin veya geri yükleyin.",
+    "investmentCashLegStatusLocked": "Bu işlem, bir yatırım işleminin nakit tarafıdır. İki tarafın birlikte değişmesi için, yatırım işleminin durumunu değiştirerek iptal edin veya geri yükleyin.",
     "notFoundById": "{{ id }} kimliğine sahip işlem bulunamadı",
     "bulkUpdateNoFields": "En az bir güncelleme alanı sağlanmalıdır",
     "bulkSplitNoMatchingLinesOne": "Hiçbir bölümü kategori güncellemesiyle eşleşmediği için 1 bölünmüş işlem atlandı",
     "bulkSplitNoMatchingLinesMany": "Hiçbir bölümü kategori güncellemesiyle eşleşmediği için {{ count }} bölünmüş işlem atlandı",
+    "bulkSplitTransferLegSkippedOne": "1 bölünmüş transfer atlandı (her iki taraf birlikte değişsin diye, ait olduğu bölünmüş işlemden iptal edin veya geri yükleyin)",
+    "bulkSplitTransferLegSkippedMany": "{{ count }} bölünmüş transfer atlandı (her iki taraf birlikte değişsin diye, ait oldukları bölünmüş işlemden iptal edin veya geri yükleyin)",
+    "bulkInvestmentCashLegSkippedOne": "1 yatırım nakit işlemi atlandı (her iki taraf birlikte değişsin diye, yatırım işleminin durumunu değiştirerek iptal edin veya geri yükleyin)",
+    "bulkInvestmentCashLegSkippedMany": "{{ count }} yatırım nakit işlemi atlandı (her iki taraf birlikte değişsin diye, yatırım işlemlerinin durumunu değiştirerek iptal edin veya geri yükleyin)",
     "payeeNotFound": "Alacaklı bulunamadı",
     "fxFieldsIncomplete": "originalAmount ve originalCurrencyCode birlikte sağlanmalıdır",
     "fxRateRequired": "Yabancı para birimi işlemi için pozitif bir döviz kuru gereklidir",
     "fxSignMismatch": "originalAmount ve amount aynı işarete sahip olmalıdır",
-    "jointAccountMoveLocked": "Paylaşılan hesaptaki işlemler başka bir hesaba taşınamaz."
+    "jointAccountMoveLocked": "Paylaşılan hesaptaki işlemler başka bir hesaba taşınamaz.",
+    "currencyMustMatchAccount": "İşlem para birimi {{ supplied }}, hesap para birimi {{ account }} ile aynı olmalıdır. Yabancı para girişi için originalAmount ve originalCurrencyCode kullanın.",
+    "transferSameCurrencyMustConserve": "İki {{ currency }} hesabı arasındaki transfer her iki tarafta da aynı tutarı hareket ettirmelidir",
+    "transferSameCurrencyRateMustBeOne": "İki {{ currency }} hesabı arasındaki transferin döviz kuru 1'den farklı olamaz",
+    "transferRateUnavailable": "{{ from }} -> {{ to }} için döviz kuru belirlenemedi. Transferin doğru kaydedilmesi için bir exchangeRate veya hedef tutar girin.",
+    "transferAmountsMustAgreeOnZero": "Bir transfer her iki tarafta sıfırdan farklı bir tutar taşımalı veya her iki tarafta sıfır olmalıdır",
+    "transferImpliedRateInvalid": "Hedef tutar, kaynak tutara göre kullanılamaz bir döviz kuru anlamına geliyor"
   },
   "users": {
     "userNotFound": "Kullanıcı bulunamadı",

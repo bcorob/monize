@@ -490,6 +490,11 @@ const cases: Array<{ name: string; schema: RawShape; raw: unknown }> = [
     schema: schemas.getPortfolioSummaryOutput,
     raw: {
       holdingCount: 1,
+      fxComplete: true,
+      missingRatePairs: [],
+      pricesComplete: true,
+      unpricedSymbols: [],
+      valuationComplete: true,
       totalCashValue: 0,
       totalHoldingsValue: 100,
       totalCostBasis: 80,
@@ -522,6 +527,10 @@ const cases: Array<{ name: string; schema: RawShape; raw: unknown }> = [
           totalMarketValue: 100,
           totalGainLoss: 20,
           totalGainLossPercent: 25,
+          fxComplete: true,
+          missingRatePairs: [],
+          pricesComplete: true,
+          valuationComplete: true,
           holdings: [
             {
               securityId: "sec-aapl",
@@ -574,6 +583,7 @@ const cases: Array<{ name: string; schema: RawShape; raw: unknown }> = [
           totalAmount: 100,
           currency: "USD",
           description: null,
+          status: "CLEARED",
         },
       ],
       truncatedTransactionList: false,

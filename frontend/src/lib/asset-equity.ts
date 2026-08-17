@@ -53,11 +53,15 @@ export function buildEquitySeries(
 
   const series: DailyBalancePoint[] = [];
   let lastAsset: number | undefined;
-  let lastLoan = 0;
+  let lastLoan: number | null = 0;
   for (const date of dates) {
-    if (assetByDate.has(date)) lastAsset = assetByDate.get(date);
-    if (loanByDate.has(date)) lastLoan = loanByDate.get(date)!;
-    if (lastAsset === undefined) continue;
+    // A null value on either side is unknown, not carried forward and not a
+    // zero: the equity line breaks there rather than reusing the last figure --
+    // or, for the loan, subtracting no debt (Math.abs(null) === 0) and inflating
+    // equity -- as if it still applied.
+    if (assetByDate.has(date)) lastAsset = assetByDate.get(date) ?? undefined;
+    if (loanByDate.has(date)) lastLoan = loanByDate.get(date) ?? null;
+    if (lastAsset === undefined || lastLoan === null) continue;
     series.push({ date, balance: Math.round((lastAsset - Math.abs(lastLoan)) * 100) / 100 });
   }
   return series;

@@ -299,6 +299,8 @@ export interface SetupLoanPaymentsResponse {
   scheduledTransactionId: string;
   accountId: string;
   paymentAmount: number;
+  /** First installment after clamping against the outstanding balance. */
+  firstInstallmentAmount: number;
   paymentFrequency: string;
   nextDueDate: string;
 }

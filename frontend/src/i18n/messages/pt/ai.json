@@ -126,7 +126,13 @@
       "TRANSFER_OUT": "Transferência de Saída",
       "REINVEST": "Reinvestir",
       "ADD_SHARES": "Adicionar Ações",
-      "REMOVE_SHARES": "Remover Ações"
+      "REMOVE_SHARES": "Remover Ações",
+      "REINVEST_INTEREST": "Reinvestimento de juros",
+      "REINVEST_CAPITAL_GAIN_SHORT": "Reinvestimento de rendimento de curto prazo",
+      "REINVEST_CAPITAL_GAIN_LONG": "Reinvestimento de rendimento de longo prazo",
+      "CAPITAL_GAIN_SHORT": "Rendimento de capital de curto prazo",
+      "CAPITAL_GAIN_LONG": "Rendimento de capital de longo prazo",
+      "REDEEM": "Resgate de CD/obrigação"
     },
     "createSecurityTitle": "Criar este título?",
     "createdSecurity": "Título criado",

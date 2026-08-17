@@ -10,7 +10,11 @@ export function HoldingStatsTable({
 }: {
   data: AccountHoldingStats[] | null;
   loading: boolean;
-  formatCurrency: (v: number) => string;
+  // Takes the value's own currency code. The market value is in the security's
+  // native currency, and formatting it with the default-currency symbol printed
+  // a USD holding as "1,000 PLN" -- a money value and its currency are one tuple
+  // (recheck RR5-004).
+  formatCurrency: (v: number, currencyCode?: string) => string;
 }) {
   const t = useTranslations('reports');
 
@@ -31,6 +35,12 @@ export function HoldingStatsTable({
 
   const fmtPct = (v: number | null) =>
     v == null ? '—' : `${(v * 100).toFixed(2)}%`;
+
+  // A missing current price is unknown, not zero. Formatting `null` as currency
+  // would print the locale's zero and claim the position is worthless. A present
+  // value is formatted in the holding's OWN currency (recheck RR5-004).
+  const fmtValue = (v: number | null, currencyCode: string) =>
+    v == null ? '—' : formatCurrency(v, currencyCode);
 
   return (
     <div className="space-y-3 mb-3">
@@ -80,7 +90,7 @@ export function HoldingStatsTable({
                         {h.name}
                       </td>
                       <td className="px-3 py-1.5 text-right text-gray-700 dark:text-gray-300 whitespace-nowrap">
-                        {formatCurrency(h.marketValue)}
+                        {fmtValue(h.marketValue, h.currencyCode)}
                       </td>
                       <td className="px-3 py-1.5 text-right text-gray-900 dark:text-gray-100 whitespace-nowrap">
                         {fmtPct(h.meanReturn)}

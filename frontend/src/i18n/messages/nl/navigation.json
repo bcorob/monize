@@ -25,6 +25,7 @@
   "closeMenu": "Menu sluiten",
   "mainMenu": "Hoofdmenu",
   "loggedOut": "Succesvol uitgelogd",
+  "logoutNotConfirmed": "Alleen op dit apparaat afgemeld — de server heeft het niet bevestigd. Zie de melding op het aanmeldscherm.",
   "search": {
     "placeholder": "Transacties zoeken...",
     "label": "Transacties zoeken",

@@ -140,8 +140,12 @@ export interface InvestmentReportRow {
   id: string;
   /** The holding's own (security) currency, for formatting native values. */
   currency: string;
-  /** Multiply this row's native monetary values by this to get base currency. */
-  baseExchangeRate: number;
+  /**
+   * Multiply this row's native monetary values by this to get base currency.
+   * `null` when no rate exists for the pair: the base-currency value is
+   * unknown, never 0 and never the native amount relabelled.
+   */
+  baseExchangeRate: number | null;
   values: Record<string, InvestmentCellValue>;
 }
 

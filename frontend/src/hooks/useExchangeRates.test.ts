@@ -92,11 +92,42 @@ describe('useExchangeRates', () => {
     expect(result.current.convertToDefault(100, 'USD')).toBeCloseTo(150, 1);
   });
 
-  it('convert returns unconverted when no rate available (after load)', async () => {
+  /**
+   * The old contract returned the amount unconverted, and every caller then
+   * formatted it under the target currency's symbol: 100.00 USD with no USD->EUR
+   * rate rendered as "100.00 EUR" and was summed into Assets and Net Worth. The
+   * error is silent and scales with each unconverted account.
+   */
+  it('convert returns null when no rate is available (after load)', async () => {
     vi.mocked(exchangeRatesApi.getLatestRates).mockResolvedValue([]);
     const { result } = renderHook(() => useExchangeRates());
     await waitFor(() => expect(result.current.isLoading).toBe(false));
-    expect(result.current.convert(100, 'USD', 'GBP')).toBe(100);
+    expect(result.current.convert(100, 'USD', 'GBP')).toBeNull();
+  });
+
+  it('convertToDefault returns null when no rate is available', async () => {
+    vi.mocked(exchangeRatesApi.getLatestRates).mockResolvedValue([]);
+    const { result } = renderHook(() => useExchangeRates());
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.convertToDefault(100, 'USD')).toBeNull();
+  });
+
+  // Same currency is 1:1 by definition. That is a known rate, not a fallback,
+  // and it must stay distinguishable from the missing case.
+  it('converts same-currency amounts without needing a rate', async () => {
+    vi.mocked(exchangeRatesApi.getLatestRates).mockResolvedValue([]);
+    const { result } = renderHook(() => useExchangeRates());
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.convert(100, 'CAD', 'CAD')).toBe(100);
+  });
+
+  it('converts a real zero rather than reporting it unknown', async () => {
+    vi.mocked(exchangeRatesApi.getLatestRates).mockResolvedValue([
+      { id: 1, fromCurrency: 'USD', toCurrency: 'CAD', rate: 1.5, rateDate: '2025-01-15', source: 'test' },
+    ]);
+    const { result } = renderHook(() => useExchangeRates());
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.convert(0, 'USD', 'CAD')).toBe(0);
   });
 
   it('getRate uses direct rate', async () => {
@@ -151,7 +182,11 @@ describe('convertWithRateMap', () => {
     expect(convertWithRateMap(136, 'CAD', 'USD', rateMap)).toBeCloseTo(100, 0);
   });
 
-  it('returns unconverted when no rate', () => {
-    expect(convertWithRateMap(100, 'GBP', 'JPY', rateMap)).toBe(100);
+  it('returns null when no rate', () => {
+    expect(convertWithRateMap(100, 'GBP', 'JPY', rateMap)).toBeNull();
+  });
+
+  it('still returns a same-currency amount unchanged', () => {
+    expect(convertWithRateMap(100, 'JPY', 'JPY', rateMap)).toBe(100);
   });
 });

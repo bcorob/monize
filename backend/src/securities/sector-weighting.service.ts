@@ -5,7 +5,10 @@ import { Security } from "./entities/security.entity";
 import { Holding } from "./entities/holding.entity";
 import { Account, AccountType } from "../accounts/entities/account.entity";
 import { YahooFinanceService } from "./yahoo-finance.service";
-import { PortfolioCalculationService } from "./portfolio-calculation.service";
+import {
+  PortfolioCalculationService,
+  FxRateCache,
+} from "./portfolio-calculation.service";
 import { roundMoney, sumMoney } from "../common/round.util";
 import {
   EXCHANGE_TO_COUNTRY,
@@ -375,7 +378,7 @@ export class SectorWeightingService {
     await this.ensureSectorData(uniqueSecurities);
 
     // 5. Build sector maps
-    const rateCache = new Map<string, number>();
+    const rateCache: FxRateCache = new Map();
     // Determine default currency from first account
     const defaultCurrency =
       investmentAccounts.length > 0
@@ -391,15 +394,18 @@ export class SectorWeightingService {
       const price = priceMap.get(holding.securityId);
       if (price == null) continue;
 
-      let marketValue = quantity * price;
-
-      // Convert to default currency
-      marketValue = await this.portfolioCalculationService.convertToDefault(
-        marketValue,
+      // `null` means no rate exists for the pair. A sector weighting is a share
+      // of a total, so counting an unconverted foreign value would misstate
+      // this sector's share and every other sector's with it (audit P5-009).
+      // Skipping is the honest option; the conversion logs the missing pair.
+      const converted = await this.portfolioCalculationService.convertToDefault(
+        quantity * price,
         holding.security.currencyCode,
         defaultCurrency,
         rateCache,
       );
+      if (converted === null) continue;
+      const marketValue = converted;
 
       const sec = holding.security;
       const isStock =
@@ -618,7 +624,7 @@ export class SectorWeightingService {
     const uniqueSecurityIds = [...new Set(holdings.map((h) => h.securityId))];
     const priceMap = await this.getLatestPrices(uniqueSecurityIds);
 
-    const rateCache = new Map<string, number>();
+    const rateCache: FxRateCache = new Map();
     const defaultCurrency =
       investmentAccounts.length > 0
         ? investmentAccounts[0].currencyCode
@@ -647,13 +653,16 @@ export class SectorWeightingService {
       const price = priceMap.get(holding.securityId);
       if (price == null) continue;
 
-      let marketValue = quantity * price;
-      marketValue = await this.portfolioCalculationService.convertToDefault(
-        marketValue,
+      // See the note above: an unconvertible holding is skipped, not counted
+      // at its face value in the wrong currency.
+      const converted = await this.portfolioCalculationService.convertToDefault(
+        quantity * price,
         holding.security.currencyCode,
         defaultCurrency,
         rateCache,
       );
+      if (converted === null) continue;
+      const marketValue = converted;
 
       const classification = classify(holding.security);
 

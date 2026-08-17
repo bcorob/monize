@@ -22,6 +22,7 @@ import { useNumberFormat } from '@/hooks/useNumberFormat';
 import { useDateFormat } from '@/hooks/useDateFormat';
 import { useExchangeRates } from '@/hooks/useExchangeRates';
 import { createLogger } from '@/lib/logger';
+import { PartialTotal } from '@/components/ui/PartialTotal';
 import {
   WidgetFilterParams,
   buildDisplayCurrencyStrategy,
@@ -72,6 +73,7 @@ export function CategoryInfoWidget({
   onPayeeClick,
 }: CategoryInfoWidgetProps) {
   const t = useTranslations('transactions');
+  const tCommon = useTranslations('common');
   const router = useRouter();
   const { formatCurrency } = useNumberFormat();
   const { formatDate } = useDateFormat();
@@ -165,19 +167,34 @@ export function CategoryInfoWidget({
   // Roll grouped rows (which the backend returns per leaf category) up to
   // this category's direct children; rows for the category itself become a
   // "This category" bucket. Shares are of the summed absolute total.
+  const subcategoryAggregated = useMemo(
+    () => aggregateGroupedTotals(groupedCategories, currencyStrategy),
+    [groupedCategories, currencyStrategy],
+  );
   const subcategoryShares = useMemo(
+    () => rollupToDirectChildren(subcategoryAggregated, categories, category.id),
+    [subcategoryAggregated, categories, category.id],
+  );
+  // rollupToDirectChildren drops an unconvertible child, so the shares would
+  // otherwise sum to 100% of only the children that converted. Count the dropped
+  // ones -- only those inside this category's subtree, the same rows the rollup
+  // actually consumes, so a stray out-of-subtree row is not miscounted here.
+  const subcategoriesExcluded = useMemo(
     () =>
-      rollupToDirectChildren(
-        aggregateGroupedTotals(groupedCategories, currencyStrategy),
-        categories,
-        category.id,
-      ),
-    [categories, groupedCategories, currencyStrategy, category.id],
+      subcategoryAggregated.filter(
+        (r) => r.total === null && r.id !== null && descendantIds.has(r.id),
+      ).length,
+    [subcategoryAggregated, descendantIds],
   );
 
   const transactionCount = summary?.transactionCount ?? 0;
+  // Average over the transactions the figures actually sum: dividing a partial
+  // income/expenses by the full count (which includes excluded transactions)
+  // understates it.
   const averageAmount =
-    totals && transactionCount > 0 ? (totals.income + totals.expenses) / transactionCount : null;
+    totals && totals.includedTransactionCount > 0
+      ? (totals.income + totals.expenses) / totals.includedTransactionCount
+      : null;
 
   // Average spend per elapsed month over the period the chart covers. Dividing
   // by elapsed months (including months with no transaction) rather than only
@@ -271,9 +288,20 @@ export function CategoryInfoWidget({
               : 'text-red-600 dark:text-red-400'
           }`}
         >
-          {headlineTotal !== null
-            ? formatCurrency(headlineTotal, currencyStrategy.displayCurrency)
-            : '—'}
+          {headlineTotal !== null ? (
+            <PartialTotal
+              total={{
+                value: headlineTotal,
+                missingCurrencies: totals?.missingCurrencies ?? [],
+                excludedCount: totals?.excludedTransactionCount ?? 0,
+              }}
+              displayCurrency={currencyStrategy.displayCurrency}
+            >
+              {formatCurrency(headlineTotal, currencyStrategy.displayCurrency)}
+            </PartialTotal>
+          ) : (
+            '—'
+          )}
         </p>
       </div>
 
@@ -315,7 +343,16 @@ export function CategoryInfoWidget({
               {t('categoryWidget.averageAmount')}
             </dt>
             <dd className="text-gray-900 dark:text-gray-100 text-right">
-              {formatCurrency(averageAmount, currencyStrategy.displayCurrency)}
+              <PartialTotal
+                total={{
+                  value: averageAmount,
+                  missingCurrencies: totals?.missingCurrencies ?? [],
+                  excludedCount: totals?.excludedTransactionCount ?? 0,
+                }}
+                displayCurrency={currencyStrategy.displayCurrency}
+              >
+                {formatCurrency(averageAmount, currencyStrategy.displayCurrency)}
+              </PartialTotal>
             </dd>
           </div>
         )}
@@ -372,6 +409,11 @@ export function CategoryInfoWidget({
               );
             })}
           </ul>
+          {subcategoriesExcluded > 0 && (
+            <p className="mt-1 text-xs text-amber-600 dark:text-amber-400" data-testid="partial-note">
+              {tCommon('partialTotal.explanationExcluded', { count: subcategoriesExcluded })}
+            </p>
+          )}
         </div>
       )}
 
@@ -383,7 +425,10 @@ export function CategoryInfoWidget({
           <ul className="space-y-1 text-sm">
             {topPayees.map((row) => {
               const label = row.name ?? t('categoryWidget.noPayee');
-              const amount = formatCurrency(Math.abs(row.total), currencyStrategy.displayCurrency);
+              const amount =
+                row.total === null
+                  ? t('categoryWidget.amountUnavailable')
+                  : formatCurrency(Math.abs(row.total), currencyStrategy.displayCurrency);
               return (
                 <li key={row.id ?? 'no-payee'}>
                   {row.id && onPayeeClick ? (

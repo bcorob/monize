@@ -89,7 +89,7 @@ The point is that the next agent inherits the correction. A fix that lives only 
 
 **A doc that names an identifier is making a claim about the source.** Renaming or deleting a field, flag or helper means grepping `docs/` and every `CLAUDE.md` in the same commit. A document describing a model that no longer exists is worse than none: it gets read, believed, and built on. The same goes for a comment asserting that *every* call site does something -- that is a scanning test, not a comment.
 
-For the half of this a machine can check -- named *files* -- it now does: `backend/src/common/doc-paths.spec.ts` fails when a path (bare filenames included) in any `CLAUDE.md` or top-level `docs/*.md` does not resolve. This rule in prose was read, agreed with, and violated anyway (a plan doc sent readers to `backend/src/ai/query/` for a service under `backend/src/transactions/`), which is the argument for the test rather than the paragraph. `docs/future-plans/` gets the weaker claim a plan can actually make: naming files that do not exist yet is what a plan is for, but an unresolved path whose basename exists elsewhere in the tree is a moved or renamed file, not a planned one, and fails the suite -- that is exactly the defect that motivated the guard, and the original scope excluded the directory it lived in. `docs/release-notes/` and `docs/audits/` are shipped records that must not be edited to match a later tree, so they are out of scope entirely. A path in another branch or repository is not a claim about this tree, so qualify it (`branch:path/to/file.md`) rather than letting it read as one -- the suite exempts that shape deliberately, with a test.
+For the half of this a machine can check -- named *files* -- it now does: `backend/src/common/doc-paths.spec.ts` fails when a path (bare filenames included) in any `CLAUDE.md` or top-level `docs/*.md` does not resolve. This rule in prose was read, agreed with, and violated anyway (a plan doc sent readers to `backend/src/ai/query/` for a service under `backend/src/transactions/`), which is the argument for the test rather than the paragraph. `docs/future-plans/` gets the weaker claim a plan can actually make: naming files that do not exist yet is what a plan is for, but an unresolved path whose basename exists elsewhere in the tree is a moved or renamed file, not a planned one, and fails the suite -- that is exactly the defect that motivated the guard, and the original scope excluded the directory it lived in. `docs/release-notes/` and `docs/audits/` are shipped records that must not be edited to match a later tree, so they are out of scope entirely. A path in another branch or repository is not a claim about this tree, so qualify it (`branch:path/to/file.md`) rather than letting it read as one -- the suite exempts that shape deliberately, with a test. The inverse holds too: a doc arguing that a file is *missing* -- `docs/release-integrity.md`'s gap register, on the branch-protection policy this repository does not carry -- names it in plain prose, because a backticked span is the idiom for "this file is here" and that passage says the opposite.
 
 ### Running the suites locally -- three ways a green branch reads as red
 
@@ -225,11 +225,236 @@ Money is `decimal(20,4)`; an exchange rate is `NUMERIC(20,10)` (`exchange_rates.
 
 Convert with `applyFxConversion` (backend) so the account's `fxFeePercent` is folded in the same way the transaction form does; validate a foreign-currency payload with `normalizeFxEntry`, which transactions and scheduled transactions share so both accept and reject exactly the same shapes.
 
+### Rate 1 means "same currency", never "no rate found"
+
+A failed rate lookup is unknown. It is not `1`, and it is not the amount passed
+through unchanged -- four conversion paths ended in one of those two, and 1,000
+USD came out of a EUR total as 1,000 EUR: an 11% error that is numerically
+plausible, which is exactly what makes it survive review. Nothing in the response
+let a consumer tell a real 1:1 pair from an absent one.
+
+Aggregate through `FxAggregate` (`backend/src/common/fx-aggregate.ts`) rather than
+`total += convert(...)`. The accumulator cannot silently absorb a missing
+component: it names each unresolvable pair, and its `total` is `null` while
+`knownSubtotal` carries what did convert. Zero and negative rates are absent, not
+applicable. `backend/src/common/fx-fallback.guard.spec.ts` scans for a new silent
+fallback; `docs/specs/fx-conversion-completeness.md` has the invariants and the
+staged rollout of nullable response totals.
+
+### A currency code is derived from the account, not accepted from the request
+
+`amount` and `currencyCode` on a transaction are the account-currency pair --
+foreign entry belongs in `originalAmount`/`originalCurrencyCode`/`exchangeRate`.
+Nothing checked it, so `amount=100, currencyCode=USD` against a EUR account moved
+the balance 100 EUR and stored a row reporting 100 USD; both fields persist, so it
+survived into every report and every backup. Derive with
+`assertTransactionCurrencyMatchesAccount` (`backend/src/common/fx-entry.util.ts`),
+which rejects a mismatch.
+
+A transfer is the same rule twice, plus conservation: two same-currency accounts
+must move the same amount (no rate or fee can make that unequal, so an explicit
+destination amount that disagrees is a rejection, not an override), and a
+cross-currency pair resolves its rate server-side or refuses. A caller holding
+only one side's currency -- a scheduled transaction -- sends neither code.
+
+### A preview computes what the commit will do, through the same code
+
+A preview that resolves a rate as `?? 1` while the commit resolves a real one has
+the user approve one figure and receive another. This has happened twice: an
+investment preview multiplied cash impact by a zero rate the commit then treated
+as 1, and a transfer preview passed the source amount through for a
+cross-currency pair. Call the same resolver from both.
+
 ### Missing data: a subtotal is not a total (CRITICAL)
 
 A field named `total*`, `portfolioValue`, `transferValue`, `gain`, `tax`, or `estimated*` may only carry a value when **every** component of the calculation is known. Filtering out `null` components and summing the rest produces a subtotal, not a total -- if any component is unknown, the total is `null`, and the partial sum, if returned at all, goes in a separate explicitly named field (`knownMarketValueSubtotal`), never in the total's field. Never default an unknown price, cost basis, or rate to `0` (or an exchange rate to `1`) to keep a formula running, and never treat a missing period price as a 0% return.
 
 **`null` is not the safe answer either.** It means "not known", so a state that *is* known must not use it: empty accounts hold zero, move zero, realize zero and owe zero, and reporting those as unknown tells the user a settled question could not be worked out -- while making "nothing to do" indistinguishable from "cannot compute". Decide which of the two each branch is in before writing it.
+
+### An investment action is folded into a share count in exactly one place
+
+`applyActionToQuantity` (`backend/src/securities/investment-replay.util.ts`), with
+`SHARE_MOVING_ACTIONS` naming the set. `quantity` means shares for most actions
+and a **ratio** for `SPLIT`, which is the distinction duplication kept losing:
+seven replays existed, three added the ratio instead of multiplying by it and the
+same three omitted `ADD_SHARES`/`REMOVE_SHARES`, so a post-split position read 40%
+light on every history chart while the holdings page was right. Each copy was
+internally consistent, which is why nothing failed. Cost goes through
+`acquisitionCost` in the same file -- commission included, `null` for an unpriced
+row. `investment-replay.guard.spec.ts` scans for a new hand-rolled fold in either
+the `case` or the `if` form.
+
+### VOID means no balance moved -- on every path that writes one
+
+A `VOID` row records something that did not happen, and
+`recalculateCurrentBalance` excludes it. So an incremental balance update must
+agree: creating a VOID transfer moved money the next recompute silently took back;
+a status-only edit wrote VOID on both legs and left both balances carrying the
+amount; a bulk void of one leg restored the source and left the destination
+holding it; and a VOID split parent credited its transfer target while leaving an
+**active** counterpart leg. Two rows describing one movement of money share a
+status, and a reversal only reverses what was actually included.
+
+The status is part of what a row is created *with*, not something applied after.
+Three separate paths recreated a voided parent's transfer legs as ACTIVE because
+they rebuilt the rows and forgot the one argument that carries the parent's status;
+each was individually tested, for what it created rather than the state it created
+it in. When a create helper takes the parent's status, every caller passes it.
+
+And where two rows can hold *different* statuses -- a cross-owner transfer, whose
+status is deliberately per-ledger -- inclusion is decided per row. Using one leg's
+`wasVoid`/`isVoid` to gate both ledgers is right in two of the four combinations
+and silently wrong in the other two: a VOID own leg beside an active foreign one
+left the foreign balance behind its own row by the whole edit delta. Four states
+means a four-case test matrix, not a representative one.
+
+### Editing one row must not leave the pair describing two different events
+
+A split parent and the transfer legs its children created are one movement of
+money, so voiding *one* leg from the target side is refused rather than applied:
+the parent's split row and total would still record money that left the source and
+never arrived. Refuse and point at the parent -- there is already a propagation
+path from there. Only the VOID boundary is shared; reconciliation states
+(`PENDING`/`CLEARED`/`RECONCILED`) are genuinely per-ledger.
+
+A refusal like that is only worth as much as its least-guarded entry point. The
+same state was reachable through `bulkUpdate`, which expands a transfer leg to its
+counterpart but rightly declines to pull in a split *parent* -- so a bulk void hit
+the leg alone. When you refuse something on one path, grep for the bulk, AI-action
+and MCP routes to the same write in the same commit.
+
+### A deletion reverses only what the row actually contributed
+
+A `VOID` row moved no balance, and neither did a future-dated one, so deleting
+either must move none. Nine reversal sites across five services each wrote the rule
+out and four got it wrong -- two of them in the *same function* as a correct one, so
+`removeParentTransaction` guarded the deleted row and the split parent and debited
+every sibling target account. Call `deletionBalanceEffect`
+(`backend/src/common/deletion-balance.util.ts`); `deletion-balance.guard.spec.ts`
+fails on a new hand-rolled `-Number(row.amount)` reaching a balance update.
+
+That guard found two the reviews had not: one site checked VOID and forgot the date,
+which is the same bug facing the other way. Prose had already failed to hold this
+rule three times before it became a scan.
+
+### A balance change is not finished until its derived state is invalidated
+
+Writing the live balance and stopping leaves the user looking at a corrected account
+beside a stale net-worth snapshot, and it stays stale until something unrelated
+touches that account. A helper that moves an account nobody upstream knows about must
+**return** the accounts it moved -- `applyParentStatusToTransferCounterparts` returned
+`void`, so both its callers invalidated only the accounts already in their own list.
+Dispatch the recalculation after the commit, never from inside the transaction: a
+rollback must not leave a recompute queued for state that was never written.
+
+### A completeness flag nobody displays is not a completeness signal
+
+The backend, the AI adapter and the MCP schema all carried `valuationComplete`
+faithfully while `frontend/src/types/investment.ts` omitted the field entirely, so
+the Investments page rendered the subtotal under "Total Portfolio Value" -- the one
+surface a household user actually reads. Adding metadata to a response is half the
+change; the other half is the consumer that has to branch on it. When you add a
+completeness field, grep the frontend types for the interface it belongs to in the
+same commit, and relabel the figure rather than leaving a total's caption over a
+partial number.
+
+Read such a field defensively at the consumer (`=== false`, not `!`): during a
+rolling deploy a page can receive a response from a backend that predates the field,
+and absent means "no information" -- not "incomplete", and certainly not a crash.
+
+And read the flag from the *same aggregate that produced the numbers on screen*. The
+single foreign-account summary card showed account-currency subtotals while checking
+the top-level default-currency flag -- two different conversion graphs -- so an account
+that could not be valued in its own currency rendered zero under a complete-looking
+total. When a view switches which aggregate it displays, it switches which completeness
+it trusts.
+
+### A weighting is in one currency or it is meaningless
+
+Summing `quantity * nativePrice` across USD, JPY and EUR holdings weights them by
+exchange rate as much as by size, so a balanced mix came out of the Monte Carlo
+historical-return calc near -20% instead of 0%. Convert every value into one common
+currency before weighting (the choice of currency does not matter -- normalized weights
+are invariant to it -- only that they share one), through the same resolver everything
+else uses. And an unpriced holding dropped from the weights makes the priced subset
+stand in for the portfolio: refuse the whole statistic (`null`) rather than report a
+subset's.
+
+### An account, its currency, its rate and its amount are one tuple
+
+Persist all of it or none of it. Moving a transfer's destination leg to an account
+in another currency wrote the account, the currency and the newly resolved rate,
+and left the old destination *number* behind -- 90 GBP at 0.80 against a 100 USD
+source, with the balance already moved by 80, so the next recompute changed the
+account by the difference with no user action behind it. Key the write on "did this
+edit re-price the transfer", never on which request fields happened to be present.
+
+### A change is a value difference, not a field being present
+
+The transfer form resends the current accounts, amount and rate on every save, so
+`updateDto.amount !== undefined` does not mean the amount changed. Keying repricing
+off presence made an idempotent full-form payload restate a settled 90 EUR
+destination as 80 and move the balance with it -- from a request whose only real edit
+was a description. Compare against what the row holds. This is the same mistake as
+using one leg's state for both ledgers: asking a question the data can answer instead
+of the one that matters.
+
+### A presentation-only edit does not re-resolve a rate
+
+Renaming a transfer's description re-resolved FX and stored today's rate beside an
+unchanged destination amount, making the row internally inconsistent -- and refused
+the rename outright when the pair had no current rate, though the transfer already
+held a valid settlement. Resolve only when the financial structure changes: either
+account, the source amount, an explicit destination amount, an explicit rate. A
+date correction is not a re-pricing; the rate a transfer settled at is a fact about
+the transfer.
+
+### A clamp bounds the total, not one of its parts
+
+Two children retiring one debt are clamped together. The loan final-payment fix
+capped the amortized principal at the outstanding balance and left the extra
+principal transfer beside it uncapped, so 400 + 300 went into a 500 balance, the
+account crossed zero into a credit, and the payoff check waiting for `<= 0.01`
+never fired. Decide which part yields -- the amortized figure is owed, the
+discretionary extra absorbs the shortfall -- and write the yielding part back:
+shrinking the parent while a child still carries the unclamped number fails the
+split validator's exact-4dp equality at the moment the user expected the loan to
+close. The same rule caught two more instances in `LoanPaymentSetupService`, which
+wrote the first installment and clamped nothing at all.
+
+### A completeness flag covers every total it is documented to cover, on every surface
+
+`fxComplete` claimed to describe all of `PortfolioSummary`'s `total*` fields while
+one aggregate's missing pairs were only written to the log, so an incomplete
+`totalNetInvested` shipped under `fxComplete: true` and fed CAGR as a complete
+denominator. Union every aggregate's gaps, and derive anything downstream (a rate,
+a ratio) only when its own inputs are complete. The flag must also survive the trip
+to each consumer: the compact LLM shape dropped both fields, so the AI Assistant and
+MCP quoted the same subtotal as a settled balance the UI knew was partial -- and for
+a model, the human-readable summary line has to say so too, not just the payload.
+
+The converse is equally wrong, and appeared in the same fix: **zero needs no rate.**
+Asking for one made an empty foreign account report its currency as unresolvable and
+took the whole portfolio's totals down to "unknown".
+
+And completeness has more than one cause. `fxComplete` covered missing exchange rates
+and nothing else, so a held position with no current **price** was skipped out of the
+total with no gap recorded: a confident `totalPortfolioValue` built from the priced
+half, `fxComplete: true`, and Monte Carlo projecting from it. Track each cause
+separately (`fxComplete`, `pricesComplete`) and give consumers one flag that means
+"every component of every total is known" (`valuationComplete`), so nobody has to
+remember to check both.
+
+Nested totals need their own answer, too. A per-account total is converted into the
+*account's* currency while the top-level total is converted into the *user's* -- two
+different conversion graphs, so a portfolio can be complete at the top and
+unconvertible underneath. A global flag cannot speak for a total it did not compute.
+
+### The difference of two 4dp decimals is not a 4dp decimal
+
+`roundMoney` the delta, not just its operands. `newAmount - oldAmount` on two
+values that are each exactly representable to 4dp is not, and that value is what a
+balance moves by.
 
 The full rules -- cost basis and tax truth table, cash, valuation, materialized-result versioning, stale quotes, backtests over incomplete history, and the required adversarial test matrix -- live in `docs/financial-calculation-contract.md` and `docs/time-series-contract.md`. Read both **before** writing or changing any financial calculation, not when a review asks about them: every rule those documents contain has been read, agreed with and broken anyway by someone who reached them afterwards. `docs/testing-contract.md` lists the adversarial inputs that have broken this codebase before -- dates, money precision, aggregation, currency conversion, ownership, concurrency -- so a test author picks from a list rather than recalling edge cases; it is explicitly not a requirement that every test use every value. A financial feature of any substance -- it computes money, materializes a derived result, or reads a time series -- starts from a short approved spec (invariants, truth tables, numerical examples, missing-data policy, test matrix), committed *before* the implementation it guides.
 

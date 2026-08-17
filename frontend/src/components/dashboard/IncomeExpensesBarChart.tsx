@@ -31,6 +31,7 @@ import { useDateFormat } from '@/hooks/useDateFormat';
 import { useChartDateFormat } from '@/hooks/useChartDateFormat';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
 import { useExchangeRates } from '@/hooks/useExchangeRates';
+import { PartialTotal } from '@/components/ui/PartialTotal';
 import { useReportData } from '@/hooks/useReportData';
 import { useWidgetConfig } from '@/hooks/useWidgetConfig';
 import { usePreferencesStore } from '@/store/preferencesStore';
@@ -100,7 +101,7 @@ export function IncomeExpensesBarChart({
   const { formatDate } = useDateFormat();
   const formatChartDate = useChartDateFormat();
   const { formatCurrencyCompact: formatCurrency, formatCurrencyAxis } = useNumberFormat();
-  const { convertToDefault } = useExchangeRates();
+  const { convertToDefault, defaultCurrency } = useExchangeRates();
   const weekStartsOn = (usePreferencesStore((s) => s.preferences?.weekStartsOn) ?? 1) as 0 | 1 | 2 | 3 | 4 | 5 | 6;
   const { config, updateConfig } = useWidgetConfig<RangeAccountsConfig>(
     WIDGET_ID,
@@ -126,8 +127,12 @@ export function IncomeExpensesBarChart({
 
   // Group transactions into weekly (recent) or monthly (longer) buckets and
   // split each bucket's activity into income and expenses.
-  const chartData = useMemo(() => {
+  const breakdown = useMemo(() => {
     const txns = transactions ?? [];
+    // Currencies excluded from the bars for want of a rate, and how many
+    // individual amounts (a component count, not a currency count) were dropped.
+    const missingCurrencies = new Set<string>();
+    let excludedCount = 0;
     const startDate = start ? parseLocalDate(start) : parseLocalDate(end);
     const endDate = parseLocalDate(end);
 
@@ -163,8 +168,20 @@ export function IncomeExpensesBarChart({
       );
       if (!bucket) return;
 
+      // Every line of a transaction shares its currency, so a missing rate
+      // excludes the whole transaction once -- not once per split line, which
+      // would report more excluded amounts than there are transactions.
+      let txExcluded = false;
       const classifyAmount = (rawAmount: number, category: { isIncome: boolean } | null | undefined) => {
         const amount = convertToDefault(rawAmount, tx.currencyCode);
+        // No rate: the amount belongs to neither bar. Counting the unconverted
+        // figure would size a bar in the wrong currency, and counting zero would
+        // silently shrink the month.
+        if (amount === null) {
+          missingCurrencies.add(tx.currencyCode);
+          txExcluded = true;
+          return;
+        }
         if (category?.isIncome === true) {
           bucket.income += amount;
         } else if (category?.isIncome === false) {
@@ -187,16 +204,28 @@ export function IncomeExpensesBarChart({
       } else {
         classifyAmount(Number(tx.amount) || 0, tx.category);
       }
+      if (txExcluded) excludedCount += 1;
     });
 
-    return buckets.map((b) => ({
-      name: b.label,
-      Income: Math.round(b.income),
-      Expenses: Math.round(b.expenses),
-      startDate: format(b.bucketStart, 'yyyy-MM-dd'),
-      endDate: format(b.bucketEnd, 'yyyy-MM-dd'),
-    }));
+    return {
+      data: buckets.map((b) => ({
+        name: b.label,
+        Income: Math.round(b.income),
+        Expenses: Math.round(b.expenses),
+        startDate: format(b.bucketStart, 'yyyy-MM-dd'),
+        endDate: format(b.bucketEnd, 'yyyy-MM-dd'),
+      })),
+      missingCurrencies: [...missingCurrencies],
+      excludedCount,
+    };
   }, [transactions, start, end, isWeekly, formatDate, formatChartDate, convertToDefault, weekStartsOn]);
+
+  const chartData = breakdown.data;
+  // The partial-total marker the income/expenses/net figures share.
+  const totalsMarker = {
+    missingCurrencies: breakdown.missingCurrencies,
+    excludedCount: breakdown.excludedCount,
+  };
 
   const barClickedRef = useRef(false);
 
@@ -320,17 +349,24 @@ export function IncomeExpensesBarChart({
               </BarChart>
             </ResponsiveContainer>
           </div>
+          {/* A month with a transaction in a currency that has no rate is a
+              subtotal: the bar and these figures exclude it, so each is marked
+              rather than passing as the complete month. */}
           <div className="pt-4 border-t border-gray-200 dark:border-gray-700 grid grid-cols-3 gap-4 text-center flex-shrink-0">
             <div>
               <div className="text-sm text-gray-500 dark:text-gray-400">{t('incomeExpenses.income')}</div>
               <div className="font-semibold text-green-600 dark:text-green-400">
-                {formatCurrency(totals.income)}
+                <PartialTotal total={{ value: totals.income, ...totalsMarker }} displayCurrency={defaultCurrency}>
+                  {formatCurrency(totals.income)}
+                </PartialTotal>
               </div>
             </div>
             <div>
               <div className="text-sm text-gray-500 dark:text-gray-400">{t('incomeExpenses.expenses')}</div>
               <div className="font-semibold text-red-600 dark:text-red-400">
-                {formatCurrency(totals.expenses)}
+                <PartialTotal total={{ value: totals.expenses, ...totalsMarker }} displayCurrency={defaultCurrency}>
+                  {formatCurrency(totals.expenses)}
+                </PartialTotal>
               </div>
             </div>
             <div>
@@ -338,7 +374,9 @@ export function IncomeExpensesBarChart({
               <div
                 className={`font-semibold ${gainLossColor(totals.income - totals.expenses)}`}
               >
-                {formatCurrency(totals.income - totals.expenses)}
+                <PartialTotal total={{ value: totals.income - totals.expenses, ...totalsMarker }} displayCurrency={defaultCurrency}>
+                  {formatCurrency(totals.income - totals.expenses)}
+                </PartialTotal>
               </div>
             </div>
           </div>

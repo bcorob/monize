@@ -2164,6 +2164,151 @@ describe('TransactionsPage', () => {
       expect(rows[0]).toEqual(['2026-02-01', '', '', '', '', '', -25, 'USD', 'UNRECONCILED']);
     });
 
+    it('exports the amount as a number when the API sends it as a decimal string', async () => {
+      // `decimal(20,4)` has no TypeORM transformer, so `amount` arrives as the
+      // string "-67.9900" while the type says number. Passing it through
+      // unconverted put text in the Amount column, which the CSV writer then
+      // read as a formula and neutralized with a leading tab -- issue #1134.
+      // The split branch below never showed it because it recomputes a real
+      // number, and a positive string opens with no character the guard looks
+      // for, which is why the reporter's only clean rows were splits and one
+      // credit.
+      const apiShapedTransactions = [
+        { id: 'tx-1', transactionDate: '2026-08-12', amount: '-67.9900', status: 'UNRECONCILED', payee: { id: 'p1', name: 'AliExpress' }, payeeName: 'AliExpress', category: { id: 'c1', name: 'Sporting Goods' }, account: { id: 'acc-1', name: 'WS VISA' }, description: 'TPU tubes x6', tags: [], currencyCode: 'CAD', isTransfer: false },
+        { id: 'tx-2', transactionDate: '2026-08-06', amount: '38.5700', status: 'UNRECONCILED', payee: { id: 'p2', name: 'WealthSimple' }, payeeName: 'WealthSimple', category: { id: 'c2', name: 'Cashback' }, account: { id: 'acc-1', name: 'WS VISA' }, description: 'From credit card', tags: [], currencyCode: 'CAD', isTransfer: false },
+      ];
+
+      mockGetAll.mockResolvedValue({
+        data: apiShapedTransactions,
+        pagination: { page: 1, totalPages: 1, total: 2 },
+        startingBalance: 5000,
+      });
+
+      render(<TransactionsPage />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('tx-count')).toHaveTextContent('2 transactions');
+      });
+
+      fireEvent.click(screen.getByTestId('export-btn'));
+
+      await waitFor(() => {
+        expect(mockExportToCsv).toHaveBeenCalledTimes(1);
+      });
+
+      const [, , rows] = mockExportToCsv.mock.calls[0];
+      expect(rows[0][6]).toBe(-67.99);
+      expect(rows[1][6]).toBe(38.57);
+      expect(typeof rows[0][6]).toBe('number');
+      expect(typeof rows[1][6]).toBe('number');
+    });
+
+    it('exports a transfer with the counterpart account and the direction', async () => {
+      // The Category column was empty for a transfer -- the register shows the
+      // counterpart as an arrow chip and the export said nothing at all. Each
+      // leg is labelled from its own amount, so the pair reads To and From.
+      const transfers = [
+        { id: 'tx-1', transactionDate: '2026-08-12', amount: '-200.0000', status: 'CLEARED', payee: null, payeeName: 'Transfer to Savings', category: null, account: { id: 'acc-1', name: 'Chequing' }, description: '', tags: [], currencyCode: 'CAD', isTransfer: true, linkedTransaction: { id: 'tx-2', account: { id: 'acc-2', name: 'Savings' } } },
+        { id: 'tx-2', transactionDate: '2026-08-12', amount: '200.0000', status: 'CLEARED', payee: null, payeeName: 'Transfer from Chequing', category: null, account: { id: 'acc-2', name: 'Savings' }, description: '', tags: [], currencyCode: 'CAD', isTransfer: true, linkedTransaction: { id: 'tx-1', account: { id: 'acc-1', name: 'Chequing' } } },
+      ];
+
+      mockGetAll.mockResolvedValue({
+        data: transfers,
+        pagination: { page: 1, totalPages: 1, total: 2 },
+        startingBalance: 5000,
+      });
+
+      render(<TransactionsPage />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('tx-count')).toHaveTextContent('2 transactions');
+      });
+
+      fireEvent.click(screen.getByTestId('export-btn'));
+
+      await waitFor(() => {
+        expect(mockExportToCsv).toHaveBeenCalledTimes(1);
+      });
+
+      const [, , rows] = mockExportToCsv.mock.calls[0];
+      expect(rows[0][3]).toBe('Transfer To Savings');
+      expect(rows[1][3]).toBe('Transfer From Chequing');
+    });
+
+    it('keeps a category a transfer also carries, beside the transfer label', async () => {
+      // The register shows both chips for a categorized transfer (a monthly
+      // investment contribution, say); dropping one in the export loses it.
+      const transfers = [
+        { id: 'tx-1', transactionDate: '2026-08-12', amount: '-200.0000', status: 'CLEARED', payee: null, payeeName: '', category: { id: 'c1', name: 'Investments' }, account: { id: 'acc-1', name: 'Chequing' }, description: '', tags: [], currencyCode: 'CAD', isTransfer: true, linkedTransaction: { id: 'tx-2', account: { id: 'acc-2', name: 'RRSP' } } },
+      ];
+
+      mockGetAll.mockResolvedValue({
+        data: transfers,
+        pagination: { page: 1, totalPages: 1, total: 1 },
+        startingBalance: 5000,
+      });
+
+      render(<TransactionsPage />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('tx-count')).toHaveTextContent('1 transactions');
+      });
+
+      fireEvent.click(screen.getByTestId('export-btn'));
+
+      await waitFor(() => {
+        expect(mockExportToCsv).toHaveBeenCalledTimes(1);
+      });
+
+      expect(mockExportToCsv.mock.calls[0][2][0][3]).toBe('Investments; Transfer To RRSP');
+    });
+
+    it('labels a transfer split line instead of calling it uncategorized', async () => {
+      // A split line pointing at another account has no category, and naming
+      // it "Uncategorized" says something untrue about where the money went.
+      const splitTransaction = [
+        {
+          id: 'tx-split',
+          transactionDate: '2026-08-12',
+          amount: '-150.0000',
+          status: 'CLEARED',
+          payee: { id: 'p1', name: 'Store' },
+          payeeName: 'Store',
+          category: null,
+          account: { id: 'acc-1', name: 'Chequing' },
+          description: 'Mixed purchase',
+          tags: [],
+          currencyCode: 'CAD',
+          isTransfer: false,
+          isSplit: true,
+          splits: [
+            { id: 's1', amount: '-100.0000', category: { id: 'c1', name: 'Groceries' }, transferAccount: null, tags: [] },
+            { id: 's2', amount: '-50.0000', category: null, transferAccount: { id: 'acc-2', name: 'Savings' }, tags: [] },
+          ],
+        },
+      ];
+
+      mockGetAll.mockResolvedValue({
+        data: splitTransaction,
+        pagination: { page: 1, totalPages: 1, total: 1 },
+        startingBalance: 5000,
+      });
+
+      render(<TransactionsPage />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('tx-count')).toHaveTextContent('1 transactions');
+      });
+
+      fireEvent.click(screen.getByTestId('export-btn'));
+
+      await waitFor(() => {
+        expect(mockExportToCsv).toHaveBeenCalledTimes(1);
+      });
+
+      expect(mockExportToCsv.mock.calls[0][2][0][3]).toBe('Groceries; Transfer To Savings');
+    });
+
     it('exports filtered split amount when only some splits match the filter', async () => {
       const splitTransaction = [
         {

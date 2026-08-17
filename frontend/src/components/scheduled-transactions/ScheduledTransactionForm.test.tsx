@@ -15,6 +15,8 @@ vi.mock('@/hooks/useNumberFormat', () => ({
     defaultCurrency: 'CAD',
     formatCurrency: (v: number, code: string) => `${code} ${v.toFixed(2)}`,
     formatNumber: (v: number, decimals = 2) => v.toFixed(decimals),
+    // Mirrors the real formatPrice: up to 6 decimals, trailing zeros trimmed.
+    formatPrice: (n: number) => n.toFixed(6).replace(/0+$/, '').replace(/\.$/, ''),
   }),
 }));
 
@@ -1492,6 +1494,231 @@ describe('ScheduledTransactionForm', () => {
   });
 
   // ============================================================
+  // Investment funding account clearing (issue #1154)
+  // ============================================================
+
+  it('sends an explicit null funding account when editing BUY to DIVIDEND', async () => {
+    const existingBuy = {
+      id: 's-inv',
+      accountId: 'acc-4', // Brokerage
+      name: 'Quarterly holding',
+      amount: -500,
+      currencyCode: 'CAD',
+      frequency: 'QUARTERLY' as const,
+      nextDueDate: '2026-06-15',
+      isActive: true,
+      autoPost: false,
+      reminderDaysBefore: 3,
+      isTransfer: false,
+      isSplit: false,
+      isInvestment: true,
+      investmentAction: 'BUY' as const,
+      investmentSecurityId: 'sec-voo',
+      // The stale funding account that must be cleared once the action no longer
+      // uses one.
+      investmentFundingAccountId: 'acc-1',
+      investmentQuantity: 1,
+      investmentPrice: 500,
+      // Carried so the DIVIDEND branch's total-amount validation passes on save.
+      investmentTotalAmount: 75,
+    } as any;
+
+    const { container } = render(
+      <ScheduledTransactionForm scheduledTransaction={existingBuy} />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Action')).toBeInTheDocument();
+    });
+
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Action'), {
+        target: { value: 'DIVIDEND' },
+      });
+    });
+
+    const submitButton = container.querySelector(
+      'button[type="submit"]',
+    ) as HTMLButtonElement;
+    await act(async () => {
+      fireEvent.click(submitButton);
+    });
+    await act(async () => {}); // flush the async submit handler
+
+    await waitFor(() => {
+      expect(mockUpdate).toHaveBeenCalled();
+    });
+    expect(toast.error).not.toHaveBeenCalled();
+    const [, payload] = mockUpdate.mock.calls[0];
+    expect(payload.investmentAction).toBe('DIVIDEND');
+    expect(payload.investmentFundingAccountId).toBeNull();
+  });
+
+  it('keeps the funding account when saving a BUY unchanged', async () => {
+    const existingBuy = {
+      id: 's-inv',
+      accountId: 'acc-4',
+      name: 'Quarterly holding',
+      amount: -500,
+      currencyCode: 'CAD',
+      frequency: 'QUARTERLY' as const,
+      nextDueDate: '2026-06-15',
+      isActive: true,
+      autoPost: false,
+      reminderDaysBefore: 3,
+      isTransfer: false,
+      isSplit: false,
+      isInvestment: true,
+      investmentAction: 'BUY' as const,
+      investmentSecurityId: 'sec-voo',
+      investmentFundingAccountId: 'acc-1',
+      investmentQuantity: 1,
+      investmentPrice: 500,
+    } as any;
+
+    const { container } = render(
+      <ScheduledTransactionForm scheduledTransaction={existingBuy} />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Action')).toBeInTheDocument();
+    });
+
+    const submitButton = container.querySelector(
+      'button[type="submit"]',
+    ) as HTMLButtonElement;
+    await act(async () => {
+      fireEvent.click(submitButton);
+    });
+    await act(async () => {});
+
+    await waitFor(() => {
+      expect(mockUpdate).toHaveBeenCalled();
+    });
+    const [, payload] = mockUpdate.mock.calls[0];
+    expect(payload.investmentAction).toBe('BUY');
+    expect(payload.investmentFundingAccountId).toBe('acc-1');
+  });
+
+  it('clears the hidden security (and funding) when editing BUY to INTEREST', async () => {
+    // INTEREST has no security field in the scheduled UI; a security carried in
+    // from the prior BUY would settle the interest in the security's currency,
+    // so the form omits the key and lets the backend clear it on the
+    // BUY -> INTEREST transition (issue #1154 review).
+    const existingBuy = {
+      id: 's-inv',
+      accountId: 'acc-4', // Brokerage
+      name: 'Bond interest',
+      amount: -500,
+      currencyCode: 'CAD',
+      frequency: 'MONTHLY' as const,
+      nextDueDate: '2026-06-15',
+      isActive: true,
+      autoPost: false,
+      reminderDaysBefore: 3,
+      isTransfer: false,
+      isSplit: false,
+      isInvestment: true,
+      investmentAction: 'BUY' as const,
+      investmentSecurityId: 'sec-voo',
+      investmentFundingAccountId: 'acc-1',
+      investmentQuantity: 1,
+      investmentPrice: 500,
+      investmentTotalAmount: 25,
+    } as any;
+
+    const { container } = render(
+      <ScheduledTransactionForm scheduledTransaction={existingBuy} />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Action')).toBeInTheDocument();
+    });
+
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Action'), {
+        target: { value: 'INTEREST' },
+      });
+    });
+
+    const submitButton = container.querySelector(
+      'button[type="submit"]',
+    ) as HTMLButtonElement;
+    await act(async () => {
+      fireEvent.click(submitButton);
+    });
+    await act(async () => {});
+
+    await waitFor(() => {
+      expect(mockUpdate).toHaveBeenCalled();
+    });
+    expect(toast.error).not.toHaveBeenCalled();
+    const [, payload] = mockUpdate.mock.calls[0];
+    expect(payload.investmentAction).toBe('INTEREST');
+    // The key is omitted (undefined), not null: the backend clears the hidden
+    // security on the action transition. Sending null unconditionally would also
+    // destroy a deliberate security-specific INTEREST on a later unrelated edit.
+    expect(payload.investmentSecurityId).toBeUndefined();
+    expect(payload.investmentFundingAccountId).toBeNull();
+  });
+
+  it('does not clear a deliberate INTEREST security on a name-only edit (issue #1154 re-review)', async () => {
+    // An existing security-specific INTEREST (e.g. created via the API) must
+    // survive a presentation-only edit: the form omits the security key rather
+    // than sending null, so the backend leaves the stored value untouched
+    // because the action did not change.
+    const existingInterest = {
+      id: 's-int',
+      accountId: 'acc-4', // Brokerage
+      name: 'Bond interest',
+      amount: 100,
+      currencyCode: 'CAD',
+      frequency: 'MONTHLY' as const,
+      nextDueDate: '2026-06-15',
+      isActive: true,
+      autoPost: false,
+      reminderDaysBefore: 3,
+      isTransfer: false,
+      isSplit: false,
+      isInvestment: true,
+      investmentAction: 'INTEREST' as const,
+      investmentSecurityId: 'sec-voo',
+      investmentTotalAmount: 100,
+    } as any;
+
+    const { container } = render(
+      <ScheduledTransactionForm scheduledTransaction={existingInterest} />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Name')).toBeInTheDocument();
+    });
+
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Name'), {
+        target: { value: 'Bond interest (renamed)' },
+      });
+    });
+
+    const submitButton = container.querySelector(
+      'button[type="submit"]',
+    ) as HTMLButtonElement;
+    await act(async () => {
+      fireEvent.click(submitButton);
+    });
+    await act(async () => {});
+
+    await waitFor(() => {
+      expect(mockUpdate).toHaveBeenCalled();
+    });
+    expect(toast.error).not.toHaveBeenCalled();
+    const [, payload] = mockUpdate.mock.calls[0];
+    expect(payload.investmentAction).toBe('INTEREST');
+    // Omitted, not null -> backend preserves the deliberate security.
+    expect(payload.investmentSecurityId).toBeUndefined();
+  });
+
+  // ============================================================
   // NEW TESTS: templateTransaction prop initialization
   // ============================================================
 
@@ -2356,6 +2583,339 @@ describe('ScheduledTransactionForm', () => {
         // 3 * 500 = 1500 (no commission). CurrencyInput formats with commas.
         expect(Number(totalInput.value.replace(/,/g, ''))).toBe(1500);
       });
+    });
+
+    it('preserves a Total Value typed before the latest price resolves', async () => {
+      // The typed-before-fetch race on this form's own auto-fill. On a slow
+      // connection the user enters a quantity and a budget while the price
+      // request is still pending; when the close lands the form must keep the
+      // total and re-derive the quantity from it (total-first), not leave the
+      // total behind while submit computes qty * price. Before the fix the
+      // auto-fill only set the price, so a typed 950 total would submit as
+      // 10 * 123.45 = 1,234.50 -- ~30% more than shown.
+      let resolvePrices!: (prices: any[]) => void;
+      mockGetSecurityPrices.mockReturnValue(
+        new Promise((resolve) => {
+          resolvePrices = resolve;
+        }),
+      );
+      await openInvestmentTab();
+      fireEvent.change(screen.getByLabelText('Investment Account'), {
+        target: { value: 'acc-4' },
+      });
+      fireEvent.change(screen.getByLabelText('Security'), {
+        target: { value: 'sec-voo' },
+      });
+      // Enter quantity and total while the price fetch is still pending.
+      fireEvent.change(screen.getByLabelText('Quantity (shares)'), {
+        target: { value: '10' },
+      });
+      fireEvent.change(screen.getByLabelText('Total Value'), {
+        target: { value: '950' },
+      });
+
+      await act(async () => {
+        resolvePrices([{ closePrice: 123.45, priceDate: '2026-05-09' }]);
+      });
+
+      const totalInput = screen.getByLabelText('Total Value') as HTMLInputElement;
+      const qtyInput = screen.getByLabelText('Quantity (shares)') as HTMLInputElement;
+      // The typed budget stands; the quantity is re-derived from it, so the shown
+      // total and the amount submit will persist agree.
+      expect(Number(totalInput.value.replace(/,/g, ''))).toBe(950);
+      expect(Number(qtyInput.value)).toBeCloseTo(950 / 123.45, 6);
+    });
+
+    it('recomputes Total Value when the commission changes', async () => {
+      await openInvestmentTab();
+      fireEvent.change(screen.getByLabelText('Investment Account'), {
+        target: { value: 'acc-4' },
+      });
+      fireEvent.change(screen.getByLabelText('Security'), {
+        target: { value: 'sec-voo' },
+      });
+      await waitFor(() => {
+        expect(
+          (screen.getByLabelText('Price per share') as HTMLInputElement).value,
+        ).toBe('500.000000');
+      });
+      fireEvent.change(screen.getByLabelText('Quantity (shares)'), {
+        target: { value: '10' },
+      });
+      await waitFor(() => {
+        expect(
+          Number(
+            (screen.getByLabelText('Total Value') as HTMLInputElement).value.replace(/,/g, ''),
+          ),
+        ).toBe(5000);
+      });
+      // A BUY folds the commission in: 10 * 500 + 25 = 5025. Before the fix the
+      // shown total stayed 5000 while submit persisted 5025.
+      fireEvent.change(screen.getByLabelText('Commission'), {
+        target: { value: '25' },
+      });
+      await waitFor(() => {
+        expect(
+          Number(
+            (screen.getByLabelText('Total Value') as HTMLInputElement).value.replace(/,/g, ''),
+          ),
+        ).toBe(5025);
+      });
+    });
+
+    it('recomputes Total Value when the action flips BUY to SELL', async () => {
+      await openInvestmentTab();
+      fireEvent.change(screen.getByLabelText('Investment Account'), {
+        target: { value: 'acc-4' },
+      });
+      fireEvent.change(screen.getByLabelText('Security'), {
+        target: { value: 'sec-voo' },
+      });
+      await waitFor(() => {
+        expect(
+          (screen.getByLabelText('Price per share') as HTMLInputElement).value,
+        ).toBe('500.000000');
+      });
+      fireEvent.change(screen.getByLabelText('Quantity (shares)'), {
+        target: { value: '10' },
+      });
+      fireEvent.change(screen.getByLabelText('Commission'), {
+        target: { value: '25' },
+      });
+      // BUY: 10 * 500 + 25 = 5025.
+      await waitFor(() => {
+        expect(
+          Number(
+            (screen.getByLabelText('Total Value') as HTMLInputElement).value.replace(/,/g, ''),
+          ),
+        ).toBe(5025);
+      });
+      // SELL nets the commission out: 10 * 500 - 25 = 4975. Before the fix the
+      // total stayed at the BUY figure while submit persisted the SELL one.
+      fireEvent.change(screen.getByLabelText('Action'), { target: { value: 'SELL' } });
+      await waitFor(() => {
+        expect(
+          Number(
+            (screen.getByLabelText('Total Value') as HTMLInputElement).value.replace(/,/g, ''),
+          ),
+        ).toBe(4975);
+      });
+    });
+
+    it('does not carry the previous security price into a newly chosen security', async () => {
+      mockGetSecurities.mockResolvedValue([
+        ...mockSecurities,
+        { ...mockSecurities[0], id: 'sec-bnd', symbol: 'BND', name: 'Vanguard Total Bond' },
+      ]);
+      mockGetSecurityPrices.mockImplementation((id: string) =>
+        Promise.resolve([{ closePrice: id === 'sec-voo' ? 100 : 250, priceDate: '2026-05-09' }]),
+      );
+      await openInvestmentTab();
+      fireEvent.change(screen.getByLabelText('Investment Account'), {
+        target: { value: 'acc-4' },
+      });
+      fireEvent.change(screen.getByLabelText('Security'), {
+        target: { value: 'sec-voo' },
+      });
+      await waitFor(() => {
+        expect(
+          (screen.getByLabelText('Price per share') as HTMLInputElement).value,
+        ).toBe('100.000000');
+      });
+      // Switch securities: the old 100 must be cleared and B's 250 fill in, not
+      // linger because the field is non-empty.
+      fireEvent.change(screen.getByLabelText('Security'), {
+        target: { value: 'sec-bnd' },
+      });
+      await waitFor(() => {
+        expect(
+          (screen.getByLabelText('Price per share') as HTMLInputElement).value,
+        ).toBe('250.000000');
+      });
+    });
+
+    it('keeps the entered quantity when switching securities, not the derived total', async () => {
+      // The reported bug: after a share count is typed, switching securities left
+      // the stale (derived) total behind, and the new security's total-first
+      // auto-fill rescaled the quantity to hold it -- 10 shares silently becoming
+      // 4. The quantity is the user's input; the total was derived, so it must not
+      // win over it.
+      mockGetSecurities.mockResolvedValue([
+        ...mockSecurities,
+        { ...mockSecurities[0], id: 'sec-bnd', symbol: 'BND', name: 'Vanguard Total Bond' },
+      ]);
+      mockGetSecurityPrices.mockImplementation((id: string) =>
+        Promise.resolve([{ closePrice: id === 'sec-voo' ? 100 : 250, priceDate: '2026-05-09' }]),
+      );
+      await openInvestmentTab();
+      fireEvent.change(screen.getByLabelText('Investment Account'), {
+        target: { value: 'acc-4' },
+      });
+      fireEvent.change(screen.getByLabelText('Security'), {
+        target: { value: 'sec-voo' },
+      });
+      await waitFor(() => {
+        expect(
+          (screen.getByLabelText('Price per share') as HTMLInputElement).value,
+        ).toBe('100.000000');
+      });
+      // Enter a share count; the total derives to 10 * 100 = 1000.
+      fireEvent.change(screen.getByLabelText('Quantity (shares)'), {
+        target: { value: '10' },
+      });
+      await waitFor(() => {
+        expect(
+          Number(
+            (screen.getByLabelText('Total Value') as HTMLInputElement).value.replace(/,/g, ''),
+          ),
+        ).toBe(1000);
+      });
+      // Switch securities. The 10 shares stand; the total recomputes at the new
+      // price (10 * 250 = 2500), rather than the quantity being rescaled to 4.
+      fireEvent.change(screen.getByLabelText('Security'), {
+        target: { value: 'sec-bnd' },
+      });
+      await waitFor(() => {
+        expect(
+          (screen.getByLabelText('Price per share') as HTMLInputElement).value,
+        ).toBe('250.000000');
+      });
+      expect(
+        Number((screen.getByLabelText('Quantity (shares)') as HTMLInputElement).value),
+      ).toBe(10);
+      expect(
+        Number(
+          (screen.getByLabelText('Total Value') as HTMLInputElement).value.replace(/,/g, ''),
+        ),
+      ).toBe(2500);
+    });
+
+    it('does not show the no-price-history hint when the lookup fails', async () => {
+      // A failed lookup is not an empty dataset: on a rejection the hint must
+      // stay off, not falsely claim the security has no price history.
+      mockGetSecurityPrices.mockRejectedValueOnce(new Error('network'));
+      await openInvestmentTab();
+      fireEvent.change(screen.getByLabelText('Investment Account'), {
+        target: { value: 'acc-4' },
+      });
+      fireEvent.change(screen.getByLabelText('Security'), {
+        target: { value: 'sec-voo' },
+      });
+      await waitFor(() => {
+        expect(mockGetSecurityPrices).toHaveBeenCalled();
+      });
+      await act(async () => {});
+      expect(screen.queryByText(/No price history yet/)).not.toBeInTheDocument();
+    });
+
+    it('does not re-fetch the close when toggling within quantity-price actions', async () => {
+      await openInvestmentTab();
+      fireEvent.change(screen.getByLabelText('Investment Account'), {
+        target: { value: 'acc-4' },
+      });
+      fireEvent.change(screen.getByLabelText('Security'), {
+        target: { value: 'sec-voo' },
+      });
+      await waitFor(() => {
+        expect(mockGetSecurityPrices).toHaveBeenCalledTimes(1);
+      });
+      // BUY -> SELL -> REINVEST: same security, all price-relevant, so the close
+      // is unchanged and there is nothing to re-fetch.
+      fireEvent.change(screen.getByLabelText('Action'), { target: { value: 'SELL' } });
+      fireEvent.change(screen.getByLabelText('Action'), { target: { value: 'REINVEST' } });
+      await act(async () => {});
+      expect(mockGetSecurityPrices).toHaveBeenCalledTimes(1);
+    });
+
+    it('treats a malformed close as no price rather than NaN', async () => {
+      // A non-numeric closePrice must normalize to null: NaN would slip past the
+      // `!= null` gate, cascade into the fold, and -- because NaN !== NaN -- make
+      // the market-price latch re-fire every render.
+      mockGetSecurityPrices.mockResolvedValue([
+        { closePrice: 'not-a-number', priceDate: '2026-05-09' },
+      ]);
+      await openInvestmentTab();
+      fireEvent.change(screen.getByLabelText('Investment Account'), {
+        target: { value: 'acc-4' },
+      });
+      fireEvent.change(screen.getByLabelText('Security'), {
+        target: { value: 'sec-voo' },
+      });
+      await waitFor(() => {
+        expect(mockGetSecurityPrices).toHaveBeenCalled();
+      });
+      // The price stays empty (no NaN written) and the "no price history" hint
+      // shows because the field is genuinely empty.
+      expect(
+        (screen.getByLabelText('Price per share') as HTMLInputElement).value,
+      ).toBe('');
+      expect(screen.getByText(/No price history yet/)).toBeInTheDocument();
+    });
+
+    it('treats a zero close as no price', async () => {
+      // A zero (or negative) quote is not a usable price, so it normalizes to
+      // null just like a missing one: the field stays empty and the hint shows,
+      // rather than a suppressed hint over an empty field with no way forward.
+      mockGetSecurityPrices.mockResolvedValue([
+        { closePrice: 0, priceDate: '2026-05-09' },
+      ]);
+      await openInvestmentTab();
+      fireEvent.change(screen.getByLabelText('Investment Account'), {
+        target: { value: 'acc-4' },
+      });
+      fireEvent.change(screen.getByLabelText('Security'), {
+        target: { value: 'sec-voo' },
+      });
+      await waitFor(() => {
+        expect(mockGetSecurityPrices).toHaveBeenCalled();
+      });
+      expect(
+        (screen.getByLabelText('Price per share') as HTMLInputElement).value,
+      ).toBe('');
+      expect(screen.getByText(/No price history yet/)).toBeInTheDocument();
+    });
+
+    it('does not store a market price on an amount-only action (DIVIDEND)', async () => {
+      const { container } = render(<ScheduledTransactionForm />);
+      await waitFor(() => {
+        expect(mockAccountsGetAll).toHaveBeenCalled();
+      });
+      await act(async () => {
+        fireEvent.click(screen.getByText('Investment'));
+      });
+      await waitFor(() => {
+        expect(mockGetSecurities).toHaveBeenCalled();
+      });
+      fireEvent.change(screen.getByLabelText('Name'), {
+        target: { value: 'VOO Dividend' },
+      });
+      fireEvent.change(screen.getByLabelText('Investment Account'), {
+        target: { value: 'acc-4' },
+      });
+      fireEvent.change(screen.getByLabelText('Action'), { target: { value: 'DIVIDEND' } });
+      fireEvent.change(screen.getByLabelText('Security'), {
+        target: { value: 'sec-voo' },
+      });
+      // A dividend has no Price field, so the form never fetches a market close
+      // for it (matching the dialogs) -- there is nothing to leak into the payload.
+      await act(async () => {});
+      expect(mockGetSecurityPrices).not.toHaveBeenCalled();
+      fireEvent.change(screen.getByLabelText('Total Amount'), {
+        target: { value: '42' },
+      });
+      const submitBtn = container.querySelector('button[type="submit"]')!;
+      await act(async () => {
+        fireEvent.click(submitBtn);
+      });
+      await waitFor(() => {
+        expect(mockCreate).toHaveBeenCalled();
+      });
+      const payload = mockCreate.mock.calls[0][0];
+      expect(payload.investmentAction).toBe('DIVIDEND');
+      // No Price field is shown for a dividend, so the market fetch must not leak
+      // a spurious investmentPrice into the payload.
+      expect(payload.investmentPrice).toBeUndefined();
+      expect(payload.investmentTotalAmount).toBe(42);
     });
 
     it('errors out when submitted without a brokerage account', async () => {

@@ -162,6 +162,7 @@ export const RULES: Record<string, TableRules> = {
     favourite_sort_order: keep,
     exclude_from_net_worth: keep,
     payment_amount: scale,
+    extra_payment_amount: scale, // money like payment_amount, scaled the same way
     payment_frequency: keep,
     payment_start_date: keep,
     source_account_id: keep,
@@ -400,6 +401,10 @@ export const RULES: Record<string, TableRules> = {
     total_amount: scale,
     exchange_rate: keep,
     description: drop,
+    // An enum flag, like transactions.status: it re-identifies nobody, and a
+    // support backup that dropped it could not reproduce a VOID row's
+    // exclusion from holdings and balances.
+    status: keep,
     created_at: keep,
     updated_at: keep,
   },

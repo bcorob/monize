@@ -25,6 +25,7 @@
   "closeMenu": "Tutup menu",
   "mainMenu": "Menu utama",
   "loggedOut": "Berhasil keluar",
+  "logoutNotConfirmed": "Keluar hanya di perangkat ini — server tidak mengonfirmasi. Lihat pemberitahuan di layar masuk.",
   "search": {
     "placeholder": "Cari transaksi...",
     "label": "Cari transaksi",

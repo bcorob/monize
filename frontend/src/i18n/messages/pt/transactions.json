@@ -26,7 +26,8 @@
     "editAria": "Editar beneficiário",
     "detailsAria": "Ver detalhes do beneficiário",
     "collapseAria": "Ocultar informações do beneficiário",
-    "show": "Mostrar informações do beneficiário"
+    "show": "Mostrar informações do beneficiário",
+    "amountUnavailable": "Sem taxa"
   },
   "categoryWidget": {
     "detailsAria": "Ver detalhes da categoria",
@@ -47,7 +48,8 @@
     "noTransactions": "Sem transações neste período",
     "editAria": "Editar categoria",
     "collapseAria": "Ocultar informações da categoria",
-    "show": "Mostrar informações da categoria"
+    "show": "Mostrar informações da categoria",
+    "amountUnavailable": "Sem taxa"
   },
   "accountWidget": {
     "currentBalance": "Saldo Atual",
@@ -110,10 +112,11 @@
       "paidAmount": "Montante Pago",
       "feePaid": "Comissão Paga",
       "balance": "Saldo",
+      "attachments": "Anexos",
       "status": "Estado",
-      "actions": "Ações",
-      "attachments": "Anexos"
+      "actions": "Ações"
     },
+    "attachmentsCount": "{count, plural, one {# anexo} other {# anexos}}",
     "today": "Hoje",
     "export": {
       "button": "Exportar",
@@ -174,8 +177,7 @@
       "editButton": "Editar",
       "deleteButton": "Eliminar"
     },
-    "itemNamePlural": "transações",
-    "attachmentsCount": "{count, plural, one {# anexo} other {# anexos}}"
+    "itemNamePlural": "transações"
   },
   "row": {
     "copyOptions": {
@@ -230,6 +232,11 @@
       "currency": "Moeda",
       "hasAttachments": "Anexos"
     },
+    "hasAttachmentsOptions": {
+      "any": "Qualquer",
+      "yes": "Sim",
+      "no": "Não"
+    },
     "placeholders": {
       "accounts": "Todas as contas",
       "payees": "Todos os beneficiários",
@@ -240,6 +247,13 @@
       "amountMax": "Máx",
       "search": "Pesquisar beneficiário, categoria, montante, etiqueta, descrição, referência #...",
       "tagKeyValue": "por ex. usa"
+    },
+    "tagKeyNone": "Qualquer (sem filtro de chave)",
+    "tagKeyOps": {
+      "hasValue": "Tem um valor",
+      "noValue": "Não tem valor",
+      "contains": "O valor contém",
+      "notContains": "O valor não contém"
     },
     "chips": {
       "removeAccount": "Remover filtro {name}",
@@ -280,18 +294,6 @@
       "yearToDate": "Ano até Hoje",
       "lastYear": "Ano Passado",
       "custom": "Personalizado"
-    },
-    "tagKeyNone": "Qualquer (sem filtro de chave)",
-    "tagKeyOps": {
-      "hasValue": "Tem um valor",
-      "noValue": "Não tem valor",
-      "contains": "O valor contém",
-      "notContains": "O valor não contém"
-    },
-    "hasAttachmentsOptions": {
-      "any": "Qualquer",
-      "yes": "Sim",
-      "no": "Não"
     }
   },
   "bulk": {
@@ -399,6 +401,7 @@
       "optionLabel": "{name} ({currency}) — {owner}"
     },
     "crossOwnerLockedNote": "O outro lado desta transferência está numa conta que já não é partilhada consigo. O montante, a data e as contas estão bloqueados, mas ainda pode editar os detalhes desta transação.",
+    "transferCategoryNote": "Opcional. A transferência continuará a não contar como receita ou despesa, mas esta categoria permite que apareça na repartição mensal por categoria (por exemplo, contribuições mensais de investimento).",
     "amountReceivedNote": "Montante recebido após conversão cambial",
     "splitTransaction": "Dividir Transação em Parcelas",
     "splitDisabledDuringTour": "Indisponível durante a visita guiada",
@@ -408,6 +411,7 @@
       "transferUpdated": "Transferência atualizada",
       "transactionCreated": "Transação criada",
       "transactionUpdated": "Transação atualizada",
+      "attachmentsUploadFailed": "Transação guardada, mas falhou o carregamento de {count} anexo(s)",
       "saveFailed": "Falha ao guardar a transação",
       "loadFailed": "Falha ao carregar os dados do formulário",
       "splitsNotEqual": "O total das parcelas ({splitTotal}) deve ser igual ao montante da transação ({txAmount})",
@@ -422,13 +426,11 @@
       "categoryCreateFailed": "Falha ao criar categoria",
       "tagCreated": "Etiqueta \"{name}\" criada",
       "fxRateRequired": "Introduza uma taxa de câmbio ou o montante convertido antes de guardar uma transação em moeda estrangeira.",
-      "attachmentsUploadFailed": "Transação guardada, mas falhou o carregamento de {count} anexo(s)",
       "jointPayeeCreateNotGranted": "O proprietário da conta não lhe concedeu permissão para criar beneficiários. Escolha um dos beneficiários existentes."
     },
     "ariaHistory": "Mostrar transações recentes",
     "ariaHistoryForPayee": "Mostrar transações recentes deste beneficiário",
     "historyTitle": "Preenchimento rápido a partir de uma transação recente",
-    "transferCategoryNote": "Opcional. A transferência continuará a não contar como receita ou despesa, mas esta categoria permite que apareça na repartição mensal por categoria (por exemplo, contribuições mensais de investimento).",
     "currencyPicker": {
       "label": "Moeda de introdução",
       "ariaLabel": "Alterar a moeda de introdução",
@@ -440,15 +442,15 @@
       "reactivated": "{code} reativada"
     },
     "fx": {
+      "totalInCurrency": "Total em {currency}",
+      "rateCaption": "1 {from} = {rate} {to} ({date})",
       "noRateWarning": "Não foi encontrada uma taxa de câmbio de {from} para {to} em {date}. Introduza o montante convertido manualmente.",
       "usingLatestRateHint": "A usar a taxa mais recente disponível (não com data {date}).",
       "displayToggle": {
         "account": "Conta",
         "original": "Original"
       },
-      "rateCaption": "1 {from} = {rate} {to} ({date})",
-      "feeCaption": "Inclui uma comissão de transação estrangeira de {percent}% ({fee}).",
-      "totalInCurrency": "Total em {currency}"
+      "feeCaption": "Inclui uma comissão de transação estrangeira de {percent}% ({fee})."
     },
     "jointSplitDisabled": "As transações divididas numa conta partilhada só podem ser geridas pelo proprietário"
   },
@@ -473,6 +475,10 @@
     "remaining": "Restante: {symbol}{amount}",
     "needAmount": "Necessário {symbol}{amount} (restante: {symbol}{remaining})",
     "setTotal": "Definir total para {symbol}{amount}",
+    "currencyToggle": {
+      "title": "Alternar a moeda em que os valores da divisão são mostrados e editados",
+      "ariaAmountsIn": "Mostrar e editar os valores da divisão em {code}"
+    },
     "splitLabel": "Parcela {number}",
     "columns": {
       "type": "Tipo",
@@ -491,11 +497,7 @@
     "selectAccount": "Selecionar conta...",
     "memoPlaceholder": "Nota opcional",
     "mobileMemoPlaceholder": "Nota",
-    "tagsPlaceholder": "Etiquetas...",
-    "currencyToggle": {
-      "title": "Alternar a moeda em que os valores da divisão são mostrados e editados",
-      "ariaAmountsIn": "Mostrar e editar os valores da divisão em {code}"
-    }
+    "tagsPlaceholder": "Etiquetas..."
   },
   "recentPopover": {
     "recentForPayee": "Recentes para {name}",
@@ -513,7 +515,11 @@
     "quantityPlaceholder": "Quantidade",
     "pricePlaceholder": "Preço",
     "commissionPlaceholder": "Comissão",
-    "amountPlaceholder": "Montante ({currency})"
+    "amountPlaceholder": "Montante ({currency})",
+    "ratePlaceholder": "{to} por 1 {from}",
+    "ariaRate": "Taxa de câmbio ({to} por 1 {from})",
+    "rateHint": "A quantidade, o preço e a comissão estão em {from}; esta taxa converte o impacto de caixa para {to}.",
+    "rateUnresolved": "Não há taxa de {from} para {to} disponível. Introduza uma — sem ela o impacto de caixa não pode ser calculado, e as duas moedas não são iguais."
   },
   "charts": {
     "balanceHistory": {

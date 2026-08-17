@@ -20,8 +20,14 @@ import { NetWorthService } from "../net-worth/net-worth.service";
 import { isTransactionInFuture } from "../common/date-utils";
 import { ActionHistoryService } from "../action-history/action-history.service";
 import { CrossOwnerAccessService } from "../delegation/cross-owner-access.service";
+import { ExchangeRateService } from "../currencies/exchange-rate.service";
 import { formatCurrency } from "../common/format-currency.util";
 import { roundMoney } from "../common/round.util";
+import {
+  assertTransactionCurrencyMatchesAccount,
+  roundFxRate,
+  resolveFxRateOrNull,
+} from "../common/fx-entry.util";
 import { stripHtml } from "../common/sanitization.util";
 import { tr } from "../i18n/translate";
 import { withScopedDb } from "../common/db/scoped-db";
@@ -67,7 +73,13 @@ export interface PreparedTransfer {
   /** True when either leg belongs to somebody other than the effective user. */
   hasForeignLeg: boolean;
   toAmount: number;
+  /**
+   * Derived by `resolveTransferFx` from the accounts, not echoed from the
+   * request: these are the values the legs are actually written with.
+   */
+  sourceCurrency: string;
   destinationCurrency: string;
+  effectiveExchangeRate: number;
   fromPayeeName: string;
   toPayeeName: string;
 }
@@ -139,7 +151,302 @@ export class TransactionTransferService {
     private dataSource: DataSource,
     private actionHistoryService: ActionHistoryService,
     private crossOwnerAccess: CrossOwnerAccessService,
+    private exchangeRateService: ExchangeRateService,
   ) {}
+
+  /**
+   * Resolve the two currency codes and the destination amount for a transfer
+   * from the accounts themselves.
+   *
+   * All three used to be client-authoritative (audit P5-002). The service loaded
+   * both accounts and then trusted the request's `fromCurrencyCode`,
+   * `toCurrencyCode`, `exchangeRate` (validated only `@Min(0)`) and `toAmount`:
+   *
+   * - A cross-currency transfer with no rate defaulted to 1, so 100 USD landed
+   *   as 100 EUR. Scheduled transfers hit this every time: the schedule carries
+   *   only the source currency, so it supplied no target currency, no rate and
+   *   no destination amount.
+   * - The destination row was labelled with the source currency, contaminating
+   *   every later conversion that read it.
+   * - An explicit `toAmount` overrode everything with no conservation check, so
+   *   `amount=100, toAmount=80` between two same-currency accounts destroyed 20.
+   *
+   * The rules now:
+   * - Currency codes come from the accounts. A request that names a different
+   *   one is rejected rather than persisted.
+   * - Same currency: the destination amount equals the source amount. An
+   *   explicit `toAmount` that disagrees is a rejection, not an override --
+   *   there is no rate or fee that can make a same-currency transfer unequal.
+   * - Different currencies: an explicit `toAmount` is honoured (a bank's actual
+   *   settlement figure, which legitimately differs from spot by fees), and
+   *   otherwise the rate is resolved server-side -- the supplied one if it is
+   *   strictly positive, else the market rate for the transfer date, else the
+   *   latest stored rate. If none can be found the transfer is refused rather
+   *   than posted at 1:1.
+   *
+   * Direction is destination-currency units per one source-currency unit.
+   */
+  private async resolveTransferFx(input: {
+    fromAccount: Account;
+    toAccount: Account;
+    amount: number;
+    transactionDate: string;
+    suppliedFromCurrencyCode?: string;
+    suppliedToCurrencyCode?: string;
+    suppliedExchangeRate?: number;
+    suppliedToAmount?: number;
+  }): Promise<{
+    fromCurrencyCode: string;
+    toCurrencyCode: string;
+    exchangeRate: number;
+    toAmount: number;
+  }> {
+    const fromCurrencyCode = assertTransactionCurrencyMatchesAccount(
+      input.suppliedFromCurrencyCode,
+      input.fromAccount.currencyCode,
+    );
+    const toCurrencyCode = assertTransactionCurrencyMatchesAccount(
+      input.suppliedToCurrencyCode,
+      input.toAccount.currencyCode,
+    );
+
+    const amount = roundMoney(input.amount);
+
+    if (fromCurrencyCode === toCurrencyCode) {
+      if (
+        input.suppliedToAmount !== undefined &&
+        roundMoney(input.suppliedToAmount) !== amount
+      ) {
+        throw new BadRequestException(
+          tr(
+            "errors.transactions.transferSameCurrencyMustConserve",
+            `A transfer between two ${toCurrencyCode} accounts must move the same amount on both sides (received ${roundMoney(input.suppliedToAmount)} against ${amount})`,
+            { currency: toCurrencyCode, amount },
+          ),
+        );
+      }
+      if (
+        input.suppliedExchangeRate !== undefined &&
+        Number(input.suppliedExchangeRate) !== 1
+      ) {
+        throw new BadRequestException(
+          tr(
+            "errors.transactions.transferSameCurrencyRateMustBeOne",
+            `A transfer between two ${toCurrencyCode} accounts cannot have an exchange rate other than 1`,
+            { currency: toCurrencyCode },
+          ),
+        );
+      }
+      return {
+        fromCurrencyCode,
+        toCurrencyCode,
+        exchangeRate: 1,
+        toAmount: amount,
+      };
+    }
+
+    // Cross-currency. An explicit settlement amount wins, and its implied rate
+    // is stored so the destination row still records how the two sides relate.
+    if (input.suppliedToAmount !== undefined) {
+      const toAmount = roundMoney(input.suppliedToAmount);
+
+      // A settlement amount still has to settle *this* transfer. Both DTO
+      // fields allow zero and this branch used to return before checking
+      // anything: `amount=100, toAmount=0` destroyed 100 of value and stored a
+      // rate of 0, while `amount=0, toAmount=100` created 100 out of nothing
+      // and stored a rate of 1 because the divisor was zero. Neither is a rate,
+      // and neither is a transfer.
+      if ((amount === 0) !== (toAmount === 0)) {
+        throw new BadRequestException(
+          tr(
+            "errors.transactions.transferAmountsMustAgreeOnZero",
+            `A transfer must move a non-zero amount on both sides, or zero on both (received ${amount} against ${toAmount})`,
+            { amount, toAmount },
+          ),
+        );
+      }
+
+      if (amount === 0) {
+        // Zero on both sides: nothing moves, and there is no rate to imply.
+        return {
+          fromCurrencyCode,
+          toCurrencyCode,
+          exchangeRate: 1,
+          toAmount: 0,
+        };
+      }
+
+      const impliedRate = roundFxRate(toAmount / amount);
+      if (!Number.isFinite(impliedRate) || impliedRate <= 0) {
+        throw new BadRequestException(
+          tr(
+            "errors.transactions.transferImpliedRateInvalid",
+            `The destination amount ${toAmount} implies an unusable exchange rate against the source amount ${amount}`,
+            { amount, toAmount },
+          ),
+        );
+      }
+
+      return {
+        fromCurrencyCode,
+        toCurrencyCode,
+        exchangeRate: impliedRate,
+        toAmount,
+      };
+    }
+
+    // Zero moves nothing on either side, so it needs no rate ("zero needs no
+    // rate", root CLAUDE.md): a zero-amount scheduled placeholder between two
+    // currencies posts as 0 -> 0, and demanding a resolvable pair here refused
+    // a transfer that moves nothing. Mirrors the zero-on-both-sides return in
+    // the explicit-toAmount branch above.
+    if (amount === 0) {
+      return {
+        fromCurrencyCode,
+        toCurrencyCode,
+        exchangeRate: 1,
+        toAmount: 0,
+      };
+    }
+
+    const supplied = input.suppliedExchangeRate;
+    let rate: number | null =
+      supplied !== undefined && Number(supplied) > 0
+        ? roundFxRate(Number(supplied))
+        : null;
+
+    if (rate === null) {
+      rate = await resolveFxRateOrNull(
+        this.exchangeRateService,
+        fromCurrencyCode,
+        toCurrencyCode,
+        input.transactionDate,
+      );
+    }
+    if (rate === null) {
+      throw new BadRequestException(
+        tr(
+          "errors.transactions.transferRateUnavailable",
+          `Could not determine an exchange rate for ${fromCurrencyCode} -> ${toCurrencyCode}. Supply an exchangeRate or a destination amount so the transfer posts correctly.`,
+          { from: fromCurrencyCode, to: toCurrencyCode },
+        ),
+      );
+    }
+
+    const exchangeRate = rate;
+    return {
+      fromCurrencyCode,
+      toCurrencyCode,
+      exchangeRate,
+      toAmount: roundMoney(amount * exchangeRate),
+    };
+  }
+
+  /**
+   * FX for an *edit*, which is not the same question as FX for a creation.
+   *
+   * `resolveTransferFx` answers "what does this transfer settle at", and calling
+   * it on every edit made two things go wrong (recheck RR2-003 and RR2-004):
+   *
+   * - A presentation-only edit re-resolved the rate. Changing a description on a
+   *   100 USD -> 90 EUR transfer resolved today's rate, and since the FR-007 fix
+   *   writes a resolved rate whenever it differs from the row's, the row became
+   *   90 EUR at 0.80 -- an internally inconsistent pair, from an edit that touched
+   *   no money. Worse, the same edit was *refused* when no current rate existed,
+   *   even though the transfer already held a perfectly good settlement.
+   * - When resolution genuinely applied, only part of the tuple was persisted.
+   *   Moving the destination leg to a GBP account with no explicit amount wrote
+   *   the account, the currency and the rate, and left the old EUR *number* on the
+   *   row: 90 GBP at 0.80 against a 100 USD source, with the balance already moved
+   *   by 80. The next recompute silently changed the account by the difference.
+   *
+   * So: re-price only when the financial structure changed -- either account, the
+   * source amount, an explicit destination amount, or an explicit rate -- and when
+   * it did, `repriced` tells the builders to write the whole resolved tuple.
+   *
+   * A date change deliberately does *not* re-price. The rate a transfer settled at
+   * is a fact about the transfer, not a function of the date field, and correcting
+   * a mistyped date should not restate what the bank actually paid -- nor be
+   * refused because that day has no stored rate. A user who wants the new date's
+   * rate supplies a rate or a destination amount, which does re-price.
+   *
+   * A supplied currency code is still validated against its account either way, so
+   * a mismatched code cannot ride in on a presentation-only edit.
+   */
+  private async resolveTransferFxForUpdate(input: {
+    fromAccount: Account;
+    toAccount: Account;
+    amount: number;
+    transactionDate: string;
+    existingFromAccountId: string;
+    existingToAccountId: string;
+    existingFromAmount: number;
+    existingToAmount: number;
+    existingExchangeRate: number | null;
+    updateDto: Partial<UpdateTransferDto>;
+  }): Promise<{
+    fromCurrencyCode: string;
+    toCurrencyCode: string;
+    exchangeRate: number;
+    toAmount: number;
+    repriced: boolean;
+  }> {
+    const { updateDto } = input;
+
+    // A *value* difference, not the presence of a field. The transfer form
+    // resends the current accounts, amount and rate on every save -- the frozen
+    // cross-owner path in this same service already compares values for exactly
+    // that reason -- so keying off presence made an idempotent full-form payload
+    // re-price a settled transfer (recheck RR3-002): the same request that only
+    // changed a description re-resolved today's rate, restated a 90 EUR
+    // destination as 80, and moved the balance with it. Presence is what the
+    // client happened to send; a difference is what the user changed.
+    const differs = (supplied: number | undefined, existing: number): boolean =>
+      supplied !== undefined && roundMoney(supplied) !== roundMoney(existing);
+
+    const financialStructureChanged =
+      (updateDto.fromAccountId !== undefined &&
+        updateDto.fromAccountId !== input.existingFromAccountId) ||
+      (updateDto.toAccountId !== undefined &&
+        updateDto.toAccountId !== input.existingToAccountId) ||
+      differs(updateDto.amount, input.existingFromAmount) ||
+      differs(updateDto.toAmount, input.existingToAmount) ||
+      (updateDto.exchangeRate !== undefined &&
+        roundFxRate(Number(updateDto.exchangeRate)) !==
+          roundFxRate(Number(input.existingExchangeRate ?? 1)));
+
+    if (financialStructureChanged) {
+      const fx = await this.resolveTransferFx({
+        fromAccount: input.fromAccount,
+        toAccount: input.toAccount,
+        amount: input.amount,
+        transactionDate: input.transactionDate,
+        suppliedFromCurrencyCode: updateDto.fromCurrencyCode,
+        suppliedToCurrencyCode: updateDto.toCurrencyCode,
+        suppliedExchangeRate: updateDto.exchangeRate,
+        suppliedToAmount: updateDto.toAmount,
+      });
+      return { ...fx, repriced: true };
+    }
+
+    // Nothing financial changed: keep the settlement the transfer already has.
+    // The currencies are still derived from the accounts and still validated.
+    const storedRate = Number(input.existingExchangeRate);
+    return {
+      fromCurrencyCode: assertTransactionCurrencyMatchesAccount(
+        updateDto.fromCurrencyCode,
+        input.fromAccount.currencyCode,
+      ),
+      toCurrencyCode: assertTransactionCurrencyMatchesAccount(
+        updateDto.toCurrencyCode,
+        input.toAccount.currencyCode,
+      ),
+      exchangeRate:
+        Number.isFinite(storedRate) && storedRate > 0 ? storedRate : 1,
+      toAmount: input.existingToAmount,
+      repriced: false,
+    };
+  }
 
   private triggerNetWorthRecalc(accountId: string, userId: string): void {
     this.netWorthService.triggerDebouncedRecalc(accountId, userId);
@@ -211,10 +518,13 @@ export class TransactionTransferService {
     const {
       fromAccountId,
       toAccountId,
+      transactionDate,
       amount,
       fromCurrencyCode,
       toCurrencyCode,
-      exchangeRate = 1,
+      // The rate is not destructured with a default of 1 any more: defaulting it
+      // here is what let a cross-currency transfer post at par. It is read from
+      // the DTO inside resolveTransferFx, which resolves a real rate or refuses.
       toAmount: explicitToAmount,
       payeeName: customPayeeName,
       categoryId,
@@ -262,11 +572,21 @@ export class TransactionTransferService {
     // is fully decided above, before the bypass window opens.
     const hasForeignLeg = fromOwnerId !== userId || toOwnerId !== userId;
 
-    const toAmount =
-      explicitToAmount !== undefined
-        ? roundMoney(explicitToAmount)
-        : roundMoney(amount * exchangeRate);
-    const destinationCurrency = toCurrencyCode || fromCurrencyCode;
+    // Currencies, rate and destination amount all derived from the accounts.
+    const fx = await this.resolveTransferFx({
+      fromAccount,
+      toAccount,
+      amount,
+      transactionDate,
+      suppliedFromCurrencyCode: fromCurrencyCode,
+      suppliedToCurrencyCode: toCurrencyCode,
+      suppliedExchangeRate: createTransferDto.exchangeRate,
+      suppliedToAmount: explicitToAmount,
+    });
+    const toAmount = fx.toAmount;
+    const sourceCurrency = fx.fromCurrencyCode;
+    const destinationCurrency = fx.toCurrencyCode;
+    const effectiveExchangeRate = fx.exchangeRate;
 
     const fromPayeeName = customPayeeName || `Transfer to ${toAccount.name}`;
     const toPayeeName = customPayeeName || `Transfer from ${fromAccount.name}`;
@@ -281,7 +601,9 @@ export class TransactionTransferService {
       toOwnerId,
       hasForeignLeg,
       toAmount,
+      sourceCurrency,
       destinationCurrency,
+      effectiveExchangeRate,
       fromPayeeName,
       toPayeeName,
     };
@@ -308,7 +630,9 @@ export class TransactionTransferService {
       toOwnerId,
       hasForeignLeg,
       toAmount,
+      sourceCurrency,
       destinationCurrency,
+      effectiveExchangeRate,
       fromPayeeName,
       toPayeeName,
     } = prepared;
@@ -317,8 +641,6 @@ export class TransactionTransferService {
       toAccountId,
       transactionDate,
       amount,
-      fromCurrencyCode,
-      exchangeRate = 1,
       description,
       payeeId,
       referenceNumber,
@@ -335,7 +657,7 @@ export class TransactionTransferService {
         accountId: fromAccountId,
         transactionDate: transactionDate as any,
         amount: -amount,
-        currencyCode: fromCurrencyCode,
+        currencyCode: sourceCurrency,
         exchangeRate: 1,
         description: description || null,
         referenceNumber,
@@ -352,7 +674,7 @@ export class TransactionTransferService {
         transactionDate: transactionDate as any,
         amount: toAmount,
         currencyCode: destinationCurrency,
-        exchangeRate: exchangeRate,
+        exchangeRate: effectiveExchangeRate,
         description: description || null,
         referenceNumber,
         status,
@@ -374,6 +696,18 @@ export class TransactionTransferService {
       await m.update(Transaction, toId, {
         linkedTransactionId: fromId,
       });
+
+      // A VOID transfer is a ledger record of something that did not happen, so
+      // neither leg may move a balance -- exactly as an ordinary VOID
+      // transaction skips its balance update (transactions.service create()).
+      //
+      // Without this the pair posted its balances anyway while both rows said
+      // VOID, and `recalculateCurrentBalance` -- which excludes VOID rows --
+      // then silently "corrected" the accounts the next time anything triggered
+      // a recompute. Money appeared to move and then unmove (audit P5-001).
+      if (status === TransactionStatus.VOID) {
+        return { savedFromId: fromId, savedToId: toId };
+      }
 
       if (isTransactionInFuture(transactionDate)) {
         // Each leg's account is owned by ITS account's owner, which for a
@@ -459,7 +793,8 @@ export class TransactionTransferService {
       fromAccount,
       toAccount,
       amount: dto.amount,
-      currencyCode: dto.fromCurrencyCode,
+      // The derived code, not the request's: it is the one actually stored.
+      currencyCode: prepared.sourceCurrency,
     });
 
     return result;
@@ -691,11 +1026,20 @@ export class TransactionTransferService {
       input.toAccountId,
     );
 
-    const exchangeRate = input.exchangeRate ?? 1;
-    const toAmount =
-      input.toAmount !== undefined
-        ? roundMoney(input.toAmount)
-        : roundMoney(input.amount * exchangeRate);
+    // The preview resolves the rate exactly as the commit does. `?? 1` here
+    // would show a same-amount destination for a cross-currency transfer that
+    // the commit then posts at a real rate -- the user approving one number and
+    // receiving another, which is the divergence audit P5-005 describes for
+    // investment previews.
+    const previewFx = await this.resolveTransferFx({
+      fromAccount,
+      toAccount,
+      amount: input.amount,
+      transactionDate: input.transactionDate,
+      suppliedExchangeRate: input.exchangeRate,
+      suppliedToAmount: input.toAmount,
+    });
+    const toAmount = previewFx.toAmount;
 
     // Resolve the custom label to an existing payee exactly like a normal cash
     // transaction (previewCreate): on a match link the payee and adopt its
@@ -751,7 +1095,7 @@ export class TransactionTransferService {
       toCurrencyCode: toAccount.currencyCode,
       amount: roundMoney(input.amount),
       toAmount,
-      exchangeRate,
+      exchangeRate: previewFx.exchangeRate,
       transactionDate: input.transactionDate,
       description: stripHtml(input.description) || null,
       payeeId,
@@ -1211,22 +1555,29 @@ export class TransactionTransferService {
     }
 
     const newAmount = updateDto.amount ?? oldFromAmount;
-    const newExchangeRate =
-      updateDto.exchangeRate ?? toTransaction.exchangeRate;
-    const newToAmount =
-      updateDto.toAmount !== undefined
-        ? roundMoney(updateDto.toAmount)
-        : roundMoney(newAmount * newExchangeRate);
-
-    const accountsOrAmountsChanged =
-      updateDto.fromAccountId ||
-      updateDto.toAccountId ||
-      updateDto.amount !== undefined ||
-      updateDto.exchangeRate !== undefined ||
-      updateDto.toAmount !== undefined;
 
     const oldDate = fromTransaction.transactionDate;
     const newDate = updateDto.transactionDate ?? oldDate;
+
+    // The same server-authoritative resolution as creation -- currencies come
+    // from the (possibly newly chosen) accounts, a same-currency pair must
+    // conserve, and a cross-currency pair with no supplied rate resolves one
+    // rather than posting 1:1 (audit P5-002) -- but only when this edit actually
+    // changes the financial structure. See `resolveTransferFxForUpdate`.
+    const updateFx = await this.resolveTransferFxForUpdate({
+      fromAccount: newFromAccount as Account,
+      toAccount: newToAccount as Account,
+      amount: newAmount,
+      transactionDate: String(newDate),
+      existingFromAccountId: oldFromAccountId,
+      existingToAccountId: oldToAccountId,
+      existingFromAmount: oldFromAmount,
+      existingToAmount: oldToAmount,
+      existingExchangeRate: toTransaction.exchangeRate,
+      updateDto,
+    });
+    const newExchangeRate = updateFx.exchangeRate;
+    const newToAmount = updateFx.toAmount;
     const oldIsFuture = isTransactionInFuture(oldDate);
     const newIsFuture = isTransactionInFuture(newDate);
     const dateChanged = oldDate !== newDate;
@@ -1243,6 +1594,9 @@ export class TransactionTransferService {
       fromTransaction.payeeId,
       fromTransaction.payeeName,
       newToAccount,
+      updateFx.fromCurrencyCode,
+      fromTransaction.currencyCode,
+      oldFromAmount,
     );
 
     const toUpdateData = this.buildToUpdateData(
@@ -1255,6 +1609,11 @@ export class TransactionTransferService {
       toTransaction.payeeId,
       toTransaction.payeeName,
       newFromAccount,
+      updateFx.toCurrencyCode,
+      toTransaction.currencyCode,
+      toTransaction.exchangeRate,
+      updateFx.repriced,
+      oldToAmount,
     );
 
     // Both legs' field updates and the four possible balance adjustments
@@ -1302,12 +1661,70 @@ export class TransactionTransferService {
         );
       }
 
-      if ((accountsOrAmountsChanged || dateChanged) && !anyFuture) {
+      // Whether each leg is included in its account's current balance, read from
+      // the LOCKED row. A status change alone flips inclusion, and it used not to
+      // be part of the balance decision at all: `accountsOrAmountsChanged` omitted
+      // `status`, so voiding an existing transfer wrote VOID onto both rows and
+      // left both balances carrying the money (audit P5-001). The concurrency
+      // guard above compares amount/account/date but not status, so the committed
+      // status is taken from `lockedFrom` rather than the pre-transaction
+      // snapshot. Mirrors the wasVoid/isVoid handling in transactions.service
+      // update().
+      const wasVoid = lockedFrom.status === TransactionStatus.VOID;
+      const isVoid =
+        updateDto.status !== undefined
+          ? updateDto.status === TransactionStatus.VOID
+          : wasVoid;
+      const voidChanged = wasVoid !== isVoid;
+
+      // Reverse the old pair only if it was actually included in the balances.
+      // A transfer that was already VOID contributed nothing to reverse, and
+      // reversing it would create the money the void was supposed to withhold.
+      // The predicate is the resolver's `repriced` (a value change to an account,
+      // the source amount, an explicit destination amount or rate), a date
+      // change, or a void transition -- replacing the presence-based
+      // `accountsOrAmountsChanged` (audit P5-002 / RR3-002 / P5-001).
+      if (
+        (updateFx.repriced || dateChanged || voidChanged) &&
+        !anyFuture &&
+        !wasVoid
+      ) {
         await this.accountsService.updateBalance(
           oldFromAccountId,
           oldFromAmount,
         );
         await this.accountsService.updateBalance(oldToAccountId, -oldToAmount);
+      }
+
+      // The reconciliation status is per-leg unless the transition crosses
+      // VOID. The edit form shows one status control for "the transfer" and used
+      // to write it onto both rows, but CLEARED and RECONCILED record whether
+      // *this* account's statement has recognised *this* leg, and the two
+      // statements arrive separately -- copying RECONCILED onto the counterpart
+      // removes the transfer from the other account's reconciliation candidates
+      // before its own statement contains it, and copying UNRECONCILED over the
+      // counterpart discards a reconciliation the user had already completed
+      // there (audit P6-RECHECK-004). So for a non-VOID edit the status stays on
+      // the leg the user opened and is stripped from the counterpart.
+      //
+      // A VOID crossing is the exception, and it PAIRS the status onto both
+      // legs: VOID decides balance inclusion, and a same-owner pair must be VOID
+      // on both legs or neither or its balances diverge. This matches the bulk
+      // path exactly -- `expandTransferCounterparts` drags the counterpart in on
+      // a VOID crossing only, and the same UPDATE stamps the submitted status
+      // onto it -- so the same action reads the same way whether done in the
+      // register or in bulk. Keeping the two surfaces in step is deliberate; the
+      // un-void sub-status question (a reactivated counterpart inheriting the
+      // opened leg's CLEARED/RECONCILED) is a platform-wide decision that must
+      // move both surfaces together, not something for one edit path to answer
+      // alone. `voidChanged` is read from the locked row above, so the
+      // strip-versus-pair choice here is made on the committed status rather
+      // than a stale snapshot -- this scopes only that choice, not the wider
+      // concurrency guard, which compares amount/account/date.
+      if (!voidChanged) {
+        // `isFromTransaction` already names which leg the user opened, so the
+        // counterpart is the other one.
+        delete (isFromTransaction ? toUpdateData : fromUpdateData).status;
       }
 
       if (Object.keys(fromUpdateData).length > 0) {
@@ -1333,7 +1750,7 @@ export class TransactionTransferService {
         ]);
       }
 
-      if (accountsOrAmountsChanged || dateChanged) {
+      if (updateFx.repriced || dateChanged || voidChanged) {
         if (anyFuture) {
           // Sorted: the same fixed lock order every other account-balance
           // writer uses, so two transfers touching the same pair cannot
@@ -1349,7 +1766,9 @@ export class TransactionTransferService {
           for (const accId of allAccounts) {
             await this.accountsService.recalculateCurrentBalance(userId, accId);
           }
-        } else {
+        } else if (!isVoid) {
+          // Re-apply only when the pair is included after the update. Becoming
+          // VOID means the reversal above is the whole change.
           await this.accountsService.updateBalance(
             newFromAccountId,
             -newAmount,
@@ -1477,10 +1896,67 @@ export class TransactionTransferService {
     if (updateDto.payeeName !== undefined)
       legData.payeeName = updateDto.payeeName || null;
 
+    // A status change is presentational for the *counterpart* -- per-ledger
+    // reconciliation state does not cross an ownership boundary -- but it is not
+    // presentational for this leg's own balance. `VOID` excludes a row from
+    // `recalculateCurrentBalance` and from every report, so writing it without
+    // moving the balance left the row and the account disagreeing, and the next
+    // recompute changed the account with no user action behind it.
     if (Object.keys(legData).length > 0) {
-      await withScopedDb(this.dataSource, (m) =>
-        m.update(Transaction, ownLeg.id, legData),
-      );
+      let voidBoundaryCrossed = false;
+      await withScopedDb(this.dataSource, async (m) => {
+        // The status the transition is decided from -- and the amount the
+        // balance moves by -- come from the row THIS write replaces, read
+        // under its lock. Deriving them from the pre-transaction snapshot let
+        // two concurrent voids each see ACTIVE and each subtract the amount:
+        // an idempotent status write beside a doubled balance move (the same
+        // shape applyStatusTransition documents for the same-owner path).
+        const lockedLeg = await lockTransactionRow(
+          m,
+          ownLeg.id,
+          effectiveUserId,
+        );
+        if (!lockedLeg) {
+          throw new NotFoundException(
+            tr(
+              "errors.transactions.notFoundById",
+              `Transaction with ID ${ownLeg.id} not found`,
+              { id: ownLeg.id },
+            ),
+          );
+        }
+        const wasVoid = lockedLeg.status === TransactionStatus.VOID;
+        const isVoid =
+          updateDto.status !== undefined
+            ? updateDto.status === TransactionStatus.VOID
+            : wasVoid;
+        const ownLegAmount = lockedLeg.amount;
+        const ownLegIsFuture = isTransactionInFuture(lockedLeg.transactionDate);
+
+        await m.update(Transaction, ownLeg.id, legData);
+
+        if (wasVoid !== isVoid) {
+          voidBoundaryCrossed = true;
+          if (ownLegIsFuture) {
+            await this.accountsService.recalculateCurrentBalance(
+              effectiveUserId,
+              ownLeg.accountId,
+            );
+          } else {
+            // Becoming void removes this leg's contribution; leaving void
+            // restores it. Only this leg's account -- the counterpart keeps its
+            // own owner's status.
+            await this.accountsService.updateBalance(
+              ownLeg.accountId,
+              isVoid ? -ownLegAmount : ownLegAmount,
+            );
+          }
+        }
+      });
+
+      if (voidBoundaryCrossed) {
+        this.triggerNetWorthRecalc(ownLeg.accountId, ownLeg.userId);
+      }
     }
 
     // Return the edited leg in both slots (the split-leg pattern) so wrapper
@@ -1530,22 +2006,34 @@ export class TransactionTransferService {
     const oldFromAmount = Math.abs(Number(fromTransaction.amount));
     const oldToAmount = Number(toTransaction.amount);
     const newAmount = updateDto.amount ?? oldFromAmount;
-    const newExchangeRate =
-      updateDto.exchangeRate ?? toTransaction.exchangeRate;
-    const newToAmount =
-      updateDto.toAmount !== undefined
-        ? roundMoney(updateDto.toAmount)
-        : roundMoney(newAmount * newExchangeRate);
-    const amountsChanged =
-      updateDto.amount !== undefined ||
-      updateDto.exchangeRate !== undefined ||
-      updateDto.toAmount !== undefined;
 
     const oldDate = fromTransaction.transactionDate;
     const newDate = updateDto.transactionDate ?? oldDate;
     const dateChanged = oldDate !== newDate;
     const anyFuture =
       isTransactionInFuture(oldDate) || isTransactionInFuture(newDate);
+
+    // The same authoritative resolver the same-owner paths use. This branch used
+    // to work `newToAmount` out for itself -- an explicit destination amount
+    // taken verbatim, otherwise `amount * storedRate` -- so every rule the
+    // resolver enforces was reachable again through a delegated transfer: two
+    // same-currency accounts could move 100 out and 80 in, and a cross-currency
+    // pair could post at a stale or absent rate. Authorization stays separate
+    // from arithmetic; only the arithmetic moves here.
+    const updateFx = await this.resolveTransferFxForUpdate({
+      fromAccount: fromTransaction.account as Account,
+      toAccount: toTransaction.account as Account,
+      amount: newAmount,
+      transactionDate: String(newDate),
+      existingFromAccountId: fromTransaction.accountId,
+      existingToAccountId: toTransaction.accountId,
+      existingFromAmount: oldFromAmount,
+      existingToAmount: oldToAmount,
+      existingExchangeRate: toTransaction.exchangeRate,
+      updateDto,
+    });
+    const newExchangeRate = updateFx.exchangeRate;
+    const newToAmount = updateFx.toAmount;
 
     const fromUpdateData = this.buildFromUpdateData(
       updateDto,
@@ -1556,6 +2044,9 @@ export class TransactionTransferService {
       fromTransaction.payeeId,
       fromTransaction.payeeName,
       toTransaction.account,
+      updateFx.fromCurrencyCode,
+      fromTransaction.currencyCode,
+      oldFromAmount,
     );
     const toUpdateData = this.buildToUpdateData(
       updateDto,
@@ -1567,6 +2058,11 @@ export class TransactionTransferService {
       toTransaction.payeeId,
       toTransaction.payeeName,
       fromTransaction.account,
+      updateFx.toCurrencyCode,
+      toTransaction.currencyCode,
+      toTransaction.exchangeRate,
+      updateFx.repriced,
+      oldToAmount,
     );
 
     // Per-user reference data and per-ledger reconciliation state never cross
@@ -1582,17 +2078,80 @@ export class TransactionTransferService {
       }
     }
 
+    // Status stays on the effective user's leg (it is stripped from the foreign
+    // one above), so a status change moves exactly one balance -- that leg's.
+    // `amountsChanged` omitted status entirely, so voiding your own side of a
+    // delegated transfer wrote VOID and left the balance carrying the money.
+    const ownLegWasVoid = ownLeg.status === TransactionStatus.VOID;
+    const ownLegIsVoid =
+      updateDto.status !== undefined
+        ? updateDto.status === TransactionStatus.VOID
+        : ownLegWasVoid;
+
+    // Inclusion is per leg here, unlike every same-owner path. Status is stripped
+    // from the foreign leg above, so the two rows hold independent statuses and
+    // the pair can sit in any of the four combinations. Using the acting leg's
+    // state for both -- which is what the FR-001 fix did -- gets the foreign
+    // ledger wrong in two of them (recheck RR2-001): with the own leg VOID and the
+    // foreign leg active, an amount edit reversed nothing and re-applied nothing,
+    // leaving the foreign balance stale by the whole delta while its active row
+    // carried the new amount; with the states swapped, both were reversed and
+    // re-applied, moving a foreign balance that excludes its VOID row.
+    const legVoidState = (leg: Transaction) =>
+      leg.id === ownLeg.id
+        ? { wasVoid: ownLegWasVoid, isVoid: ownLegIsVoid }
+        : {
+            // The foreign leg's status is never written by this path.
+            wasVoid: leg.status === TransactionStatus.VOID,
+            isVoid: leg.status === TransactionStatus.VOID,
+          };
+    const fromVoid = legVoidState(fromTransaction);
+    const toVoid = legVoidState(toTransaction);
+
     await withSystemContext(() =>
       withScopedDb(this.dataSource, async (m) => {
-        if ((amountsChanged || dateChanged) && !anyFuture) {
-          await this.accountsService.updateBalance(
-            fromTransaction.accountId,
-            oldFromAmount,
+        // The VOID transition for the status-only branch below is decided from
+        // the row THIS write replaces, read under its lock BEFORE the status
+        // write -- two concurrent voids each deriving wasVoid from their
+        // pre-transaction snapshots both saw ACTIVE and each moved the
+        // balance, an idempotent status write beside a doubled move.
+        let lockedOwnLegVoidState: { wasVoid: boolean; amount: number } | null =
+          null;
+        if (updateDto.status !== undefined) {
+          const lockedOwn = await lockTransactionRow(
+            m,
+            ownLeg.id,
+            effectiveUserId,
           );
-          await this.accountsService.updateBalance(
-            toTransaction.accountId,
-            -oldToAmount,
-          );
+          if (!lockedOwn) {
+            throw new NotFoundException(
+              tr(
+                "errors.transactions.notFoundById",
+                `Transaction with ID ${ownLeg.id} not found`,
+                { id: ownLeg.id },
+              ),
+            );
+          }
+          lockedOwnLegVoidState = {
+            wasVoid: lockedOwn.status === TransactionStatus.VOID,
+            amount: lockedOwn.amount,
+          };
+        }
+
+        if ((updateFx.repriced || dateChanged) && !anyFuture) {
+          // Reverse each leg only if that leg was actually included.
+          if (!fromVoid.wasVoid) {
+            await this.accountsService.updateBalance(
+              fromTransaction.accountId,
+              oldFromAmount,
+            );
+          }
+          if (!toVoid.wasVoid) {
+            await this.accountsService.updateBalance(
+              toTransaction.accountId,
+              -oldToAmount,
+            );
+          }
         }
 
         if (Object.keys(fromUpdateData).length > 0) {
@@ -1602,7 +2161,7 @@ export class TransactionTransferService {
           await m.update(Transaction, toTransaction.id, toUpdateData);
         }
 
-        if (amountsChanged || dateChanged) {
+        if (updateFx.repriced || dateChanged) {
           if (anyFuture) {
             // Cross-owner transfer: the two legs belong to different owners, so
             // each account's balance-write lock is scoped to ITS own leg's
@@ -1620,13 +2179,38 @@ export class TransactionTransferService {
               );
             }
           } else {
-            await this.accountsService.updateBalance(
-              fromTransaction.accountId,
-              -newAmount,
+            // And re-apply each leg only if that leg is included afterwards.
+            if (!fromVoid.isVoid) {
+              await this.accountsService.updateBalance(
+                fromTransaction.accountId,
+                -newAmount,
+              );
+            }
+            if (!toVoid.isVoid) {
+              await this.accountsService.updateBalance(
+                toTransaction.accountId,
+                newToAmount,
+              );
+            }
+          }
+        } else if (
+          lockedOwnLegVoidState !== null &&
+          lockedOwnLegVoidState.wasVoid !== ownLegIsVoid
+        ) {
+          // A status-only change: only this leg's account moves, and only by
+          // this leg's amount -- both taken from the locked row, not the
+          // pre-transaction snapshot.
+          if (isTransactionInFuture(ownLeg.transactionDate)) {
+            await this.accountsService.recalculateCurrentBalance(
+              effectiveUserId,
+              ownLeg.accountId,
             );
+          } else {
             await this.accountsService.updateBalance(
-              toTransaction.accountId,
-              newToAmount,
+              ownLeg.accountId,
+              ownLegIsVoid
+                ? -lockedOwnLegVoidState.amount
+                : lockedOwnLegVoidState.amount,
             );
           }
         }
@@ -1658,7 +2242,83 @@ export class TransactionTransferService {
    * never drifts out of agreement with the parent. Structural edits (moving the
    * transfer to different accounts) are rejected -- those belong to the split
    * editor on the source transaction.
+   *
+   * The leg's amount is in the TARGET account's currency and the split row's is
+   * in the parent's, so a cross-currency pair needs the amount converted back
+   * across rather than copied. See `resolveSplitLegSourceAmount`.
    */
+  /**
+   * Convert an edited split-transfer leg amount back into the split row's
+   * currency, which is the split parent's account currency.
+   *
+   * `TransactionSplitService.createSplits` posts the counterpart as
+   * `-splitAmount * rate`, storing that rate (destination units per source unit)
+   * on the leg. So the inverse is `-legAmount / rate`, and the same rate is used
+   * in both directions -- the pair keeps the relationship it was posted at
+   * rather than acquiring a second one from a later edit.
+   *
+   * FR-006: this was `roundMoney(-newCounterpartAmount)` under a comment
+   * asserting that split transfers are always 1:1 same-currency, which stopped
+   * being true when the cross-currency conversion went into the create path.
+   * A 1,000 PLN split posting a 232 EUR leg, edited to 250 EUR, wrote -250 onto
+   * a PLN split row and re-totalled the PLN parent from it: the parent lost 750
+   * PLN, the source balance moved by that difference, and both rows still
+   * claimed to describe one movement of money.
+   *
+   * A stored rate that is absent or unusable is resolved from the market for the
+   * leg's date (then the latest stored rate), and refused if neither exists --
+   * never defaulted to 1, which is the failure this whole finding family is.
+   */
+  private async resolveSplitLegSourceAmount(
+    counterpart: Transaction,
+    parentTransaction: Transaction,
+    newCounterpartAmount: number,
+    transactionDate: string,
+  ): Promise<{ amount: number; exchangeRate: number }> {
+    const legCurrencyCode =
+      counterpart.account?.currencyCode ?? counterpart.currencyCode;
+    const parentCurrencyCode =
+      parentTransaction.account?.currencyCode ?? parentTransaction.currencyCode;
+
+    if (
+      !legCurrencyCode ||
+      !parentCurrencyCode ||
+      legCurrencyCode === parentCurrencyCode
+    ) {
+      return { amount: roundMoney(-newCounterpartAmount), exchangeRate: 1 };
+    }
+
+    const storedRate = Number(counterpart.exchangeRate);
+    let rate: number | null =
+      Number.isFinite(storedRate) && storedRate > 0
+        ? roundFxRate(storedRate)
+        : null;
+
+    if (rate === null) {
+      rate = await resolveFxRateOrNull(
+        this.exchangeRateService,
+        parentCurrencyCode,
+        legCurrencyCode,
+        transactionDate,
+      );
+    }
+    if (rate === null) {
+      throw new BadRequestException(
+        tr(
+          "errors.transactions.transferRateUnavailable",
+          `Could not determine an exchange rate for ${parentCurrencyCode} -> ${legCurrencyCode}. Supply an exchangeRate or a destination amount so the transfer posts correctly.`,
+          { from: parentCurrencyCode, to: legCurrencyCode },
+        ),
+      );
+    }
+
+    const exchangeRate = rate;
+    return {
+      amount: roundMoney(-newCounterpartAmount / exchangeRate),
+      exchangeRate,
+    };
+  }
+
   private async updateSplitTransferLeg(
     userId: string,
     counterpart: Transaction,
@@ -1686,6 +2346,34 @@ export class TransactionTransferService {
       );
     }
 
+    // Whether each row is included in its account's current balance. A split
+    // parent and the legs its transfer children created are one economic event,
+    // and this path checked neither row's state: a status-only VOID on the leg
+    // wrote VOID and left the balance carrying the money, and an amount edit to an
+    // already-VOID leg moved both balances by the delta even though neither row
+    // contributes (recheck RR2-002).
+    const counterpartIsVoid = counterpart.status === TransactionStatus.VOID;
+    const parentIsVoid = parentTransaction.status === TransactionStatus.VOID;
+
+    // Crossing the VOID boundary from one leg is refused rather than applied to
+    // that leg alone: the parent's split row and total would still record money
+    // leaving the source that never arrived. Inclusion belongs to the parent
+    // event, which is why `applyParentStatusToTransferCounterparts` pushes the
+    // parent's status down to every counterpart. Reconciliation states
+    // (PENDING/CLEARED/RECONCILED) are genuinely per-ledger and pass through.
+    const requestedIsVoid =
+      updateDto.status !== undefined
+        ? updateDto.status === TransactionStatus.VOID
+        : counterpartIsVoid;
+    if (requestedIsVoid !== counterpartIsVoid) {
+      throw new BadRequestException(
+        tr(
+          "errors.transactions.splitTransferLegStatusLocked",
+          "This transfer is part of a split transaction. Void or restore it by editing the split transaction it belongs to, so both sides change together.",
+        ),
+      );
+    }
+
     await this.assertCategoryOwned(userId, updateDto.categoryId);
 
     const oldCounterpartAmount = Number(counterpart.amount);
@@ -1700,9 +2388,9 @@ export class TransactionTransferService {
     const newDate = updateDto.transactionDate ?? oldDate;
     const dateChanged = oldDate !== newDate;
 
-    // The counterpart's own editable fields. Currency / exchange-rate / toAmount
-    // are intentionally ignored: split transfers are 1:1 same-currency, and the
-    // form resends the current currency on every edit.
+    // The counterpart's own editable fields. The currency itself is not editable
+    // from here -- it is the leg account's, which this path refuses to change --
+    // and neither is the rate, which belongs to the pair rather than to one side.
     const legData: Partial<Transaction> = {};
     if (updateDto.transactionDate)
       legData.transactionDate = updateDto.transactionDate as any;
@@ -1721,10 +2409,30 @@ export class TransactionTransferService {
 
     // The split row on the source transaction is kept in step with the leg: its
     // memo mirrors the leg's description (they are seeded from each other on
-    // create), and its amount mirrors the leg's negated amount.
-    const newSplitAmount = amountChanged
-      ? roundMoney(-newCounterpartAmount)
+    // create), and its amount is the leg's amount converted back into the
+    // parent's currency -- which is the leg's negated amount only when the two
+    // accounts share a currency.
+    const resolvedSource = amountChanged
+      ? await this.resolveSplitLegSourceAmount(
+          counterpart,
+          parentTransaction,
+          newCounterpartAmount,
+          newDate,
+        )
       : undefined;
+    const newSplitAmount = resolvedSource?.amount;
+
+    // A leg whose stored rate was missing forced the fallback lookup above, so
+    // record what the pair was actually converted at rather than leaving the row
+    // unable to answer the same question next time.
+    if (
+      resolvedSource !== undefined &&
+      !(Number(counterpart.exchangeRate) > 0) &&
+      resolvedSource.exchangeRate !== 1
+    ) {
+      legData.exchangeRate = resolvedSource.exchangeRate;
+    }
+
     const splitData: Partial<TransactionSplit> = {};
     if (updateDto.description !== undefined)
       splitData.memo = updateDto.description ?? null;
@@ -1738,7 +2446,9 @@ export class TransactionTransferService {
       }
 
       // Rebalance the counterpart's own account for an amount and/or date change.
-      if (amountChanged || dateChanged) {
+      // A VOID leg contributes nothing, so there is no delta to move -- the
+      // persisted amount still changes, the balance does not.
+      if ((amountChanged || dateChanged) && !counterpartIsVoid) {
         if (isTransactionInFuture(oldDate) || isTransactionInFuture(newDate)) {
           await this.accountsService.recalculateCurrentBalance(
             userId,
@@ -1747,7 +2457,10 @@ export class TransactionTransferService {
         } else {
           await this.accountsService.updateBalance(
             counterpart.accountId,
-            newCounterpartAmount - oldCounterpartAmount,
+            // Rounded: the difference of two 4dp decimals is not itself a 4dp
+            // decimal in binary floating point, and this value is the amount a
+            // balance moves by.
+            roundMoney(newCounterpartAmount - oldCounterpartAmount),
           );
         }
       }
@@ -1774,16 +2487,21 @@ export class TransactionTransferService {
           amount: newParentAmount,
         });
 
-        if (isTransactionInFuture(parentTransaction.transactionDate)) {
-          await this.accountsService.recalculateCurrentBalance(
-            userId,
-            parentTransaction.accountId,
-          );
-        } else {
-          await this.accountsService.updateBalance(
-            parentTransaction.accountId,
-            newParentAmount - oldParentAmount,
-          );
+        // Same rule on the source side: a VOID parent is excluded from its
+        // account's balance, so re-totalling it moves the record and not the
+        // money.
+        if (!parentIsVoid) {
+          if (isTransactionInFuture(parentTransaction.transactionDate)) {
+            await this.accountsService.recalculateCurrentBalance(
+              userId,
+              parentTransaction.accountId,
+            );
+          } else {
+            await this.accountsService.updateBalance(
+              parentTransaction.accountId,
+              roundMoney(newParentAmount - oldParentAmount),
+            );
+          }
         }
       }
     });
@@ -1809,11 +2527,39 @@ export class TransactionTransferService {
     existingPayeeId: string | null,
     existingPayeeName: string | null,
     newToAccount: any,
+    /**
+     * The currency the row must be denominated in, derived from the account it
+     * will belong to after this update.
+     *
+     * Written whenever it differs from what the row already holds. It used to be
+     * written only when the request supplied `fromCurrencyCode`, and once that
+     * field became optional -- because the server derives it -- moving a leg to
+     * an account in another currency resolved FX correctly, moved the balance in
+     * the new currency, and left the row still labelled with the old one.
+     *
+     * Compared against `existingCurrencyCode` rather than written every time, so
+     * an edit that changes nothing still writes nothing.
+     */
+    derivedCurrencyCode?: string,
+    existingCurrencyCode?: string | null,
+    /**
+     * The source amount the row already holds (positive magnitude).
+     *
+     * Compared rather than trusting the presence of `updateDto.amount`: the form
+     * resends the current amount on every save, so a presence check rewrote the
+     * row on an edit that changed nothing financial (recheck RR3-002).
+     */
+    existingFromAmount?: number,
   ): Partial<Transaction> {
     const data: Partial<Transaction> = {};
     if (updateDto.transactionDate)
       data.transactionDate = updateDto.transactionDate as any;
-    if (updateDto.amount !== undefined) data.amount = -newAmount;
+    if (
+      updateDto.amount !== undefined &&
+      (existingFromAmount === undefined ||
+        roundMoney(newAmount) !== roundMoney(existingFromAmount))
+    )
+      data.amount = -newAmount;
     if (updateDto.description !== undefined)
       data.description = updateDto.description ?? null;
     if (updateDto.referenceNumber !== undefined)
@@ -1821,8 +2567,12 @@ export class TransactionTransferService {
     if (updateDto.status !== undefined) data.status = updateDto.status;
     if (updateDto.categoryId !== undefined)
       data.categoryId = updateDto.categoryId || null;
-    if (updateDto.fromCurrencyCode)
-      data.currencyCode = updateDto.fromCurrencyCode;
+    // Only the derived code ever reaches the row: a supplied code either
+    // matched the account (so it equals derivedCurrencyCode) or already threw
+    // in assertTransactionCurrencyMatchesAccount. There is deliberately no
+    // client-authoritative fallback.
+    if (derivedCurrencyCode && derivedCurrencyCode !== existingCurrencyCode)
+      data.currencyCode = derivedCurrencyCode;
     if (updateDto.payeeId !== undefined)
       data.payeeId = updateDto.payeeId || null;
     if (updateDto.payeeName !== undefined)
@@ -1872,16 +2622,29 @@ export class TransactionTransferService {
     existingPayeeId: string | null,
     existingPayeeName: string | null,
     newFromAccount: any,
+    /** As above: the destination row's currency, derived from its account. */
+    derivedCurrencyCode?: string,
+    existingCurrencyCode?: string | null,
+    existingExchangeRate?: number | null,
+    /**
+     * Whether FX was actually re-resolved for this edit
+     * (`resolveTransferFxForUpdate`). The destination account, currency, rate and
+     * amount are one tuple: when it is re-resolved every changed member is
+     * written, and when it is not, none of them are.
+     *
+     * Keying `amount` off the request fields instead meant a pure destination
+     * account move across currencies wrote the new account, currency and rate and
+     * left the old destination *number* on the row -- 90 GBP at 0.80 against a
+     * 100 USD source, with the balance already moved by 80, so the next full
+     * recompute changed the account by the 10 difference (recheck RR2-003).
+     */
+    repriced?: boolean,
+    existingToAmount?: number,
   ): Partial<Transaction> {
     const data: Partial<Transaction> = {};
     if (updateDto.transactionDate)
       data.transactionDate = updateDto.transactionDate as any;
-    if (
-      updateDto.amount !== undefined ||
-      updateDto.exchangeRate !== undefined ||
-      updateDto.toAmount !== undefined
-    )
-      data.amount = newToAmount;
+    if (repriced && newToAmount !== existingToAmount) data.amount = newToAmount;
     if (updateDto.description !== undefined)
       data.description = updateDto.description ?? null;
     if (updateDto.referenceNumber !== undefined)
@@ -1889,8 +2652,23 @@ export class TransactionTransferService {
     if (updateDto.status !== undefined) data.status = updateDto.status;
     if (updateDto.categoryId !== undefined)
       data.categoryId = updateDto.categoryId || null;
-    if (updateDto.toCurrencyCode) data.currencyCode = updateDto.toCurrencyCode;
-    if (updateDto.exchangeRate) data.exchangeRate = updateDto.exchangeRate;
+    // Same as the from-side: derived only, no client fallback.
+    if (derivedCurrencyCode && derivedCurrencyCode !== existingCurrencyCode)
+      data.currencyCode = derivedCurrencyCode;
+    // The rate the resolver settled on, not only one the client happened to
+    // send: a server-resolved rate has to reach the row it describes. Written
+    // only when this edit re-priced the transfer and only on a change, so a
+    // presentation-only edit cannot rewrite the settlement it did not touch.
+    if (
+      repriced &&
+      newExchangeRate !== undefined &&
+      Number(newExchangeRate) !== Number(existingExchangeRate)
+    )
+      data.exchangeRate = newExchangeRate;
+    // No `else if (updateDto.exchangeRate)` fallback: the resolver already honours
+    // a supplied positive rate, so anything that reaches here either matches the
+    // stored rate or belongs to an edit that did not re-price. Writing it anyway
+    // put a rate onto a row from an edit that touched no money.
     if (updateDto.payeeId !== undefined)
       data.payeeId = updateDto.payeeId || null;
     if (updateDto.payeeName !== undefined)

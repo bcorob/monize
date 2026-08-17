@@ -332,3 +332,93 @@ export async function lockTransactionRows(
   }
   return found;
 }
+
+/**
+ * Row-lock one investment transaction and return the columns its holdings and
+ * cash effects are derived from, or null when it is gone or not this user's.
+ * Same P4-003 doctrine as `lockTransactionRow`: the status a transition is
+ * refused or applied on, and the quantities a reversal is derived from, must
+ * be the locked row's, not a snapshot loaded before the transaction.
+ */
+export interface LockedInvestmentTransactionRow {
+  id: string;
+  accountId: string;
+  securityId: string | null;
+  fundingAccountId: string | null;
+  transactionId: string | null;
+  transactionSplitId: string | null;
+  linkedTransactionId: string | null;
+  action: string;
+  transactionDate: string;
+  quantity: number | null;
+  price: number | null;
+  commission: number;
+  totalAmount: number;
+  exchangeRate: number;
+  status: string;
+}
+
+export async function lockInvestmentTransactionRow(
+  manager: EntityManager,
+  id: string,
+  userId: string,
+): Promise<LockedInvestmentTransactionRow | null> {
+  const rows: {
+    id: string;
+    account_id: string;
+    security_id: string | null;
+    funding_account_id: string | null;
+    transaction_id: string | null;
+    transaction_split_id: string | null;
+    linked_transaction_id: string | null;
+    action: string;
+    transaction_date: string;
+    quantity: string | null;
+    price: string | null;
+    commission: string | null;
+    total_amount: string;
+    exchange_rate: string;
+    status: string;
+  }[] = await manager.query(
+    // includes VOID rows: records read -- a lock loads the row whatever its
+    // status; the caller decides what the status means.
+    `SELECT id,
+            account_id,
+            security_id,
+            funding_account_id,
+            transaction_id,
+            transaction_split_id,
+            linked_transaction_id,
+            action,
+            TO_CHAR(transaction_date, 'YYYY-MM-DD') AS transaction_date,
+            quantity,
+            price,
+            commission,
+            total_amount,
+            exchange_rate,
+            status
+       FROM investment_transactions
+      WHERE id = $1 AND user_id = $2
+        FOR UPDATE`,
+    [id, userId],
+  );
+  const row = rows[0];
+  if (!row) return null;
+  return {
+    id: row.id,
+    accountId: row.account_id,
+    securityId: row.security_id,
+    fundingAccountId: row.funding_account_id,
+    transactionId: row.transaction_id,
+    transactionSplitId: row.transaction_split_id,
+    linkedTransactionId: row.linked_transaction_id,
+    action: row.action,
+    transactionDate: row.transaction_date,
+    quantity: row.quantity === null ? null : Number(row.quantity),
+    price: row.price === null ? null : Number(row.price),
+    commission: Number(row.commission ?? 0),
+    totalAmount: Number(row.total_amount),
+    exchangeRate: Number(row.exchange_rate),
+    status: row.status,
+  };
+}

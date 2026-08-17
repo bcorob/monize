@@ -5,6 +5,7 @@ import {
   InvestmentTransaction,
 } from "../securities/entities/investment-transaction.entity";
 import { AccountSubType } from "../accounts/entities/account.entity";
+import { TransactionStatus } from "../transactions/entities/transaction.entity";
 
 import { Security } from "../securities/entities/security.entity";
 import { Holding } from "../securities/entities/holding.entity";
@@ -12,6 +13,7 @@ import { ImportResultDto } from "./dto/import.dto";
 
 describe("ImportInvestmentProcessorService", () => {
   let service: ImportInvestmentProcessorService;
+  let exchangeRateService: Record<string, jest.Mock>;
 
   const userId = "user-1";
   const accountId = "acc-1";
@@ -86,7 +88,17 @@ describe("ImportInvestmentProcessorService", () => {
   };
 
   beforeEach(() => {
-    service = new ImportInvestmentProcessorService();
+    // The importer resolves a rate when a security's currency differs from the
+    // cash account's rather than posting the security-currency number at par
+    // (audit P5-003/P5-009 in the import path). Same-currency trades never reach
+    // the lookup, which is every fixture here unless it says otherwise.
+    exchangeRateService = {
+      getRateForDate: jest.fn().mockResolvedValue(null),
+      getLatestRate: jest.fn().mockResolvedValue(null),
+    };
+    service = new ImportInvestmentProcessorService(
+      exchangeRateService as never,
+    );
   });
 
   describe("processTransaction", () => {
@@ -120,6 +132,96 @@ describe("ImportInvestmentProcessorService", () => {
       expect(firstSaveArg.commission).toBe(9.99);
       // BUY: totalAmount = quantity * price + commission
       expect(firstSaveArg.totalAmount).toBe(1509.99);
+    });
+
+    describe("foreign-security cash posting (P5-003 / P5-009 in the import path)", () => {
+      // `totalAmount` on an imported row is in the SECURITY's currency. It used
+      // to be written straight onto the cash transaction with `exchangeRate: 1`,
+      // the row labelled with the security's currency, and the cash account's
+      // balance moved by that raw number -- so a 1,000 USD purchase settled from
+      // a CAD account took 1,000 CAD out and left a USD-labelled row sitting in a
+      // CAD account.
+      const usdSecurityInCadAccount = (ctx: ReturnType<typeof makeContext>) => {
+        managerOf(ctx).findOne.mockImplementation((entity: any, opts: any) => {
+          if (entity === Security && opts?.where?.id === "sec-1") {
+            return Promise.resolve({
+              id: "sec-1",
+              symbol: "AAPL",
+              currencyCode: "USD",
+            });
+          }
+          return Promise.resolve(null);
+        });
+      };
+
+      const buyQif = {
+        action: "Buy",
+        security: "Apple Inc",
+        quantity: 10,
+        price: 100,
+        commission: 0,
+        date: "2025-01-15",
+      };
+
+      it("converts the cash effect into the cash account's currency", async () => {
+        const securityMap = new Map<string, string | null>([
+          ["Apple Inc", "sec-1"],
+        ]);
+        const ctx = makeContext({
+          securityMap,
+          account: {
+            id: accountId,
+            currencyCode: "CAD",
+            accountSubType: null,
+            linkedAccountId: null,
+            name: "Investment Account",
+          } as never,
+        });
+        usdSecurityInCadAccount(ctx);
+        exchangeRateService.getRateForDate.mockResolvedValue(1.35);
+
+        await service.processTransaction(ctx, buyQif);
+
+        const cashTx = managerOf(ctx)
+          .save.mock.calls.map((c: any[]) => c[0])
+          .find((arg: any) => arg?.currencyCode !== undefined);
+        expect(cashTx.currencyCode).toBe(ctx.account.currencyCode);
+        // 1,000 USD at 1.35 is 1,350 in the account's currency, taken out.
+        expect(cashTx.amount).toBe(-1350);
+        expect(cashTx.exchangeRate).toBe(1.35);
+      });
+
+      it("does not post a cash effect it cannot denominate", async () => {
+        // Posting the unconverted number would move a real balance by the wrong
+        // amount and look entirely normal. The trade still imports; the user is
+        // told which pair is missing.
+        const securityMap = new Map<string, string | null>([
+          ["Apple Inc", "sec-1"],
+        ]);
+        const ctx = makeContext({
+          securityMap,
+          account: {
+            id: accountId,
+            currencyCode: "CAD",
+            accountSubType: null,
+            linkedAccountId: null,
+            name: "Investment Account",
+          } as never,
+        });
+        usdSecurityInCadAccount(ctx);
+        exchangeRateService.getRateForDate.mockResolvedValue(null);
+        exchangeRateService.getLatestRate.mockResolvedValue(null);
+
+        await service.processTransaction(ctx, buyQif);
+
+        const cashTx = managerOf(ctx)
+          .save.mock.calls.map((c: any[]) => c[0])
+          .find((arg: any) => arg?.currencyCode !== undefined);
+        expect(cashTx).toBeUndefined();
+        expect(ctx.importResult.warnings?.join(" ")).toMatch(
+          /No exchange rate for USD -> /,
+        );
+      });
     });
 
     it("should map SELL action and calculate total correctly", async () => {
@@ -202,13 +304,24 @@ describe("ImportInvestmentProcessorService", () => {
       expect(firstSaveArg.action).toBe(InvestmentAction.INTEREST);
     });
 
-    it("should map CGLong and CGShort to CAPITAL_GAIN", async () => {
-      const ctx = makeContext();
-      const qifTx1 = { action: "CGLong", amount: 100, date: "2025-03-01" };
-      await service.processTransaction(ctx, qifTx1);
-
-      const firstSaveArg = managerOf(ctx).save.mock.calls[0][0];
-      expect(firstSaveArg.action).toBe(InvestmentAction.CAPITAL_GAIN);
+    it("should map CGLong and CGShort to the term'd capital-gain actions", async () => {
+      // Short- and long-term gains are taxed differently (issue #1149), so
+      // the term survives the import instead of collapsing to CAPITAL_GAIN.
+      const cases = [
+        { action: "CGLong", expected: InvestmentAction.CAPITAL_GAIN_LONG },
+        { action: "CGShort", expected: InvestmentAction.CAPITAL_GAIN_SHORT },
+        { action: "CGMid", expected: InvestmentAction.CAPITAL_GAIN },
+      ];
+      for (const { action, expected } of cases) {
+        const ctx = makeContext();
+        await service.processTransaction(ctx, {
+          action,
+          amount: 100,
+          date: "2025-03-01",
+        });
+        const firstSaveArg = managerOf(ctx).save.mock.calls[0][0];
+        expect(firstSaveArg.action).toBe(expected);
+      }
     });
 
     it("should map StkSplit to SPLIT", async () => {
@@ -252,9 +365,23 @@ describe("ImportInvestmentProcessorService", () => {
       expect(firstSaveArg.action).toBe(InvestmentAction.TRANSFER_OUT);
     });
 
-    it("should map ReinvDiv, ReinvInt, ReinvLg, ReinvSh to REINVEST", async () => {
-      const actions = ["ReinvDiv", "ReinvInt", "ReinvLg", "ReinvSh"];
-      for (const action of actions) {
+    it("should map the reinvestment actions, keeping the income kind", async () => {
+      // ReinvDiv stays the base REINVEST; the interest and term'd gain
+      // variants carry their kind through (issue #1149).
+      const cases = [
+        { action: "ReinvDiv", expected: InvestmentAction.REINVEST },
+        { action: "ReinvInt", expected: InvestmentAction.REINVEST_INTEREST },
+        {
+          action: "ReinvLg",
+          expected: InvestmentAction.REINVEST_CAPITAL_GAIN_LONG,
+        },
+        {
+          action: "ReinvSh",
+          expected: InvestmentAction.REINVEST_CAPITAL_GAIN_SHORT,
+        },
+        { action: "ReinvMd", expected: InvestmentAction.REINVEST },
+      ];
+      for (const { action, expected } of cases) {
         const ctx = makeContext();
         const qifTx = {
           action,
@@ -264,7 +391,7 @@ describe("ImportInvestmentProcessorService", () => {
         };
         await service.processTransaction(ctx, qifTx);
         const firstSaveArg = managerOf(ctx).save.mock.calls[0][0];
-        expect(firstSaveArg.action).toBe(InvestmentAction.REINVEST);
+        expect(firstSaveArg.action).toBe(expected);
       }
     });
 
@@ -845,6 +972,75 @@ describe("ImportInvestmentProcessorService", () => {
       expect(holdingSave[0].averageCost).toBe(100);
     });
 
+    it("blends the commission into averageCost, as a rebuild computes it (FR-008)", async () => {
+      // 10 shares at 100 with 10 commission cost 101.00 per share -- the same
+      // figure acquisitionUnitCost yields on a rebuild. The bare price here
+      // was the live-vs-rebuild drift left alive on the import surface: the
+      // holdings page showed 100.00 until an unrelated recompute changed it.
+      const securityMap = new Map<string, string | null>();
+      securityMap.set("Test Stock", "sec-1");
+      const ctx = makeContext({ securityMap });
+
+      managerOf(ctx).findOne.mockImplementation((entity: any, opts: any) => {
+        if (entity === Security && opts?.where?.id === "sec-1") {
+          return Promise.resolve({ id: "sec-1", symbol: "TST" });
+        }
+        return Promise.resolve(null);
+      });
+
+      await service.processTransaction(ctx, {
+        action: "Buy",
+        security: "Test Stock",
+        quantity: 10,
+        price: 100,
+        commission: 10,
+        date: "2025-01-15",
+      });
+
+      const saveCalls = managerOf(ctx).save.mock.calls;
+      const holdingSave = saveCalls.find(
+        (call: any) =>
+          call[0] instanceof Holding || call[0]?.averageCost !== undefined,
+      );
+      expect(holdingSave).toBeDefined();
+      expect(holdingSave[0].averageCost).toBe(101);
+    });
+
+    it("books a Grant (ADD_SHARES) without writing a basis (quantity-only)", async () => {
+      // Every other surface (isQuantityOnlyAction, adjustQuantity,
+      // computeHoldingsMap) defines ADD_SHARES as basis-free: shares arrive
+      // with no cost. Seeding averageCost from an imported grant/vest price
+      // wrote a basis the first rebuild silently erased. (ShrsIn maps to
+      // TRANSFER_IN, which genuinely carries a basis.)
+      const securityMap = new Map<string, string | null>();
+      securityMap.set("Test Stock", "sec-1");
+      const ctx = makeContext({ securityMap });
+
+      managerOf(ctx).findOne.mockImplementation((entity: any, opts: any) => {
+        if (entity === Security && opts?.where?.id === "sec-1") {
+          return Promise.resolve({ id: "sec-1", symbol: "TST" });
+        }
+        return Promise.resolve(null);
+      });
+
+      await service.processTransaction(ctx, {
+        action: "Grant",
+        security: "Test Stock",
+        quantity: 10,
+        price: 50,
+        date: "2025-01-15",
+      });
+
+      const saveCalls = managerOf(ctx).save.mock.calls;
+      const holdingSave = saveCalls.find(
+        (call: any) =>
+          call[0] instanceof Holding || call[0]?.averageCost !== undefined,
+      );
+      expect(holdingSave).toBeDefined();
+      expect(holdingSave[0].quantity).toBe(10);
+      expect(holdingSave[0].averageCost).toBe(0);
+    });
+
     it("should update existing holding quantity for BUY and recalculate average cost", async () => {
       const securityMap = new Map<string, string | null>();
       securityMap.set("Test Stock", "sec-1");
@@ -1190,7 +1386,10 @@ describe("ImportInvestmentProcessorService", () => {
         if (opts?.where?.id === "acc-ws") {
           return Promise.resolve({
             id: "acc-ws",
-            currencyCode: "CAD",
+            // Same currency as the importing account: these tests are about
+            // transfer mechanics, and the counterpart equals the negated cash
+            // amount only when no conversion applies.
+            currencyCode: "USD",
             currentBalance: 0,
           });
         }
@@ -1242,7 +1441,10 @@ describe("ImportInvestmentProcessorService", () => {
         if (opts?.where?.id === "acc-eq") {
           return Promise.resolve({
             id: "acc-eq",
-            currencyCode: "CAD",
+            // Same currency as the importing account: these tests are about
+            // transfer mechanics, and the counterpart equals the negated cash
+            // amount only when no conversion applies.
+            currencyCode: "USD",
             currentBalance: 0,
           });
         }
@@ -1287,6 +1489,88 @@ describe("ImportInvestmentProcessorService", () => {
   });
 
   describe("XIn / XOut cash transfers", () => {
+    it("converts the counterpart into the target account's currency (P5-003)", async () => {
+      // USD investment account transferring to a CAD chequing account: the
+      // counterpart lives in the target, so it is denominated there. It used
+      // to be written as `-cashAmount` -- a USD number -- labelled CAD, equal
+      // magnitudes across two currencies with no conversion.
+      const accountMap = new Map<string, string | null>();
+      accountMap.set("Chequing CAD", "acc-cad");
+      const ctx = makeContext({ accountMap });
+      exchangeRateService.getRateForDate.mockResolvedValue(1.35);
+
+      managerOf(ctx).findOne.mockImplementation((_entity: any, opts: any) => {
+        if (opts?.where?.id === "acc-cad") {
+          return Promise.resolve({
+            id: "acc-cad",
+            currencyCode: "CAD",
+            currentBalance: 0,
+          });
+        }
+        return Promise.resolve(null);
+      });
+
+      await service.processTransaction(ctx, {
+        action: "XOut",
+        date: "2025-01-15",
+        amount: 1000,
+        payee: "Transfer",
+        isTransfer: true,
+        transferAccount: "Chequing CAD",
+      });
+
+      const saveCalls = managerOf(ctx).save.mock.calls;
+      const linkedTxSave = saveCalls.find(
+        (call: any) => call[0]?.accountId === "acc-cad",
+      );
+      expect(linkedTxSave).toBeDefined();
+      // -(-1000) * 1.35: converted into CAD, with the rate on the row.
+      expect(linkedTxSave[0].amount).toBe(1350);
+      expect(linkedTxSave[0].currencyCode).toBe("CAD");
+      expect(linkedTxSave[0].exchangeRate).toBe(1.35);
+    });
+
+    it("skips the counterpart with a warning when the pair has no rate, instead of mislabelling it", async () => {
+      const accountMap = new Map<string, string | null>();
+      accountMap.set("Chequing THB", "acc-thb");
+      const ctx = makeContext({ accountMap });
+      exchangeRateService.getRateForDate.mockResolvedValue(null);
+      exchangeRateService.getLatestRate.mockResolvedValue(null);
+
+      managerOf(ctx).findOne.mockImplementation((_entity: any, opts: any) => {
+        if (opts?.where?.id === "acc-thb") {
+          return Promise.resolve({
+            id: "acc-thb",
+            currencyCode: "THB",
+            currentBalance: 0,
+          });
+        }
+        return Promise.resolve(null);
+      });
+
+      await service.processTransaction(ctx, {
+        action: "XOut",
+        date: "2025-01-15",
+        amount: 1000,
+        payee: "Transfer",
+        isTransfer: true,
+        transferAccount: "Chequing THB",
+      });
+
+      // The cash leg stands alone; no row in the target and no balance moved
+      // there by a number in the wrong currency.
+      const saveCalls = managerOf(ctx).save.mock.calls;
+      const linkedTxSave = saveCalls.find(
+        (call: any) => call[0]?.accountId === "acc-thb",
+      );
+      expect(linkedTxSave).toBeUndefined();
+      expect(
+        (ctx.importResult.warnings ?? []).some((w: string) =>
+          w.includes("USD -> THB"),
+        ),
+      ).toBe(true);
+    });
+
     it("XIn creates a cash transaction and a linked transaction in the transfer account", async () => {
       const accountMap = new Map<string, string | null>();
       accountMap.set("Chequing", "acc-chequing");
@@ -1401,7 +1685,10 @@ describe("ImportInvestmentProcessorService", () => {
         if (opts?.where?.id === "acc-ws-joint") {
           return Promise.resolve({
             id: "acc-ws-joint",
-            currencyCode: "CAD",
+            // Same currency as the importing account: these tests are about
+            // transfer mechanics, and the counterpart equals the negated cash
+            // amount only when no conversion applies.
+            currencyCode: "USD",
             currentBalance: 0,
           });
         }
@@ -1471,6 +1758,9 @@ describe("ImportInvestmentProcessorService", () => {
         if (opts?.where?.id === "acc-ws-joint") {
           return Promise.resolve({
             id: "acc-ws-joint",
+            // Same currency as this test's CAD importing account, for the same
+            // reason the sibling fixtures match theirs: the duplicate-counting
+            // assertions compare unconverted amounts.
             currencyCode: "CAD",
             currentBalance: 0,
           });
@@ -1648,7 +1938,10 @@ describe("ImportInvestmentProcessorService", () => {
         if (opts?.where?.id === "acc-cash-joint") {
           return Promise.resolve({
             id: "acc-cash-joint",
-            currencyCode: "CAD",
+            // Same currency as the importing account: these tests are about
+            // transfer mechanics, and the counterpart equals the negated cash
+            // amount only when no conversion applies.
+            currencyCode: "USD",
             currentBalance: 10000,
           });
         }
@@ -1855,8 +2148,18 @@ describe("ImportInvestmentProcessorService", () => {
       // An unknown cost is persisted as NULL, never as a zero price
       expect(saved.price).toBeNull();
       expect(saved.totalAmount).toBe(0);
-      // No cash transaction: only the investment row is saved
-      expect(managerOf(ctx).save).toHaveBeenCalledTimes(1);
+      // No cash transaction leg: ADD_SHARES has no cash impact. Asserted by the
+      // absence of a saved cash Transaction (currencyCode + amount), mirroring
+      // the StkSplit sibling above -- not by a raw save count, because the
+      // holding IS now updated: folding ADD_SHARES through the shared reducer
+      // (this concept) is exactly what upstream's processHoldings dropped, so a
+      // Holding save legitimately joins the investment row.
+      const saveCalls = managerOf(ctx).save.mock.calls;
+      const cashTxCall = saveCalls.find(
+        (call: any) =>
+          call[0]?.currencyCode !== undefined && call[0]?.amount !== undefined,
+      );
+      expect(cashTxCall).toBeUndefined();
       expect(ctx.importResult.imported).toBe(1);
     });
 
@@ -1946,6 +2249,108 @@ describe("ImportInvestmentProcessorService", () => {
       expect(created.accountId).toBe("cash-1");
       expect(created.amount).toBe(-25);
       expect(ctx.importResult.imported).toBe(1);
+    });
+  });
+
+  describe("parsed status lands on the investment row and its cash leg", () => {
+    const withSecurity = (ctx: ImportContext) => {
+      managerOf(ctx).findOne.mockImplementation((entity: any, opts: any) => {
+        if (entity === Security && opts?.where?.id === "sec-1") {
+          return Promise.resolve({ id: "sec-1", symbol: "TST" });
+        }
+        return Promise.resolve(null);
+      });
+    };
+
+    const buyWith = (flags: Record<string, unknown>) => ({
+      action: "Buy",
+      security: "Test Stock",
+      quantity: 10,
+      price: 100,
+      commission: 0,
+      date: "2025-01-15",
+      ...flags,
+    });
+
+    const makeBuyContext = () => {
+      const securityMap = new Map<string, string | null>([
+        ["Test Stock", "sec-1"],
+      ]);
+      const ctx = makeContext({ securityMap });
+      withSecurity(ctx);
+      return ctx;
+    };
+
+    const cashTxOf = (ctx: ImportContext) =>
+      managerOf(ctx)
+        .save.mock.calls.map((call: any[]) => call[0])
+        .find(
+          (arg: any) =>
+            arg?.currencyCode !== undefined && arg?.amount !== undefined,
+        );
+
+    const holdingSaveOf = (ctx: ImportContext) =>
+      managerOf(ctx)
+        .save.mock.calls.map((call: any[]) => call[0])
+        .find(
+          (arg: any) =>
+            arg instanceof Holding || arg?.averageCost !== undefined,
+        );
+
+    it("a reconciled Buy imports RECONCILED on both the row and its cash leg", async () => {
+      const ctx = makeBuyContext();
+
+      await service.processTransaction(ctx, buyWith({ reconciled: true }));
+
+      const investmentTx = managerOf(ctx).save.mock.calls[0][0];
+      expect(investmentTx).toBeInstanceOf(InvestmentTransaction);
+      expect(investmentTx.status).toBe(TransactionStatus.RECONCILED);
+      expect(cashTxOf(ctx)?.status).toBe(TransactionStatus.RECONCILED);
+    });
+
+    it("a Buy with no flags imports UNRECONCILED on both sides", async () => {
+      // Adversarial against the old implementation, which hard-coded CLEARED
+      // on the cash leg and carried nothing on the investment row: this case
+      // fails there with status CLEARED.
+      const ctx = makeBuyContext();
+
+      await service.processTransaction(ctx, buyWith({}));
+
+      const investmentTx = managerOf(ctx).save.mock.calls[0][0];
+      expect(investmentTx.status).toBe(TransactionStatus.UNRECONCILED);
+      expect(cashTxOf(ctx)?.status).toBe(TransactionStatus.UNRECONCILED);
+    });
+
+    it("a voided Buy imports a VOID row and touches no holdings", async () => {
+      // Fails against the naive implementation that updates holdings
+      // unconditionally: a voided trade's shares must not enter the position.
+      const ctx = makeBuyContext();
+
+      await service.processTransaction(ctx, buyWith({ void: true }));
+
+      const investmentTx = managerOf(ctx).save.mock.calls[0][0];
+      expect(investmentTx.status).toBe(TransactionStatus.VOID);
+      // The cash leg is still recorded, VOID, so the event stays visible.
+      expect(cashTxOf(ctx)?.status).toBe(TransactionStatus.VOID);
+      expect(holdingSaveOf(ctx)).toBeUndefined();
+    });
+
+    it("a voided XIn cash transfer imports a VOID cash transaction", async () => {
+      // processCashTransfer used to ignore the void flag entirely, so a
+      // cancelled transfer landed live.
+      const ctx = makeContext();
+
+      await service.processTransaction(ctx, {
+        action: "XIn",
+        date: "2025-01-15",
+        amount: 500,
+        payee: "Transfer",
+        void: true,
+      });
+
+      const created = managerOf(ctx).create.mock.calls[0][1];
+      expect(created.amount).toBe(500);
+      expect(created.status).toBe(TransactionStatus.VOID);
     });
   });
 });

@@ -172,7 +172,7 @@ describe("mapInvestments", () => {
     });
 
     // PR #192 iterated TRN_INV and so dropped every cash dividend in the file.
-    it("maps an act=4 dividend, which has no TRN_INV row at all", () => {
+    it("maps an act=3 dividend, which has no TRN_INV row at all", () => {
       const result = mapInvestments(
         input({
           transactions: transactionData({
@@ -252,6 +252,207 @@ describe("mapInvestments", () => {
         totalAmount: 250,
         cashAmount: 0,
         cashAccountKey: null,
+      });
+    });
+
+    /**
+     * Money's "Interest" activity (issue #1149): fixed-income interest paid to
+     * a cash account, filed on tax reports as interest. While the code's name
+     * was unknown it imported as DIVIDEND, which misfiled it. The file stores
+     * the amount with the opposite sign from what Money's UI shows; direction
+     * comes from the action, so the sleeve is still paid into.
+     */
+    it("maps act=4 interest to INTEREST with cash arriving in the sleeve", () => {
+      const result = mapInvestments(
+        input({
+          transactions: transactionData({
+            transactions: [
+              invRow({ handle: 1, action: MNY_ACTION.INTEREST, amount: -37.2 }),
+            ],
+          }),
+        }),
+      );
+
+      expect(result.transactions).toHaveLength(1);
+      expect(result.transactions[0]).toMatchObject({
+        action: InvestmentAction.INTEREST,
+        quantity: null,
+        price: null,
+        totalAmount: 37.2,
+        cashAmount: 37.2,
+        cashAccountKey: "acct-11",
+      });
+      // Both halves are known now -- measured cash-only shape, name from
+      // issue #1149 -- so the row is neither warned about nor flagged as
+      // missing detail.
+      expect(result.warnings).toHaveLength(0);
+    });
+
+    /**
+     * Money's "Reinvest Interest" (issue #1149): CD/bond interest accrued
+     * straight back into the holding. Like every reinvestment, it has a value
+     * and no cash leg -- charging it to the sleeve would double-count money
+     * that never landed there.
+     */
+    it("maps act=10 reinvested interest to REINVEST_INTEREST with no cash leg", () => {
+      const result = mapInvestments(
+        input({
+          transactions: transactionData({
+            transactions: [
+              invRow({
+                handle: 1,
+                action: MNY_ACTION.REINVEST_INTEREST,
+                amount: 125.5,
+              }),
+            ],
+          }),
+          investments: investmentData({
+            investmentDetails: [
+              mnyInvestmentDetail({
+                transaction: 1,
+                quantity: 125.5,
+                price: 1,
+              }),
+            ],
+          }),
+        }),
+      );
+
+      expect(result.transactions[0]).toMatchObject({
+        action: InvestmentAction.REINVEST_INTEREST,
+        quantity: 125.5,
+        totalAmount: 125.5,
+        cashAmount: 0,
+        cashAccountKey: null,
+      });
+      // Unmeasured on any file available here, so every row stays visible in
+      // the verification report.
+      expect(result.warnings).toContainEqual({
+        code: "unconfirmedInvestmentAction",
+        subject: "htrn=1",
+        detail: `act=${MNY_ACTION.REINVEST_INTEREST}`,
+        row: expect.objectContaining({ handle: 1 }),
+      });
+    });
+
+    /**
+     * Money's cash capital-gain distributions (issue #1149): short-term
+     * (act 24) and long-term (act 26) both pay into the cash sleeve. Monize
+     * has a single CAPITAL_GAIN action, so the term distinction ends at the
+     * import. As cash payouts they are expected to have no TRN_INV row, and
+     * its absence is not a missing-detail defect.
+     */
+    it.each([
+      [MNY_ACTION.ST_CAPITAL_GAINS_DIST, InvestmentAction.CAPITAL_GAIN_SHORT],
+      [MNY_ACTION.LT_CAPITAL_GAINS_DIST, InvestmentAction.CAPITAL_GAIN_LONG],
+    ])("maps the cash capital-gain distribution act=%p", (act, expected) => {
+      const result = mapInvestments(
+        input({
+          transactions: transactionData({
+            transactions: [invRow({ handle: 1, action: act, amount: -88.4 })],
+          }),
+        }),
+      );
+
+      expect(result.transactions[0]).toMatchObject({
+        action: expected,
+        quantity: null,
+        totalAmount: 88.4,
+        cashAmount: 88.4,
+        cashAccountKey: "acct-11",
+      });
+      expect(
+        result.warnings.filter((w) => w.code === "missingInvestmentDetail"),
+      ).toHaveLength(0);
+      expect(result.warnings).toContainEqual(
+        expect.objectContaining({
+          code: "unconfirmedInvestmentAction",
+          detail: `act=${act}`,
+        }),
+      );
+    });
+
+    /**
+     * Money's reinvested capital-gain distributions (issue #1149): short-term
+     * (act 27) and long-term (act 29) buy the distribution straight back into
+     * the security -- a value, a position, and no cash leg.
+     */
+    it.each([
+      [
+        MNY_ACTION.REINVEST_ST_CAPITAL_GAINS,
+        InvestmentAction.REINVEST_CAPITAL_GAIN_SHORT,
+      ],
+      [
+        MNY_ACTION.REINVEST_LT_CAPITAL_GAINS,
+        InvestmentAction.REINVEST_CAPITAL_GAIN_LONG,
+      ],
+    ])(
+      "maps the reinvested capital-gain distribution act=%p",
+      (act, expected) => {
+        const result = mapInvestments(
+          input({
+            transactions: transactionData({
+              transactions: [invRow({ handle: 1, action: act, amount: 61.75 })],
+            }),
+            investments: investmentData({
+              investmentDetails: [
+                mnyInvestmentDetail({
+                  transaction: 1,
+                  quantity: 2.47,
+                  price: 25,
+                }),
+              ],
+            }),
+          }),
+        );
+
+        expect(result.transactions[0]).toMatchObject({
+          action: expected,
+          quantity: 2.47,
+          totalAmount: 61.75,
+          cashAmount: 0,
+          cashAccountKey: null,
+        });
+      },
+    );
+
+    /**
+     * Money's "Redeem CD/Bond" (issue #1149): a disposal whose cash figure may
+     * carry accrued interest on top of quantity x price. TRN.amt wins as the
+     * total -- recomputing from the detail would drop the accrued component --
+     * so the sleeve receives exactly what Money says the redemption paid.
+     */
+    it("maps act=30 redeem CD/bond to REDEEM with TRN.amt as the proceeds", () => {
+      const result = mapInvestments(
+        input({
+          transactions: transactionData({
+            transactions: [
+              invRow({
+                handle: 1,
+                action: MNY_ACTION.REDEEM_CD_BOND,
+                amount: 10087.5,
+              }),
+            ],
+          }),
+          investments: investmentData({
+            investmentDetails: [
+              // 10,000 face value; the extra 87.50 is accrued interest.
+              mnyInvestmentDetail({
+                transaction: 1,
+                quantity: 10000,
+                price: 1,
+              }),
+            ],
+          }),
+        }),
+      );
+
+      expect(result.transactions[0]).toMatchObject({
+        action: InvestmentAction.REDEEM,
+        quantity: 10000,
+        totalAmount: 10087.5,
+        cashAmount: 10087.5,
+        cashAccountKey: "acct-11",
       });
     });
 

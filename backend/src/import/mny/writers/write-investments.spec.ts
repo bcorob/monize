@@ -194,6 +194,38 @@ describe("writeInvestments", () => {
     });
   });
 
+  it("persists the mapped status on the investment row, not only the cash leg", async () => {
+    // The writer used to carry the status onto the cash leg alone, so a
+    // Money-voided trade's shares stayed counted while its cash claimed not to
+    // have moved -- and rows with no cash leg dropped the status entirely.
+    const { manager, investments } = doubles();
+
+    await writeInvestments(manager, "user-1", {
+      ...baseInput,
+      transactions: [investment({ status: TransactionStatus.RECONCILED })],
+    });
+
+    expect(investments.insert.mock.calls[0][0][0].status).toBe(
+      TransactionStatus.RECONCILED,
+    );
+  });
+
+  it("writes a Money-voided trade as VOID on both the investment row and its cash leg", async () => {
+    const { manager, investments, transactions } = doubles();
+
+    await writeInvestments(manager, "user-1", {
+      ...baseInput,
+      transactions: [investment({ status: TransactionStatus.VOID })],
+    });
+
+    expect(investments.insert.mock.calls[0][0][0].status).toBe(
+      TransactionStatus.VOID,
+    );
+    expect(transactions.insert.mock.calls[0][0][0].status).toBe(
+      TransactionStatus.VOID,
+    );
+  });
+
   it("inserts the cash row before the investment row that references it", async () => {
     const { manager, investments, transactions } = doubles();
     const order: string[] = [];

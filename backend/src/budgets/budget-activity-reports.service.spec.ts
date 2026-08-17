@@ -417,24 +417,34 @@ describe("BudgetActivityReportsService", () => {
           { date: "2026-02-15", total: "50.00" },
         ]),
       });
+      // A transfer recorded as one line of a split parent (audit P5-007):
+      // counted alongside the whole-row transfers.
+      const splitTransferQb = createMockQueryBuilder({
+        getRawMany: jest
+          .fn()
+          .mockResolvedValue([{ date: "2026-02-15", total: "25.00" }]),
+      });
 
-      // Direct spending query, split query, then transfer query
+      // Direct spending query, split query, then the two transfer queries
       transactionsRepository.createQueryBuilder
         .mockReturnValueOnce(directQb)
         .mockReturnValueOnce(transferQb);
-      splitsRepository.createQueryBuilder.mockReturnValueOnce(splitQb);
+      splitsRepository.createQueryBuilder
+        .mockReturnValueOnce(splitQb)
+        .mockReturnValueOnce(splitTransferQb);
 
       const result = await service.getDailySpending("user-1", "budget-1");
 
-      // 3 queries should have been created
+      // 4 queries should have been created
       expect(transactionsRepository.createQueryBuilder).toHaveBeenCalledTimes(
         2,
       );
-      expect(splitsRepository.createQueryBuilder).toHaveBeenCalledTimes(1);
+      expect(splitsRepository.createQueryBuilder).toHaveBeenCalledTimes(2);
       expect(result).toHaveLength(2);
       // Feb 5: 100 direct + 200 transfer = 300
       expect(result[0]).toEqual({ date: "2026-02-05", amount: 300 });
-      expect(result[1]).toEqual({ date: "2026-02-15", amount: 50 });
+      // Feb 15: 50 whole-row transfer + 25 split-line transfer
+      expect(result[1]).toEqual({ date: "2026-02-15", amount: 75 });
     });
 
     it("should return empty array when no expense categories exist", async () => {
@@ -477,16 +487,22 @@ describe("BudgetActivityReportsService", () => {
           .fn()
           .mockResolvedValue([{ date: "2026-02-20", total: "150.00" }]),
       });
+      const splitTransferQb = createMockQueryBuilder({
+        getRawMany: jest.fn().mockResolvedValue([]),
+      });
 
       transactionsRepository.createQueryBuilder.mockReturnValueOnce(transferQb);
+      splitsRepository.createQueryBuilder.mockReturnValueOnce(splitTransferQb);
 
       const result = await service.getDailySpending("user-1", "budget-1");
 
-      // Only the transfer query should be created (no direct/split queries)
+      // Only the two transfer queries should be created (no direct/split
+      // category queries) -- the split-transfer read still runs, because a
+      // transfer can arrive as one line of a split parent (audit P5-007).
       expect(transactionsRepository.createQueryBuilder).toHaveBeenCalledTimes(
         1,
       );
-      expect(splitsRepository.createQueryBuilder).not.toHaveBeenCalled();
+      expect(splitsRepository.createQueryBuilder).toHaveBeenCalledTimes(1);
       expect(result).toHaveLength(1);
       expect(result[0]).toEqual({ date: "2026-02-20", amount: 150 });
     });

@@ -1517,6 +1517,66 @@ describe("ActionHistoryService", () => {
       );
       expect(wrongTableCalls.length).toBe(0);
     });
+
+    it("carries an over-sold position as negative, agreeing with the canonical rebuild", async () => {
+      // BUY 10, SELL 15, BUY 10: computeHoldingsMap carries the over-sell as
+      // -5 (its own comment calls an over-sell "history") and stores 5 shares.
+      // The undo rebuild used to clamp the -5 to 0 and store 10 -- so undoing
+      // any unrelated action rewrote holdings to a position the next canonical
+      // rebuild flipped back.
+      const invAction = {
+        ...mockAction,
+        entityType: "investment_transaction",
+        action: "create",
+        entityId: "inv-1",
+        afterData: { id: "inv-1" },
+      };
+      mockRepository.findOne.mockResolvedValue(invAction);
+
+      mockQueryRunner.manager.findOne.mockResolvedValueOnce({
+        id: "inv-1",
+        userId,
+        accountId: "acc-1",
+        transactionId: null,
+      });
+      mockQueryRunner.manager.remove.mockResolvedValue(undefined);
+      mockQueryRunner.manager.update.mockResolvedValue({ affected: 1 });
+      mockQueryRunner.query
+        .mockResolvedValueOnce([]) // pg_advisory_xact_lock
+        .mockResolvedValueOnce(undefined) // DELETE FROM holdings
+        .mockResolvedValueOnce([
+          {
+            security_id: "sec-1",
+            action: "BUY",
+            quantity: "10",
+            price: "100",
+          },
+          {
+            security_id: "sec-1",
+            action: "SELL",
+            quantity: "15",
+            price: "100",
+          },
+          {
+            security_id: "sec-1",
+            action: "BUY",
+            quantity: "10",
+            price: "100",
+          },
+        ]) // SELECT investment_transactions
+        .mockResolvedValueOnce(undefined); // INSERT INTO holdings
+
+      await service.undo(userId);
+
+      const insertCall = mockQueryRunner.query.mock.calls.find(
+        (call: any[]) =>
+          typeof call[0] === "string" &&
+          call[0].includes("INSERT INTO holdings"),
+      );
+      expect(insertCall).toBeDefined();
+      // Params: [accountId, securityId, quantity, avgCost] -- 5 shares, not 10.
+      expect(insertCall[1][2]).toBe(5);
+    });
   });
 
   describe("undo bulk transaction", () => {

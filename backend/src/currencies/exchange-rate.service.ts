@@ -502,7 +502,7 @@ export class ExchangeRateService implements OnModuleInit {
           `SELECT a.currency_code,
               LEAST(
                 (SELECT MIN(t.transaction_date) FROM transactions t WHERE t.account_id = a.id),
-                (SELECT MIN(it.transaction_date) FROM investment_transactions it WHERE it.account_id = a.id)
+                (SELECT MIN(it.transaction_date) FROM investment_transactions it WHERE it.account_id = a.id AND it.status != 'VOID')
               )::TEXT AS earliest
        FROM accounts a
        WHERE a.currency_code != $1
@@ -519,7 +519,8 @@ export class ExchangeRateService implements OnModuleInit {
           `SELECT DISTINCT s.currency_code,
               (SELECT MIN(it.transaction_date)::TEXT
                FROM investment_transactions it
-               WHERE it.security_id = s.id) AS earliest
+               WHERE it.security_id = s.id
+                 AND it.status != 'VOID') AS earliest
        FROM securities s
        INNER JOIN holdings h ON h.security_id = s.id
        INNER JOIN accounts a ON a.id = h.account_id AND a.is_closed = false

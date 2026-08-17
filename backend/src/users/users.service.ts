@@ -437,7 +437,7 @@ export class UsersService {
     dto: { password?: string; oidcIdToken?: string } | undefined,
   ): Promise<void> {
     if (user.authProvider === "oidc") {
-      this.oidcReauth.consume(user.id, purpose, dto?.oidcIdToken);
+      await this.oidcReauth.consume(user.id, purpose, dto?.oidcIdToken);
       return;
     }
     if (!user.passwordHash) {

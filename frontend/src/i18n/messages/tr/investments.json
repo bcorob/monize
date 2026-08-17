@@ -38,6 +38,10 @@
     "title": "Portföy Özeti",
     "noData": "Yatırım verisi mevcut değil.",
     "totalPortfolioValue": "Toplam Portföy Değeri",
+    "knownPortfolioSubtotal": "Portföy Değeri (kısmi)",
+    "incompleteHeading": "Bu tutarlar eksik",
+    "incompletePrices": "{symbols} için güncel fiyat yok, bu nedenle ilgili pozisyonlar aşağıdaki hiçbir toplama dahil edilmedi.",
+    "incompleteFx": "{pairs} için döviz kuru yok, bu nedenle o para birimlerindeki pozisyonlar aşağıdaki hiçbir toplama dahil edilmedi.",
     "values": "Değerler",
     "holdingsValue": "Pozisyon Değeri",
     "holdingsValueTooltip": "En son mevcut fiyatlara göre sahip olduğunuz tüm menkul kıymetlerin mevcut piyasa değeri.",
@@ -48,9 +52,9 @@
     "netInvested": "Net Yatırım",
     "netInvestedTooltip": "Yatırım hesaplarınıza yatırdığınız kendi paranızın net tutarı. Bu, yatırım kazançları, temettüler veya kazanılan faiz hariç toplam katkılar eksi çekimlerdir.",
     "costBasis": "Maliyet Esası",
-    "costBasisTooltip": "Satın alma fiyatları ve işlem ücretleri dahil olmak üzere yatırımlarınızı edinmek için başlangıçta ödediğiniz toplam tutar. Kazanç ve kayıplarınızı hesaplamak için kullanılır.",
+    "costBasisTooltip": "Mevcut pozisyonlarınızın edinme maliyeti, işlem geçmişinizden yeniden oluşturulur: alış fiyatları artı her alışta kesilen komisyon, her biri onu ödeyen işlemin kuruyla çevrilir. Görüntüleme para biriminizde gösterilir. Kazanç ve kayıpları hesaplamak için kullanılır.",
     "gainLoss": "Kazanç/Kayıp",
-    "gainLossTooltip": "Mevcut pozisyonlarınızdaki gerçekleşmemiş kazanç veya kayıp: Piyasa Değeri eksi Maliyet Esası. Geçmiş satışlardan gerçekleşmiş kazanımları veya alınan geliri içermez.",
+    "gainLossTooltip": "Mevcut pozisyonlarınızdaki gerçekleşmemiş kazanç veya kayıp: bugünkü fiyatlarla piyasa değeri eksi yukarıdaki maliyet esası. Geçmiş satışlardan gerçekleşen kazançları veya alınan temettü ve faizi içermez.",
     "returns": "Getiriler",
     "simpleReturn": "Basit Getiri",
     "simpleReturnTooltip": "Pozisyonlarınızdaki toplam yüzde kazanç veya kayıp, (Piyasa Değeri − Maliyet Esası) ÷ Maliyet Esası olarak hesaplanır. Katkı veya çekimlerin zamanlamasını dikkate almaz.",
@@ -59,26 +63,28 @@
     "twrTooltip": "Para ekleyip çıkardığınız zamandan bağımsız olarak yatırımlarınızın ne kadar iyi performans gösterdiğini ölçer. Nakit akışı zamanlamasının etkisini ortadan kaldırarak saf yatırım performansını gösterir.",
     "cagr": "BYOB",
     "cagrTooltip": "Bileşik Yıllık Ortalama Büyüme. Net Yatırım ile mevcut portföy değeri arasına dayalı yıllık getiriniz, büyüme her yıl mükemmel şekilde sabit olmuş gibi.",
-    "notAvailable": "Yok"
+    "notAvailable": "Yok",
+    "unpricedHoldings": "Kısmi değerleme: {count, plural, one {# pozisyonun} other {# pozisyonun}} güncel fiyatı yok ({symbols}); aşağıdaki değerler bunları içermez."
   },
   "assetAllocation": {
     "title": "Varlık Dağılımı",
     "noData": "Dağılım verisi mevcut değil.",
+    "knownValueOnly": "Yüzdeler yalnızca bilinen değeri kapsar; bazı pozisyonlar değerlenemedi.",
     "cash": "Nakit",
     "untagged": "Etiketsiz",
     "noTagData": "Gösterilecek etiketli pozisyon yok. Etikete göre dağılımı görmek için menkul kıymetlerinize etiket ekleyin.",
+    "noKeyData": "Bu etiket anahtarı için değeri olan varlık yok. Bu dökümü görmek için menkul kıymetleri anahtar:değer (örn. country:usa) olarak etiketleyin.",
     "noCountryData": "Ülke dağılımı verisi mevcut değil.",
+    "keySelectorLabel": "Toplanacak etiket anahtarı",
     "otherCountries": "Diğer ülkeler",
     "otherAssetClasses": "Diğer varlık sınıfları",
     "groupBy": {
       "security": "Menkul kıymete göre",
       "tag": "Etikete göre",
-      "country": "Ülkeye göre",
       "tagKey": "Anahtara göre",
+      "country": "Ülkeye göre",
       "assetClass": "Varlık sınıfına göre"
-    },
-    "noKeyData": "Bu etiket anahtarı için değeri olan varlık yok. Bu dökümü görmek için menkul kıymetleri anahtar:değer (örn. country:usa) olarak etiketleyin.",
-    "keySelectorLabel": "Toplanacak etiket anahtarı"
+    }
   },
   "holdingsList": {
     "title": "Pozisyonlar",
@@ -93,6 +99,7 @@
   "groupedHoldings": {
     "title": "Hesaba Göre Pozisyonlar",
     "noHoldings": "Portföyünüzde pozisyon yok.",
+    "accountIncomplete": "Kısmi: bu hesabın toplamları, {currency} cinsinden değerlenemeyen pozisyonları içermiyor.",
     "accountSummary": "{positions} pozisyonlu {accounts} hesap",
     "positionsWithCash": "{count} pozisyon + Nakit",
     "positions": "{count} pozisyon",
@@ -172,6 +179,12 @@
     "actionReinvest": "Yeniden Yatır",
     "actionAddShares": "Hisse Ekle",
     "actionRemoveShares": "Hisse Çıkar",
+    "actionReinvestInterest": "Faizi Yeniden Yatır",
+    "actionReinvestCapitalGainShort": "Kısa Vadeli Kazancı Yeniden Yatır",
+    "actionReinvestCapitalGainLong": "Uzun Vadeli Kazancı Yeniden Yatır",
+    "actionCapitalGainShort": "Kısa Vadeli Sermaye Kazancı",
+    "actionCapitalGainLong": "Uzun Vadeli Sermaye Kazancı",
+    "actionRedeem": "CD/Tahvil İtfası",
     "allActions": "Tüm Eylemler"
   },
   "transactionForm": {
@@ -186,6 +199,12 @@
     "actionReinvest": "Temettü Yeniden Yatır",
     "actionAddShares": "Hisse Ekle",
     "actionRemoveShares": "Hisse Çıkar",
+    "actionReinvestInterest": "Faizi Yeniden Yatır",
+    "actionReinvestCapitalGainShort": "Kısa Vadeli Kazancı Yeniden Yatır",
+    "actionReinvestCapitalGainLong": "Uzun Vadeli Kazancı Yeniden Yatır",
+    "actionCapitalGainShort": "Kısa Vadeli Sermaye Kazancı",
+    "actionCapitalGainLong": "Uzun Vadeli Sermaye Kazancı",
+    "actionRedeem": "CD/Tahvil İtfası",
     "actionTransfer": "Transfer",
     "brokerageAccount": "Aracı Kurum Hesabı",
     "fromAccount": "Kaynak Hesap",
@@ -206,6 +225,7 @@
     "pricePerShare": "Hisse Başı Fiyat ({currency})",
     "commissionFees": "Komisyon / Ücretler ({currency})",
     "description": "Açıklama (isteğe bağlı)",
+    "statusLockedToParent": "Bu işlem, bölünmüş bir işlemin parçasıdır. İki tarafın birlikte değişmesi için bunun yerine bölünmüş işlemin durumunu değiştirin.",
     "descriptionPlaceholder": "İsteğe bağlı notlar",
     "splitRatio": "Bölünme oranı",
     "noSplitRatioWarning": "Bu işlemde bölünme oranı belirlenmemiş. Kaydetmeden önce duyurulduğu şekilde oranı girin — Monize sizin için bir oran varsaymaz.",
@@ -257,7 +277,10 @@
     "toastAvailableShares": "Transfer için yalnızca {available} hisse mevcut",
     "toastSplitRatioRequired": "Bölünme oranı sıfırdan büyük olmalıdır",
     "toastPairedLegError": "Eşleştirilmiş transfer kolu yüklenemedi; yeniden açın ve tekrar deneyin",
-    "toastSaveFailed": "İşlem kaydedilemedi"
+    "toastSaveFailed": "İşlem kaydedilemedi",
+    "exchangeRateUnresolved": "{from} → {to} kuru yok. Kaydetmeden önce bir kur veya çevrilmiş toplamı girin.",
+    "toastExchangeRateRequired": "Para birimleri arası bir işlemi kaydetmeden önce bir döviz kuru girin.",
+    "notAvailable": "Mevcut değil"
   },
   "newTransactionButton": {
     "label": "+ Yeni İşlem",

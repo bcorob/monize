@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, type ReactNode } from 'react';
+import { useTranslations } from 'next-intl';
 import { chartColors } from '@/lib/chart-colors';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
 import type { GroupedTotal } from '@/types/transaction';
@@ -15,6 +16,12 @@ interface TopGroupsPanelProps {
   currencyCode: string;
   isLoading: boolean;
   limit?: number;
+  /**
+   * How many rows were dropped upstream for want of a rate. When set, a note
+   * marks the breakdown as a subtotal rather than letting the ranked bars read
+   * as 100% of the whole.
+   */
+  excludedCount?: number;
   /** When set, each row becomes a link to its filtered transactions (id may be null). */
   onSelect?: (id: string | null) => void;
   /** Allow the unidentified (e.g. uncategorised) row to be selectable too. */
@@ -43,8 +50,10 @@ export function TopGroupsPanel({
   onSelect,
   selectableWhenUnidentified = false,
   headerAction,
+  excludedCount = 0,
 }: TopGroupsPanelProps) {
   const { formatCurrency } = useNumberFormat();
+  const tCommon = useTranslations('common');
 
   const rows = useMemo(() => {
     const ranked = [...totals]
@@ -124,6 +133,11 @@ export function TopGroupsPanel({
               );
             })}
           </ul>
+        )}
+        {excludedCount > 0 && (
+          <p className="mt-2 text-xs text-amber-600 dark:text-amber-400" data-testid="partial-note">
+            {tCommon('partialTotal.explanationExcluded', { count: excludedCount })}
+          </p>
         )}
       </div>
     </section>

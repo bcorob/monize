@@ -40,6 +40,13 @@ import { findRepoRoot, gitListFiles, requireRepoRoot } from "./repo-tree.util";
  * them. Fenced code blocks are stripped before scanning: they are sample code,
  * where a hypothetical path is legitimate; the claim idiom is the inline span.
  *
+ * The same grammar decides the inverse case: a doc asserting that a file is
+ * *absent* -- `docs/release-integrity.md`'s gap register says the repository has
+ * no branch-protection policy in it -- names it in plain prose rather than in a
+ * span, because a span here means "this is here" and that doc is arguing the
+ * opposite. Re-backticking such a name fails this suite, which is the intended
+ * outcome: the day the file lands, the span is correct again.
+ *
  * Cross-tree references are not claims about this tree and are exempt by
  * grammar, each with a test below: `branch:path/to/file.md` (qualify a path
  * that lives in another branch exactly this way -- the root `CLAUDE.md` says

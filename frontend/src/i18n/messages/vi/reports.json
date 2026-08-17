@@ -144,9 +144,6 @@
     "defaultMessage": "Không thể tải dữ liệu báo cáo. Vui lòng thử lại.",
     "retry": "Thử lại"
   },
-  "foreignCurrencyFees": {
-    "noEligibleAccounts": "Không có tài khoản nào được cấu hình phí giao dịch nước ngoài. Đặt tỷ lệ phí phần trăm cho một tài khoản để theo dõi phí ngoại tệ của tài khoản đó tại đây."
-  },
   "accountBalances": {
     "totalAssets": "Tổng tài sản",
     "totalLiabilities": "Tổng nợ",
@@ -333,7 +330,8 @@
     "tooltipUtilization": "Mức sử dụng",
     "tooltipUsed": "Đã dùng",
     "tooltipAvailable": "Khả dụng",
-    "pdfTitle": "Mức sử dụng tín dụng"
+    "pdfTitle": "Mức sử dụng tín dụng",
+    "noRate": "Không có tỷ giá"
   },
   "currencyExposure": {
     "empty": "Không tìm thấy vị thế đầu tư. Thêm chứng khoán để xem rủi ro tiền tệ.",
@@ -575,20 +573,20 @@
     "topRegion": "Khu vực hàng đầu",
     "viewByRegion": "Theo khu vực",
     "viewByExchange": "Theo sàn giao dịch",
+    "viewByCountry": "Theo quốc gia",
     "regionalAllocation": "Phân bổ theo khu vực",
     "exchangeAllocation": "Phân bổ theo sàn giao dịch",
+    "countryAllocation": "Phân bổ theo quốc gia (nhìn xuyên)",
+    "countryLookThroughNote": "Mức độ phơi nhiễm theo quốc gia nhìn xuyên qua các ETF và quỹ bằng cách sử dụng phân bổ theo quốc gia được thiết lập thủ công trên từng chứng khoán. Cổ phiếu riêng lẻ được xếp theo sàn niêm yết; phần chưa phân loại được hiển thị là \"Khác\".",
     "colRegion": "Khu vực",
     "colExchange": "Sàn giao dịch",
     "colCountry": "Quốc gia",
     "colHoldings": "Vị thế",
     "colMarketValue": "Giá trị thị trường",
     "colPortfolioPct": "% Danh mục",
+    "other": "Khác",
     "total": "Tổng",
-    "holdingCount": "{count, plural, one {# vị thế} other {# vị thế}}",
-    "viewByCountry": "Theo quốc gia",
-    "countryAllocation": "Phân bổ theo quốc gia (nhìn xuyên)",
-    "countryLookThroughNote": "Mức độ phơi nhiễm theo quốc gia nhìn xuyên qua các ETF và quỹ bằng cách sử dụng phân bổ theo quốc gia được thiết lập thủ công trên từng chứng khoán. Cổ phiếu riêng lẻ được xếp theo sàn niêm yết; phần chưa phân loại được hiển thị là \"Khác\".",
-    "other": "Khác"
+    "holdingCount": "{count, plural, one {# vị thế} other {# vị thế}}"
   },
   "healthScoreHistory": {
     "pdfTitle": "Lịch sử điểm sức khỏe",
@@ -761,7 +759,13 @@
     "actionTransferOut": "Chuyển ra",
     "actionReinvest": "Tái đầu tư",
     "actionAddShares": "Thêm cổ phiếu",
-    "actionRemoveShares": "Xóa cổ phiếu"
+    "actionRemoveShares": "Xóa cổ phiếu",
+    "actionReinvestInterest": "Tái đầu tư lãi",
+    "actionReinvestCapitalGainShort": "Tái đầu tư lãi vốn ngắn hạn",
+    "actionReinvestCapitalGainLong": "Tái đầu tư lãi vốn dài hạn",
+    "actionCapitalGainShort": "Lãi vốn ngắn hạn",
+    "actionCapitalGainLong": "Lãi vốn dài hạn",
+    "actionRedeem": "Đáo hạn CD/trái phiếu"
   },
   "loanAmortization": {
     "empty": "Không tìm thấy tài khoản vay hoặc thế chấp. Thêm tài khoản vay để xem lịch sử thanh toán.",
@@ -820,6 +824,7 @@
       "maxCompare": "Bạn có thể so sánh tối đa {max} kịch bản.",
       "loadFailed": "Không thể tải dữ liệu Monte Carlo. Vui lòng tải lại.",
       "currentValueFailed": "Không thể lấy giá trị danh mục hiện tại.",
+      "currentValueUnavailable": "Không thể xác định giá trị hiện tại của các tài khoản đã chọn. Hãy nhập giá trị khởi điểm, hoặc thử lại khi đã có giá và tỷ giá.",
       "holdingStatsFailed": "Không thể tải thống kê lịch sử theo vị thế.",
       "reorderFailed": "Không thể sắp xếp lại các kịch bản."
     },
@@ -1168,7 +1173,8 @@
     "csvColProceeds": "Tiền thu",
     "csvColCostBasis": "Cơ sở chi phí",
     "csvColGainLoss": "Lãi/Lỗ",
-    "csvColReturn": "Lợi nhuận %"
+    "csvColReturn": "Lợi nhuận %",
+    "csvNoRate": "Không có tỷ giá"
   },
   "recurringExpenses": {
     "recurringExpenses": "Chi phí định kỳ",
@@ -1376,7 +1382,8 @@
     "pdfTotalPortfolio": "Tổng danh mục",
     "pdfAssetTypes": "Loại tài sản",
     "pdfTotalHoldings": "Tổng vị thế",
-    "pdfLargestType": "Loại lớn nhất"
+    "pdfLargestType": "Loại lớn nhất",
+    "unavailable": "Không có sẵn"
   },
   "spendingAnomalies": {
     "highPriority": "Ưu tiên cao",
@@ -1700,5 +1707,8 @@
     "labelSelectAccount": "Chọn tài khoản khoản vay",
     "viewTransactions": "Xem giao dịch",
     "empty": "Không tìm thấy tài khoản khoản vay, thế chấp hoặc hạn mức tín dụng."
+  },
+  "foreignCurrencyFees": {
+    "noEligibleAccounts": "Không có tài khoản nào được cấu hình phí giao dịch nước ngoài. Đặt tỷ lệ phí phần trăm cho một tài khoản để theo dõi phí ngoại tệ của tài khoản đó tại đây."
   }
 }

@@ -221,6 +221,46 @@ describe('DividendIncomeReport', () => {
     expect(screen.getAllByText('$-500.00').length).toBeGreaterThan(0);
   });
 
+  it('renders an unknown capital-gain entry as unknown, never as a zero', async () => {
+    // The backend sends null for a gain it could not value (no rate between
+    // the security's currency and the account's). `bucket.capitalGains += null`
+    // coerced it to 0, so real gains vanished into a confident $0.00 summary.
+    mockGetTransactions.mockResolvedValue({ data: [], pagination: { hasMore: false } });
+    mockGetInvestmentAccounts.mockResolvedValue([
+      { id: 'acc-1', name: 'TFSA', currencyCode: 'CAD', accountSubType: 'INVESTMENT_CASH' },
+    ]);
+    mockGetCapitalGains.mockResolvedValue([
+      {
+        month: '2024-08',
+        accountId: 'acc-1',
+        accountName: 'TFSA',
+        accountCurrencyCode: 'CAD',
+        securityId: 'sec-1',
+        symbol: 'ABC',
+        securityName: 'ABC Corp',
+        securityCurrencyCode: 'EUR',
+        startQuantity: 10,
+        endQuantity: 10,
+        startValue: null,
+        endValue: null,
+        buys: 0,
+        sells: 0,
+        realizedGain: 0,
+        unrealizedGain: null,
+        totalCapitalGain: null,
+      },
+    ]);
+    render(<DividendIncomeReport />);
+    await waitFor(() => {
+      expect(screen.getAllByText('Capital Gains').length).toBeGreaterThan(0);
+    });
+    // The capital-gains card and the total (which contains it) show the
+    // unknown marker; only dividends and interest -- genuine known zeros from
+    // an empty transaction list -- may read $0.00.
+    expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText('$0.00')).toHaveLength(2);
+  });
+
   it('renders summary cards with data', async () => {
     mockGetTransactions.mockResolvedValue({
       data: [

@@ -43,7 +43,8 @@
     "summaryEnding": "Saldo końcowe",
     "summaryLowest": "Najniższe",
     "summaryMinBalance": "Min. saldo",
-    "allAccounts": "Wszystkie konta"
+    "allAccounts": "Wszystkie konta",
+    "unavailableMissingRates": "Tej prognozy nie można pokazać w {displayCurrency}: brak kursu wymiany dla {currencies}, a prognozowane saldo opiera się na każdym wcześniejszym dniu. Dodaj kurs lub wybierz konto jednowalutowe."
   },
   "calendar": {
     "days": {

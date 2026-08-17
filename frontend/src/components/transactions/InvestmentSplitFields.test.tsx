@@ -12,6 +12,16 @@ vi.mock('@/lib/investments', () => ({
   },
 }));
 
+// The rate prefill for a cross-currency split. Empty by default, so a test has
+// to say a rate exists before the component can convert -- which is the state
+// that used to be papered over with 1.
+const mockGetLatestRates = vi.fn().mockResolvedValue([]);
+vi.mock('@/lib/exchange-rates', () => ({
+  exchangeRatesApi: {
+    getLatestRates: (...args: unknown[]) => mockGetLatestRates(...args),
+  },
+}));
+
 const mockSecurities: Security[] = [
   {
     id: 'sec-1',
@@ -167,12 +177,150 @@ describe('InvestmentSplitFields', () => {
     expect(next.commission).toBe(3);
   });
 
+  // A cross-currency embedded split had no rate input at all and defaulted the
+  // rate to 1, so buying a USD security from a CAD account recorded the
+  // unconverted figure as the split's cash impact -- while the investment row
+  // written beside it used the server-resolved rate. The two halves of one split
+  // described different amounts of money.
+  describe('a security priced in another currency', () => {
+    // sec-1 is USD; the cash account is CAD.
+    const noStatedRate = () => buyValue({ exchangeRate: undefined });
+
+    it('prefills the rate from the stored market rate and converts with it', async () => {
+      mockGetLatestRates.mockResolvedValue([
+        { fromCurrency: 'USD', toCurrency: 'CAD', rate: 1.35 },
+      ]);
+      const onChange = vi.fn();
+      await renderFieldsAsync({ value: noStatedRate(), onChange });
+      await waitFor(() =>
+        expect(
+          screen.getByLabelText('Exchange rate (CAD per 1 USD)'),
+        ).toHaveValue('1.350000'),
+      );
+
+      await act(async () => {
+        fireEvent.change(screen.getByPlaceholderText('Quantity'), {
+          target: { value: '20' },
+        });
+      });
+      const [next, amount] = onChange.mock.calls.at(-1)!;
+      expect(next.exchangeRate).toBe(1.35);
+      // BUY 20 @ 5 USD + 1 commission = -101 USD, x 1.35 = -136.35 CAD.
+      expect(amount).toBe(-136.35);
+    });
+
+    it('emits the converted amount at money precision, not cents', async () => {
+      // A real FX rate rarely yields a 2dp-clean product. The amount is stored
+      // as decimal(20,4) and the backend validates it at 4dp (roundMoney) both
+      // in validateSplits and where the embedded investment row is written, so
+      // rounding it to cents here made the two disagree and the commit was
+      // rejected. -101 USD x 1.3652 = -137.8852 CAD: cents would emit -137.89,
+      // which fails the backend's 4dp check.
+      mockGetLatestRates.mockResolvedValue([
+        { fromCurrency: 'USD', toCurrency: 'CAD', rate: 1.3652 },
+      ]);
+      const onChange = vi.fn();
+      await renderFieldsAsync({ value: noStatedRate(), onChange });
+      await waitFor(() =>
+        expect(
+          screen.getByLabelText('Exchange rate (CAD per 1 USD)'),
+        ).toHaveValue('1.365200'),
+      );
+
+      await act(async () => {
+        fireEvent.change(screen.getByPlaceholderText('Quantity'), {
+          target: { value: '20' },
+        });
+      });
+      const [, amount] = onChange.mock.calls.at(-1)!;
+      expect(amount).toBe(-137.8852);
+    });
+
+    it('does not truncate the market rate when the field is only blurred', async () => {
+      // The field shows 6dp but the market rate is stored at 10dp, so blurring
+      // the untouched field re-reports the 6dp rounding. That is not a user
+      // override: adopting it would replace the fetched rate with a truncated
+      // one (the FX-panel bug frontend/CLAUDE.md warns about). The guard drops a
+      // re-report matching the market rate at display precision, so no onChange
+      // fires from the blur alone.
+      mockGetLatestRates.mockResolvedValue([
+        { fromCurrency: 'USD', toCurrency: 'CAD', rate: 1.2345678 },
+      ]);
+      const onChange = vi.fn();
+      await renderFieldsAsync({ value: noStatedRate(), onChange });
+      const rateField = await screen.findByLabelText(
+        'Exchange rate (CAD per 1 USD)',
+      );
+      await waitFor(() => expect(rateField).toHaveValue('1.234568'));
+      onChange.mockClear();
+      await act(async () => {
+        fireEvent.focus(rateField);
+        fireEvent.blur(rateField);
+      });
+      expect(onChange).not.toHaveBeenCalled();
+    });
+
+    it('says the rate is unknown rather than settling at par', async () => {
+      mockGetLatestRates.mockResolvedValue([]);
+      await renderFieldsAsync({ value: noStatedRate() });
+      await waitFor(() =>
+        expect(screen.getByRole('alert')).toHaveTextContent(
+          /No USD to CAD rate is available/i,
+        ),
+      );
+    });
+
+    it('emits no cash impact while the rate is unknown', async () => {
+      mockGetLatestRates.mockResolvedValue([]);
+      const onChange = vi.fn();
+      await renderFieldsAsync({ value: noStatedRate(), onChange });
+      await act(async () => {
+        fireEvent.change(screen.getByPlaceholderText('Quantity'), {
+          target: { value: '20' },
+        });
+      });
+      const [next, amount] = onChange.mock.calls.at(-1)!;
+      expect(next.exchangeRate).toBeUndefined();
+      // Not -101: that is the unconverted figure, which is what the old default
+      // of 1 produced.
+      expect(amount).toBe(0);
+    });
+
+    it('lets the user state a rate that overrides the market one', async () => {
+      mockGetLatestRates.mockResolvedValue([
+        { fromCurrency: 'USD', toCurrency: 'CAD', rate: 1.35 },
+      ]);
+      const onChange = vi.fn();
+      await renderFieldsAsync({ value: noStatedRate(), onChange });
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText('Exchange rate (CAD per 1 USD)'), {
+          target: { value: '1.4' },
+        });
+      });
+      const [next] = onChange.mock.calls.at(-1)!;
+      expect(next.exchangeRate).toBe(1.4);
+    });
+
+    it('shows no rate field when the security matches the account currency', async () => {
+      await renderFieldsAsync({
+        value: noStatedRate(),
+        currencyCode: 'USD',
+      });
+      expect(
+        screen.queryByLabelText(/Exchange rate/),
+      ).not.toBeInTheDocument();
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    });
+  });
+
   it('shows the single amount field (no qty/price) for DIVIDEND', async () => {
     await renderFieldsAsync({ value: buyValue({ action: 'DIVIDEND' }) });
     expect(screen.queryByPlaceholderText('Quantity')).not.toBeInTheDocument();
     expect(screen.queryByPlaceholderText('Price')).not.toBeInTheDocument();
-    // amount-only field uses the currency-based placeholder
-    expect(screen.getByPlaceholderText('Amount (CAD)')).toBeInTheDocument();
+    // The amount is in the SECURITY's currency (sec-1 is USD), not the cash
+    // account's -- that is how the backend reads price and commission, and
+    // labelling them with the account's currency asked for the wrong number.
+    expect(screen.getByPlaceholderText('Amount (USD)')).toBeInTheDocument();
     // DIVIDEND still needs a security
     expect(screen.getByLabelText('Security')).toBeInTheDocument();
   });
@@ -184,7 +332,7 @@ describe('InvestmentSplitFields', () => {
       onChange,
     });
     await act(async () => {
-      fireEvent.change(screen.getByPlaceholderText('Amount (CAD)'), {
+      fireEvent.change(screen.getByPlaceholderText('Amount (USD)'), {
         target: { value: '25' },
       });
     });
@@ -197,7 +345,7 @@ describe('InvestmentSplitFields', () => {
   it('hides the security dropdown for actions that do not need one (INTEREST)', async () => {
     await renderFieldsAsync({ value: buyValue({ action: 'INTEREST' }) });
     expect(screen.queryByLabelText('Security')).not.toBeInTheDocument();
-    expect(screen.getByPlaceholderText('Amount (CAD)')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Amount (USD)')).toBeInTheDocument();
   });
 
   it('honours a custom currency code in the amount placeholder and symbol', async () => {

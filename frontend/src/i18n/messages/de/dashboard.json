@@ -202,7 +202,8 @@
     "title": "Kreditauslastung nach Konto",
     "empty": "Keine Kreditkonten mit festgelegtem Limit.",
     "utilization": "Auslastung",
-    "used": "Genutzt"
+    "used": "Genutzt",
+    "noRate": "nicht verfügbar (kein {currency}-Kurs)"
   },
   "creditUtilizationTotal": {
     "title": "Gesamte Kreditauslastung",

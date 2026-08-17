@@ -1,5 +1,12 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { getCached, setCache, invalidateCache, clearAllCache, dedupe } from './apiCache';
+import {
+  getCached,
+  setCache,
+  invalidateCache,
+  clearAllCache,
+  dedupe,
+  invalidateBalanceCaches,
+} from './apiCache';
 
 describe('apiCache', () => {
   beforeEach(() => {
@@ -44,6 +51,42 @@ describe('apiCache', () => {
   it('uses default 30 second TTL when no ttl arg', () => {
     setCache('default-ttl', 'val');
     expect(getCached('default-ttl')).toBe('val');
+  });
+});
+
+describe('invalidateBalanceCaches', () => {
+  beforeEach(() => {
+    clearAllCache();
+  });
+
+  // Every family below is derived from transaction rows, so a money-moving
+  // write leaves all of them wrong. Budgets were the omission: a successful
+  // expense used to leave `budgets:dashboard` claiming the pre-write remaining
+  // amount for up to 30 seconds, and `budgets:cat-status:*` for up to 60.
+  it.each([
+    'accounts:all:true',
+    'accounts:daily-balances:::',
+    'investments:portfolioSummary',
+    'investments:summary:all',
+    'budgets:dashboard',
+    'budgets:cat-status:cat-1,cat-2',
+    'budgets:all',
+  ])('drops %s', (key) => {
+    setCache(key, 'stale', 120_000);
+    invalidateBalanceCaches();
+    expect(getCached(key)).toBeUndefined();
+  });
+
+  it('leaves families a transaction cannot change', () => {
+    // Renaming a payee or a category is not a money movement, and dropping
+    // those lists on every write would turn one mutation into four refetches.
+    setCache('payees:all', 'kept', 120_000);
+    setCache('categories:all', 'kept', 120_000);
+    setCache('institutions:all', 'kept', 120_000);
+    invalidateBalanceCaches();
+    expect(getCached('payees:all')).toBe('kept');
+    expect(getCached('categories:all')).toBe('kept');
+    expect(getCached('institutions:all')).toBe('kept');
   });
 });
 

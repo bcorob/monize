@@ -118,7 +118,12 @@ export function CreditUtilizationAccountsWidget({
                         {t('creditUtilizationAccounts.utilization')}: {row.utilizationPercent.toFixed(1)}%
                       </p>
                       <p className="text-sm text-gray-600 dark:text-gray-400">
-                        {t('creditUtilizationAccounts.used')}: {formatCurrency(row.used, displayCurrency)}
+                        {t('creditUtilizationAccounts.used')}:{' '}
+                        {row.used === null
+                          ? t('creditUtilizationAccounts.noRate', {
+                              currency: row.currencyCode,
+                            })
+                          : formatCurrency(row.used, displayCurrency)}
                       </p>
                     </ChartTooltipPanel>
                   );

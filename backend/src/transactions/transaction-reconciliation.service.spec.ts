@@ -3,7 +3,9 @@ import { DataSource } from "typeorm";
 import { BadRequestException, NotFoundException } from "@nestjs/common";
 import { TransactionReconciliationService } from "./transaction-reconciliation.service";
 import { Transaction, TransactionStatus } from "./entities/transaction.entity";
+import { TransactionSplit } from "./entities/transaction-split.entity";
 import { AccountsService } from "../accounts/accounts.service";
+import { TransactionSplitService } from "./transaction-split.service";
 import { isTransactionInFuture } from "../common/date-utils";
 import {
   createScopedDbMocks,
@@ -38,6 +40,9 @@ describe("TransactionReconciliationService", () => {
   let service: TransactionReconciliationService;
   let transactionsRepository: Record<string, jest.Mock>;
   let accountsService: Record<string, jest.Mock>;
+  let splitService: Record<string, jest.Mock>;
+  let splitsRepository: Record<string, jest.Mock>;
+  let managerQuery: jest.Mock;
   let dataSource: DataSourceMock;
 
   const mockFindOne = jest.fn();
@@ -120,13 +125,22 @@ describe("TransactionReconciliationService", () => {
     // The withScopedDb status writes go through the manager's entity-level update;
     // forward them to the repository mock (dropping the entity arg) so the
     // existing two-arg `transactionsRepository.update` assertions still hold.
+    // The VOID-crossing guard asks whether the row is a split-transfer
+    // counterpart leg; none of these fixtures is, so the lookup finds nothing.
+    splitsRepository = { findOne: jest.fn().mockResolvedValue(null) };
     const tenantMocks = createScopedDbMocks([
       [Transaction, transactionsRepository],
+      [TransactionSplit, splitsRepository],
     ]);
     dataSource = tenantMocks.dataSource;
     tenantMocks.manager.update.mockImplementation((_entity, id, payload) =>
       transactionsRepository.update(id, payload),
     );
+    // The VOID-crossing guard's second question -- is this row the cash leg of
+    // an investment transaction -- is a raw EXISTS through manager.query.
+    // Default: no owning investment row.
+    managerQuery = tenantMocks.manager.query;
+    managerQuery.mockResolvedValue([]);
 
     accountsService = {
       findOne: jest.fn().mockResolvedValue({
@@ -142,10 +156,18 @@ describe("TransactionReconciliationService", () => {
     mockFindOne.mockReset();
     mockTriggerNetWorthRecalc.mockReset();
 
+    splitService = {
+      // The real method returns the accounts it moved (recheck RR4-003).
+      applyParentStatusToTransferCounterparts: jest
+        .fn()
+        .mockResolvedValue(new Set<string>()),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         TransactionReconciliationService,
         { provide: AccountsService, useValue: accountsService },
+        { provide: TransactionSplitService, useValue: splitService },
         { provide: DataSource, useValue: dataSource },
       ],
     }).compile();
@@ -232,6 +254,182 @@ describe("TransactionReconciliationService", () => {
         -300,
       );
       expect(mockTriggerNetWorthRecalc).toHaveBeenCalledWith(accountId, userId);
+    });
+
+    it("carries a VOID across to the mirror transfer leg with its own balance (P5-001)", async () => {
+      // PATCH /transactions/:id/status was the one door left into the
+      // divergent-pair state every other route refuses: voiding one leg
+      // restored its account and left the counterpart ACTIVE holding the
+      // money. The mirror leg crosses the boundary with it, adjusted by its
+      // OWN amount, read under its own lock.
+      stubLockedTransactions(
+        {
+          lockTransactionRow: lockTransactionRow as jest.Mock,
+          lockTransactionRows: jest.fn(),
+        },
+        [
+          lockedTransactionRow({
+            id: "leg-1",
+            accountId,
+            amount: -100,
+            transactionDate: "2026-01-15",
+            status: TransactionStatus.CLEARED,
+            isSplit: false,
+            linkedTransactionId: "leg-2",
+          }),
+          lockedTransactionRow({
+            id: "leg-2",
+            accountId: "account-2",
+            amount: 100,
+            transactionDate: "2026-01-15",
+            status: TransactionStatus.CLEARED,
+            isSplit: false,
+            linkedTransactionId: "leg-1",
+          }),
+        ],
+      );
+      mockFindOne.mockResolvedValue(
+        makeTransaction({ status: TransactionStatus.VOID }),
+      );
+
+      await service.updateStatus(
+        userId,
+        "leg-1",
+        TransactionStatus.VOID,
+        mockTriggerNetWorthRecalc,
+        mockFindOne,
+      );
+
+      expect(transactionsRepository.update).toHaveBeenCalledWith("leg-2", {
+        status: TransactionStatus.VOID,
+      });
+      // Own leg reversed by its own -100; the counterpart by its own +100.
+      expect(accountsService.updateBalance).toHaveBeenCalledWith(
+        accountId,
+        100,
+      );
+      expect(accountsService.updateBalance).toHaveBeenCalledWith(
+        "account-2",
+        -100,
+      );
+      expect(mockTriggerNetWorthRecalc).toHaveBeenCalledWith(
+        "account-2",
+        userId,
+      );
+    });
+
+    it("refuses to void a split-transfer counterpart leg on its own", async () => {
+      // The pairing belongs to the split parent, which has a propagation path;
+      // voiding the leg alone leaves the parent's split row recording money
+      // that never arrived. Same refusal as updateSplitTransferLeg's.
+      const transaction = stageTransaction({
+        status: TransactionStatus.CLEARED,
+        amount: 100,
+      });
+      splitsRepository.findOne.mockResolvedValue({ id: "split-1" });
+
+      await expect(
+        service.updateStatus(
+          userId,
+          transaction.id,
+          TransactionStatus.VOID,
+          mockTriggerNetWorthRecalc,
+          mockFindOne,
+        ),
+      ).rejects.toThrow(/split transaction/);
+
+      expect(accountsService.updateBalance).not.toHaveBeenCalled();
+      expect(transactionsRepository.update).not.toHaveBeenCalled();
+    });
+
+    it("refuses to void an investment cash leg on its own", async () => {
+      // The investment row owns the pair's VOID boundary
+      // (InvestmentTransactionsService.updateStatus is the propagation path);
+      // voiding the cash leg alone would leave the trade's shares counted
+      // while its cash claims not to have moved.
+      const transaction = stageTransaction({
+        status: TransactionStatus.CLEARED,
+        amount: -1509.99,
+      });
+      managerQuery.mockImplementation(async (sql: string) =>
+        String(sql).includes("investment_transactions")
+          ? [{ id: "inv-tx-1" }]
+          : [],
+      );
+
+      await expect(
+        service.updateStatus(
+          userId,
+          transaction.id,
+          TransactionStatus.VOID,
+          mockTriggerNetWorthRecalc,
+          mockFindOne,
+        ),
+      ).rejects.toThrow(/investment transaction/);
+
+      // Refusal precedes the write: nothing stored, no balance moved.
+      expect(transactionsRepository.update).not.toHaveBeenCalled();
+      expect(accountsService.updateBalance).not.toHaveBeenCalled();
+    });
+
+    it("allows reconciliation cycling on an investment cash leg (guard only fires on crossings)", async () => {
+      // The cash sleeve is reconciled against a bank statement independently
+      // of the brokerage, so CLEARED -> RECONCILED stays per-ledger even
+      // though the row IS an investment cash leg.
+      const transaction = stageTransaction({
+        status: TransactionStatus.CLEARED,
+        amount: -1509.99,
+      });
+      managerQuery.mockImplementation(async (sql: string) =>
+        String(sql).includes("investment_transactions")
+          ? [{ id: "inv-tx-1" }]
+          : [],
+      );
+      mockFindOne.mockResolvedValue(
+        makeTransaction({ status: TransactionStatus.RECONCILED }),
+      );
+
+      await service.updateStatus(
+        userId,
+        transaction.id,
+        TransactionStatus.RECONCILED,
+        mockTriggerNetWorthRecalc,
+        mockFindOne,
+      );
+
+      expect(transactionsRepository.update).toHaveBeenCalledWith(
+        "tx-1",
+        expect.objectContaining({ status: TransactionStatus.RECONCILED }),
+      );
+      expect(accountsService.updateBalance).not.toHaveBeenCalled();
+    });
+
+    it("propagates a VOID on a split parent to its children's counterparts (FR-002)", async () => {
+      const transaction = stageTransaction({
+        status: TransactionStatus.CLEARED,
+        amount: 100,
+        isSplit: true,
+      });
+      mockFindOne.mockResolvedValue(
+        makeTransaction({ status: TransactionStatus.VOID, isSplit: true }),
+      );
+
+      await service.updateStatus(
+        userId,
+        transaction.id,
+        TransactionStatus.VOID,
+        mockTriggerNetWorthRecalc,
+        mockFindOne,
+      );
+
+      expect(
+        splitService.applyParentStatusToTransferCounterparts,
+      ).toHaveBeenCalledWith(
+        expect.anything(),
+        transaction.id,
+        userId,
+        TransactionStatus.VOID,
+      );
     });
 
     it("does not change balance when staying VOID", async () => {

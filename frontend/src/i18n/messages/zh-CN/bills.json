@@ -43,7 +43,8 @@
     "summaryEnding": "结束",
     "summaryLowest": "最低",
     "summaryMinBalance": "最低余额",
-    "allAccounts": "所有账户"
+    "allAccounts": "所有账户",
+    "unavailableMissingRates": "此预测无法以 {displayCurrency} 显示：{currencies} 没有可用汇率，而预测余额依赖之前的每一天。请添加汇率，或选择单一货币的账户。"
   },
   "calendar": {
     "days": {

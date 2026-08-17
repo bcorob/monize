@@ -38,6 +38,10 @@
     "title": "Portfolio-Übersicht",
     "noData": "Keine Investitionsdaten verfügbar.",
     "totalPortfolioValue": "Gesamter Portfoliowert",
+    "knownPortfolioSubtotal": "Portfoliowert (unvollständig)",
+    "incompleteHeading": "Diese Zahlen sind unvollständig",
+    "incompletePrices": "Kein aktueller Kurs für {symbols}, daher sind die betreffenden Positionen in keiner Summe unten enthalten.",
+    "incompleteFx": "Kein Wechselkurs für {pairs}, daher sind die Positionen in diesen Währungen in keiner Summe unten enthalten.",
     "values": "Werte",
     "holdingsValue": "Depotwert",
     "holdingsValueTooltip": "Der aktuelle Marktwert aller gehaltenen Wertpapiere basierend auf den zuletzt verfügbaren Kursen.",
@@ -48,9 +52,9 @@
     "netInvested": "Nettoinvestition",
     "netInvestedTooltip": "Der Nettobetrag Ihres eigenen in Investitionskonten eingezahlten Geldes. Dies sind Gesamteinzahlungen abzüglich Abhebungen, ohne Investitionsgewinne, Dividenden oder Zinsen.",
     "costBasis": "Anschaffungskosten",
-    "costBasisTooltip": "Der Gesamtbetrag, den Sie ursprünglich für den Erwerb Ihrer Investitionen bezahlt haben, einschließlich Kaufpreisen und Buchungsgebühren. Wird zur Berechnung von Gewinnen und Verlusten verwendet.",
+    "costBasisTooltip": "Was Ihre aktuellen Bestände in der Anschaffung gekostet haben, aus Ihrer Buchungshistorie rekonstruiert: Kaufpreise plus die je Kauf berechnete Provision, jeweils zum Kurs des Handels umgerechnet, der sie bezahlt hat. In Ihrer Anzeigewährung. Grundlage der Gewinn- und Verlustberechnung.",
     "gainLoss": "Gewinn/Verlust",
-    "gainLossTooltip": "Nicht realisierter Gewinn oder Verlust auf Ihre aktuellen Bestände: Marktwert abzüglich Anschaffungskosten. Enthält keine realisierten Gewinne aus vergangenen Verkäufen oder erhaltenen Erträgen.",
+    "gainLossTooltip": "Nicht realisierter Gewinn oder Verlust Ihrer aktuellen Bestände: Marktwert zu heutigen Preisen minus die Anschaffungskosten oben. Realisierte Gewinne aus früheren Verkäufen sowie erhaltene Dividenden und Zinsen sind nicht enthalten.",
     "returns": "Renditen",
     "simpleReturn": "Einfache Rendite",
     "simpleReturnTooltip": "Gesamtprozentualer Gewinn oder Verlust auf Ihre Bestände, berechnet als (Marktwert − Anschaffungskosten) ÷ Anschaffungskosten. Berücksichtigt nicht den Zeitpunkt von Ein- oder Auszahlungen.",
@@ -59,26 +63,28 @@
     "twrTooltip": "Misst, wie gut Ihre Investitionen unabhängig von Ein- oder Auszahlungszeitpunkten abgeschnitten haben. Eliminiert den Einfluss des Cashflow-Timings, um die reine Investitionsperformance zu zeigen.",
     "cagr": "CAGR",
     "cagrTooltip": "Compound Annual Growth Rate. Ihre annualisierte Rendite basierend auf der Nettoinvestition gegenüber dem aktuellen Portfoliowert, als ob das Wachstum jedes Jahr gleichmäßig gewesen wäre.",
-    "notAvailable": "N/A"
+    "notAvailable": "N/A",
+    "unpricedHoldings": "Teilbewertung: {count, plural, one {# Bestand hat} other {# Bestände haben}} keinen aktuellen Preis ({symbols}); die Werte unten schließen {count, plural, one {ihn} other {sie}} aus."
   },
   "assetAllocation": {
     "title": "Vermögensaufteilung",
     "noData": "Keine Aufteilungsdaten verfügbar.",
+    "knownValueOnly": "Prozentsätze umfassen nur den bekannten Wert; einige Positionen konnten nicht bewertet werden.",
     "cash": "Barmittel",
     "untagged": "Ohne Tags",
     "noTagData": "Keine getaggten Positionen vorhanden. Vergib Tags an deine Wertpapiere, um die Aufteilung nach Tags zu sehen.",
+    "noKeyData": "Keine Positionen haben einen Wert für diesen Tag-Schlüssel. Kennzeichnen Sie Wertpapiere als key:value (z. B. country:usa), um diese Aufschlüsselung zu sehen.",
     "noCountryData": "Keine Länderaufteilungsdaten verfügbar.",
+    "keySelectorLabel": "Tag-Schlüssel zum Aggregieren",
     "otherCountries": "Andere Länder",
     "otherAssetClasses": "Sonstige Anlageklassen",
     "groupBy": {
       "security": "Nach Wertpapier",
       "tag": "Nach Tag",
-      "country": "Nach Land",
       "tagKey": "Nach Schlüssel",
+      "country": "Nach Land",
       "assetClass": "Nach Anlageklasse"
-    },
-    "noKeyData": "Keine Positionen haben einen Wert für diesen Tag-Schlüssel. Kennzeichnen Sie Wertpapiere als key:value (z. B. country:usa), um diese Aufschlüsselung zu sehen.",
-    "keySelectorLabel": "Tag-Schlüssel zum Aggregieren"
+    }
   },
   "holdingsList": {
     "title": "Depotbestand",
@@ -93,6 +99,7 @@
   "groupedHoldings": {
     "title": "Depotbestand nach Konto",
     "noHoldings": "Keine Positionen in Ihrem Portfolio.",
+    "accountIncomplete": "Unvollständig: Die Summen dieses Kontos lassen Positionen aus, die nicht in {currency} bewertet werden konnten.",
     "accountSummary": "{accounts} Konto{accountsPlural} mit {positions} Position{positionsPlural}",
     "positionsWithCash": "{count} Position{plural} + Barmittel",
     "positions": "{count} Position{plural}",
@@ -172,6 +179,12 @@
     "actionReinvest": "Wiederanlage",
     "actionAddShares": "Anteile hinzufügen",
     "actionRemoveShares": "Anteile entfernen",
+    "actionReinvestInterest": "Wiederanlage von Zinsen",
+    "actionReinvestCapitalGainShort": "Wiederanlage kurzfristiger Kapitalerträge",
+    "actionReinvestCapitalGainLong": "Wiederanlage langfristiger Kapitalerträge",
+    "actionCapitalGainShort": "Kurzfristiger Kapitalertrag",
+    "actionCapitalGainLong": "Langfristiger Kapitalertrag",
+    "actionRedeem": "CD/Anleihe einlösen",
     "allActions": "Alle Aktionen"
   },
   "transactionForm": {
@@ -186,6 +199,12 @@
     "actionReinvest": "Dividende wiederanlegen",
     "actionAddShares": "Anteile hinzufügen",
     "actionRemoveShares": "Anteile entfernen",
+    "actionReinvestInterest": "Wiederanlage von Zinsen",
+    "actionReinvestCapitalGainShort": "Wiederanlage kurzfristiger Kapitalerträge",
+    "actionReinvestCapitalGainLong": "Wiederanlage langfristiger Kapitalerträge",
+    "actionCapitalGainShort": "Kurzfristiger Kapitalertrag",
+    "actionCapitalGainLong": "Langfristiger Kapitalertrag",
+    "actionRedeem": "CD/Anleihe einlösen",
     "actionTransfer": "Überweisung",
     "brokerageAccount": "Brokeragekonto",
     "fromAccount": "Von Konto",
@@ -206,6 +225,7 @@
     "pricePerShare": "Preis pro Anteil ({currency})",
     "commissionFees": "Provision / Gebühren ({currency})",
     "description": "Beschreibung (optional)",
+    "statusLockedToParent": "Diese Buchung ist Teil einer aufgeteilten Transaktion. Ändern Sie stattdessen den Status der aufgeteilten Transaktion, damit sich beide Seiten gemeinsam ändern.",
     "descriptionPlaceholder": "Optionale Notizen",
     "splitRatio": "Teilungsverhältnis",
     "noSplitRatioWarning": "Für diese Buchung ist kein Teilungsverhältnis festgelegt. Geben Sie das Verhältnis so ein, wie es angekündigt wurde, bevor Sie speichern – Monize nimmt keines an.",
@@ -257,7 +277,10 @@
     "toastAvailableShares": "Nur {available} Anteile für die Übertragung verfügbar",
     "toastSplitRatioRequired": "Teilungsverhältnis muss größer als null sein",
     "toastPairedLegError": "Verknüpfte Überweisungsseite konnte nicht geladen werden; erneut öffnen und versuchen",
-    "toastSaveFailed": "Buchung konnte nicht gespeichert werden"
+    "toastSaveFailed": "Buchung konnte nicht gespeichert werden",
+    "exchangeRateUnresolved": "Kein Kurs für {from} zu {to} verfügbar. Geben Sie vor dem Speichern einen Kurs oder den umgerechneten Gesamtbetrag ein.",
+    "toastExchangeRateRequired": "Geben Sie einen Wechselkurs ein, bevor Sie einen währungsübergreifenden Handel speichern.",
+    "notAvailable": "Nicht verfügbar"
   },
   "newTransactionButton": {
     "label": "+ Neue Buchung",

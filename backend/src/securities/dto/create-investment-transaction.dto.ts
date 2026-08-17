@@ -1,5 +1,6 @@
 import { ApiProperty } from "@nestjs/swagger";
 import {
+  IsPositive,
   IsString,
   IsEnum,
   IsOptional,
@@ -10,6 +11,7 @@ import {
   MaxLength,
 } from "class-validator";
 import { InvestmentAction } from "../entities/investment-transaction.entity";
+import { TransactionStatus } from "../../transactions/entities/transaction.entity";
 import { SanitizeHtml } from "../../common/decorators/sanitize-html.decorator";
 
 export class CreateInvestmentTransactionDto {
@@ -70,7 +72,9 @@ export class CreateInvestmentTransactionDto {
   })
   @IsOptional()
   @IsNumber({ maxDecimalPlaces: 10 })
-  @Min(0)
+  // Strictly positive: zero is not a rate. `@Min(0)` let a request through that
+  // previewed as zero cash impact and committed at 1.0 (audit P5-005).
+  @IsPositive()
   exchangeRate?: number;
 
   @ApiProperty({
@@ -82,4 +86,14 @@ export class CreateInvestmentTransactionDto {
   @MaxLength(500)
   @SanitizeHtml()
   description?: string;
+
+  @ApiProperty({
+    enum: TransactionStatus,
+    required: false,
+    description:
+      "Reconciliation status. Defaults to UNRECONCILED. A VOID transaction moves no shares and no cash.",
+  })
+  @IsOptional()
+  @IsEnum(TransactionStatus)
+  status?: TransactionStatus;
 }

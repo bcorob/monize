@@ -595,6 +595,14 @@ export class SecuritiesService {
       security.currencyCode = updateSecurityDto.currencyCode;
     if (updateSecurityDto.description !== undefined)
       security.description = updateSecurityDto.description ?? null;
+    // Both addresses were normalised above ("" -> null, bare domain -> https).
+    // They must be copied onto the entity here like every other scalar: this
+    // block replaces Object.assign, so a field it omits is silently dropped and
+    // the edit never persists -- which is exactly what happened to these two.
+    if (updateSecurityDto.website !== undefined)
+      security.website = updateSecurityDto.website ?? null;
+    if (updateSecurityDto.irWebsite !== undefined)
+      security.irWebsite = updateSecurityDto.irWebsite ?? null;
     if (updateSecurityDto.isActive !== undefined)
       security.isActive = updateSecurityDto.isActive;
     if (updateSecurityDto.isFavourite !== undefined)
@@ -716,6 +724,8 @@ export class SecuritiesService {
     }
 
     // Check for any investment transactions referencing this security
+    // includes VOID rows: records read -- a VOID row still references the
+    // security and would be orphaned by the delete.
     const transactionsCount = await withScopedDb(this.dataSource, (m) =>
       m
         .getRepository(InvestmentTransaction)
@@ -838,6 +848,7 @@ export class SecuritiesService {
   }
 
   async getSecurityIdsWithTransactions(userId: string): Promise<string[]> {
+    // includes VOID rows: records read -- "referenced anywhere", not an effect.
     const results = await withScopedDb(this.dataSource, (m) =>
       m
         .getRepository(InvestmentTransaction)

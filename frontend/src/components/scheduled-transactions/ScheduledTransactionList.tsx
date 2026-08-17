@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, memo, type JSX } from 'react';
+import { baseInvestmentAction } from '@/lib/investment-actions';
 import { useTranslations } from 'next-intl';
 import { isPast, isToday, addDays, isBefore } from 'date-fns';
 import toast from 'react-hot-toast';
@@ -112,7 +113,7 @@ function scheduledOccurrenceAmount(
     const override = useOverride ? transaction.nextOverride : null;
     const commission = Number(transaction.investmentCommission ?? 0);
 
-    if (action === 'BUY' || action === 'SELL' || action === 'REINVEST') {
+    if (['BUY', 'SELL', 'REINVEST'].includes(baseInvestmentAction(action))) {
       const qty = Number(
         override?.investmentQuantity ?? transaction.investmentQuantity ?? 0,
       );
@@ -122,7 +123,7 @@ function scheduledOccurrenceAmount(
       if (qty <= 0 || price <= 0) return null;
       return computeInvestmentCashImpact(action, qty, price, commission);
     }
-    if (action === 'DIVIDEND' || action === 'INTEREST' || action === 'CAPITAL_GAIN') {
+    if (['DIVIDEND', 'INTEREST', 'CAPITAL_GAIN'].includes(baseInvestmentAction(action))) {
       const total =
         override?.investmentTotalAmount ?? transaction.investmentTotalAmount;
       return total != null ? Number(total) : null;

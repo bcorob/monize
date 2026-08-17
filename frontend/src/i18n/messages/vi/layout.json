@@ -73,7 +73,13 @@
       "TRANSFER_OUT": "Chuyển ra",
       "REINVEST": "Tái đầu tư",
       "ADD_SHARES": "Thêm cổ phiếu",
-      "REMOVE_SHARES": "Xóa cổ phiếu"
+      "REMOVE_SHARES": "Xóa cổ phiếu",
+      "REINVEST_INTEREST": "Tái đầu tư lãi",
+      "REINVEST_CAPITAL_GAIN_SHORT": "Tái đầu tư lãi vốn ngắn hạn",
+      "REINVEST_CAPITAL_GAIN_LONG": "Tái đầu tư lãi vốn dài hạn",
+      "CAPITAL_GAIN_SHORT": "Lãi vốn ngắn hạn",
+      "CAPITAL_GAIN_LONG": "Lãi vốn dài hạn",
+      "REDEEM": "Đáo hạn CD/trái phiếu"
     },
     "descriptions": {
       "createdAccount": "Đã tạo tài khoản \"{name}\"",

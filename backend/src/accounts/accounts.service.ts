@@ -255,6 +255,7 @@ export class AccountsService {
             .groupBy("t.accountId")
             .getRawMany(),
           m
+            // includes VOID rows: records read -- an activity count, not an effect.
             .getRepository(InvestmentTransaction)
             .createQueryBuilder("it")
             .select("it.accountId", "accountId")
@@ -633,6 +634,8 @@ export class AccountsService {
               m.count(Transaction, {
                 where: { accountId: id },
               }),
+              // includes VOID rows: records read -- a VOID row still stores
+              // figures denominated in the old currency.
               m.count(InvestmentTransaction, {
                 where: { accountId: id },
               }),
@@ -1418,6 +1421,8 @@ export class AccountsService {
         where: { accountId },
       });
 
+      // includes VOID rows: records read -- a VOID row is still a row the
+      // delete would destroy.
       const investmentTransactionCount = await m
         .getRepository(InvestmentTransaction)
         .count({
@@ -1459,6 +1464,8 @@ export class AccountsService {
     const investmentTransactionCount = await withScopedDb(
       this.dataSource,
       (m) =>
+        // includes VOID rows: records read -- a VOID row is still a row the
+        // delete would destroy.
         m.getRepository(InvestmentTransaction).count({
           where: { accountId: id },
         }),

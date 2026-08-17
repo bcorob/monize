@@ -228,5 +228,10 @@
     "nothingToRedo": "Нечего повторять",
     "cannotRedo": "Невозможно повторить это действие",
     "redoFailed": "Не удалось повторить"
+  },
+  "partialTotal": {
+    "srSuffix": "(частичный итог)",
+    "explanation": "Частичный итог: не удалось включить {count, plural, one {# сумму} few {# суммы} many {# сумм} other {# суммы}}, поэтому показанное значение их не учитывает. Нет курса к {displayCurrency} для {currencies}.",
+    "explanationExcluded": "Частичный итог: не удалось вычислить {count, plural, one {# сумму} few {# суммы} many {# сумм} other {# суммы}}, поэтому показанное значение их не включает."
   }
 }

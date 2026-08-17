@@ -159,7 +159,7 @@ export class StepUpAuthService {
           message: "This action cannot be confirmed for your account type.",
         });
       }
-      this.oidcReauth.consume(userId, purpose, args.oidcReauthToken);
+      await this.oidcReauth.consume(userId, purpose, args.oidcReauthToken);
       verified = true;
     } else if (user.passwordHash) {
       if (!args.password) {

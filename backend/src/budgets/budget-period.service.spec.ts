@@ -368,6 +368,67 @@ describe("BudgetPeriodService", () => {
         BadRequestException,
       );
     });
+
+    it("freezes transfer actuals from whole-row transfers AND split-line transfers", async () => {
+      // A transfer can arrive as one line of a split parent (audit P5-007). A
+      // closed period is never recomputed, so leaving that shape out here made
+      // the materialized month disagree with the live budget page for the same
+      // dates (review #1131).
+      const transferCategory: BudgetCategory = {
+        ...mockBudgetCategory,
+        id: "bc-transfer",
+        categoryId: null,
+        isTransfer: true,
+        transferAccountId: "acct-savings",
+      };
+      budgetsService.findOne.mockResolvedValue({
+        ...mockBudget,
+        categories: [transferCategory],
+      });
+
+      const openPeriod = {
+        ...mockPeriod,
+        status: PeriodStatus.OPEN,
+        periodCategories: [
+          {
+            ...mockPeriodCategory,
+            budgetCategoryId: "bc-transfer",
+            budgetCategory: transferCategory,
+          },
+        ],
+      };
+      periodsRepository.findOne.mockResolvedValue(openPeriod);
+      periodsRepository.save.mockImplementation((data) => data);
+
+      transactionsRepository.createQueryBuilder.mockReturnValue(
+        createMockQueryBuilder({
+          getRawMany: jest
+            .fn()
+            .mockResolvedValue([
+              { destinationAccountId: "acct-savings", total: "100" },
+            ]),
+        }),
+      );
+      splitsRepository.createQueryBuilder.mockReturnValue(
+        createMockQueryBuilder({
+          getRawMany: jest
+            .fn()
+            .mockResolvedValue([
+              { destinationAccountId: "acct-savings", total: "50" },
+            ]),
+        }),
+      );
+
+      await service.closePeriod("user-1", "budget-1");
+
+      expect(scopedManager.save).toHaveBeenCalledWith(
+        BudgetPeriodCategory,
+        expect.objectContaining({
+          budgetCategoryId: "bc-transfer",
+          actualAmount: 150,
+        }),
+      );
+    });
   });
 
   describe("getOrCreateCurrentPeriod", () => {

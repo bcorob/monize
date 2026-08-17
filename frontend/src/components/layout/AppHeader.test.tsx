@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@/test/render';
 import { AppHeader } from './AppHeader';
+import toast from 'react-hot-toast';
 
 // Mock next/image
 vi.mock('next/image', () => ({
@@ -71,6 +72,7 @@ vi.mock('@/components/budgets/BudgetAlertBadge', () => ({
 describe('AppHeader', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    window.sessionStorage.clear();
     mockPathname = '/dashboard';
     mockUser = {
       id: 'test-user-id',
@@ -134,16 +136,36 @@ describe('AppHeader', () => {
     });
   });
 
-  it('still logs out and redirects when authApi.logout fails', async () => {
+  it('clears the incomplete-logout flag on a confirmed logout', async () => {
+    window.sessionStorage.setItem('monize:logout-incomplete', '1');
+    render(<AppHeader />);
+    fireEvent.click(screen.getByRole('button', { name: /logout/i }));
+
+    await waitFor(() => {
+      expect(mockLogout).toHaveBeenCalled();
+    });
+    expect(window.sessionStorage.getItem('monize:logout-incomplete')).toBeNull();
+    expect(toast.success).toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  // Only the server can clear the HttpOnly refresh cookie, so a failed request
+  // leaves a session this client cannot end. Local state still has to go, but
+  // the UI used to show the ordinary success toast over it.
+  it('does not claim success when authApi.logout fails', async () => {
     mockApiLogout.mockRejectedValueOnce(new Error('Network error'));
     render(<AppHeader />);
-    const logoutButton = screen.getByRole('button', { name: /logout/i });
-    fireEvent.click(logoutButton);
+    fireEvent.click(screen.getByRole('button', { name: /logout/i }));
 
     await waitFor(() => {
       expect(mockLogout).toHaveBeenCalled();
       expect(mockPush).toHaveBeenCalledWith('/login');
     });
+
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalled();
+    // and the login screen is told to keep warning until a retry succeeds
+    expect(window.sessionStorage.getItem('monize:logout-incomplete')).toBe('1');
   });
 
   it('renders the Tools dropdown button', () => {

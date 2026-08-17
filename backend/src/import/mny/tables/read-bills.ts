@@ -15,7 +15,7 @@ const BILL_SPEC: RowSpec<MnyBill> = {
   handle: { from: "hbill", as: toHandle },
   status: { from: "st", as: (value) => toInteger(value, -1) },
   frequency: { from: "frq", as: (value) => toInteger(value, -1) },
-  interval: { from: "cFrqInst", as: (value) => toNumber(value, 1) },
+  occurrencesPerUnit: { from: "cFrqInst", as: (value) => toNumber(value, 1) },
   nextDue: { from: "dt", as: toDate },
   templateTransaction: { from: "lHtrn", as: toHandle },
   series: { from: "hbillHead", as: toHandle },

@@ -43,7 +43,13 @@ export interface ChartMarker {
 }
 
 interface BalanceHistoryChartProps {
-  data: Array<{ date: string; balance: number }>;
+  /**
+   * The series. `balance` is `null` for a day whose figure is not known -- a
+   * multi-currency series missing a rate. The line breaks at those points
+   * (`connectNulls={false}`) rather than drawing a straight segment through the
+   * gap, which would be indistinguishable from measured data.
+   */
+  data: Array<{ date: string; balance: number | null }>;
   isLoading: boolean;
   currencyCode?: string;
   /** Subject to append to the download filename, e.g. "Checking" or "AAPL". */
@@ -142,7 +148,7 @@ interface ChartPoint {
    */
   t: number;
   label: string;
-  balance: number;
+  balance: number | null;
 }
 
 /**
@@ -205,10 +211,10 @@ function BalanceTooltip({
           className={`text-lg font-semibold ${
             neutral
               ? 'text-gray-900 dark:text-gray-100'
-              : gainLossColor(data.balance)
+              : gainLossColor(data.balance ?? 0)
           }`}
         >
-          {formatCurrency(data.balance)}
+          {data.balance === null ? '\u2014' : formatCurrency(data.balance)}
         </p>
         {markersByDate?.get(data.date)?.map((marker, i) => (
           <p
@@ -338,7 +344,12 @@ export function BalanceHistoryChart({
       t: parseLocalDate(d.date).getTime(),
       label: formatChartDate(parseLocalDate(d.date), 'MMM d, yyyy'),
       // Money rounds to cents; a price keeps what it was quoted at.
-      balance: precise ? d.balance : Math.round(d.balance * 100) / 100,
+      balance:
+        d.balance === null
+          ? null
+          : precise
+            ? d.balance
+            : Math.round(d.balance * 100) / 100,
     }));
 
     // A month tick per month reads well over ~2 years or less; beyond that the
@@ -428,7 +439,12 @@ export function BalanceHistoryChart({
   }, [chartData]);
 
   const areaGradient = useMemo(
-    () => computeBalanceGradient(chartData.map((point) => point.balance)),
+    () =>
+      computeBalanceGradient(
+        chartData
+          .map((point) => point.balance)
+          .filter((balance): balance is number => balance !== null),
+      ),
     [chartData],
   );
 
@@ -439,7 +455,13 @@ export function BalanceHistoryChart({
     () =>
       hideExtremeFlags
         ? { show: false as const, minIndex: 0, maxIndex: 0 }
-        : computeMinMaxFlagIndices(chartData.map((point) => point.balance)),
+        : // Extremes are only meaningful over the points that have a value; a
+          // gap is neither a high nor a low.
+          computeMinMaxFlagIndices(
+            chartData.map((point) =>
+              point.balance === null ? Number.NaN : point.balance,
+            ),
+          ),
     [chartData, hideExtremeFlags],
   );
 
@@ -603,7 +625,7 @@ export function BalanceHistoryChart({
               <ReferenceDot
                 key={`${point.date}-${i}`}
                 x={point.t}
-                y={point.balance}
+                y={point.balance ?? undefined}
                 r={4}
                 fill={
                   marker.direction === 'in'
@@ -622,6 +644,9 @@ export function BalanceHistoryChart({
             <Area
               type="monotone"
               dataKey="balance"
+              // A day with no known balance leaves a gap; joining across it
+              // would draw a figure nobody measured.
+              connectNulls={false}
               stroke={chartColors.primary}
               strokeWidth={2}
               fillOpacity={1}

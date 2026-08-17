@@ -646,3 +646,100 @@ describe("an account picker labels its options through the shared hook", () => {
     ).toEqual([]);
   });
 });
+
+describe("a CSV file is written by the shared exporter", () => {
+  /** The one file allowed to build a CSV -- it *is* the writer. */
+  const WRITER = "/src/lib/csv-export.ts";
+  /** A `text/csv` Blob: the last step of writing one by hand. */
+  const CSV_BLOB = /new Blob\([\s\S]{0,200}?text\/csv/;
+  /** RFC 4180 quoting, doubled quotes and all. */
+  const CSV_QUOTING = /replace\(\/"\/g,\s*['"]""['"]\)/;
+
+  it("builds no CSV outside the shared writer", () => {
+    const offenders = productionSources()
+      .filter(([path]) => path !== WRITER)
+      .filter(
+        ([, content]) => CSV_BLOB.test(content) || CSV_QUOTING.test(content),
+      )
+      .map(([path]) => path);
+
+    // A second writer is a second set of answers to the questions this one
+    // already answers: the BOM, CRLF line endings, quoting, and which values a
+    // spreadsheet would evaluate rather than display. MonteCarloReport had one,
+    // and it applied no formula-injection guard at all -- while the shared
+    // writer applied it to every negative amount (issue #1134). Neither file
+    // looked wrong on its own, which is why this is a scan.
+    expect(
+      offenders,
+      "Write CSV through exportToCsv/exportCsvSections in @/lib/csv-export.",
+    ).toEqual([]);
+  });
+
+  it("still finds the writer, so the rule cannot pass by accident", () => {
+    const writer = sources[WRITER];
+    expect(writer, `${WRITER} not found -- update WRITER in this test`).toBeTruthy();
+    expect(CSV_BLOB.test(writer)).toBe(true);
+    expect(CSV_QUOTING.test(writer)).toBe(true);
+  });
+});
+
+describe("a transfer's direction is decided in one place", () => {
+  /** The one file allowed to turn an amount's sign into a direction. */
+  const HELPER = "/src/lib/transfer-label.ts";
+  const DIRECTION_TERNARY = /['"]to['"]\s*:\s*['"]from['"]|['"]from['"]\s*:\s*['"]to['"]/;
+
+  it("derives to/from from an amount nowhere else", () => {
+    const offenders = productionSources()
+      .filter(([path]) => path !== HELPER)
+      .filter(([, content]) => DIRECTION_TERNARY.test(content))
+      .map(([path]) => path);
+
+    // Money leaving an account went *to* the counterpart and money arriving
+    // came *from* it, so both legs of one transfer read differently and each
+    // line -- a split line included -- is asked with its own amount. That rule
+    // was written out four times in TransactionRow and omitted from both CSV
+    // exports, which is how the register showed a counterpart the export did
+    // not mention. Call transferDirection().
+    expect(
+      offenders,
+      "Decide a transfer's direction with transferDirection() from @/lib/transfer-label.",
+    ).toEqual([]);
+  });
+
+  it("still finds the helper, so the rule cannot pass by accident", () => {
+    const helper = sources[HELPER];
+    expect(helper, `${HELPER} not found -- update HELPER in this test`).toBeTruthy();
+    expect(DIRECTION_TERNARY.test(helper)).toBe(true);
+  });
+});
+
+describe("a transaction status cell is the shared StatusCellButton", () => {
+  /** The one file allowed to render the dense status letters -- it IS the cell. */
+  const WRAPPER = "/src/components/transactions/StatusCellButton.tsx";
+  // The dense-label catalog keys fingerprint a hand-rolled status cell: any
+  // second copy has to read them to draw the C/R/V/pending letters.
+  const DENSE_LABEL_KEY =
+    /list\.status\.(?:reconciledDense|clearedDense|voidDense|pendingDense)/;
+
+  it("reads the dense status labels only inside the shared cell", () => {
+    const offenders = productionSources()
+      .filter(([path]) => path !== WRAPPER)
+      .filter(([, content]) => DENSE_LABEL_KEY.test(content))
+      .map(([path]) => path);
+
+    // The cash register and the investment register share one status cell so
+    // the two cannot drift on colours, labels, or what a click means. A second
+    // inline copy is the mistake this rule was written after: the investment
+    // register would have grown its own near-copy of TransactionRow's cell.
+    expect(offenders).toEqual([]);
+  });
+
+  it("still finds the shared cell, so the rule cannot pass by accident", () => {
+    const wrapper = sources[WRAPPER];
+    expect(
+      wrapper,
+      `${WRAPPER} not found -- update WRAPPER in this test`,
+    ).toBeTruthy();
+    expect(DENSE_LABEL_KEY.test(wrapper)).toBe(true);
+  });
+});

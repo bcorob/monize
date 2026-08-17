@@ -82,7 +82,13 @@ export function SecurityTypeAllocationWidget({
     const typeMap = new Map<string, number>();
     aggregated.forEach((h) => {
       const type = h.securityType || 'OTHER';
-      const converted = convertToDefault(h.marketValue ?? 0, h.currencyCode);
+      // An unpriced holding has no market value and a missing rate has no
+      // conversion. Either way this holding cannot be placed on the chart --
+      // `?? 0` used to fold it in as a zero-size slice of a smaller total, which
+      // silently changed every other slice's percentage.
+      if (h.marketValue === null || h.marketValue === undefined) return;
+      const converted = convertToDefault(h.marketValue, h.currencyCode);
+      if (converted === null) return;
       typeMap.set(type, (typeMap.get(type) ?? 0) + converted);
     });
 

@@ -99,7 +99,9 @@ export class CreateTransactionSplitDto {
 
   @ApiProperty({
     description:
-      "Amount for this split (must be same sign as parent transaction)",
+      "Amount for this split. Signed: a line may oppose the parent's sign " +
+      "(a withholding under a net paycheck, a refund under a charge), and " +
+      "the signed sum of all lines must equal the parent amount.",
   })
   @IsNumber({ maxDecimalPlaces: 4 })
   @Min(-999999999999)

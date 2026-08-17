@@ -519,6 +519,7 @@
     "billTemplateMissing": "[XX-{count, plural, one {# scheduled bill} other {# scheduled bills}} had no template transaction in the file and were skipped.-XX]",
     "unusableBill": "[XX-{count, plural, one {# scheduled bill} other {# scheduled bills}} had no account, no usable date or an unrecognized recurrence, and were skipped.-XX]",
     "billFrequencyApproximated": "[XX-{count, plural, one {# scheduled bill uses} other {# scheduled bills use}} a repeat interval Monize cannot express exactly, so the closest shorter one was used.-XX]",
+    "loanInterestCategoryUnclear": "[XX-{count, plural, one {# loan payment} other {# loan payments}} included multiple non-principal categories, so the loan's interest category was left unset. Check whether the payment includes escrow and set the interest category after import.-XX]",
     "showTransactions": "[XX-Show {count, plural, one {the # transaction} other {the # transactions}}-XX]",
     "hideTransactions": "[XX-Hide transactions-XX]",
     "reviewInMoney": "[XX-Open these in Microsoft Money to check or correct them, then export and import again.-XX]",

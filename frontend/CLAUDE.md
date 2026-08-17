@@ -42,10 +42,10 @@ Feature API modules (one per feature, typed axios wrappers) live alongside `api.
 
 ### A write that moves money calls `invalidateBalanceCaches()`
 
-`accountsApi.getAll` and `investmentsApi.getPortfolioSummary` are cached in
-`apiCache.ts` for two minutes, and the backend computes balances live from
-transactions -- so a write that does not drop those entries leaves the Accounts
-page showing the pre-write number. Navigating away and back does not fix it:
+`accountsApi.getAll`, `investmentsApi.getPortfolioSummary` and the budget
+progress views are cached in `apiCache.ts`, and the backend computes all three
+live from transaction rows -- so a write that does not drop those entries leaves
+the Accounts page showing the pre-write number. Navigating away and back does not fix it:
 the page refetches on mount and the refetch is served from the same cache, so
 only a browser reload clears it. Call `invalidateBalanceCaches()` (both
 prefixes at once) after any write that adds, removes, re-dates, re-prices or
@@ -56,6 +56,24 @@ named), an investment trade hitting its INVESTMENT_CASH account, and a QIF/OFX/
 CSV/MNY import all write transaction rows from their own modules. That omission
 on `scheduledTransactionsApi.post` is the bug this rule came from;
 `src/lib/balance-cache.guard.test.ts` now scans for it.
+
+**The prefix list inside the helper is the other half of the rule.** It covers
+`accounts:`, `investments:` and `budgets:` -- three views of the same rows. A
+categorised expense moves a budget's progress exactly as it moves the account's
+balance, and `budgets:dashboard` (30s) and `budgets:cat-status:*` (60s) used to
+survive the write, so the toast said saved while the remaining-funds figure
+beside it was pre-write. Adding a cached family that reads transaction rows means
+adding its prefix in `invalidateBalanceCaches` in the same change;
+`apiCache.test.ts` pins the set, both what it drops and what it leaves alone.
+
+Pinning the set is not enough on its own, because that is what was green while
+`budgets:` was missing from it: the pinned set matched the helper, and neither
+knew about the new family. So `cache-prefix-classification.guard.test.ts` scans
+`src/` for every prefix any cache call uses and requires each one to be listed as
+transaction-derived (and therefore dropped) or as reference data (and therefore
+kept). A prefix in neither list fails, which forces the decision at the moment it
+is cheap to make. The list also fails when it names a prefix nothing uses any
+more, so it cannot drift into fiction.
 
 Where the write can touch anything -- undo/redo, an AI assistant action, a
 backup restore -- use `clearAllCache()` instead; no prefix is narrow enough to
@@ -202,6 +220,79 @@ bills-and-deposits sum, or the same money is reported twice
 not a measurement, so it is never given a `+`/`-` sign or a red/green treatment
 that would read as a real amount.
 
+### A stored occurrence price is an instruction; the market close is a suggestion
+
+An investment price *or quantity* the user saved -- on a scheduled occurrence's
+override, or carried from the schedule -- is a decision, not a stale default, so
+live market data may be *offered* beside it but never *written over* it. Both
+dialogs that fill a price obey this. `OverrideEditorDialog` fills the field from
+the latest close only when the occurrence has no price of its own and the user
+has not typed a total (`hasStoredPrice` false, `userEditedTotal` false, field
+empty), otherwise exposing an explicit "use latest close" action;
+`PostTransactionDialog` skips its market-price refresh when the prefill came from
+a per-occurrence override (`investmentFromStoredOverride`, keyed off a stored
+price *or quantity* -- an override that set only the shares must not have them
+rescaled) or when the user has edited any field, keeping the base-schedule DCA
+refresh only for a price that is a creation-time snapshot.
+
+The two guards differ **because their fill precedence differs**, and the guard
+protects whichever field that precedence would clobber. The override editor's
+fill is quantity-first (it keeps the shares and recomputes the total), so it must
+not run once the user has typed a **total** -- but a quantity-only edit is safe
+and is left to auto-fill. The post dialog's refresh is total-first (it preserves
+the scheduled total and rescales the shares), so it must not run once the user
+has typed anything, because a typed **quantity** is what its precedence would
+overwrite. The fetch being asynchronous is what makes this matter: it can resolve
+*after* the dialog opens, and a value typed in the meantime (price still blank,
+so an "is the field empty" check alone lets the fill through) is the user's own
+instruction. The defect all of this prevents is a silent re-price: reopening an
+override to change only its date, posting an occurrence whose price the user set,
+or having a value you just typed re-derived under you, must not move money to
+today's close. A NaN or zero close is not a usable price -- normalize it to null
+where `marketPrice` is set (through `usableClose`), so the fill, the placeholder
+and the latch all treat it as "no price" rather than a value.
+
+`marketPrice == null` is three states at once -- loading, a failed lookup, and a
+genuinely empty history -- so it must not gate the "no price history, enter
+manually" hint: a failed lookup is not an empty dataset, and flashing the hint
+mid-fetch is a lie the resolve then retracts. Each surface carries a
+`priceHistoryEmpty` flag set true *only* when a request completes with no usable
+close, reset false while in flight and left false on rejection; the hint reads
+that flag, never the bare null.
+
+There are three surfaces that fill these fields -- the two dialogs and
+`ScheduledTransactionForm` -- and all three do the price/quantity/total
+arithmetic through `lib/investmentFold.ts` (`totalFromQuantity` /
+`quantityFromTotal` -- one rounding scale and one signed commission fold, so the
+surfaces cannot drift on the math, only on which conversion they run). Never
+hand-roll the fold inline; `lib/investmentFold.guard.test.ts` scans for the 8dp
+share-precision rounding that fingerprints a hand-rolled `quantityFromTotal` and
+fails for any occurrence outside the helper. State a stored price's provenance
+truthfully (a price on this override reads "saved on this occurrence", one
+inherited from the schedule reads "from the schedule" -- the two are different
+keys, not one); and format the "latest close" copy through
+`useNumberFormat().formatPrice` (a price is not money: up to six decimals,
+trailing zeros trimmed by Intl), never a hand-rolled `toFixed`/trailing-zero
+regex, which leaves a dangling separator in comma-decimal locales. Compose any
+"Label: value" line (the transfer and category banners) in the catalog as one
+string a translator can reorder, never as `{t('label')}: {value}` fragments in
+JSX.
+
+`ScheduledTransactionForm` reconciles the same way the dialogs do, and two more
+invariants live here because its `Total Value` is a shown figure that submit
+recomputes from `quantity * price (+/-) commission`: **the displayed total and
+the persisted amount must never disagree.** So every field that moves the
+economic total -- price, quantity, **commission, and the BUY/SELL action whose
+sign flips the fee** -- recomputes the shown total through the same fold, and the
+async close arriving mid-entry preserves an already-typed total and re-derives
+the quantity from it (total-first) rather than only writing the price. And **a
+market price belongs to one security**: changing the selected security clears the
+auto-filled price (and the seen-market-price latch) so the new security's own
+close fills the field, instead of the previous security's quote lingering because
+the field is non-empty. A NaN or zero close is not a usable price -- gate the
+"Latest:" placeholder on a positive `roundedMarketPrice`, never a bare
+`marketPrice != null`, so it never renders as "Latest: NaN".
+
 ### A long list -- page it, or bound it and scroll with `scrollbar-slim`
 
 Two patterns, depending on where it lives:
@@ -268,6 +359,60 @@ The same applies to anything else that is punctuation rather than words: compose
 it in the catalog, not in JSX. `"{units} ({share})"` is one string a translator
 can reorder; `{value}{' ('}{share}{')'}` in a component is three fragments they
 cannot reach.
+
+### A transfer's direction comes from the row's own amount -- `transferDirection`
+
+Money leaving an account went **to** the counterpart; money arriving came
+**from** it. So the two legs of one transfer are labelled differently and both
+are right, and a split line pointing at another account is asked with *its* own
+amount rather than the parent's. `transferDirection` (`lib/transfer-label.ts`)
+is the only place that decision is made, and `transferCsvLabel` is the export's
+rendering of it (`Transfer To Savings`); the register renders the same decision
+as its arrow chip.
+
+The rule had been written out four times inside `TransactionRow` and was missing
+from both CSV exports entirely -- the Transactions export left the Category cell
+empty for a transfer, and a transfer split line was exported as `Uncategorized`,
+which is not merely blank but wrong. A `ui-conventions.test.ts` guard fails on a
+new `? 'to' : 'from'` outside the helper.
+
+Coerce before comparing: `'-67.9900' < 0` is false, and a decimal string is what
+the API sends, so a hand-rolled comparison labels every debit backwards.
+
+### A CSV file is written by `exportToCsv`, and a number in it is a number
+
+`lib/csv-export.ts` is the only CSV writer: it owns the BOM, the CRLF line
+endings, the RFC 4180 quoting, the formula-injection guard and the download.
+Multi-table exports take `exportCsvSections` rather than assembling their own
+lines -- `MonteCarloReport` had a hand-rolled copy that quoted every field and
+guarded none of them, so the report with the *most* user-supplied text in it was
+the one export a formula could ride out of. `ui-conventions.test.ts` fails the
+build on a second `text/csv` Blob or a second `replace(/"/g, '""')`.
+
+The guard cannot key off the first character, because `-` opens both
+`-1+cmd|'/c calc'!A0` and every debit in the ledger. Deciding from that
+character alone is issue #1134: Excel showed `-67.99` as the text ` -67.99` and
+refused to total the column, on 59 of 64 rows. So it asks whether the value *is*
+a number -- an optional sign then only digits, separators, whitespace and
+currency symbols, with an optional `%` -- which is provably inert as a formula
+and covers a formatted `-$1,652.73` as well as a bare `-67.99`.
+
+**The reason it reached the user is worth more than the fix.** A prior pass had
+already exempted negative numbers, with a passing test to prove it -- but it
+tested `-100`, the JS number, and the value the API actually sends is the
+*string* `"-67.9900"`. `decimal(20,4)` columns cross the wire as strings while
+`types/transaction.ts` declares `amount: number`, so the fix and its test agreed
+with each other and neither described the running app. Two consequences:
+
+- **A money value off the API is a string until you make it one.** `Number(...)`
+  it at the boundary of anything that branches on its type -- an export, a
+  `typeof` check, a `.toFixed`. The transactions export now does; the split
+  branch beside it always did, which is precisely why split rows were the only
+  ones the reporter found intact.
+- **A test for a type-dependent branch uses the shape the API sends**, not the
+  shape the interface claims. `page.test.tsx` exports a fixture whose `amount`
+  is `'-67.9900'` for this reason. Where a fixture disagrees with the wire, the
+  suite is checking the type declaration rather than the code.
 
 ### Asynchronous data carries the request that produced it
 
@@ -504,6 +649,37 @@ hundred pixels are where that gets thrown away:
 
 Whoever adds the `null` on the server owns how it looks. A component test
 asserting the gap, the marker or the absent fill is what keeps it.
+
+**A missing exchange rate is the same class, and it used to be the worst case
+of it.** `useExchangeRates().convert` / `convertToDefault` /
+`convertWithRateMap` return `number | null`; they previously returned the amount
+*unconverted*, so a 100.00 USD balance with no USD→EUR rate was formatted as
+"100.00 EUR" and summed into Assets, Liabilities and Net Worth. Silent,
+unbounded, one instance per unconverted account, and able to reverse a trend.
+
+Pick the treatment from what the figure is:
+
+- **An aggregate** uses `sumConverted` / `combineTotals`
+  (`lib/currency-total.ts`), which keep the subtotal and the missing currencies
+  together, and renders through `PartialTotal`. Incompleteness is a union: net
+  worth built from a complete asset total and a partial liability total is
+  partial.
+- **A single displayed value** shows an unknown marker, or nothing. Never the
+  unconverted number beside the target currency's symbol -- "≈" does not make a
+  euro figure an approximate zloty one.
+- **A chart series** uses `null` and `connectNulls={false}`. A bar, slice or
+  gauge cannot say "unknown", so an unconvertible component leaves the chart
+  rather than appearing at an arbitrary size.
+- **A cumulative series** (a running balance, a forecast) is withheld whole:
+  one missing rate invalidates every point after it, so `buildForecast` returns
+  no points and names the currencies. A short series there is not a partial
+  answer, it is a wrong one.
+- **A summary over a series** (`computeBalanceSummary`) refuses when any point
+  is unknown. "Minimum" and "goes negative" are claims about all of it.
+
+Same currency is 1:1 *by definition* and stays a known conversion -- keep it
+distinguishable from the missing case, and keep a real zero rendering as a
+number.
 
 ## `accountsApi.getAll()` is not "the user's accounts"
 

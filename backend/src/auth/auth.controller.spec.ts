@@ -2363,9 +2363,28 @@ describe("AuthController", () => {
           },
           {
             provide: DataSource,
-            useValue: createScopedDbMocks([
-              [UserPreference, { findOne: jest.fn().mockResolvedValue(null) }],
-            ]).dataSource,
+            useValue: (() => {
+              const { manager, dataSource } = createScopedDbMocks([
+                [
+                  UserPreference,
+                  { findOne: jest.fn().mockResolvedValue(null) },
+                ],
+              ]);
+              // Stand-in for the oidc_step_up_claims ledger: the INSERT
+              // returns the row it created, so consume() can spend a jti.
+              const claimed = new Set<string>();
+              manager.query.mockImplementation(
+                async (sql: string, params?: unknown[]) => {
+                  if (!sql.includes("oidc_step_up_claims")) return [];
+                  if (sql.startsWith("DELETE")) return [];
+                  const jti = String(params?.[0]);
+                  if (claimed.has(jti)) return [];
+                  claimed.add(jti);
+                  return [{ jti }];
+                },
+              );
+              return dataSource;
+            })(),
           },
         ],
       }).compile();
@@ -2417,7 +2436,7 @@ describe("AuthController", () => {
       expect(cookie[2]).toMatchObject({ httpOnly: true });
       expect(
         reauth.readPendingMarker(cookie[1] as string, REAUTH_USER, "state-1"),
-      ).toBe("restore-backup");
+      ).toMatchObject({ purpose: "restore-backup" });
     });
 
     it("refuses an unknown purpose", async () => {
@@ -2468,7 +2487,7 @@ describe("AuthController", () => {
       );
       expect(
         reauth.readPendingMarker(cookie[1] as string, delegate, "state-1"),
-      ).toBe("delete-data");
+      ).toMatchObject({ purpose: "delete-data" });
     });
 
     it("mints the artifact in the callback and returns it in the fragment", async () => {
@@ -2476,6 +2495,9 @@ describe("AuthController", () => {
       oidc.handleCallback.mockResolvedValue({
         access_token: "at",
         sub: "sub-1",
+        // The provider asserts the user just authenticated. Without this the
+        // callback refuses to mint (see the not-fresh cases below).
+        auth_time: Math.floor(Date.now() / 1000),
       });
       authService.findOrCreateOidcUser.mockResolvedValue({
         user: { id: REAUTH_USER },
@@ -2508,10 +2530,72 @@ describe("AuthController", () => {
       // In the fragment: a fragment is never sent to a server, so it stays out
       // of proxy and access logs.
       const artifact = decodeURIComponent(target.split("#reauth_token=")[1]);
-      expect(() =>
+      await expect(
         reauth.consume(REAUTH_USER, "delete-account", artifact),
-      ).not.toThrow();
+      ).resolves.toBeUndefined();
     });
+
+    it.each([
+      [
+        "a reused SSO session (auth_time before the window)",
+        Math.floor(Date.now() / 1000) - 3600,
+      ],
+      [
+        // The anchoring fix: this auth_time is only two minutes old -- inside
+        // any now-relative window -- but it predates the flow that just started,
+        // so a provider replaying a warm session's earlier login is refused.
+        "a warm session whose auth_time predates the flow",
+        Math.floor(Date.now() / 1000) - 120,
+      ],
+      ["a provider that omits auth_time", undefined],
+    ])(
+      "mints nothing when the round trip did not freshly authenticate: %s",
+      async (_label, authTime) => {
+        // prompt=login and max_age=0 are requests, not properties: a provider
+        // holding a live SSO session can answer without prompting anyone.
+        // auth_time reports what actually happened, so the callback checks it
+        // before the proof exists -- and an absent claim is "not answered",
+        // not "fine".
+        const { controller, reauth, oidc } = await build();
+        oidc.handleCallback.mockResolvedValue({
+          access_token: "at",
+          sub: "sub-1",
+          ...(authTime === undefined ? {} : { auth_time: authTime }),
+        });
+        authService.findOrCreateOidcUser.mockResolvedValue({
+          user: { id: REAUTH_USER },
+          isNewUser: false,
+        });
+        authService.generateTokenPair.mockResolvedValue({
+          accessToken: "a",
+          refreshToken: "r",
+        });
+        const res = mockRes();
+
+        await controller.oidcCallback(
+          { code: "c" },
+          {
+            cookies: {
+              oidc_state: "s",
+              oidc_nonce: "n",
+              oidc_reauth: reauth.createPendingMarker(
+                REAUTH_USER,
+                "delete-account",
+                "s",
+              ),
+            },
+          } as never,
+          res as never,
+        );
+
+        const target = res.redirect.mock.calls[0][0] as string;
+        expect(target).not.toContain("reauth_token");
+        // The user stays signed in; the page they came from is told why the
+        // action stayed locked, distinguishably from a failed sign-in.
+        expect(target).toContain("error=reauth_not_fresh");
+        expect(target).toContain("reauth=delete-account");
+      },
+    );
 
     it("mints nothing when a different account came back from the provider", async () => {
       // Otherwise the round trip user B completed would hand user A a proof.

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { AccountSubType } from "../../../accounts/entities/account.entity";
 import { InvestmentAction } from "../../../securities/entities/investment-transaction.entity";
+import { baseInvestmentAction } from "../../../securities/investment-replay.util";
 import { roundMoney, roundToDecimals } from "../../../common/round.util";
 import {
   MappedAccounts,
@@ -46,7 +47,8 @@ import { MnyTransactionData } from "../tables/read-transactions";
  *
  * Nothing here touches the database, and no code is guessed: an action outside
  * the known set is skipped and counted, and an action whose meaning is inferred
- * rather than observed (`act` 5 and 14) carries a warning on every row it maps.
+ * or reported rather than measured here (`MNY_UNCONFIRMED_ACTIONS`) carries a
+ * warning on every row it maps.
  */
 
 /** Quantities are `decimal(20,8)`; ratios and share counts round to match. */
@@ -178,7 +180,8 @@ function totalAmountOf(
   price: number | null,
   commission: number,
 ): number {
-  if (ZERO_TOTAL_ACTIONS.has(action)) {
+  const base = baseInvestmentAction(action);
+  if (ZERO_TOTAL_ACTIONS.has(base as InvestmentAction)) {
     return 0;
   }
   if (row.amount !== 0) {
@@ -189,16 +192,17 @@ function totalAmountOf(
   }
   const gross = quantity * price;
   return roundMoney(
-    action === InvestmentAction.SELL ? gross - commission : gross + commission,
+    base === InvestmentAction.SELL ? gross - commission : gross + commission,
   );
 }
 
 /** Signed impact on the cash sleeve. Direction comes from the action only. */
 function cashAmountOf(action: InvestmentAction, totalAmount: number): number {
-  if (NO_CASH_ACTIONS.has(action) || totalAmount === 0) {
+  const base = baseInvestmentAction(action) as InvestmentAction;
+  if (NO_CASH_ACTIONS.has(base) || totalAmount === 0) {
     return 0;
   }
-  return CASH_OUT_ACTIONS.has(action) ? -totalAmount : totalAmount;
+  return CASH_OUT_ACTIONS.has(base) ? -totalAmount : totalAmount;
 }
 
 function positiveOrNull(value: number, decimals: number): number | null {

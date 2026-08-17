@@ -126,7 +126,13 @@
       "TRANSFER_OUT": "출고",
       "REINVEST": "재투자",
       "ADD_SHARES": "주식수 추가",
-      "REMOVE_SHARES": "주식수 제거"
+      "REMOVE_SHARES": "주식수 제거",
+      "REINVEST_INTEREST": "이자 재투자",
+      "REINVEST_CAPITAL_GAIN_SHORT": "단기 자본이득 재투자",
+      "REINVEST_CAPITAL_GAIN_LONG": "장기 자본이득 재투자",
+      "CAPITAL_GAIN_SHORT": "단기 자본이득",
+      "CAPITAL_GAIN_LONG": "장기 자본이득",
+      "REDEEM": "CD/채권 상환"
     },
     "createSecurityTitle": "이 증권을 생성하시겠습니까?",
     "createdSecurity": "증권이 생성되었습니다",

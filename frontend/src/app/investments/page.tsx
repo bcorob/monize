@@ -235,6 +235,7 @@ function InvestmentsContent() {
               holdingsByAccount={data.portfolioSummary?.holdingsByAccount}
               titleSuffix={accountFilterLabel}
               accountIds={data.selectedAccountIds}
+              valuationComplete={data.portfolioSummary?.valuationComplete}
             />
           </div>
 
@@ -257,6 +258,7 @@ function InvestmentsContent() {
               holdingsByAccount={data.portfolioSummary?.holdingsByAccount || []}
               isLoading={data.isLoading}
               totalPortfolioValue={data.portfolioSummary?.totalPortfolioValue || 0}
+              valuationComplete={data.portfolioSummary?.valuationComplete}
               onSecurityClick={data.handleSecurityClick}
               onCashClick={data.handleCashClick}
             />
@@ -273,6 +275,7 @@ function InvestmentsContent() {
                   onDelete={handleDeleteTransaction}
                   onEdit={data.handleEditTransaction}
                   onNewTransaction={data.handleNewTransaction}
+                  onStatusChanged={data.handleFormCreateAndNew}
                   density={listDensity}
                   onDensityChange={setListDensity}
                   filters={data.transactionFilters}

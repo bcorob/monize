@@ -25,6 +25,7 @@
   "closeMenu": "Fermer le menu",
   "mainMenu": "Menu principal",
   "loggedOut": "Déconnecté avec succès",
+  "logoutNotConfirmed": "Déconnecté sur cet appareil uniquement — le serveur n'a pas confirmé. Voir l'avis sur l'écran de connexion.",
   "search": {
     "placeholder": "Rechercher des transactions...",
     "label": "Rechercher des transactions",

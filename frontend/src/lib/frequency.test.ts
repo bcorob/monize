@@ -25,15 +25,26 @@ describe('advanceByFrequency', () => {
     ['MONTHLY', '2026-05-10', '2026-06-10'],
     ['EVERY2MONTHS', '2026-05-10', '2026-07-10'],
     ['QUARTERLY', '2026-05-10', '2026-08-10'],
+    ['EVERY4MONTHS', '2026-05-10', '2026-09-10'],
     ['SEMIANNUAL', '2026-05-10', '2026-11-10'],
     ['YEARLY', '2026-05-10', '2027-05-10'],
+    ['EVERY2YEARS', '2026-05-10', '2028-05-10'],
   ] as [FrequencyType, string, string][])('steps %s from %s to %s', (frequency, start, expected) => {
     expect(step(start, frequency)).toBe(expected);
   });
 
-  it('handles every frequency the type allows', () => {
+  it('handles every frequency the type allows, and every one but ONCE moves forward', () => {
+    // A recurring frequency that returns the same date is a calendar or a
+    // forecast that projects one occurrence over and over -- the SEMIMONTHLY
+    // defect this module was extracted to fix.
     for (const frequency of FREQUENCY_VALUES) {
       expect(() => advanceByFrequency(from('2026-05-10'), frequency)).not.toThrow();
+      const stepped = step('2026-05-10', frequency);
+      if (frequency === 'ONCE') {
+        expect(stepped).toBe('2026-05-10');
+      } else {
+        expect(stepped > '2026-05-10').toBe(true);
+      }
     }
   });
 

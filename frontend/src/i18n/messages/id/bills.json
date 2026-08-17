@@ -43,7 +43,8 @@
     "summaryEnding": "Akhir",
     "summaryLowest": "Terendah",
     "summaryMinBalance": "Saldo Min",
-    "allAccounts": "Semua Akun"
+    "allAccounts": "Semua Akun",
+    "unavailableMissingRates": "Prakiraan ini tidak dapat ditampilkan dalam {displayCurrency}: tidak ada nilai tukar untuk {currencies}, dan saldo proyeksi dibangun dari setiap hari sebelumnya. Tambahkan kurs, atau pilih akun satu mata uang."
   },
   "calendar": {
     "days": {

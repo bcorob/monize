@@ -63,4 +63,20 @@ describe('buildEquitySeries', () => {
     const asset = [{ date: '2026-01-01', balance: 30000 }];
     expect(buildEquitySeries(asset, [])).toEqual([{ date: '2026-01-01', balance: 30000 }]);
   });
+
+  it('breaks the line when the loan balance is unknown rather than subtracting zero debt', () => {
+    // A null loan balance is unknown, not zero owed: subtracting Math.abs(null) === 0
+    // would report the full asset value as equity, hiding the debt.
+    const asset = [
+      { date: '2026-01-01', balance: 500000 },
+      { date: '2026-02-01', balance: 510000 },
+    ];
+    const loan = [
+      { date: '2026-01-01', balance: -300000 },
+      { date: '2026-02-01', balance: null },
+    ];
+    const series = buildEquitySeries(asset, loan);
+    // The first date is known; the second breaks because the loan is unknown.
+    expect(series).toEqual([{ date: '2026-01-01', balance: 200000 }]);
+  });
 });

@@ -1,4 +1,9 @@
 import { InvestmentAction } from "../../../securities/entities/investment-transaction.entity";
+import { TransactionStatus } from "../../../transactions/entities/transaction.entity";
+import {
+  applyActionToQuantity,
+  SHARE_MOVING_ACTIONS,
+} from "../../../securities/investment-replay.util";
 import { roundToDecimals } from "../../../common/round.util";
 import {
   MappedAccounts,
@@ -30,24 +35,10 @@ const QUANTITY_TOLERANCE = 0.00000001;
 
 const QUANTITY_DECIMALS = 8;
 
-/** Actions that reduce a position. Mirrors `HoldingsService.computeHoldingsMap`. */
-const REDUCING_ACTIONS: ReadonlySet<InvestmentAction> = new Set([
-  InvestmentAction.SELL,
-  InvestmentAction.TRANSFER_OUT,
-  InvestmentAction.REMOVE_SHARES,
-]);
-
-/** Actions that change a position at all. Mirrors the holdings fold exactly. */
-const HOLDING_ACTIONS: ReadonlySet<InvestmentAction> = new Set([
-  InvestmentAction.BUY,
-  InvestmentAction.SELL,
-  InvestmentAction.REINVEST,
-  InvestmentAction.TRANSFER_IN,
-  InvestmentAction.TRANSFER_OUT,
-  InvestmentAction.ADD_SHARES,
-  InvestmentAction.REMOVE_SHARES,
-  InvestmentAction.SPLIT,
-]);
+/** Actions that change a position at all. Shared with the holdings fold. */
+const HOLDING_ACTIONS: ReadonlySet<InvestmentAction> = new Set(
+  SHARE_MOVING_ACTIONS,
+);
 
 export interface CheckHoldingsInput {
   /** In replay order, as `mapInvestments` returns them. */
@@ -67,10 +58,11 @@ function positionKey(accountKey: string, securityHandle: number): string {
 }
 
 /**
- * Positions produced by folding the mapped actions the same way
- * `HoldingsService.computeHoldingsMap` does. Deliberately a mirror rather than a
- * call: this must agree with what the database will hold *after* the import, and
- * the service's version reads entity rows the mapper does not have yet.
+ * Positions produced by folding the mapped actions the same way the holdings
+ * rebuild does -- through the same `applyActionToQuantity` reducer, so this
+ * cannot drift from what the database will hold *after* the import. It stays a
+ * separate function only because it reads mapper rows the service's version
+ * does not have yet, not because the arithmetic differs.
  */
 export function replayPositions(
   transactions: readonly MappedInvestmentTransaction[],
@@ -80,25 +72,24 @@ export function replayPositions(
   for (const transaction of transactions) {
     if (
       !HOLDING_ACTIONS.has(transaction.action) ||
-      transaction.quantity === null
+      transaction.quantity === null ||
+      // A voided trade moved no shares: the holdings rebuild excludes VOID
+      // rows, and Money's own open lots never contain a voided trade's shares,
+      // so the projection must skip them or every account with a voided trade
+      // reports a share discrepancy the import itself created.
+      transaction.status === TransactionStatus.VOID
     ) {
       continue;
     }
 
     const key = positionKey(transaction.accountKey, transaction.securityHandle);
-    const current = positions.get(key) ?? 0;
-
-    if (transaction.action === InvestmentAction.SPLIT) {
-      positions.set(key, current * transaction.quantity);
-      continue;
-    }
-
     positions.set(
       key,
-      current +
-        (REDUCING_ACTIONS.has(transaction.action)
-          ? -transaction.quantity
-          : transaction.quantity),
+      applyActionToQuantity(
+        positions.get(key) ?? 0,
+        transaction.action,
+        transaction.quantity,
+      ),
     );
   }
 

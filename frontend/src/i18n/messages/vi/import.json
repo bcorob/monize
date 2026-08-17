@@ -519,6 +519,7 @@
     "billTemplateMissing": "{count, plural, other {# hóa đơn theo lịch}} không có giao dịch mẫu trong tệp và đã bị bỏ qua.",
     "unusableBill": "{count, plural, other {# hóa đơn theo lịch}} không có tài khoản, ngày dùng được hoặc chu kỳ nhận diện được, nên đã bị bỏ qua.",
     "billFrequencyApproximated": "{count, plural, other {# hóa đơn theo lịch}} dùng khoảng lặp mà Monize không thể diễn đạt chính xác, nên đã dùng khoảng ngắn hơn gần nhất.",
+    "loanInterestCategoryUnclear": "{count, plural, other {# khoản thanh toán khoản vay}} bao gồm nhiều danh mục ngoài phần gốc, nên danh mục lãi của khoản vay chưa được đặt. Hãy kiểm tra xem khoản thanh toán có bao gồm escrow (ký quỹ) không và đặt danh mục lãi sau khi nhập.",
     "showTransactions": "Hiện {count, plural, other {# giao dịch}}",
     "hideTransactions": "Ẩn giao dịch",
     "reviewInMoney": "Mở các giao dịch này trong Microsoft Money để kiểm tra hoặc sửa, sau đó xuất và nhập lại.",

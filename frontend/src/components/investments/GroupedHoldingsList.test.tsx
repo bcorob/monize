@@ -2,10 +2,14 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@/test/render';
 import { GroupedHoldingsList } from './GroupedHoldingsList';
 
-vi.mock('@heroicons/react/24/outline', () => ({
-  ChevronDownIcon: () => <span data-testid="chevron-down" />,
-  ChevronRightIcon: () => <span data-testid="chevron-right" />,
-}));
+vi.mock('@heroicons/react/24/outline', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  return {
+    ...actual,
+    ChevronDownIcon: () => <span data-testid="chevron-down" />,
+    ChevronRightIcon: () => <span data-testid="chevron-right" />,
+  };
+});
 
 vi.mock('@/hooks/useNumberFormat', () => ({
   useNumberFormat: () => ({
@@ -29,16 +33,18 @@ vi.mock('@/hooks/useNumberFormat', () => ({
   }),
 }));
 
-// USD -> CAD @ 1.35 for tests that exercise cross-currency holdings
+// USD -> CAD @ 1.35 for tests that exercise cross-currency holdings. Like the
+// real hook, getRate returns null for an unresolved pair -- the component must
+// treat that as unknown, never as an implicit 1:1 (review #1133).
 vi.mock('@/hooks/useExchangeRates', () => ({
   useExchangeRates: () => ({
-    convert: (n: number, from: string, to?: string) => {
-      if (!to || from === to) return n;
-      if (from === 'USD' && to === 'CAD') return n * 1.35;
-      if (from === 'CAD' && to === 'USD') return n / 1.35;
-      return n;
+    getRate: (from: string, to?: string) => {
+      const target = to || 'CAD';
+      if (from === target) return 1;
+      if (from === 'USD' && target === 'CAD') return 1.35;
+      if (from === 'CAD' && target === 'USD') return 1 / 1.35;
+      return null;
     },
-    convertToDefault: (n: number) => n,
     defaultCurrency: 'CAD',
   }),
 }));
@@ -335,5 +341,226 @@ describe('GroupedHoldingsList', () => {
 
     // No approximate conversion lines should appear when currencies match
     expect(screen.queryByText(/\u2248/)).not.toBeInTheDocument();
+  });
+
+  it("marks an account whose own totals are incomplete (recheck RR4-002)", () => {
+    // The account totals are in the ACCOUNT's currency, a different conversion
+    // from the portfolio's, so the global flag cannot speak for them: this list
+    // rendered a known subtotal as the account's value and gain.
+    const accounts = [
+      {
+        accountId: 'a1',
+        accountName: 'Tokyo Brokerage',
+        currencyCode: 'JPY',
+        cashAccountId: null,
+        cashBalance: 0,
+        // The account must hold something, or the list renders its empty state
+        // and there is no account row to inspect.
+        holdings: [
+          {
+            id: 'h1',
+            securityId: 'sec-1',
+            symbol: 'EUSTX',
+            name: 'Euro Stoxx',
+            securityType: 'ETF',
+            currencyCode: 'EUR',
+            quantity: 10,
+            averageCost: 50,
+            costBasis: 500,
+            costBasisAccountCurrency: null,
+            currentPrice: 60,
+            marketValue: 600,
+            gainLoss: 100,
+            gainLossPercent: 20,
+          },
+        ],
+        totalCostBasis: 0,
+        totalMarketValue: 0,
+        totalGainLoss: 0,
+        totalGainLossPercent: 0,
+        netInvested: 0,
+        fxComplete: false,
+        missingRatePairs: ['EUR->JPY'],
+        pricesComplete: true,
+        unpricedSecurityIds: [],
+        valuationComplete: false,
+      },
+    ];
+
+    render(
+      <GroupedHoldingsList
+        holdingsByAccount={accounts as never}
+        isLoading={false}
+        totalPortfolioValue={600}
+      />,
+    );
+
+    // Names the account's own currency, because that is the conversion that failed
+    // -- not the portfolio's reporting currency.
+    expect(
+      screen.getByText(/Partial: this account's totals leave out .* in JPY\./),
+    ).toBeInTheDocument();
+  });
+
+  it("says nothing for an account whose own totals are complete", () => {
+    const accounts = [
+      {
+        accountId: 'a1',
+        accountName: 'Tokyo Brokerage',
+        currencyCode: 'JPY',
+        cashAccountId: null,
+        cashBalance: 0,
+        holdings: [
+          {
+            id: 'h1',
+            securityId: 'sec-1',
+            symbol: 'EUSTX',
+            name: 'Euro Stoxx',
+            securityType: 'ETF',
+            currencyCode: 'JPY',
+            quantity: 10,
+            averageCost: 50,
+            costBasis: 500,
+            costBasisAccountCurrency: 500,
+            currentPrice: 60,
+            marketValue: 600,
+            gainLoss: 100,
+            gainLossPercent: 20,
+          },
+        ],
+        totalCostBasis: 500,
+        totalMarketValue: 600,
+        totalGainLoss: 100,
+        totalGainLossPercent: 20,
+        netInvested: 500,
+        fxComplete: true,
+        missingRatePairs: [],
+        pricesComplete: true,
+        unpricedSecurityIds: [],
+        valuationComplete: true,
+      },
+    ];
+
+    render(
+      <GroupedHoldingsList
+        holdingsByAccount={accounts as never}
+        isLoading={false}
+        totalPortfolioValue={600}
+      />,
+    );
+
+    expect(screen.queryByText(/Partial:/)).not.toBeInTheDocument();
+  });
+
+  it('omits the approx conversions when the pair has no rate (review #1133)', () => {
+    // convert() used to pass the amount through unchanged for an unresolved
+    // pair, so a EUR value rendered as an "approx JPY" figure right beside the
+    // account's Partial marker. No rate: the account-currency value is
+    // unknown, and unknown does not render.
+    const accounts = [
+      {
+        accountId: 'a1',
+        accountName: 'Tokyo Brokerage',
+        currencyCode: 'JPY',
+        cashAccountId: null,
+        cashBalance: 0,
+        holdings: [
+          {
+            id: 'h1',
+            securityId: 'sec-1',
+            symbol: 'EUSTX',
+            name: 'Euro Stoxx',
+            securityType: 'ETF',
+            currencyCode: 'EUR',
+            quantity: 10,
+            averageCost: 50,
+            costBasis: 500,
+            costBasisAccountCurrency: null,
+            currentPrice: 60,
+            marketValue: 600,
+            gainLoss: 100,
+            gainLossPercent: 20,
+          },
+        ],
+        totalCostBasis: 0,
+        totalMarketValue: 0,
+        totalGainLoss: 0,
+        totalGainLossPercent: 0,
+        netInvested: 0,
+        fxComplete: false,
+        missingRatePairs: ['EUR->JPY'],
+        pricesComplete: true,
+        unpricedSecurityIds: [],
+        valuationComplete: false,
+      },
+    ];
+
+    render(
+      <GroupedHoldingsList
+        holdingsByAccount={accounts as never}
+        isLoading={false}
+        totalPortfolioValue={600}
+      />,
+    );
+
+    // Neither the header's default-currency approximation (the account is
+    // incomplete and JPY->CAD has no rate in this file's mock) nor the row's
+    // account-currency approximation (EUR->JPY has none either) may render.
+    expect(screen.queryByText(/≈/)).not.toBeInTheDocument();
+  });
+
+  it('shows the portfolio percent as unknown when the valuation is incomplete (review #1133)', () => {
+    // totalPortfolioValue is a known subtotal then, and a share of a subtotal
+    // is not a share of the portfolio.
+    const accounts = [
+      {
+        accountId: 'a1',
+        accountName: 'CAD Brokerage',
+        currencyCode: 'CAD',
+        cashAccountId: null,
+        cashBalance: 0,
+        holdings: [
+          {
+            id: 'h1',
+            securityId: 'sec-1',
+            symbol: 'XEQT',
+            name: 'iShares Equity',
+            securityType: 'ETF',
+            currencyCode: 'CAD',
+            quantity: 10,
+            averageCost: 40,
+            costBasis: 400,
+            costBasisAccountCurrency: 400,
+            currentPrice: 50,
+            marketValue: 500,
+            gainLoss: 100,
+            gainLossPercent: 25,
+          },
+        ],
+        totalCostBasis: 400,
+        totalMarketValue: 500,
+        totalGainLoss: 100,
+        totalGainLossPercent: 25,
+        netInvested: 400,
+        fxComplete: true,
+        missingRatePairs: [],
+        pricesComplete: true,
+        unpricedSecurityIds: [],
+        valuationComplete: true,
+      },
+    ];
+
+    render(
+      <GroupedHoldingsList
+        holdingsByAccount={accounts as never}
+        isLoading={false}
+        totalPortfolioValue={500}
+        valuationComplete={false}
+      />,
+    );
+
+    // This holding is 100% of the KNOWN subtotal; presenting that as its share
+    // of the portfolio is exactly the subtotal-as-total mistake.
+    expect(screen.queryByText('100.0%')).not.toBeInTheDocument();
   });
 });

@@ -144,9 +144,6 @@
     "defaultMessage": "載入報表資料失敗。請再試一次。",
     "retry": "再試一次"
   },
-  "foreignCurrencyFees": {
-    "noEligibleAccounts": "沒有科目設定境外交易手續費。在科目上設定手續費百分比，即可在此追蹤其外幣手續費。"
-  },
   "accountBalances": {
     "totalAssets": "總資產",
     "totalLiabilities": "總負債",
@@ -333,7 +330,8 @@
     "tooltipUtilization": "使用率",
     "tooltipUsed": "已使用",
     "tooltipAvailable": "可用",
-    "pdfTitle": "信用使用率"
+    "pdfTitle": "信用使用率",
+    "noRate": "無匯率"
   },
   "currencyExposure": {
     "empty": "找不到投資持倉。請新增證券以查看貨幣曝險。",
@@ -575,20 +573,20 @@
     "topRegion": "主要地區",
     "viewByRegion": "依地區",
     "viewByExchange": "依交易所",
+    "viewByCountry": "依國家/地區",
     "regionalAllocation": "地區配置",
     "exchangeAllocation": "交易所配置",
+    "countryAllocation": "國家/地區配置（穿透）",
+    "countryLookThroughNote": "國家/地區曝險會使用每檔證券上手動設定的國家/地區配置穿透 ETF 和基金。個股依上市交易所歸類；未分類的部分顯示為「其他」。",
     "colRegion": "地區",
     "colExchange": "交易所",
     "colCountry": "國家",
     "colHoldings": "持倉",
     "colMarketValue": "市值",
     "colPortfolioPct": "佔投資組合 %",
+    "other": "其他",
     "total": "總計",
-    "holdingCount": "{count, plural, one {# 個持倉} other {# 個持倉}}",
-    "viewByCountry": "依國家/地區",
-    "countryAllocation": "國家/地區配置（穿透）",
-    "countryLookThroughNote": "國家/地區曝險會使用每檔證券上手動設定的國家/地區配置穿透 ETF 和基金。個股依上市交易所歸類；未分類的部分顯示為「其他」。",
-    "other": "其他"
+    "holdingCount": "{count, plural, one {# 個持倉} other {# 個持倉}}"
   },
   "healthScoreHistory": {
     "pdfTitle": "健康分數歷史",
@@ -761,7 +759,13 @@
     "actionTransferOut": "轉出",
     "actionReinvest": "再投資",
     "actionAddShares": "增加股數",
-    "actionRemoveShares": "減少股數"
+    "actionRemoveShares": "減少股數",
+    "actionReinvestInterest": "利息再投資",
+    "actionReinvestCapitalGainShort": "短期資本利得再投資",
+    "actionReinvestCapitalGainLong": "長期資本利得再投資",
+    "actionCapitalGainShort": "短期資本利得",
+    "actionCapitalGainLong": "長期資本利得",
+    "actionRedeem": "贖回定存單/債券"
   },
   "loanAmortization": {
     "empty": "找不到貸款或抵押貸款科目。請新增貸款科目以查看付款記錄。",
@@ -820,6 +824,7 @@
       "maxCompare": "最多可比較 {max} 個情境。",
       "loadFailed": "載入蒙地卡羅資料失敗。請重新整理。",
       "currentValueFailed": "取得目前投資組合價值失敗。",
+      "currentValueUnavailable": "無法確定所選帳戶的目前價值。請輸入起始金額，或在價格與匯率可用後重試。",
       "holdingStatsFailed": "載入個別持倉歷史統計資料失敗。",
       "reorderFailed": "無法重新排序情境。"
     },
@@ -1168,7 +1173,8 @@
     "csvColProceeds": "收益",
     "csvColCostBasis": "成本基礎",
     "csvColGainLoss": "損益",
-    "csvColReturn": "報酬率 %"
+    "csvColReturn": "報酬率 %",
+    "csvNoRate": "無匯率"
   },
   "recurringExpenses": {
     "recurringExpenses": "固定支出",
@@ -1376,7 +1382,8 @@
     "pdfTotalPortfolio": "投資組合總值",
     "pdfAssetTypes": "資產類型",
     "pdfTotalHoldings": "持倉總計",
-    "pdfLargestType": "最大類型"
+    "pdfLargestType": "最大類型",
+    "unavailable": "無法使用"
   },
   "spendingAnomalies": {
     "highPriority": "高優先",
@@ -1700,5 +1707,8 @@
     "labelSelectAccount": "選擇貸款帳戶",
     "viewTransactions": "檢視交易",
     "empty": "找不到貸款、抵押貸款或信用額度帳戶。"
+  },
+  "foreignCurrencyFees": {
+    "noEligibleAccounts": "沒有科目設定境外交易手續費。在科目上設定手續費百分比，即可在此追蹤其外幣手續費。"
   }
 }

@@ -25,6 +25,7 @@
   "closeMenu": "メニューを閉じる",
   "mainMenu": "メインメニュー",
   "loggedOut": "ログアウトしました",
+  "logoutNotConfirmed": "このデバイスのみサインアウトしました — サーバーは確認していません。サインイン画面のお知らせをご覧ください。",
   "search": {
     "placeholder": "取引を検索...",
     "label": "取引を検索",

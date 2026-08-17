@@ -325,6 +325,14 @@ describe("ToolExecutorService", () => {
     portfolio = {
       getLlmSummary: jest.fn().mockResolvedValue({
         holdingCount: 0,
+        // The real method always returns these two: they are what tells the
+        // model whether the totals beside them are complete (recheck RR2-007).
+        // A mock without them describes a shape the service cannot produce.
+        fxComplete: true,
+        missingRatePairs: [],
+        pricesComplete: true,
+        unpricedSymbols: [],
+        valuationComplete: true,
         totalCashValue: 0,
         totalHoldingsValue: 0,
         totalCostBasis: 0,
@@ -914,9 +922,17 @@ describe("ToolExecutorService", () => {
     it("get_portfolio_summary requests the look-through when asked", async () => {
       portfolio.getLlmSummary.mockResolvedValueOnce({
         holdingCount: 1,
+        fxComplete: true,
+        missingRatePairs: [],
+        pricesComplete: true,
+        unpricedSymbols: [],
+        valuationComplete: true,
         totalPortfolioValue: 1000,
         totalGainLoss: 100,
         totalGainLossPercent: 10,
+        // The real method always returns this array; without it the per-account
+        // completeness note could not be built at all.
+        holdingsByAccount: [],
         lookThrough: {
           totalPortfolioValue: 1000,
           byCountry: {
@@ -941,6 +957,37 @@ describe("ToolExecutorService", () => {
       });
       expect(result.summary).toContain("1 country");
       expect(result.summary).toContain("1 asset class");
+    });
+
+    it("get_portfolio_summary tells the model when the totals are incomplete", async () => {
+      // The model reads the summary line before the payload, so an unconvertible
+      // component has to be described there. Flagging it only inside `data` let
+      // the assistant quote a subtotal as a settled balance (recheck RR2-007).
+      portfolio.getLlmSummary.mockResolvedValueOnce({
+        holdingCount: 2,
+        fxComplete: false,
+        missingRatePairs: ["EUR->USD"],
+        pricesComplete: true,
+        unpricedSymbols: [],
+        valuationComplete: false,
+        totalCashValue: 100,
+        totalHoldingsValue: 0,
+        totalCostBasis: 0,
+        totalPortfolioValue: 100,
+        totalGainLoss: 0,
+        totalGainLossPercent: 0,
+        timeWeightedReturn: null,
+        cagr: null,
+        holdings: [],
+        holdingsByAccount: [],
+        allocation: [],
+      });
+
+      const result = await service.execute(userId, "get_portfolio_summary", {});
+
+      expect(result.summary).toContain("INCOMPLETE");
+      expect(result.summary).toContain("EUR->USD");
+      expect((result.data as { fxComplete: boolean }).fxComplete).toBe(false);
     });
 
     it("list_investment_transactions delegates to investmentTransactions.getLlmInvestmentTransactions", async () => {

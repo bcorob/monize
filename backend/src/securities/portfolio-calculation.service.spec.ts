@@ -1,3 +1,5 @@
+import { readFileSync } from "fs";
+import { join } from "path";
 import {
   CategorisedAccounts,
   PortfolioCalculationService,
@@ -11,6 +13,7 @@ import {
 import { Account, AccountSubType } from "../accounts/entities/account.entity";
 import { HoldingWithMarketValue } from "./portfolio.service";
 import { createScopedDbMocks } from "../test-helpers/scoped-db-testing";
+import { applyActionToQuantity } from "./investment-replay.util";
 
 jest.mock("../common/db/scoped-db", () =>
   jest.requireActual("../test-helpers/scoped-db-testing").scopedDbMockModule(),
@@ -147,6 +150,160 @@ describe("PortfolioCalculationService.calculateRealizedGains", () => {
     expect(result).toHaveLength(1);
     expect(result[0].costBasis).toBe(3000);
     expect(result[0].realizedGain).toBe(1000);
+  });
+
+  it("includes the acquisition commission in the cost basis a sale is measured against (P5-006)", async () => {
+    // The audit's worked example. Buy 10 at 100 with 10 commission -- the cash
+    // debit is 1,010 -- then sell all 10 at 110 with no sell commission.
+    //
+    // Basis 1,000 reports a realized gain of 100 and taxes the commission as
+    // profit. The basis is 1,010, so the gain is 90.
+    txRepo.find.mockResolvedValue([
+      makeTx({
+        id: "b1",
+        action: InvestmentAction.BUY,
+        transactionDate: "2024-01-10",
+        quantity: 10,
+        price: 100,
+        commission: 10,
+        totalAmount: 1010,
+      }),
+      makeTx({
+        id: "s1",
+        action: InvestmentAction.SELL,
+        transactionDate: "2024-06-10",
+        quantity: 10,
+        price: 110,
+        commission: 0,
+        totalAmount: 1100,
+      }),
+    ]);
+
+    const result = await service.calculateRealizedGains(userId);
+    expect(result).toHaveLength(1);
+    expect(result[0].costBasis).toBe(1010);
+    expect(result[0].realizedGain).toBe(90);
+  });
+
+  it("relieves a commissioned basis proportionally on a partial sale", async () => {
+    // Buy 10 at 100 + 10 commission = 1,010 basis, 101.00 per share. Selling 4
+    // relieves 404, not 400.
+    txRepo.find.mockResolvedValue([
+      makeTx({
+        id: "b1",
+        action: InvestmentAction.BUY,
+        transactionDate: "2024-01-10",
+        quantity: 10,
+        price: 100,
+        commission: 10,
+        totalAmount: 1010,
+      }),
+      makeTx({
+        id: "s1",
+        action: InvestmentAction.SELL,
+        transactionDate: "2024-06-10",
+        quantity: 4,
+        price: 120,
+        commission: 0,
+        totalAmount: 480,
+      }),
+    ]);
+
+    const result = await service.calculateRealizedGains(userId);
+    expect(result[0].costBasis).toBe(404);
+    expect(result[0].realizedGain).toBe(76); // 480 - 404
+  });
+
+  it("converts the commission at the trade's rate, not separately", async () => {
+    // 10 @ 100 USD + 10 USD commission at 1.3 -> (1000 + 10) * 1.3 = 1313 CAD.
+    txRepo.find.mockResolvedValue([
+      makeTx({
+        id: "b1",
+        action: InvestmentAction.BUY,
+        transactionDate: "2024-01-01",
+        quantity: 10,
+        price: 100,
+        commission: 10,
+        totalAmount: 1010,
+        exchangeRate: 1.3,
+      }),
+      makeTx({
+        id: "s1",
+        action: InvestmentAction.SELL,
+        transactionDate: "2024-06-01",
+        quantity: 10,
+        price: 150,
+        totalAmount: 1500,
+        exchangeRate: 1.35,
+      }),
+    ]);
+
+    const result = await service.calculateRealizedGains(userId);
+    expect(result[0].costBasis).toBe(1313);
+    expect(result[0].realizedGain).toBe(712); // 2025 - 1313
+  });
+
+  it("does not treat an unpriced acquisition as a free one", async () => {
+    // `price` is nullable. Folding null to 0 gave the position a basis of zero
+    // and reported the entire proceeds as gain.
+    txRepo.find.mockResolvedValue([
+      makeTx({
+        id: "b1",
+        action: InvestmentAction.BUY,
+        transactionDate: "2024-01-10",
+        quantity: 10,
+        price: null as never,
+        commission: 0,
+        totalAmount: 0,
+      }),
+      makeTx({
+        id: "s1",
+        action: InvestmentAction.SELL,
+        transactionDate: "2024-06-10",
+        quantity: 10,
+        price: 110,
+        totalAmount: 1100,
+      }),
+    ]);
+
+    const result = await service.calculateRealizedGains(userId);
+    // The shares still joined the position, so the sale is still reported --
+    // but no cost was invented for them.
+    expect(result[0].costBasis).toBe(0);
+  });
+
+  it("multiplies the position by a split ratio when relieving basis", async () => {
+    // Buy 10 @ 100 (basis 1,000), 2-for-1 split -> 20 shares, basis unchanged,
+    // so 50 per share. Selling all 20 at 60 realizes 1,200 - 1,000 = 200.
+    // Additive split semantics would have left 12 shares and mispriced basis.
+    txRepo.find.mockResolvedValue([
+      makeTx({
+        id: "b1",
+        action: InvestmentAction.BUY,
+        transactionDate: "2024-01-10",
+        quantity: 10,
+        price: 100,
+        totalAmount: 1000,
+      }),
+      makeTx({
+        id: "sp1",
+        action: InvestmentAction.SPLIT,
+        transactionDate: "2024-03-01",
+        quantity: 2,
+      }),
+      makeTx({
+        id: "s1",
+        action: InvestmentAction.SELL,
+        transactionDate: "2024-06-10",
+        quantity: 20,
+        price: 60,
+        totalAmount: 1200,
+      }),
+    ]);
+
+    const result = await service.calculateRealizedGains(userId);
+    expect(result[0].costBasis).toBe(1000);
+    expect(result[0].realizedGain).toBe(200);
   });
 
   it("filters the output by startDate but still replays history before the range", async () => {
@@ -336,6 +493,188 @@ describe("PortfolioCalculationService.calculateCapitalGainsByMonth", () => {
     // Feb: (60*100) - (55*100) = +500
     expect(feb.totalCapitalGain).toBe(500);
     expect(feb.unrealizedGain).toBe(500);
+  });
+
+  it("reports gains as unknown when the basis carries an unpriced acquisition", async () => {
+    // An unpriced BUY joins the position with an unknown cost. `?? 0` replayed
+    // it as free, so the eventual SELL reported the full proceeds as confident
+    // realized gain -- while getCostBasis marks the identical row
+    // `unpriced_acquisition`. Unknown, not zero: the gain fields go null and
+    // `buys` stays the known subtotal of the priced acquisitions.
+    txRepo.find.mockResolvedValue([
+      makeTx({
+        id: "buy-unpriced",
+        action: InvestmentAction.BUY,
+        transactionDate: "2024-01-10",
+        quantity: 10,
+        price: null as never,
+        totalAmount: 0,
+      }),
+      makeTx({
+        id: "sell",
+        action: InvestmentAction.SELL,
+        transactionDate: "2024-01-20",
+        quantity: 10,
+        price: 110,
+        totalAmount: 1100,
+      }),
+    ]);
+    priceRepo.query.mockResolvedValue(
+      priceRows([
+        { date: "2023-12-31", price: 100 },
+        { date: "2024-01-31", price: 110 },
+      ]),
+    );
+
+    const result = await service.calculateCapitalGainsByMonth(userId, {
+      startDate: "2024-01-01",
+      endDate: "2024-01-31",
+    });
+
+    expect(result).toHaveLength(1);
+    const jan = result[0];
+    expect(jan.realizedGain).toBeNull();
+    expect(jan.totalCapitalGain).toBeNull();
+    expect(jan.unrealizedGain).toBeNull();
+    expect(jan.buys).toBe(0);
+    expect(jan.sells).toBe(1100);
+  });
+
+  it("a closed position clears the unknown-basis state for later periods", async () => {
+    // Once the position holding the unknown lot is fully disposed of, a fresh
+    // priced position's gains are knowable again -- an empty position holds a
+    // known zero basis.
+    txRepo.find.mockResolvedValue([
+      makeTx({
+        id: "buy-unpriced",
+        action: InvestmentAction.BUY,
+        transactionDate: "2024-01-10",
+        quantity: 10,
+        price: null as never,
+        totalAmount: 0,
+      }),
+      makeTx({
+        id: "sell-all",
+        action: InvestmentAction.SELL,
+        transactionDate: "2024-01-20",
+        quantity: 10,
+        price: 100,
+        totalAmount: 1000,
+      }),
+      makeTx({
+        id: "buy-priced",
+        action: InvestmentAction.BUY,
+        transactionDate: "2024-02-05",
+        quantity: 10,
+        price: 100,
+        totalAmount: 1000,
+      }),
+      makeTx({
+        id: "sell-2",
+        action: InvestmentAction.SELL,
+        transactionDate: "2024-02-20",
+        quantity: 10,
+        price: 110,
+        totalAmount: 1100,
+      }),
+    ]);
+    priceRepo.query.mockResolvedValue(
+      priceRows([
+        { date: "2023-12-31", price: 100 },
+        { date: "2024-01-31", price: 100 },
+        { date: "2024-02-29", price: 110 },
+      ]),
+    );
+
+    const result = await service.calculateCapitalGainsByMonth(userId, {
+      startDate: "2024-01-01",
+      endDate: "2024-02-29",
+    });
+
+    const jan = result.find((r) => r.month === "2024-01")!;
+    const feb = result.find((r) => r.month === "2024-02")!;
+    expect(jan.realizedGain).toBeNull();
+    // Feb's position was acquired at a known 1,000 and sold for 1,100.
+    expect(feb.realizedGain).toBe(100);
+    expect(feb.totalCapitalGain).toBe(100);
+  });
+
+  it("reports unknown boundary values when the security currency cannot be converted (P5-009)", async () => {
+    // A USD security in a CAD account with no USD/CAD rate in either direction.
+    // The security's value at each month boundary is therefore unknown, so the
+    // capital gain measured between them is unknown too.
+    //
+    // The rate used to fall back to 1, which valued 100 USD shares as 100 CAD
+    // and produced a confident gain figure from an arbitrary conversion.
+    exchangeRateService.getLatestRate.mockResolvedValue(null);
+    txRepo.find.mockResolvedValue([
+      makeTx({
+        id: "buy",
+        action: InvestmentAction.BUY,
+        transactionDate: "2023-12-15",
+        quantity: 100,
+        price: 50,
+        totalAmount: 5000,
+        security: {
+          id: securityId,
+          symbol: "ABC",
+          name: "ABC Corp",
+          currencyCode: "USD",
+        },
+      } as never),
+    ]);
+    priceRepo.query.mockResolvedValue(
+      priceRows([
+        { date: "2023-12-31", price: 50 },
+        { date: "2024-01-31", price: 55 },
+      ]),
+    );
+
+    const result = await service.calculateCapitalGainsByMonth(userId, {
+      startDate: "2024-01-01",
+      endDate: "2024-01-31",
+    });
+
+    expect(result).toHaveLength(1);
+    const jan = result[0];
+    expect(jan.startValue).toBeNull();
+    expect(jan.endValue).toBeNull();
+    expect(jan.unrealizedGain).toBeNull();
+    expect(jan.totalCapitalGain).toBeNull();
+    // Realized gain comes from each transaction's own stored rate, so it stays
+    // known -- there were no sales, and zero is the right answer for that.
+    expect(jan.realizedGain).toBe(0);
+  });
+
+  it("still computes gains when the security and account share a currency", async () => {
+    // The same-currency path must not be caught by the missing-rate handling:
+    // rate 1 is correct here because the codes are equal, and no lookup happens.
+    exchangeRateService.getLatestRate.mockResolvedValue(null);
+    txRepo.find.mockResolvedValue([
+      makeTx({
+        id: "buy",
+        action: InvestmentAction.BUY,
+        transactionDate: "2023-12-15",
+        quantity: 100,
+        price: 50,
+        totalAmount: 5000,
+      }),
+    ]);
+    priceRepo.query.mockResolvedValue(
+      priceRows([
+        { date: "2023-12-31", price: 50 },
+        { date: "2024-01-31", price: 55 },
+      ]),
+    );
+
+    const result = await service.calculateCapitalGainsByMonth(userId, {
+      startDate: "2024-01-01",
+      endDate: "2024-01-31",
+    });
+
+    expect(result[0].totalCapitalGain).toBe(500);
+    expect(result[0].startValue).toBe(5000);
+    expect(result[0].endValue).toBe(5500);
   });
 
   it("decomposes a SELL month into realized + unrealized capital gains", async () => {
@@ -799,6 +1138,62 @@ describe("PortfolioCalculationService.primeLiveRates", () => {
 
     expect(holdingsRepo.createQueryBuilder).not.toHaveBeenCalled();
     expect(rateCache.get("USD->CAD")).toBe(1.37);
+  });
+});
+
+describe("PortfolioCalculationService.convertToDefault", () => {
+  let service: PortfolioCalculationService;
+  let exchangeRateService: { getLatestRate: jest.Mock };
+
+  beforeEach(() => {
+    exchangeRateService = { getLatestRate: jest.fn().mockResolvedValue(null) };
+    service = buildService([], exchangeRateService);
+  });
+
+  it("returns zero for a zero amount without looking for a rate", async () => {
+    // Zero converts to zero at any rate, so it needs none. Asking for one turned
+    // an empty foreign account -- no cash, no holdings, nothing invested -- into
+    // an unresolvable pair that made the whole portfolio's totals unknown. A
+    // settled question must not be reported as one that could not be worked out.
+    const result = await service.convertToDefault(
+      0,
+      "EUR",
+      "CAD",
+      new Map<string, number>(),
+    );
+
+    expect(result).toBe(0);
+    expect(exchangeRateService.getLatestRate).not.toHaveBeenCalled();
+  });
+
+  it("still reports a non-zero amount with no rate as unknown", async () => {
+    // The control: the zero shortcut must not become a general fallback.
+    const result = await service.convertToDefault(
+      100,
+      "EUR",
+      "CAD",
+      new Map<string, number>(),
+    );
+
+    expect(result).toBeNull();
+  });
+
+  it("caches the absence of a rate, resolving a missing pair once per cache", async () => {
+    // A portfolio with 50 holdings in one unrated currency used to re-run both
+    // lookups (direct + inverse) and re-log the warning for every holding.
+    const cache = new Map<string, number | null>();
+
+    expect(await service.convertToDefault(100, "EUR", "CAD", cache)).toBeNull();
+    expect(await service.convertToDefault(250, "EUR", "CAD", cache)).toBeNull();
+    expect(await service.convertToDefault(999, "EUR", "CAD", cache)).toBeNull();
+
+    // Direct + inverse for the first call only; the cached null answers the rest.
+    expect(exchangeRateService.getLatestRate).toHaveBeenCalledTimes(2);
+  });
+
+  it("a cached absence does not shadow the zero shortcut", async () => {
+    const cache = new Map<string, number | null>([["EUR->CAD", null]]);
+    expect(await service.convertToDefault(0, "EUR", "CAD", cache)).toBe(0);
   });
 });
 
@@ -2342,5 +2737,322 @@ describe("PortfolioCalculationService.calculateHoldingsWithValues", () => {
     const result = await valuation(lot({ quantity: 10.00001 }));
 
     expect(result.holdingsWithValues[0].costBasisAccountCurrency).toBe(900);
+  });
+
+  it("names the pair that actually failed when a basis cannot reach the account currency", async () => {
+    // USD security in a PLN account, user default PLN, no USD->PLN rate. The
+    // failed conversion is USD->PLN; recording it as accountCurrency->default
+    // filed the gap under the degenerate "PLN->PLN" -- a pair that is not
+    // missing -- so the report pointed the user (and any AI consumer) at a rate
+    // that did not need fixing while never naming the one that did.
+    const usdHolding = {
+      ...holdingRow,
+      security: { ...holdingRow.security, currencyCode: "USD" },
+    };
+    const holdingRepo = { find: jest.fn().mockResolvedValue([usdHolding]) };
+    const txRepo = { find: jest.fn().mockResolvedValue([]) };
+    const accountRepo = { find: jest.fn().mockResolvedValue([]) };
+    const service = buildService(
+      [
+        [Holding, holdingRepo],
+        [InvestmentTransaction, txRepo],
+        [Account, accountRepo],
+      ],
+      { getLatestRate: jest.fn().mockResolvedValue(null) },
+    );
+    jest
+      .spyOn(service, "calculateCostBasisLotsInAccountCurrency")
+      .mockResolvedValue(new Map());
+
+    const result = await service.calculateHoldingsWithValues(
+      userId,
+      ["acct-1"],
+      "PLN",
+      new Map(),
+      async () => new Map([["sec-a", 50]]),
+    );
+
+    expect(result.holdingsWithValues[0].costBasisAccountCurrency).toBeNull();
+    expect(result.fxComplete).toBe(false);
+    expect(result.missingRatePairs).toContain("USD->PLN");
+    expect(result.missingRatePairs).not.toContain("PLN->PLN");
+  });
+
+  /**
+   * A holding carries two cost-basis figures with two different definitions, and
+   * they are labelled the same word on one screen: the portfolio card shows the
+   * replayed `costBasisAccountCurrency`, which includes each purchase's
+   * commission, while the holdings list's Cost Basis column shows the native
+   * `costBasis`, which is `quantity x averageCost` and carries none --
+   * `HoldingsService.updateHolding` blends only the price into the average.
+   *
+   * That is deliberate today, not an oversight, and the UI now says so in the
+   * column's tooltip. It is pinned here because the difference is otherwise
+   * invisible: both are plausible currency figures, and the gap is exactly the
+   * commission. If a product decision later makes the native basis
+   * commission-inclusive, this test is the one that has to change, and its
+   * failure is the prompt to update the tooltip with it.
+   */
+  it("reads costBasis from the stored average cost and costBasisAccountCurrency from the replay", async () => {
+    // Two cost-basis figures reach the holdings list from different sources and
+    // the projection must not conflate them. `costBasis` is quantity times the
+    // live `averageCost` -- which includes each purchase's commission
+    // (P5-006/FR-008), so it is not a commission-free figure -- expressed in the
+    // security's own currency. `costBasisAccountCurrency` is the replayed lot
+    // basis in the account's currency. Both include commission; they can still
+    // differ through currency conversion or the replay's lot handling versus a
+    // running average, so the mock gives them distinct values to prove each field
+    // is read from its own source rather than one overwriting the other. gainLoss
+    // follows the native figure.
+    const result = await valuation(lot({ costBasis: 305 }));
+    const holding = result.holdingsWithValues[0];
+
+    // 10 x stored averageCost 30.
+    expect(holding.costBasis).toBe(300);
+    // The replayed lot basis, surfaced as its own field.
+    expect(holding.costBasisAccountCurrency).toBe(305);
+    // Gain follows the native costBasis: 10 x 50 market - 300.
+    expect(holding.gainLoss).toBe(200);
+  });
+});
+
+describe("PortfolioCalculationService.calculateTWR", () => {
+  const userId = "user-1";
+
+  const buys = (currencyCode: string) => [
+    {
+      id: "tx-1",
+      userId,
+      accountId: "acct-1",
+      securityId: "sec-a",
+      security: { id: "sec-a", currencyCode },
+      action: InvestmentAction.BUY,
+      transactionDate: "2024-01-02",
+      quantity: 10,
+      price: 10,
+      createdAt: new Date("2024-01-02"),
+    },
+    {
+      id: "tx-2",
+      userId,
+      accountId: "acct-1",
+      securityId: "sec-a",
+      security: { id: "sec-a", currencyCode },
+      action: InvestmentAction.BUY,
+      transactionDate: "2024-02-02",
+      quantity: 10,
+      price: 12,
+      createdAt: new Date("2024-02-02"),
+    },
+  ];
+
+  const runTwr = async (currencyCode: string, latestRate: number | null) => {
+    const txRepo = { find: jest.fn().mockResolvedValue(buys(currencyCode)) };
+    const service = buildService([[InvestmentTransaction, txRepo]], {
+      getLatestRate: jest.fn().mockResolvedValue(latestRate),
+    });
+    jest.spyOn(service, "getAllPricesForSecurities").mockResolvedValue(
+      new Map([
+        [
+          "sec-a",
+          [
+            { date: "2024-01-02", price: 10 },
+            { date: "2024-02-02", price: 12 },
+          ],
+        ],
+      ]),
+    );
+    return service.calculateTWR(
+      userId,
+      ["acct-1"],
+      "USD",
+      new Map(),
+      async () => new Map([["sec-a", 15]]),
+    );
+  };
+
+  it("computes a chained return when every period value converts", async () => {
+    const twr = await runTwr("USD", 1);
+
+    // 100 -> 120 at the second buy (factor 1.2), 240 -> 300 today (1.25):
+    // chained (1.2 * 1.25) - 1 = 50%.
+    expect(twr).toBeCloseTo(50, 5);
+  });
+
+  it("returns null when a period value omitted an unconvertible position", async () => {
+    // EUR security, USD reporting, no EUR->USD rate. Every period value is
+    // then a knownSubtotal that silently omitted the position, and unlike the
+    // summary's totals the chained ratio carries no missingRatePairs field a
+    // consumer could check -- so the only honest answer is unknown, the same
+    // treatment CAGR gets from its completeness gate.
+    const twr = await runTwr("EUR", null);
+
+    expect(twr).toBeNull();
+  });
+
+  const runSplitTwr = async (latestPrice: number) => {
+    const txRepo = {
+      find: jest.fn().mockResolvedValue([
+        {
+          id: "b1",
+          userId,
+          accountId: "acct-1",
+          securityId: "sec-a",
+          security: { id: "sec-a", currencyCode: "USD" },
+          action: InvestmentAction.BUY,
+          transactionDate: "2024-01-01",
+          quantity: 100,
+          price: 10,
+          createdAt: new Date("2024-01-01"),
+        },
+        {
+          id: "s1",
+          userId,
+          accountId: "acct-1",
+          securityId: "sec-a",
+          security: { id: "sec-a", currencyCode: "USD" },
+          action: InvestmentAction.SPLIT,
+          transactionDate: "2024-02-01",
+          quantity: 2,
+          createdAt: new Date("2024-02-01"),
+        },
+      ]),
+    };
+    const service = buildService([[InvestmentTransaction, txRepo]], {
+      getLatestRate: jest.fn().mockResolvedValue(1),
+    });
+    jest.spyOn(service, "getAllPricesForSecurities").mockResolvedValue(
+      new Map([
+        [
+          "sec-a",
+          [
+            { date: "2024-01-01", price: 10 },
+            { date: "2024-02-01", price: 10 },
+          ],
+        ],
+      ]),
+    );
+    return service.calculateTWR(
+      userId,
+      ["acct-1"],
+      "USD",
+      new Map(),
+      async () => new Map([["sec-a", latestPrice]]),
+    );
+  };
+
+  // The behavioural half. TWR chains price ratios and resets the running value
+  // after each date's transactions, so within every sub-period the share count
+  // is constant and divides out of V(t)/V(t-1) = P(t)/P(t-1): a correct walk
+  // returns the security's price return whatever the absolute count. That
+  // invariance is why an *ignored* split is not visible to a normal-holdings
+  // TWR -- 100 shares and 200 shares give the identical ratio -- and why the
+  // net-worth history, which reports absolute value, is where the 2-for-1 ->
+  // 200-share arithmetic is pinned (see net-worth.service.spec.ts). What this
+  // case does pin is the *timing*: the split has to fold in AFTER the factor for
+  // its own date is taken against the pre-split count. Fold it before, and the
+  // boundary factor doubles. BUY 100 @ 10, steady at 10 across the split, latest
+  // 12 -> a clean +20%; applying the split a step early would report +140%.
+  it("returns the price return through a split, not a share-count jump", async () => {
+    expect(await runSplitTwr(12)).toBeCloseTo(20, 5);
+  });
+
+  it("is flat when price is unchanged across the split", async () => {
+    expect(await runSplitTwr(10)).toBeCloseTo(0, 5);
+  });
+
+  // Where the ignored split DOES move a single-security TWR: a sale that only
+  // the post-split count can cover. BUY 100 @ 10, 2-for-1 split, SELL 150 @ 10
+  // -- valid against the 200 shares the split produces, an oversell against the
+  // 100 the old walk kept. Prices hold at 10 so no split-date price artifact
+  // enters, then the last close is 12. The correct walk holds 50 shares into
+  // that +20% final period; the old walk drives holdings to -50, whose negative
+  // value trips the `previousValue > 0` gate and drops the final factor, so it
+  // reports 0% and silently loses the gain. This is the arithmetic pin the
+  // value-invariant cases above cannot provide.
+  it("keeps the post-split count through an oversell so the final gain counts", async () => {
+    const txRepo = {
+      find: jest.fn().mockResolvedValue([
+        {
+          id: "b1",
+          userId,
+          accountId: "acct-1",
+          securityId: "sec-a",
+          security: { id: "sec-a", currencyCode: "USD" },
+          action: InvestmentAction.BUY,
+          transactionDate: "2024-01-01",
+          quantity: 100,
+          price: 10,
+          createdAt: new Date("2024-01-01"),
+        },
+        {
+          id: "s1",
+          userId,
+          accountId: "acct-1",
+          securityId: "sec-a",
+          security: { id: "sec-a", currencyCode: "USD" },
+          action: InvestmentAction.SPLIT,
+          transactionDate: "2024-02-01",
+          quantity: 2,
+          createdAt: new Date("2024-02-01"),
+        },
+        {
+          id: "sell1",
+          userId,
+          accountId: "acct-1",
+          securityId: "sec-a",
+          security: { id: "sec-a", currencyCode: "USD" },
+          action: InvestmentAction.SELL,
+          transactionDate: "2024-03-01",
+          quantity: 150,
+          price: 10,
+          createdAt: new Date("2024-03-01"),
+        },
+      ]),
+    };
+    const service = buildService([[InvestmentTransaction, txRepo]], {
+      getLatestRate: jest.fn().mockResolvedValue(1),
+    });
+    jest.spyOn(service, "getAllPricesForSecurities").mockResolvedValue(
+      new Map([
+        [
+          "sec-a",
+          [
+            { date: "2024-01-01", price: 10 },
+            { date: "2024-02-01", price: 10 },
+            { date: "2024-03-01", price: 10 },
+          ],
+        ],
+      ]),
+    );
+    const twr = await service.calculateTWR(
+      userId,
+      ["acct-1"],
+      "USD",
+      new Map(),
+      async () => new Map([["sec-a", 12]]),
+    );
+    // 50 shares x (12/10) over the final period; the old ignored-split walk
+    // reports 0% here.
+    expect(twr).toBeCloseTo(20, 5);
+  });
+
+  // The mechanical half, kept as a cheap secondary guard alongside the oversell
+  // case above: a source pin catches a re-introduction wherever a future price
+  // path happens not to cross a holdings sign change.
+  // `investment-replay.guard.spec.ts` only flags a hand-rolled SPLIT *case*;
+  // this walk omitted SPLIT through a comment instead.
+  it("folds the split through the shared reducer rather than deciding inline", () => {
+    expect(applyActionToQuantity(100, InvestmentAction.SPLIT, 2)).toBe(200);
+
+    const source = readFileSync(
+      join(__dirname, "portfolio-calculation.service.ts"),
+      "utf8",
+    );
+    const walk = source.slice(source.indexOf("async calculateTWR("));
+    expect(walk).toContain("applyActionToQuantity(current, tx.action, qty)");
+    expect(walk).not.toContain(
+      "DIVIDEND, INTEREST, CAPITAL_GAIN, SPLIT: no quantity change",
+    );
   });
 });

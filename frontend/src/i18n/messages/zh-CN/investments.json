@@ -38,6 +38,10 @@
     "title": "投资组合摘要",
     "noData": "暂无投资数据。",
     "totalPortfolioValue": "投资组合总价值",
+    "knownPortfolioSubtotal": "投资组合价值（部分）",
+    "incompleteHeading": "这些数字并不完整",
+    "incompletePrices": "缺少 {symbols} 的当前价格，因此相关持仓未计入下方任何合计。",
+    "incompleteFx": "缺少 {pairs} 的汇率，因此这些货币的持仓未计入下方任何合计。",
     "values": "价值",
     "holdingsValue": "持仓价值",
     "holdingsValueTooltip": "根据最新可用价格计算的所有持有证券的当前市值。",
@@ -48,9 +52,9 @@
     "netInvested": "净投入金额",
     "netInvestedTooltip": "您存入投资账户的净金额，即总投入减去提取金额，不含投资收益、股息或利息。",
     "costBasis": "成本基础",
-    "costBasisTooltip": "您最初购买投资所支付的总金额，包括购买价格和交易费用。用于计算盈亏。",
+    "costBasisTooltip": "当前持仓的取得成本，由交易历史重建：买入价格加上每次买入收取的佣金，各自按支付该笔交易时的汇率换算。以您的显示货币显示。用于计算盈亏。",
     "gainLoss": "盈亏",
-    "gainLossTooltip": "当前持仓的未实现盈亏：市值减去成本基础。不包括过去销售的已实现收益或已获得的收入。",
+    "gainLossTooltip": "当前持仓的未实现盈亏：按今日价格计算的市值减去上面的成本基础。不包括过去卖出已实现的收益，也不包括已收到的股息和利息。",
     "returns": "回报率",
     "simpleReturn": "简单回报率",
     "simpleReturnTooltip": "持仓的总百分比盈亏，计算公式为（市值 - 成本基础）÷ 成本基础。不考虑投入或提取资金的时间。",
@@ -59,26 +63,28 @@
     "twrTooltip": "衡量您的投资表现，不受资金进出时间的影响。消除现金流时机的影响，以展示纯投资表现。",
     "cagr": "年复合增长率",
     "cagrTooltip": "复合年增长率。基于净投入金额与当前投资组合价值，计算每年保持稳定增长时的年化回报率。",
-    "notAvailable": "不适用"
+    "notAvailable": "不适用",
+    "unpricedHoldings": "部分估值：{count, plural, one {# 项持仓} other {# 项持仓}}没有当前价格（{symbols}），以下数值不包含这些持仓。"
   },
   "assetAllocation": {
     "title": "资产配置",
     "noData": "暂无配置数据。",
+    "knownValueOnly": "百分比仅涵盖可估值部分；部分持仓无法估值。",
     "cash": "现金",
     "untagged": "无标签",
     "noTagData": "没有可显示的带标签持仓。为你的证券添加标签即可按标签查看敞口。",
+    "noKeyData": "没有持仓包含此标签键的值。将证券标记为 key:value（例如 country:usa）以查看此细分。",
     "noCountryData": "暂无国家/地区配置数据。",
+    "keySelectorLabel": "用于汇总的标签键",
     "otherCountries": "其他国家/地区",
     "otherAssetClasses": "其他资产类别",
     "groupBy": {
       "security": "按证券",
       "tag": "按标签",
-      "country": "按国家/地区",
       "tagKey": "按键",
+      "country": "按国家/地区",
       "assetClass": "按资产类别"
-    },
-    "noKeyData": "没有持仓包含此标签键的值。将证券标记为 key:value（例如 country:usa）以查看此细分。",
-    "keySelectorLabel": "用于汇总的标签键"
+    }
   },
   "holdingsList": {
     "title": "持仓",
@@ -93,6 +99,7 @@
   "groupedHoldings": {
     "title": "按账户划分的持仓",
     "noHoldings": "您的投资组合无持仓。",
+    "accountIncomplete": "部分：此账户的合计不包含无法以 {currency} 计价的持仓。",
     "accountSummary": "{accounts} 个账户{accountsPlural}，{positions} 个持仓{positionsPlural}",
     "positionsWithCash": "{count} 个持仓{plural} + 现金",
     "positions": "{count} 个持仓{plural}",
@@ -172,6 +179,12 @@
     "actionReinvest": "再投资",
     "actionAddShares": "增加股份",
     "actionRemoveShares": "减少股份",
+    "actionReinvestInterest": "利息再投资",
+    "actionReinvestCapitalGainShort": "短期资本收益再投资",
+    "actionReinvestCapitalGainLong": "长期资本收益再投资",
+    "actionCapitalGainShort": "短期资本收益",
+    "actionCapitalGainLong": "长期资本收益",
+    "actionRedeem": "赎回存单/债券",
     "allActions": "所有操作"
   },
   "transactionForm": {
@@ -186,6 +199,12 @@
     "actionReinvest": "股息再投资",
     "actionAddShares": "增加股份",
     "actionRemoveShares": "减少股份",
+    "actionReinvestInterest": "利息再投资",
+    "actionReinvestCapitalGainShort": "短期资本收益再投资",
+    "actionReinvestCapitalGainLong": "长期资本收益再投资",
+    "actionCapitalGainShort": "短期资本收益",
+    "actionCapitalGainLong": "长期资本收益",
+    "actionRedeem": "赎回存单/债券",
     "actionTransfer": "转移",
     "brokerageAccount": "经纪账户",
     "fromAccount": "来源账户",
@@ -206,6 +225,7 @@
     "pricePerShare": "每股价格（{currency}）",
     "commissionFees": "佣金/费用（{currency}）",
     "description": "描述（可选）",
+    "statusLockedToParent": "此交易属于拆分交易的一部分。请改为更改拆分交易的状态，使两侧一并变更。",
     "descriptionPlaceholder": "可选备注",
     "splitRatio": "拆股比例",
     "noSplitRatioWarning": "此交易未设置拆股比例。请按公告中的比例输入后再保存，Monize 不会自动假设比例。",
@@ -257,7 +277,10 @@
     "toastAvailableShares": "仅有 {available} 股可供转移",
     "toastSplitRatioRequired": "拆股比例必须大于零",
     "toastPairedLegError": "无法加载配对转移记录，请重新打开后重试",
-    "toastSaveFailed": "保存交易失败"
+    "toastSaveFailed": "保存交易失败",
+    "exchangeRateUnresolved": "没有 {from} 兑 {to} 的汇率。请在保存前输入汇率或换算后的总额。",
+    "toastExchangeRateRequired": "在保存跨货币交易前请输入汇率。",
+    "notAvailable": "不可用"
   },
   "newTransactionButton": {
     "label": "+ 新建交易",

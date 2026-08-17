@@ -317,7 +317,9 @@
   "monteCarlo": {
     "scenarioNotFound": "找不到情境 {{ id }}",
     "scenarioIdsMustBeArray": "scenarioIds 必須是陣列",
-    "atLeastOneAccountRequired": "至少需要一個 accountId"
+    "atLeastOneAccountRequired": "至少需要一個 accountId",
+    "currentValueUnavailable": "無法確定所選帳戶的目前價值，因此模擬無法以該值為起點。請手動輸入起始金額，或在價格與匯率可用後重試。",
+    "historicalReturnsUnavailable": "無法計算所選帳戶的歷史報酬，因此模擬無法使用。請手動輸入預期報酬與波動率，或在價格與匯率可用後重試。"
   },
   "netWorth": {
     "invalidStartDate": "startDate 必須為 YYYY-MM-DD 格式",
@@ -361,6 +363,7 @@
     "requiresBrokerageAccount": "定期投資交易需要經紀科目",
     "notFound": "找不到 ID 為 {{ id }} 的定期交易",
     "occurrenceAlreadyPosted": "此次記帳已完成。",
+    "changedConcurrently": "The scheduled transaction changed during the operation. Reload it and retry.",
     "fxPlainOnly": "只有一般定期交易才能使用其他貨幣，分割、轉帳和投資均不支援",
     "fxRateUnavailable": "{{ date }} 沒有從 {{ from }} 到 {{ to }} 的可用匯率。請以 {{ to }} 輸入金額後再過帳。",
     "investmentActionRequired": "定期投資交易需要投資操作",
@@ -396,6 +399,7 @@
     "cannotChangeSplitAccount": "無法變更投資分割的科目；請移除分割後在新科目上重新新增",
     "splitNoFundingAccount": "投資分割不使用獨立的資金科目",
     "cannotChangeSplitDate": "無法變更投資分割的日期；請改為編輯父分割交易的日期",
+    "embeddedStatusLocked": "此投資交易屬於拆分交易的一部分。請改為變更拆分交易的狀態，使兩側一併變更。",
     "invalidAccountUuid": "無效的科目 UUID：{{ id }}",
     "startDateFormat": "startDate 必須為 YYYY-MM-DD 格式",
     "endDateFormat": "endDate 必須為 YYYY-MM-DD 格式",
@@ -435,8 +439,10 @@
     "invalidTagKey": "需要標籤鍵（1-100 個字元）",
     "assetOptionNameRequired": "需要填寫資產類別名稱。",
     "documentNotFound": "找不到該文件",
+    "embeddedSplitAmountMismatch": "此分割記錄了 {{ amount }}，但 {{ action }} {{ quantity }} @ {{ price }} 按 {{ rate }} 的匯率換算應為 {{ expected }}。請使用該金額，或說明您想使用的匯率。",
     "selectionNotFound": "找不到所選證券中的一檔或多檔",
-    "comparisonSelectionEmpty": "請至少選擇一檔證券或一個市場指數進行比較"
+    "comparisonSelectionEmpty": "請至少選擇一檔證券或一個市場指數進行比較",
+    "exchangeRateNotPositive": "匯率必須大於零"
   },
   "tags": {
     "notFound": "找不到 ID 為 {{ id }} 的標籤",
@@ -490,15 +496,27 @@
     "transferAmountNegative": "轉帳金額不得為負數",
     "notATransfer": "交易不是轉帳",
     "splitTransferLegAccountLocked": "此轉帳屬於分割交易的一部分。請改為在來源交易中編輯分割以變更其帳戶。",
+    "splitTransferLegStatusLocked": "此轉帳屬於拆分交易的一部分。請編輯其所屬的拆分交易來作廢或還原它，使兩側一併變更。",
+    "investmentCashLegStatusLocked": "此交易是某筆投資交易的現金側。請透過變更該投資交易的狀態來作廢或還原它，使兩側一併變更。",
     "notFoundById": "找不到 ID 為 {{ id }} 的交易",
     "bulkUpdateNoFields": "至少需要提供一個更新欄位",
     "bulkSplitNoMatchingLinesOne": "已略過 1 筆分割交易，因為它沒有任何分割與類別更新相符",
     "bulkSplitNoMatchingLinesMany": "已略過 {{ count }} 筆分割交易，因為它們沒有任何分割與類別更新相符",
+    "bulkSplitTransferLegSkippedOne": "已略過 1 筆拆分轉帳（請從其所屬的拆分交易中作廢或還原，使兩側一起變更）",
+    "bulkSplitTransferLegSkippedMany": "已略過 {{ count }} 筆拆分轉帳（請從其所屬的拆分交易中作廢或還原，使兩側一起變更）",
+    "bulkInvestmentCashLegSkippedOne": "已略過 1 筆投資現金交易（請透過變更該投資交易的狀態來作廢或還原，使兩側一起變更）",
+    "bulkInvestmentCashLegSkippedMany": "已略過 {{ count }} 筆投資現金交易（請透過變更相應投資交易的狀態來作廢或還原，使兩側一起變更）",
     "payeeNotFound": "找不到收款人",
     "fxFieldsIncomplete": "originalAmount 和 originalCurrencyCode 必須同時提供",
     "fxRateRequired": "外幣交易需要一個正的匯率",
     "fxSignMismatch": "originalAmount 和 amount 的符號必須相同",
-    "jointAccountMoveLocked": "共享帳戶中的交易無法移動到其他帳戶。"
+    "jointAccountMoveLocked": "共享帳戶中的交易無法移動到其他帳戶。",
+    "currencyMustMatchAccount": "交易貨幣 {{ supplied }} 必須與帳戶貨幣 {{ account }} 一致。外幣記帳請使用 originalAmount 與 originalCurrencyCode。",
+    "transferSameCurrencyMustConserve": "兩個 {{ currency }} 帳戶之間的轉帳，兩側金額必須相同",
+    "transferSameCurrencyRateMustBeOne": "兩個 {{ currency }} 帳戶之間的轉帳，匯率只能為 1",
+    "transferRateUnavailable": "無法確定 {{ from }} -> {{ to }} 的匯率。請提供 exchangeRate 或目標金額，以便正確記錄該轉帳。",
+    "transferAmountsMustAgreeOnZero": "轉帳必須在兩側移動非零金額，或兩側皆為零",
+    "transferImpliedRateInvalid": "目標金額相對於來源金額意味著無法使用的匯率"
   },
   "users": {
     "userNotFound": "找不到使用者",

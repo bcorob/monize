@@ -25,6 +25,7 @@
   "closeMenu": "Cerrar menú",
   "mainMenu": "Menú principal",
   "loggedOut": "Sesión cerrada correctamente",
+  "logoutNotConfirmed": "Sesión cerrada solo en este dispositivo — el servidor no lo confirmó. Consulta el aviso en la pantalla de inicio de sesión.",
   "search": {
     "placeholder": "Buscar transacciones...",
     "label": "Buscar transacciones",

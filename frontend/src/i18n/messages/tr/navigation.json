@@ -25,6 +25,7 @@
   "closeMenu": "Menüyü kapat",
   "mainMenu": "Ana menü",
   "loggedOut": "Başarıyla çıkış yapıldı",
+  "logoutNotConfirmed": "Yalnızca bu cihazda oturum kapatıldı — sunucu onaylamadı. Oturum açma ekranındaki uyarıya bakın.",
   "search": {
     "placeholder": "İşlem ara...",
     "label": "İşlem ara",

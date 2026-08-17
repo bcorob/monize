@@ -71,16 +71,15 @@ export function SecuritySummaryCards({
    * All three cards convert at the same rate, so the arithmetic between them
    * still holds.
    */
-  // Only when a rate actually exists. `convertToDefault` falls back to the
-  // amount unconverted when it has no rate for the pair, which would print a
-  // euro figure under a zloty symbol -- a fabricated number, and a worse failure
-  // than showing nothing.
+  // `convertToDefault` now returns null for a pair it has no rate for, so this
+  // guard is belt-and-braces rather than the only thing standing between the
+  // reader and a euro figure under a zloty symbol.
   const hasRate = isForeign && getRate(currency, defaultCurrency) !== null;
 
   const converted = (amount: number | null) => {
     if (!hasRate || amount === null) return undefined;
     const value = convertToDefault(amount, currency);
-    if (!isFinite(value)) return undefined;
+    if (value === null || !isFinite(value)) return undefined;
     return t('cards.approx', {
       amount: formatCurrency(value, defaultCurrency),
     });

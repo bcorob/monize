@@ -284,7 +284,13 @@
       "TRANSFER_OUT": "ट्रांसफर गया",
       "REINVEST": "पुनर्निवेश",
       "ADD_SHARES": "शेयर जोड़ें",
-      "REMOVE_SHARES": "शेयर हटाएं"
+      "REMOVE_SHARES": "शेयर हटाएं",
+      "REINVEST_INTEREST": "ब्याज का पुनर्निवेश",
+      "REINVEST_CAPITAL_GAIN_SHORT": "अल्पकालिक पूंजी लाभ का पुनर्निवेश",
+      "REINVEST_CAPITAL_GAIN_LONG": "दीर्घकालिक पूंजी लाभ का पुनर्निवेश",
+      "CAPITAL_GAIN_SHORT": "अल्पकालिक पूंजी लाभ",
+      "CAPITAL_GAIN_LONG": "दीर्घकालिक पूंजी लाभ",
+      "REDEEM": "सीडी/बॉन्ड रिडीम करें"
     },
     "toasts": {
       "loadHistoryFailed": "इतिहास लोड करने में विफल",

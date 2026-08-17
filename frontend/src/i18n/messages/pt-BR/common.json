@@ -228,5 +228,10 @@
     "nothingToRedo": "Nada para refazer",
     "cannotRedo": "Não é possível refazer esta ação",
     "redoFailed": "Falha ao refazer"
+  },
+  "partialTotal": {
+    "srSuffix": "(total parcial)",
+    "explanation": "Total parcial: não foi possível incluir {count, plural, one {# valor} other {# valores}}, portanto o número exibido os exclui. Não há taxa para {displayCurrency} disponível para {currencies}.",
+    "explanationExcluded": "Total parcial: não foi possível calcular {count, plural, one {# valor} other {# valores}}, portanto o número exibido os exclui."
   }
 }

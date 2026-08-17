@@ -340,6 +340,46 @@ describe("OidcService", () => {
 
       expect(result.acr).toBeUndefined();
     });
+
+    it("returns auth_time when the claim is a number", async () => {
+      await service.initialize();
+      mockAuthorizationCodeGrant.mockResolvedValueOnce({
+        access_token: "at-123",
+        claims: () => ({
+          sub: "oidc-user-1",
+          auth_time: 1_700_000_000,
+        }),
+      });
+
+      const result = await service.handleCallback(
+        { code: "abc" },
+        "state-1",
+        "nonce-1",
+      );
+
+      expect(result.auth_time).toBe(1_700_000_000);
+    });
+
+    it("returns undefined auth_time when the claim is absent or malformed", async () => {
+      // The freshness check downstream treats undefined as "not fresh", so a
+      // provider sending a string here must not smuggle one through.
+      await service.initialize();
+      mockAuthorizationCodeGrant.mockResolvedValueOnce({
+        access_token: "at-123",
+        claims: () => ({
+          sub: "oidc-user-1",
+          auth_time: "1700000000",
+        }),
+      });
+
+      const result = await service.handleCallback(
+        { code: "abc" },
+        "state-1",
+        "nonce-1",
+      );
+
+      expect(result.auth_time).toBeUndefined();
+    });
   });
 
   describe("onModuleInit()", () => {

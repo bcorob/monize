@@ -519,6 +519,7 @@
     "billTemplateMissing": "{count, plural, one {# zaplanowany rachunek nie miał} few {# zaplanowane rachunki nie miały} many {# zaplanowanych rachunków nie miało} other {# zaplanowanych rachunków nie miało}} transakcji szablonowej w pliku i zostały pominięte.",
     "unusableBill": "{count, plural, one {# zaplanowany rachunek nie miał} few {# zaplanowane rachunki nie miały} many {# zaplanowanych rachunków nie miało} other {# zaplanowanych rachunków nie miało}} konta, użytecznej daty ani rozpoznanej cykliczności i zostały pominięte.",
     "billFrequencyApproximated": "{count, plural, one {# zaplanowany rachunek używa} few {# zaplanowane rachunki używają} many {# zaplanowanych rachunków używa} other {# zaplanowanych rachunków używa}} interwału powtarzania, którego Monize nie potrafi wyrazić dokładnie, więc użyto najbliższego krótszego.",
+    "loanInterestCategoryUnclear": "{count, plural, one {# spłata pożyczki obejmowała} few {# spłaty pożyczki obejmowały} many {# spłat pożyczki obejmowało} other {# spłaty pożyczki obejmowało}} wiele kategorii innych niż kapitał, więc kategoria odsetek pożyczki pozostała nieustawiona. Sprawdź, czy spłata obejmuje depozyt zabezpieczający (escrow), i ustaw kategorię odsetek po imporcie.",
     "showTransactions": "{count, plural, one {Pokaż # transakcję} few {Pokaż # transakcje} many {Pokaż # transakcji} other {Pokaż # transakcji}}",
     "hideTransactions": "Ukryj transakcje",
     "reviewInMoney": "Otwórz je w Microsoft Money, aby je sprawdzić lub poprawić, a następnie ponownie wyeksportuj i zaimportuj.",

@@ -519,6 +519,7 @@
     "billTemplateMissing": "{count, plural, other {# planlanmış faturanın}} dosyada şablon işlemi yoktu ve atlandı.",
     "unusableBill": "{count, plural, other {# planlanmış faturanın}} hesabı, kullanılabilir tarihi veya tanınan bir yinelenmesi yoktu ve atlandı.",
     "billFrequencyApproximated": "{count, plural, other {# planlanmış fatura}} Monize'ın tam olarak ifade edemediği bir yineleme aralığı kullanıyor; en yakın daha kısa aralık kullanıldı.",
+    "loanInterestCategoryUnclear": "{count, plural, other {# kredi ödemesi}} ana para dışında birden fazla kategori içeriyordu, bu yüzden kredinin faiz kategorisi ayarlanmadı. Ödemenin emanet (escrow) içerip içermediğini kontrol edin ve içe aktarmadan sonra faiz kategorisini ayarlayın.",
     "showTransactions": "{count, plural, other {# işlemi}} göster",
     "hideTransactions": "İşlemleri gizle",
     "reviewInMoney": "Bunları Microsoft Money içinde açıp kontrol edin veya düzeltin, ardından yeniden dışa aktarıp içe aktarın.",

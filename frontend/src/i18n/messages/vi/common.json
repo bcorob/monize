@@ -228,5 +228,10 @@
     "nothingToRedo": "Không có gì để làm lại",
     "cannotRedo": "Không thể làm lại hành động này",
     "redoFailed": "Làm lại thất bại"
+  },
+  "partialTotal": {
+    "srSuffix": "(tổng một phần)",
+    "explanation": "Tổng một phần: không thể bao gồm {count, plural, other {# khoản}}, vì vậy số liệu hiển thị đã loại trừ chúng. Không có tỷ giá sang {displayCurrency} cho {currencies}.",
+    "explanationExcluded": "Tổng một phần: không thể tính được {count, plural, other {# khoản}}, vì vậy số liệu hiển thị đã loại trừ chúng."
   }
 }

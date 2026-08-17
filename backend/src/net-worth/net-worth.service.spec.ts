@@ -98,6 +98,7 @@ describe("NetWorthService", () => {
     statementDueDay: null,
     statementSettlementDay: null,
     paymentAmount: null,
+    extraPaymentAmount: null,
     paymentFrequency: null,
     paymentStartDate: null,
     sourceAccountId: null,
@@ -645,7 +646,7 @@ describe("NetWorthService", () => {
           {
             securityId: "sec-1",
             action: InvestmentAction.SPLIT,
-            quantity: 90,
+            quantity: 2,
             transactionDate: "2024-03-05",
           },
         ]);
@@ -661,8 +662,117 @@ describe("NetWorthService", () => {
         expect(insertCalls[0][1][4]).toBe(10500);
         // Month 2 (Feb): 105 - SELL 20 + TRANSFER_IN 10 = 95 shares * 100 = 9500
         expect(insertCalls[1][1][4]).toBe(9500);
-        // Month 3 (Mar): 95 - TRANSFER_OUT 5 + SPLIT 90 = 180 shares * 100 = 18000
+        // Month 3 (Mar): 95 - TRANSFER_OUT 5 = 90, then a 2-for-1 SPLIT
+        // MULTIPLIES the position: 90 * 2 = 180 shares * 100 = 18000.
+        //
+        // This expectation previously read "+ SPLIT 90 = 180" with a fixture
+        // quantity of 90 -- additive semantics that happened to land on the
+        // same number, which is why the wrong reducer stayed green. A split's
+        // quantity is a ratio (audit P5-011); under the old code a ratio of 2
+        // here would have produced 92 shares and 9200.
         expect(insertCalls[2][1][4]).toBe(18000);
+      });
+
+      it("multiplies by the split ratio rather than adding it (P5-011)", async () => {
+        // A separate case with a fixture that cannot be satisfied by both
+        // readings: 10 shares and a 2-for-1 split is 20 shares (2000 at 100),
+        // never 12 (1200).
+        accountRepository.findOne.mockResolvedValue({
+          ...mockBrokerageAccount,
+        });
+        reportQuery
+          .mockResolvedValueOnce([{ earliest: null }])
+          .mockResolvedValueOnce([{ inv_earliest: "2024-01-01" }])
+          .mockResolvedValueOnce([{ month: "2024-01-01", balance: 0 }])
+          .mockResolvedValueOnce([
+            {
+              security_id: "sec-1",
+              price_date: "2024-01-15",
+              close_price: 100,
+            },
+          ])
+          .mockResolvedValue([]);
+
+        const mockSecurity: Partial<Security> = {
+          id: "sec-1",
+          symbol: "TEST",
+          skipPriceUpdates: false,
+        };
+
+        invTxRepository.find.mockResolvedValue([
+          {
+            securityId: "sec-1",
+            action: InvestmentAction.BUY,
+            quantity: 10,
+            transactionDate: "2024-01-05",
+          },
+          {
+            securityId: "sec-1",
+            action: InvestmentAction.SPLIT,
+            quantity: 2,
+            transactionDate: "2024-01-10",
+          },
+        ]);
+        securityRepository.findByIds.mockResolvedValue([mockSecurity]);
+
+        await service.recalculateAccount("user-1", "brokerage-1");
+
+        const insertCalls = snapshotQuery.mock.calls.filter(
+          (call: any[]) =>
+            typeof call[0] === "string" && call[0].includes("INSERT"),
+        );
+        expect(insertCalls[0][1][4]).toBe(2000);
+      });
+
+      it("includes ADD_SHARES and REMOVE_SHARES in the replay", async () => {
+        // These two actions were absent from all three historical reducers, so
+        // shares booked without a purchase never reached a net-worth chart at
+        // all -- the position read as 0 while the holdings page showed 15.
+        accountRepository.findOne.mockResolvedValue({
+          ...mockBrokerageAccount,
+        });
+        reportQuery
+          .mockResolvedValueOnce([{ earliest: null }])
+          .mockResolvedValueOnce([{ inv_earliest: "2024-01-01" }])
+          .mockResolvedValueOnce([{ month: "2024-01-01", balance: 0 }])
+          .mockResolvedValueOnce([
+            {
+              security_id: "sec-1",
+              price_date: "2024-01-15",
+              close_price: 100,
+            },
+          ])
+          .mockResolvedValue([]);
+
+        const mockSecurity: Partial<Security> = {
+          id: "sec-1",
+          symbol: "TEST",
+          skipPriceUpdates: false,
+        };
+
+        invTxRepository.find.mockResolvedValue([
+          {
+            securityId: "sec-1",
+            action: InvestmentAction.ADD_SHARES,
+            quantity: 20,
+            transactionDate: "2024-01-05",
+          },
+          {
+            securityId: "sec-1",
+            action: InvestmentAction.REMOVE_SHARES,
+            quantity: 5,
+            transactionDate: "2024-01-06",
+          },
+        ]);
+        securityRepository.findByIds.mockResolvedValue([mockSecurity]);
+
+        await service.recalculateAccount("user-1", "brokerage-1");
+
+        const insertCalls = snapshotQuery.mock.calls.filter(
+          (call: any[]) =>
+            typeof call[0] === "string" && call[0].includes("INSERT"),
+        );
+        expect(insertCalls[0][1][4]).toBe(1500);
       });
 
       it("uses transaction prices for skipPriceUpdates securities", async () => {
@@ -1556,8 +1666,50 @@ describe("NetWorthService", () => {
 
       const result = await service.getMonthlyNetWorth("user-1");
 
-      // Falls back to unconverted amount
-      expect(result[0].assets).toBe(1000);
+      // A missing rate is reported as a gap, NOT applied as 1:1 (audit P5-009).
+      //
+      // This assertion previously read `expect(result[0].assets).toBe(1000)`
+      // under the name "returns amount unconverted when no rate exists" -- it
+      // documented the defect as intended behaviour, which is why the defect
+      // survived. 1,000 JPY is roughly 7 USD; reporting it as 1,000 USD
+      // overstated the month by two orders of magnitude.
+      expect(result[0].fxComplete).toBe(false);
+      expect(result[0].missingRatePairs).toEqual(["JPY->USD"]);
+      // The unconvertible component is excluded from the subtotal rather than
+      // entered at face value.
+      expect(result[0].assets).toBe(0);
+    });
+
+    it("a zero balance in an unrated currency is a settled zero, not a gap", async () => {
+      // An emptied account holds zero in any currency, so it needs no rate.
+      // Asking for one flagged every month incomplete for as long as the empty
+      // account existed -- reporting a question that was never open as one that
+      // could not be answered ("zero needs no rate", root CLAUDE.md).
+      mabRepository.count.mockResolvedValue(5);
+      prefRepository.findOne.mockResolvedValue({
+        defaultCurrency: "USD",
+      });
+
+      reportQuery
+        .mockResolvedValueOnce([
+          {
+            month: "2024-01-01",
+            balance: 0,
+            market_value: null,
+            account_id: "jpy-account",
+            account_type: AccountType.CHEQUING,
+            account_sub_type: null,
+            currency_code: "JPY",
+          },
+        ])
+        // no rates returned
+        .mockResolvedValueOnce([]);
+
+      const result = await service.getMonthlyNetWorth("user-1");
+
+      expect(result[0].fxComplete).toBe(true);
+      expect(result[0].missingRatePairs).toEqual([]);
+      expect(result[0].assets).toBe(0);
     });
 
     it("aggregates multiple accounts in the same month", async () => {
@@ -2208,9 +2360,60 @@ describe("NetWorthService", () => {
       expect(result).toHaveLength(2);
       // Cost basis for first month: 100*100 (BUY) - 10*105 (SELL) = 10000 - 1050 = 8950
       // (replaces market_value of 11000)
-      expect(result[0]).toEqual({ month: "2024-03-01", value: 8950 });
+      expect(result[0]).toMatchObject({ month: "2024-03-01", value: 8950 });
       // Second month uses market_value as before
-      expect(result[1]).toEqual({ month: "2024-04-01", value: 12000 });
+      expect(result[1]).toMatchObject({ month: "2024-04-01", value: 12000 });
+    });
+
+    it("marks the month incomplete when a first-month cost-basis component cannot convert", async () => {
+      // A EUR-denominated buy seeds the first month of a USD account with no
+      // EUR->USD rate stored. The seed used to skip the component silently, so
+      // the month shipped an understated value under fxComplete: true -- the
+      // "flag that does not cover every total" shape the completeness contract
+      // forbids. The gap must ride the seed's aggregate into the month.
+      mabRepository.count.mockResolvedValue(5);
+      prefRepository.findOne.mockResolvedValue({ defaultCurrency: "USD" });
+
+      reportQuery
+        // snapshots
+        .mockResolvedValueOnce([
+          {
+            month: "2024-03-01",
+            balance: 0,
+            market_value: 11000,
+            account_id: "brokerage-new",
+            account_type: AccountType.INVESTMENT,
+            account_sub_type: "INVESTMENT_BROKERAGE",
+            currency_code: "USD",
+          },
+        ])
+        // firstMonthRows: 2024-03-01 IS this account's first active month
+        .mockResolvedValueOnce([
+          { account_id: "brokerage-new", first_month: "2024-03-01" },
+        ])
+        // txRows: a buy denominated in EUR
+        .mockResolvedValueOnce([
+          {
+            account_id: "brokerage-new",
+            action: "BUY",
+            quantity: 100,
+            price: 100,
+            transaction_date: "2024-03-05",
+            security_currency: "EUR",
+          },
+        ])
+        // rate index for the seed's EUR: nothing stored
+        .mockResolvedValueOnce([]);
+
+      const result = await service.getMonthlyInvestments(
+        "user-1",
+        "2024-03-01",
+        "2024-03-31",
+      );
+
+      expect(result).toHaveLength(1);
+      expect(result[0].fxComplete).toBe(false);
+      expect(result[0].missingRatePairs).toContain("EUR->USD");
     });
 
     it("does not adjust when snapshot month is after the account's first active month", async () => {
@@ -2499,9 +2702,14 @@ describe("NetWorthService", () => {
       // 03-01, 03-02 -> 03-02, 03-03 -> 03-03. This lines the daily series up
       // with the month-end-valued monthly snapshots.
       expect(result).toHaveLength(3);
-      expect(result[0]).toEqual({ date: "2025-03-01", value: 1000 });
-      expect(result[1]).toEqual({ date: "2025-03-02", value: 1020 });
-      expect(result[2]).toEqual({ date: "2025-03-03", value: 1010 });
+      expect(result[0]).toEqual({
+        date: "2025-03-01",
+        value: 1000,
+        fxComplete: true,
+        missingRatePairs: [],
+      });
+      expect(result[1]).toMatchObject({ date: "2025-03-02", value: 1020 });
+      expect(result[2]).toMatchObject({ date: "2025-03-03", value: 1010 });
     });
 
     it("includes cash balances from INVESTMENT_CASH accounts", async () => {
@@ -2538,8 +2746,8 @@ describe("NetWorthService", () => {
       );
 
       expect(result).toHaveLength(2);
-      expect(result[0]).toEqual({ date: "2025-03-01", value: 5000 });
-      expect(result[1]).toEqual({ date: "2025-03-02", value: 5100 });
+      expect(result[0]).toMatchObject({ date: "2025-03-01", value: 5000 });
+      expect(result[1]).toMatchObject({ date: "2025-03-02", value: 5100 });
     });
 
     it("resolves linked account pairs when accountIds provided", async () => {
@@ -2898,7 +3106,12 @@ describe("NetWorthService", () => {
         },
       ]);
 
-      // investment transactions: BUY 100, SELL 30, TRANSFER_OUT 20, SPLIT 50 = 100 shares
+      // BUY 100, SELL 30, TRANSFER_OUT 20 = 50 shares, then a 2-for-1 SPLIT
+      // MULTIPLIES that to 100 shares.
+      //
+      // The fixture previously carried a SPLIT quantity of 50 and relied on it
+      // being ADDED to 50 to reach 100 -- additive semantics that made the
+      // wrong reducer look right (audit P5-011). A split's quantity is a ratio.
       reportQuery.mockResolvedValueOnce([
         {
           account_id: "brok-1",
@@ -2925,7 +3138,7 @@ describe("NetWorthService", () => {
           account_id: "brok-1",
           security_id: "sec-1",
           action: "SPLIT",
-          quantity: "50",
+          quantity: "2",
           transaction_date: "2025-02-20",
         },
       ]);
@@ -3154,6 +3367,9 @@ describe("NetWorthService", () => {
       expect(result).toEqual({
         granularity: "monthly",
         currency: "USD",
+        // Nothing to convert is complete, not unknown.
+        fxComplete: true,
+        missingRatePairs: [],
         series: [],
         points: [],
       });

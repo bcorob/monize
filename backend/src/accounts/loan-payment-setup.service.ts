@@ -12,6 +12,7 @@ import {
   SetupLoanPaymentsDto,
   SetupLoanPaymentsResponseDto,
 } from "./dto/setup-loan-payments.dto";
+import { roundMoney } from "../common/round.util";
 import { CategoriesService } from "../categories/categories.service";
 import { ScheduledTransactionsService } from "../scheduled-transactions/scheduled-transactions.service";
 import {
@@ -22,6 +23,7 @@ import {
   calculateMortgagePaymentSplit,
   MortgagePaymentFrequency,
 } from "./mortgage-amortization.util";
+import { allocateLoanPayment } from "./loan-payment-waterfall.util";
 import { tr } from "../i18n/translate";
 import { withScopedDb } from "../common/db/scoped-db";
 
@@ -148,10 +150,36 @@ export class LoanPaymentSetupService {
       principalPayment = split.principal;
       interestPayment = split.interest;
     } else {
-      // No interest rate - entire payment goes to principal
-      principalPayment = dto.paymentAmount;
+      // No interest rate: the whole of the base payment goes to principal.
+      //
+      // This branch alone used `dto.paymentAmount` rather than
+      // `basePaymentAmount`, so extra principal was counted twice -- once inside
+      // the regular principal child and again in its own child. The children
+      // then summed to payment + extra against a parent of payment, and
+      // `ScheduledTransactionsService.create` validates that sum to exact 4dp
+      // equality: setting up payments on a 0% loan with any extra principal
+      // failed outright.
+      principalPayment = basePaymentAmount;
       interestPayment = 0;
     }
+
+    // The clamp sequence -- interest-first, balance caps, extra absorbing the
+    // shortfall -- is `allocateLoanPayment`, shared with the per-posting
+    // recalculation in `ScheduledTransactionLoanService` because the two must
+    // agree about what any installment looks like. A zero recorded balance
+    // here means the history has not been imported yet, not that the loan is
+    // paid off, so it does not bound the payment.
+    const allocation = allocateLoanPayment({
+      paymentAmount: dto.paymentAmount,
+      extraPrincipal,
+      interest: interestPayment,
+      principal: principalPayment,
+      currentBalance: currentBalance > 0 ? currentBalance : null,
+    });
+    principalPayment = allocation.principal;
+    interestPayment = allocation.interest;
+    const scheduledExtraPrincipal = allocation.extraPrincipal;
+    const parentAmount = allocation.total;
 
     // Map frequency for scheduled transactions
     // Mortgage frequencies like ACCELERATED_BIWEEKLY map to BIWEEKLY in scheduling
@@ -192,10 +220,10 @@ export class LoanPaymentSetupService {
 
     // Extra principal as a separate transfer split to the loan account,
     // matching the structure of imported transactions
-    if (extraPrincipal > 0) {
+    if (scheduledExtraPrincipal > 0) {
       splits.push({
         transferAccountId: accountId,
-        amount: -extraPrincipal,
+        amount: -scheduledExtraPrincipal,
         memo: "Extra Principal",
       });
     }
@@ -211,7 +239,7 @@ export class LoanPaymentSetupService {
         name: `${accountLabel} Payment - ${account.name}`,
         payeeId: dto.payeeId || undefined,
         payeeName: dto.payeeName || account.institution || undefined,
-        amount: -dto.paymentAmount,
+        amount: -parentAmount,
         currencyCode: account.currencyCode,
         frequency: scheduledFrequency as any,
         nextDueDate: dto.nextDueDate,
@@ -225,6 +253,10 @@ export class LoanPaymentSetupService {
     // Update the account with loan payment details
     const updateData: Partial<Account> = {
       paymentAmount: dto.paymentAmount,
+      // The configured standing instruction, not the possibly-clamped first
+      // installment: this is what the recalculation grows the extra back to
+      // once a transient clamp (an interest spike) has passed.
+      extraPaymentAmount: extraPrincipal,
       paymentFrequency: dto.paymentFrequency,
       paymentStartDate: new Date(dto.nextDueDate),
       sourceAccountId: dto.sourceAccountId,
@@ -263,13 +295,17 @@ export class LoanPaymentSetupService {
 
     this.logger.log(
       `Set up ${accountLabel.toLowerCase()} payments for account ${account.name}: ` +
-        `$${dto.paymentAmount} ${dto.paymentFrequency}, next due ${dto.nextDueDate}`,
+        `$${dto.paymentAmount} ${dto.paymentFrequency}, next due ${dto.nextDueDate}` +
+        (parentAmount !== roundMoney(dto.paymentAmount)
+          ? `, first installment clamped to $${parentAmount} against the outstanding balance`
+          : ""),
     );
 
     return {
       scheduledTransactionId: scheduledTransaction.id,
       accountId,
       paymentAmount: dto.paymentAmount,
+      firstInstallmentAmount: parentAmount,
       paymentFrequency: dto.paymentFrequency,
       nextDueDate: dto.nextDueDate,
     };

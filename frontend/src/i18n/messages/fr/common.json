@@ -228,5 +228,10 @@
     "nothingToRedo": "Rien à rétablir",
     "cannotRedo": "Impossible de rétablir cette action",
     "redoFailed": "Échec du rétablissement"
+  },
+  "partialTotal": {
+    "srSuffix": "(total partiel)",
+    "explanation": "Total partiel : {count, plural, one {# montant n’a pas pu être inclus} other {# montants n’ont pas pu être inclus}}, la valeur affichée les exclut donc. Aucun taux vers {displayCurrency} n’est disponible pour {currencies}.",
+    "explanationExcluded": "Total partiel : {count, plural, one {# montant n’a pas pu être calculé} other {# montants n’ont pas pu être calculés}}, la valeur affichée les exclut donc."
   }
 }

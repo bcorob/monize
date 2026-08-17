@@ -38,6 +38,10 @@
     "title": "포트폴리오 요약",
     "noData": "사용 가능한 투자 데이터가 없습니다.",
     "totalPortfolioValue": "총 포트폴리오 가치",
+    "knownPortfolioSubtotal": "포트폴리오 가치(일부)",
+    "incompleteHeading": "이 수치는 불완전합니다",
+    "incompletePrices": "{symbols}의 현재 가격이 없어 해당 보유 종목은 아래 어떤 합계에도 포함되지 않았습니다.",
+    "incompleteFx": "{pairs}의 환율이 없어 해당 통화의 보유 종목은 아래 어떤 합계에도 포함되지 않았습니다.",
     "values": "가치",
     "holdingsValue": "보유 가치",
     "holdingsValueTooltip": "최신 가격을 기준으로 현재 보유 중인 모든 유가증권의 현재 시장 가치입니다.",
@@ -48,9 +52,9 @@
     "netInvested": "순 투자금",
     "netInvestedTooltip": "투자 계정에 입금된 순 금액입니다. 투자 이익, 배당금 또는 이자를 제외한 총 기여금에서 인출금을 뺀 값입니다.",
     "costBasis": "취득원가",
-    "costBasisTooltip": "구매 가격과 거래 수수료를 포함하여 투자를 취득하기 위해 원래 지불한 총 금액입니다. 이익과 손실을 계산하는 데 사용됩니다.",
+    "costBasisTooltip": "현재 보유 종목의 취득 비용을 거래 내역에서 재구성한 값입니다. 매수 가격에 각 매수의 수수료를 더하고, 각각을 해당 거래를 결제한 시점의 환율로 환산했습니다. 표시 통화로 보여지며 손익 계산에 사용됩니다.",
     "gainLoss": "이익/손실",
-    "gainLossTooltip": "현재 보유 자산의 미실현 이익 또는 손실입니다: 시장 가치에서 취득원가를 뺀 값입니다. 과거 매도의 실현 이익이나 수령한 수입은 포함되지 않습니다.",
+    "gainLossTooltip": "현재 보유 종목의 미실현 손익: 오늘 가격 기준 시장 가치에서 위의 취득원가를 뺀 값입니다. 과거 매도로 실현된 이익이나 수령한 배당·이자는 포함하지 않습니다.",
     "returns": "수익률",
     "simpleReturn": "단순 수익률",
     "simpleReturnTooltip": "보유 자산에 대한 총 이익 또는 손실 비율로, (시장 가치 - 취득원가) ÷ 취득원가로 계산됩니다. 기여금이나 인출 시점을 고려하지 않습니다.",
@@ -59,26 +63,28 @@
     "twrTooltip": "자금 입출금 시점에 관계없이 투자 성과를 측정합니다. 현금 흐름 타이밍의 영향을 제거하여 순수 투자 성과를 보여줍니다.",
     "cagr": "CAGR",
     "cagrTooltip": "연평균 복합 성장률입니다. 성장이 매년 일정하게 이루어졌다고 가정했을 때, 순 투자금 대비 현재 포트폴리오 가치를 기준으로 한 연환산 수익률입니다.",
-    "notAvailable": "해당 없음"
+    "notAvailable": "해당 없음",
+    "unpricedHoldings": "부분 평가: {count, plural, one {#개 보유 종목} other {#개 보유 종목}}에 현재 가격이 없습니다({symbols}). 아래 값은 이를 제외합니다."
   },
   "assetAllocation": {
     "title": "자산 배분",
     "noData": "사용 가능한 배분 데이터가 없습니다.",
+    "knownValueOnly": "백분율은 평가된 금액만을 기준으로 합니다. 일부 보유 종목은 평가할 수 없었습니다.",
     "cash": "현금",
     "untagged": "태그 없음",
     "noTagData": "표시할 태그가 지정된 보유 종목이 없습니다. 태그별 노출을 보려면 증권에 태그를 추가하세요.",
+    "noKeyData": "이 태그 키에 대한 값을 가진 보유 종목이 없습니다. 이 분석을 보려면 증권을 key:value(예: country:usa) 형식으로 태그하세요.",
     "noCountryData": "국가별 배분 데이터가 없습니다.",
+    "keySelectorLabel": "집계할 태그 키",
     "otherCountries": "기타 국가",
     "otherAssetClasses": "기타 자산군",
     "groupBy": {
       "security": "증권별",
       "tag": "태그별",
-      "country": "국가별",
       "tagKey": "키별",
+      "country": "국가별",
       "assetClass": "자산군별"
-    },
-    "noKeyData": "이 태그 키에 대한 값을 가진 보유 종목이 없습니다. 이 분석을 보려면 증권을 key:value(예: country:usa) 형식으로 태그하세요.",
-    "keySelectorLabel": "집계할 태그 키"
+    }
   },
   "holdingsList": {
     "title": "보유 자산",
@@ -93,6 +99,7 @@
   "groupedHoldings": {
     "title": "계정별 보유 자산",
     "noHoldings": "포트폴리오에 보유 자산이 없습니다.",
+    "accountIncomplete": "일부: 이 계좌의 합계에는 {currency}로 평가할 수 없었던 보유 종목이 빠져 있습니다.",
     "accountSummary": "{positions}개 포지션{positionsPlural}을 보유한 {accounts}개 계정{accountsPlural}",
     "positionsWithCash": "{count}개 포지션{plural} + 현금",
     "positions": "{count}개 포지션{plural}",
@@ -172,6 +179,12 @@
     "actionReinvest": "재투자",
     "actionAddShares": "주식수 추가",
     "actionRemoveShares": "주식수 제거",
+    "actionReinvestInterest": "이자 재투자",
+    "actionReinvestCapitalGainShort": "단기 자본이득 재투자",
+    "actionReinvestCapitalGainLong": "장기 자본이득 재투자",
+    "actionCapitalGainShort": "단기 자본이득",
+    "actionCapitalGainLong": "장기 자본이득",
+    "actionRedeem": "CD/채권 상환",
     "allActions": "모든 작업"
   },
   "transactionForm": {
@@ -186,6 +199,12 @@
     "actionReinvest": "배당금 재투자",
     "actionAddShares": "주식수 추가",
     "actionRemoveShares": "주식수 제거",
+    "actionReinvestInterest": "이자 재투자",
+    "actionReinvestCapitalGainShort": "단기 자본이득 재투자",
+    "actionReinvestCapitalGainLong": "장기 자본이득 재투자",
+    "actionCapitalGainShort": "단기 자본이득",
+    "actionCapitalGainLong": "장기 자본이득",
+    "actionRedeem": "CD/채권 상환",
     "actionTransfer": "이체",
     "brokerageAccount": "증권사 계정",
     "fromAccount": "출금 계정",
@@ -206,6 +225,7 @@
     "pricePerShare": "주당 가격 ({currency})",
     "commissionFees": "수수료 / 거래비용 ({currency})",
     "description": "설명 (선택사항)",
+    "statusLockedToParent": "이 거래는 분할 거래의 일부입니다. 양쪽이 함께 변경되도록 대신 분할 거래의 상태를 변경하세요.",
     "descriptionPlaceholder": "선택적 메모",
     "splitRatio": "분할 비율",
     "noSplitRatioWarning": "이 거래에 분할 비율이 설정되지 않았습니다. 저장하기 전에 공표된 비율을 입력하세요 — Monize가 자동으로 가정하지 않습니다.",
@@ -257,7 +277,10 @@
     "toastAvailableShares": "이체 가능한 주식수는 {available}개뿐입니다",
     "toastSplitRatioRequired": "분할 비율은 0보다 커야 합니다",
     "toastPairedLegError": "대응 이체 항목을 로드할 수 없습니다. 다시 열고 시도하세요",
-    "toastSaveFailed": "거래 저장에 실패했습니다"
+    "toastSaveFailed": "거래 저장에 실패했습니다",
+    "exchangeRateUnresolved": "{from}→{to} 환율이 없습니다. 저장하기 전에 환율 또는 환산된 합계를 입력하세요.",
+    "toastExchangeRateRequired": "통화 간 거래를 저장하기 전에 환율을 입력하세요.",
+    "notAvailable": "사용 불가"
   },
   "newTransactionButton": {
     "label": "+ 새 거래",

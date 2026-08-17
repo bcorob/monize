@@ -921,6 +921,33 @@ Cx
     });
   });
 
+  describe("parseQif - Quicken's own c/R cleared markers", () => {
+    // Quicken writes `c` (cleared) and `R` (reconciled) as well as `*`/`X`.
+    // The parser accepted only `*`/`X`/`x`, so these two silently imported as
+    // unreconciled -- the regression these cases pin.
+    it("parses Cc as cleared", () => {
+      const qif = `!Type:Bank
+D01/15/2026
+T-50.00
+Cc
+^`;
+      const tx = parseQif(qif).transactions[0];
+      expect(tx.cleared).toBe(true);
+      expect(tx.reconciled).toBe(false);
+    });
+
+    it("parses CR as reconciled", () => {
+      const qif = `!Type:Bank
+D01/15/2026
+T-50.00
+CR
+^`;
+      const tx = parseQif(qif).transactions[0];
+      expect(tx.reconciled).toBe(true);
+      expect(tx.cleared).toBe(false);
+    });
+  });
+
   describe("parseQif - unparseable date returns as-is", () => {
     it("returns unparseable date string as-is", () => {
       const qif = `!Type:Bank
@@ -1893,6 +1920,34 @@ T1500.00
       const result = parseQifFull(qif, "MM/DD/YYYY");
       expect(result.accountBlocks[0].accountType).toBe("INVESTMENT");
       expect(result.accountBlocks[0].securities).toEqual(["AAPL"]);
+    });
+  });
+
+  describe("cleared markers", () => {
+    // Same regression as the single-account parser: the multi-account switch
+    // arm was a byte-identical copy that also dropped Quicken's own `c`/`R`,
+    // so both go through the shared helper now and both are pinned here.
+    it("parses Cc as cleared and CR as reconciled", () => {
+      const qif = `!Account
+NChecking
+TBank
+^
+!Type:Bank
+D01/15/2026
+T-50.00
+Cc
+^
+D01/16/2026
+T-30.00
+CR
+^
+`;
+      const result = parseQifFull(qif, "MM/DD/YYYY");
+      const [clearedTx, reconciledTx] = result.accountBlocks[0].transactions;
+      expect(clearedTx.cleared).toBe(true);
+      expect(clearedTx.reconciled).toBe(false);
+      expect(reconciledTx.reconciled).toBe(true);
+      expect(reconciledTx.cleared).toBe(false);
     });
   });
 

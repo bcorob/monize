@@ -25,6 +25,7 @@
   "closeMenu": "Fechar menu",
   "mainMenu": "Menu principal",
   "loggedOut": "Sessão encerrada com sucesso",
+  "logoutNotConfirmed": "Desconectado apenas neste dispositivo — o servidor não confirmou. Veja o aviso na tela de login.",
   "search": {
     "placeholder": "Pesquisar transações...",
     "label": "Pesquisar transações",

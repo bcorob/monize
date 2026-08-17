@@ -228,5 +228,10 @@
     "nothingToRedo": "Niente da ripristinare",
     "cannotRedo": "Impossibile ripristinare questa azione",
     "redoFailed": "Ripristino non riuscito"
+  },
+  "partialTotal": {
+    "srSuffix": "(totale parziale)",
+    "explanation": "Totale parziale: non è stato possibile includere {count, plural, one {# importo} other {# importi}}, quindi la cifra mostrata li esclude. Nessun tasso verso {displayCurrency} è disponibile per {currencies}.",
+    "explanationExcluded": "Totale parziale: non è stato possibile calcolare {count, plural, one {# importo} other {# importi}}, quindi la cifra mostrata li esclude."
   }
 }

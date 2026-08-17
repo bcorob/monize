@@ -89,6 +89,11 @@ describe("derived financial state has one set of writers", () => {
     const ALLOWED = new Set([
       // The helper that performs the locked read.
       "common/db/locks.ts",
+      // A pure function: computes a deletion's balance delta from the row it is
+      // given and performs no reads or writes itself. It matches the scan only
+      // because its doc comment's usage example names `updateBalance`; the
+      // locked read is the caller's obligation, and the callers are scanned.
+      "common/deletion-balance.util.ts",
     ]);
 
     const offenders = sourceFiles()

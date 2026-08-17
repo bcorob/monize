@@ -76,6 +76,10 @@ vi.mock('@/lib/user-settings', () => ({
 
 vi.mock('js-cookie', () => ({ default: { set: vi.fn() } }));
 
+vi.mock('@/lib/stepUpToken', () => ({
+  stashOidcReauthArtifact: vi.fn(),
+}));
+
 const mockGetProfile = vi.fn();
 
 vi.mock('@/lib/auth', () => ({
@@ -303,6 +307,60 @@ describe('CallbackPage', () => {
     render(<CallbackPage />);
     await waitFor(() => {
       expect(mockRouterPush).toHaveBeenCalledWith('/dashboard');
+    });
+  });
+
+  describe('re-authentication return', () => {
+    function stubLocation(hash: string) {
+      Object.defineProperty(window, 'location', {
+        value: { hash, pathname: '/auth/callback', href: '' },
+        writable: true,
+        configurable: true,
+      });
+      vi.spyOn(window.history, 'replaceState').mockImplementation(() => {});
+    }
+
+    it('stashes the artifact and returns without a sign-in toast', async () => {
+      const toast = await import('react-hot-toast');
+      const { stashOidcReauthArtifact } = await import('@/lib/stepUpToken');
+      mockSearchParams = new URLSearchParams('reauth=delete-account');
+      stubLocation('#reauth_token=artifact-1');
+      render(<CallbackPage />);
+      await waitFor(() => {
+        expect(mockRouterPush).toHaveBeenCalledWith('/dashboard');
+      });
+      expect(vi.mocked(stashOidcReauthArtifact)).toHaveBeenCalledWith('artifact-1');
+      // The token lives in the URL fragment; keeping it out of the address bar
+      // (so it never lands in history or a bookmark) is a stated property of
+      // this flow, so assert the clear rather than only stubbing it away.
+      expect(window.history.replaceState).toHaveBeenCalledWith(
+        null,
+        '',
+        '/auth/callback',
+      );
+      expect(toast.default.error).not.toHaveBeenCalled();
+      expect(toast.default.success).not.toHaveBeenCalled();
+    });
+
+    it('says the provider did not re-prompt when the server refused to mint', async () => {
+      // error=reauth_not_fresh: the session is fine, only the action stayed
+      // locked -- the message must be distinguishable from a failed sign-in.
+      const toast = await import('react-hot-toast');
+      const { stashOidcReauthArtifact } = await import('@/lib/stepUpToken');
+      mockSearchParams = new URLSearchParams(
+        'reauth=delete-account&error=reauth_not_fresh',
+      );
+      stubLocation('');
+      render(<CallbackPage />);
+      await waitFor(() => {
+        expect(mockRouterPush).toHaveBeenCalledWith('/dashboard');
+      });
+      expect(vi.mocked(stashOidcReauthArtifact)).not.toHaveBeenCalled();
+      expect(toast.default.error).toHaveBeenCalledWith(
+        'Your identity provider did not ask you to sign in again, so the action was not confirmed. Try again, and complete the sign-in prompt when it appears.',
+      );
+      // Not the generic sign-in failure, and no redirect to /login.
+      expect(mockRouterPush).not.toHaveBeenCalledWith('/login');
     });
   });
 });

@@ -172,6 +172,20 @@ export class Account {
   })
   paymentAmount: number | null;
 
+  // The standing extra-principal instruction inside paymentAmount. Durable
+  // configured source for the recalculation after each posting -- the template
+  // split alone ratchets, because a clamp written for one installment becomes
+  // the configured value on the next pass (review #1131).
+  @Column({
+    type: "decimal",
+    precision: 20,
+    scale: 4,
+    name: "extra_payment_amount",
+    nullable: true,
+    transformer: numericTransformer,
+  })
+  extraPaymentAmount: number | null;
+
   @Column({
     type: "varchar",
     length: 20,

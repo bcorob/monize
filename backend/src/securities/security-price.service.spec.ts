@@ -2834,7 +2834,17 @@ describe("SecurityPriceService", () => {
         "2025-06-01",
         150.5,
         "buy",
-        ["buy", "sell", "reinvest", "transfer_in", "transfer_out"],
+        [
+          "buy",
+          "sell",
+          "reinvest",
+          "reinvest_interest",
+          "reinvest_capital_gain_short",
+          "reinvest_capital_gain_long",
+          "redeem",
+          "transfer_in",
+          "transfer_out",
+        ],
       ]);
     });
 

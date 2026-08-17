@@ -43,7 +43,8 @@
     "summaryEnding": "Final",
     "summaryLowest": "Mais baixo",
     "summaryMinBalance": "Saldo mínimo",
-    "allAccounts": "Todas as contas"
+    "allAccounts": "Todas as contas",
+    "unavailableMissingRates": "Esta previsão não pode ser mostrada em {displayCurrency}: não há taxa de câmbio disponível para {currencies}, e um saldo projetado assenta em cada dia anterior. Adicione uma taxa, ou escolha uma conta de moeda única."
   },
   "calendar": {
     "days": {

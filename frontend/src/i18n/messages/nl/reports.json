@@ -144,9 +144,6 @@
     "defaultMessage": "Rapportgegevens konden niet worden geladen. Probeer het opnieuw.",
     "retry": "Opnieuw proberen"
   },
-  "foreignCurrencyFees": {
-    "noEligibleAccounts": "Voor geen enkele rekening zijn transactiekosten voor vreemde valuta geconfigureerd. Stel een kostenpercentage in op een rekening om hier de transactiekosten voor vreemde valuta bij te houden."
-  },
   "accountBalances": {
     "totalAssets": "Totale activa",
     "totalLiabilities": "Totale passiva",
@@ -333,7 +330,8 @@
     "tooltipUtilization": "Benutting",
     "tooltipUsed": "Gebruikt",
     "tooltipAvailable": "Beschikbaar",
-    "pdfTitle": "Kredietbenutting"
+    "pdfTitle": "Kredietbenutting",
+    "noRate": "Geen koers"
   },
   "currencyExposure": {
     "empty": "Geen beleggingsposities gevonden. Voeg waardepapieren toe om valutablootstelling te zien.",
@@ -575,20 +573,20 @@
     "topRegion": "Topgebied",
     "viewByRegion": "Per regio",
     "viewByExchange": "Per beurs",
+    "viewByCountry": "Per land",
     "regionalAllocation": "Regionale allocatie",
     "exchangeAllocation": "Beurs­allocatie",
+    "countryAllocation": "Landenallocatie (look-through)",
+    "countryLookThroughNote": "De landenblootstelling kijkt door ETF’s en fondsen heen op basis van de handmatige landenallocatie die per effect is ingesteld. Individuele aandelen worden ingedeeld op basis van de beurs van notering; niet-geclassificeerd wordt weergegeven als \"Overig\".",
     "colRegion": "Regio",
     "colExchange": "Beurs",
     "colCountry": "Land",
     "colHoldings": "Posities",
     "colMarketValue": "Marktwaarde",
     "colPortfolioPct": "% van portefeuille",
+    "other": "Overig",
     "total": "Totaal",
-    "holdingCount": "{count, plural, one {# positie} other {# posities}}",
-    "viewByCountry": "Per land",
-    "countryAllocation": "Landenallocatie (look-through)",
-    "countryLookThroughNote": "De landenblootstelling kijkt door ETF’s en fondsen heen op basis van de handmatige landenallocatie die per effect is ingesteld. Individuele aandelen worden ingedeeld op basis van de beurs van notering; niet-geclassificeerd wordt weergegeven als \"Overig\".",
-    "other": "Overig"
+    "holdingCount": "{count, plural, one {# positie} other {# posities}}"
   },
   "healthScoreHistory": {
     "pdfTitle": "Geschiedenis gezondheidsscore",
@@ -761,7 +759,13 @@
     "actionTransferOut": "Overboeking uit",
     "actionReinvest": "Herbeleggen",
     "actionAddShares": "Aandelen toevoegen",
-    "actionRemoveShares": "Aandelen verwijderen"
+    "actionRemoveShares": "Aandelen verwijderen",
+    "actionReinvestInterest": "Rente herbeleggen",
+    "actionReinvestCapitalGainShort": "Kortetermijnwinst herbeleggen",
+    "actionReinvestCapitalGainLong": "Langetermijnwinst herbeleggen",
+    "actionCapitalGainShort": "Kortetermijnkapitaalwinst",
+    "actionCapitalGainLong": "Langetermijnkapitaalwinst",
+    "actionRedeem": "CD/obligatie aflossen"
   },
   "loanAmortization": {
     "empty": "Geen lening- of hypotheekrekeningen gevonden. Voeg een leningrekening toe om de betalingsgeschiedenis te zien.",
@@ -820,6 +824,7 @@
       "maxCompare": "Je kunt maximaal {max} scenario's vergelijken.",
       "loadFailed": "Monte Carlo-gegevens konden niet worden geladen. Vernieuw de pagina.",
       "currentValueFailed": "De huidige portefeuillewaarde kon niet worden opgehaald.",
+      "currentValueUnavailable": "De huidige waarde van de geselecteerde rekeningen kon niet worden bepaald. Voer een startwaarde in, of probeer het opnieuw zodra koersen en wisselkoersen beschikbaar zijn.",
       "holdingStatsFailed": "Historische statistieken per positie konden niet worden geladen.",
       "reorderFailed": "Scenario's konden niet opnieuw worden geordend."
     },
@@ -1168,7 +1173,8 @@
     "csvColProceeds": "Opbrengsten",
     "csvColCostBasis": "Kostprijs",
     "csvColGainLoss": "Winst/verlies",
-    "csvColReturn": "Rendement %"
+    "csvColReturn": "Rendement %",
+    "csvNoRate": "Geen koers"
   },
   "recurringExpenses": {
     "recurringExpenses": "Terugkerende uitgaven",
@@ -1376,7 +1382,8 @@
     "pdfTotalPortfolio": "Totale portefeuille",
     "pdfAssetTypes": "Activatypen",
     "pdfTotalHoldings": "Totale posities",
-    "pdfLargestType": "Grootste type"
+    "pdfLargestType": "Grootste type",
+    "unavailable": "Niet beschikbaar"
   },
   "spendingAnomalies": {
     "highPriority": "Hoge prioriteit",
@@ -1700,5 +1707,8 @@
     "labelSelectAccount": "Leningrekening selecteren",
     "viewTransactions": "Transacties bekijken",
     "empty": "Geen lening-, hypotheek- of kredietlijnrekeningen gevonden."
+  },
+  "foreignCurrencyFees": {
+    "noEligibleAccounts": "Voor geen enkele rekening zijn transactiekosten voor vreemde valuta geconfigureerd. Stel een kostenpercentage in op een rekening om hier de transactiekosten voor vreemde valuta bij te houden."
   }
 }

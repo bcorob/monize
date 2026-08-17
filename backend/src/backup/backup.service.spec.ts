@@ -28,7 +28,10 @@ import { User } from "../users/entities/user.entity";
 import { AiEncryptionService } from "../ai/ai-encryption.service";
 import { encryptBackup } from "./backup-crypto.util";
 import * as bcrypt from "bcryptjs";
-import { createScopedDbMocks } from "../test-helpers/scoped-db-testing";
+import {
+  createScopedDbMocks,
+  withStepUpClaimLedger,
+} from "../test-helpers/scoped-db-testing";
 import { emulatePgCursors } from "../test-helpers/pg-cursor-mock";
 import {
   ATTACHMENT_STORAGE_PROVIDER,
@@ -576,7 +579,8 @@ describe("BackupService", () => {
     purpose: Parameters<OidcReauthService["issue"]>[1] = "restore-backup",
     forUser = userId,
   ): string {
-    return new OidcReauthService().issue(forUser, purpose);
+    // `issue` only signs; the DataSource is only touched by `consume`.
+    return new OidcReauthService(undefined as never).issue(forUser, purpose);
   }
 
   beforeEach(async () => {
@@ -600,6 +604,10 @@ describe("BackupService", () => {
     // test that mocks `sql.includes("FROM accounts")` still answers, and
     // `mock.calls` still records the query rather than the cursor plumbing.
     const select = scoped.manager.query;
+    // The real OidcReauthService below spends each artifact's jti in the
+    // oidc_step_up_claims ledger; teach the inner jest.fn to answer those
+    // statements like the table does, beneath the cursor emulation.
+    withStepUpClaimLedger(select);
     scoped.manager.query = jest.fn(
       emulatePgCursors((sql, params) => select(sql, params)),
     ) as jest.Mock;

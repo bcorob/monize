@@ -317,7 +317,9 @@
   "monteCarlo": {
     "scenarioNotFound": "시나리오 {{ id }}을(를) 찾을 수 없습니다",
     "scenarioIdsMustBeArray": "scenarioIds는 배열이어야 합니다",
-    "atLeastOneAccountRequired": "최소 하나의 accountId가 필요합니다"
+    "atLeastOneAccountRequired": "최소 하나의 accountId가 필요합니다",
+    "currentValueUnavailable": "선택한 계좌의 현재 가치를 확인할 수 없어 해당 값으로 시뮬레이션을 시작할 수 없습니다. 시작 금액을 직접 입력하거나, 가격과 환율을 사용할 수 있게 된 후 다시 시도하세요.",
+    "historicalReturnsUnavailable": "선택한 계좌의 과거 수익률을 계산할 수 없어 시뮬레이션에서 사용할 수 없습니다. 기대 수익률과 변동성을 직접 입력하거나, 가격과 환율이 준비된 후 다시 시도하세요."
   },
   "netWorth": {
     "invalidStartDate": "startDate는 YYYY-MM-DD 형식이어야 합니다",
@@ -361,6 +363,7 @@
     "requiresBrokerageAccount": "예약 투자 거래에는 중개 계정이 필요합니다",
     "notFound": "ID가 {{ id }}인 예약 거래를 찾을 수 없습니다",
     "occurrenceAlreadyPosted": "이 발생 건은 이미 등록되었습니다.",
+    "changedConcurrently": "The scheduled transaction changed during the operation. Reload it and retry.",
     "fxPlainOnly": "다른 통화는 일반 예약 거래에서만 사용할 수 있으며 분할, 이체, 투자에서는 사용할 수 없습니다",
     "fxRateUnavailable": "{{ date }}에 {{ from }}에서 {{ to }}로의 환율을 사용할 수 없습니다. 게시하려면 금액을 {{ to }}로 입력하세요.",
     "investmentActionRequired": "예약 투자 거래에는 투자 작업이 필요합니다",
@@ -396,6 +399,7 @@
     "cannotChangeSplitAccount": "투자 분할의 계정은 변경할 수 없습니다. 분할을 제거하고 새 계정에 추가하세요",
     "splitNoFundingAccount": "투자 분할은 별도의 자금 계정을 사용하지 않습니다",
     "cannotChangeSplitDate": "투자 분할의 날짜는 변경할 수 없습니다. 대신 상위 분할 거래 날짜를 편집하세요",
+    "embeddedStatusLocked": "이 투자 거래는 분할 거래의 일부입니다. 양쪽이 함께 변경되도록 대신 분할 거래의 상태를 변경하세요.",
     "invalidAccountUuid": "유효하지 않은 계정 UUID입니다: {{ id }}",
     "startDateFormat": "startDate는 YYYY-MM-DD 형식이어야 합니다",
     "endDateFormat": "endDate는 YYYY-MM-DD 형식이어야 합니다",
@@ -435,8 +439,10 @@
     "invalidTagKey": "태그 키(1~100자)가 필요합니다",
     "assetOptionNameRequired": "자산군 이름이 필요합니다.",
     "documentNotFound": "문서를 찾을 수 없습니다",
+    "embeddedSplitAmountMismatch": "이 분할은 {{ amount }}을(를) 기록하지만 {{ action }} {{ quantity }} @ {{ price }}은(는) 환율 {{ rate }}로 {{ expected }}이(가) 됩니다. 그 금액을 사용하거나 의도한 환율을 지정하세요.",
     "selectionNotFound": "선택한 증권 중 하나 이상을 찾을 수 없습니다",
-    "comparisonSelectionEmpty": "비교할 증권 또는 시장 지수를 하나 이상 선택하세요"
+    "comparisonSelectionEmpty": "비교할 증권 또는 시장 지수를 하나 이상 선택하세요",
+    "exchangeRateNotPositive": "환율은 0보다 커야 합니다"
   },
   "tags": {
     "notFound": "ID가 {{ id }}인 태그를 찾을 수 없습니다",
@@ -490,15 +496,27 @@
     "transferAmountNegative": "이체 금액은 음수일 수 없습니다",
     "notATransfer": "거래가 이체가 아닙니다",
     "splitTransferLegAccountLocked": "이 이체는 분할 거래의 일부입니다. 계좌를 변경하려면 원본 거래의 분할을 편집하세요.",
+    "splitTransferLegStatusLocked": "이 이체는 분할 거래의 일부입니다. 양쪽이 함께 변경되도록, 이 이체가 속한 분할 거래를 편집하여 무효화하거나 복원하세요.",
+    "investmentCashLegStatusLocked": "이 거래는 투자 거래의 현금 측면입니다. 양쪽이 함께 변경되도록, 투자 거래의 상태를 변경하여 무효화하거나 복원하세요.",
     "notFoundById": "ID가 {{ id }}인 거래를 찾을 수 없습니다",
     "bulkUpdateNoFields": "하나 이상의 업데이트 필드를 제공해야 합니다",
     "bulkSplitNoMatchingLinesOne": "분할 라인 중 어느 것도 카테고리 업데이트와 일치하지 않아 분할 거래 1건을 건너뛰었습니다",
     "bulkSplitNoMatchingLinesMany": "분할 라인 중 어느 것도 카테고리 업데이트와 일치하지 않아 분할 거래 {{ count }}건을 건너뛰었습니다",
+    "bulkSplitTransferLegSkippedOne": "분할 이체 1건을 건너뛰었습니다(양쪽이 함께 변경되도록 해당 분할 거래에서 무효화하거나 복원하세요)",
+    "bulkSplitTransferLegSkippedMany": "분할 이체 {{ count }}건을 건너뛰었습니다(양쪽이 함께 변경되도록 해당 분할 거래에서 무효화하거나 복원하세요)",
+    "bulkInvestmentCashLegSkippedOne": "투자 현금 거래 1건을 건너뛰었습니다(양쪽이 함께 변경되도록 투자 거래의 상태를 변경하여 무효화하거나 복원하세요)",
+    "bulkInvestmentCashLegSkippedMany": "투자 현금 거래 {{ count }}건을 건너뛰었습니다(양쪽이 함께 변경되도록 투자 거래의 상태를 변경하여 무효화하거나 복원하세요)",
     "payeeNotFound": "수취인을 찾을 수 없습니다",
     "fxFieldsIncomplete": "originalAmount와 originalCurrencyCode는 함께 제공해야 합니다",
     "fxRateRequired": "외화 거래에는 양수 환율이 필요합니다",
     "fxSignMismatch": "originalAmount와 amount의 부호가 같아야 합니다",
-    "jointAccountMoveLocked": "공유 계좌의 거래는 다른 계좌로 이동할 수 없습니다."
+    "jointAccountMoveLocked": "공유 계좌의 거래는 다른 계좌로 이동할 수 없습니다.",
+    "currencyMustMatchAccount": "거래 통화 {{ supplied }}은(는) 계좌 통화 {{ account }}와 일치해야 합니다. 외화 입력에는 originalAmount와 originalCurrencyCode를 사용하세요.",
+    "transferSameCurrencyMustConserve": "{{ currency }} 계좌 간 이체는 양쪽 금액이 같아야 합니다",
+    "transferSameCurrencyRateMustBeOne": "{{ currency }} 계좌 간 이체에는 1 이외의 환율을 지정할 수 없습니다",
+    "transferRateUnavailable": "{{ from }} -> {{ to }}의 환율을 확인할 수 없습니다. 이체가 올바르게 기록되도록 exchangeRate 또는 대상 금액을 입력하세요.",
+    "transferAmountsMustAgreeOnZero": "이체는 양쪽 모두에서 0이 아닌 금액을 이동해야 하거나 양쪽 모두 0이어야 합니다",
+    "transferImpliedRateInvalid": "대상 금액이 출금 금액에 대해 사용할 수 없는 환율을 의미합니다"
   },
   "users": {
     "userNotFound": "사용자를 찾을 수 없습니다",

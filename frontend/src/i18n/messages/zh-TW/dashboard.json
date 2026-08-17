@@ -202,7 +202,8 @@
     "title": "依科目信用使用率",
     "empty": "沒有設定額度的信用科目。",
     "utilization": "使用率",
-    "used": "已使用"
+    "used": "已使用",
+    "noRate": "無法使用（無 {currency} 匯率）"
   },
   "creditUtilizationTotal": {
     "title": "總信用使用率",

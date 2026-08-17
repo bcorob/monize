@@ -14,6 +14,7 @@ import { PayeesService } from "../payees/payees.service";
 import { NetWorthService } from "../net-worth/net-worth.service";
 import { ActionHistoryService } from "../action-history/action-history.service";
 import { CrossOwnerAccessService } from "../delegation/cross-owner-access.service";
+import { ExchangeRateService } from "../currencies/exchange-rate.service";
 import { isTransactionInFuture } from "../common/date-utils";
 import { withSystemContext } from "../common/db/with-context";
 import {
@@ -66,6 +67,7 @@ describe("TransactionTransferService", () => {
   // The withScopedDb EntityManager, under the legacy `mockQueryRunner.manager`
   // shape so the pre-RLS manager assertions still read naturally.
   let mockQueryRunner: Record<string, any>;
+  let exchangeRateService: Record<string, jest.Mock>;
   let mockDataSource: DataSourceMock;
 
   const mockFindOne = jest.fn();
@@ -296,6 +298,13 @@ describe("TransactionTransferService", () => {
 
     mockQueryRunner = { manager };
 
+    // Transfers resolve a cross-currency rate server-side rather than defaulting
+    // to 1 (audit P5-002). Same-currency transfers never reach these.
+    exchangeRateService = {
+      getRateForDate: jest.fn().mockResolvedValue(null),
+      getLatestRate: jest.fn().mockResolvedValue(null),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         TransactionTransferService,
@@ -305,6 +314,7 @@ describe("TransactionTransferService", () => {
         { provide: DataSource, useValue: mockDataSource },
         { provide: ActionHistoryService, useValue: actionHistoryService },
         { provide: CrossOwnerAccessService, useValue: crossOwnerAccess },
+        { provide: ExchangeRateService, useValue: exchangeRateService },
       ],
     }).compile();
 
@@ -365,6 +375,61 @@ describe("TransactionTransferService", () => {
 
       expect(result.fromTransaction.id).toBe("from-tx-id");
       expect(result.toTransaction.id).toBe("to-tx-id");
+    });
+
+    it("does not move either balance when the transfer is created VOID (P5-001)", async () => {
+      // A VOID row is a record of something that did not happen. Both legs are
+      // still written, but neither may touch a balance -- exactly as an
+      // ordinary VOID transaction skips its balance update.
+      //
+      // Before this fix the pair posted -500 and +500 while both rows said
+      // VOID, and recalculateCurrentBalance (which excludes VOID rows) then
+      // silently reversed it the next time anything triggered a recompute:
+      // money appeared to move and then unmove.
+      mockFindOne
+        .mockResolvedValueOnce({ id: "from-tx-id", amount: -500 })
+        .mockResolvedValueOnce({ id: "to-tx-id", amount: 500 });
+
+      await service.createTransfer(
+        "user-1",
+        { ...baseTransferDto, status: TransactionStatus.VOID },
+        mockFindOne,
+      );
+
+      // Both ledger rows exist and are linked.
+      expect(transactionsRepository.create).toHaveBeenCalledTimes(2);
+      expect(transactionsRepository.create.mock.calls[0][0].status).toBe(
+        TransactionStatus.VOID,
+      );
+      expect(transactionsRepository.create.mock.calls[1][0].status).toBe(
+        TransactionStatus.VOID,
+      );
+
+      // Neither balance moved, by either mechanism.
+      expect(accountsService.updateBalance).not.toHaveBeenCalled();
+      expect(accountsService.recalculateCurrentBalance).not.toHaveBeenCalled();
+    });
+
+    it("still moves balances for a non-VOID status", async () => {
+      // The guard must not swallow the ordinary case.
+      mockFindOne
+        .mockResolvedValueOnce({ id: "from-tx-id", amount: -500 })
+        .mockResolvedValueOnce({ id: "to-tx-id", amount: 500 });
+
+      await service.createTransfer(
+        "user-1",
+        { ...baseTransferDto, status: TransactionStatus.RECONCILED },
+        mockFindOne,
+      );
+
+      expect(accountsService.updateBalance).toHaveBeenCalledWith(
+        "from-account",
+        -500,
+      );
+      expect(accountsService.updateBalance).toHaveBeenCalledWith(
+        "to-account",
+        500,
+      );
     });
 
     it("writes both legs with the effective user's id and no system context on the same-owner path", async () => {
@@ -565,6 +630,27 @@ describe("TransactionTransferService", () => {
     });
 
     it("uses explicit toAmount when provided", async () => {
+      // A bank's actual settlement figure legitimately differs from spot by
+      // fees, so an explicit destination amount is honoured for a genuine
+      // cross-currency pair. The destination account really is CAD -- the
+      // currency is read from the account now, not from the request.
+      accountsService.findOne.mockImplementation((_u: string, id: string) =>
+        Promise.resolve(
+          id === "to-account"
+            ? { ...mockToAccount, currencyCode: "CAD" }
+            : mockFromAccount,
+        ),
+      );
+      crossOwnerAccess.accountAccessFor.mockImplementation(
+        (_u: string, id: string) =>
+          Promise.resolve({
+            account:
+              id === "to-account"
+                ? { ...mockToAccount, currencyCode: "CAD" }
+                : mockFromAccount,
+          }),
+      );
+
       transactionsRepository.save
         .mockReset()
         .mockResolvedValueOnce({ id: "from-tx-id" })
@@ -592,6 +678,17 @@ describe("TransactionTransferService", () => {
     });
 
     it("calculates toAmount from exchangeRate when toAmount not provided", async () => {
+      const cadTo = { ...mockToAccount, currencyCode: "CAD" };
+      accountsService.findOne.mockImplementation((_u: string, id: string) =>
+        Promise.resolve(id === "to-account" ? cadTo : mockFromAccount),
+      );
+      crossOwnerAccess.accountAccessFor.mockImplementation(
+        (_u: string, id: string) =>
+          Promise.resolve({
+            account: id === "to-account" ? cadTo : mockFromAccount,
+          }),
+      );
+
       transactionsRepository.save
         .mockReset()
         .mockResolvedValueOnce({ id: "from-tx-id" })
@@ -612,6 +709,241 @@ describe("TransactionTransferService", () => {
       const toCreateCall = transactionsRepository.create.mock.calls[1][0];
       // 500 * 1.35 = 675
       expect(toCreateCall.amount).toBe(675);
+      expect(toCreateCall.currencyCode).toBe("CAD");
+    });
+
+    describe("currency and FX are server-authoritative (P5-002)", () => {
+      const asCad = () => {
+        const cadTo = { ...mockToAccount, currencyCode: "CAD" };
+        accountsService.findOne.mockImplementation((_u: string, id: string) =>
+          Promise.resolve(id === "to-account" ? cadTo : mockFromAccount),
+        );
+        crossOwnerAccess.accountAccessFor.mockImplementation(
+          (_u: string, id: string) =>
+            Promise.resolve({
+              account: id === "to-account" ? cadTo : mockFromAccount,
+            }),
+        );
+        return cadTo;
+      };
+
+      const expectLegsSaved = () => {
+        transactionsRepository.save
+          .mockReset()
+          .mockResolvedValueOnce({ id: "from-tx-id" })
+          .mockResolvedValueOnce({ id: "to-tx-id" });
+        mockFindOne
+          .mockResolvedValueOnce({ id: "from-tx-id" })
+          .mockResolvedValueOnce({ id: "to-tx-id" });
+      };
+
+      it("rejects a same-currency transfer whose destination amount differs", async () => {
+        // The audit's scenario B. Both accounts are USD, amount 100,
+        // toAmount 80: the source lost 100, the destination gained 80, and 20
+        // simply left the system. An explicit destination amount used to
+        // override the calculation with no conservation check at all.
+        //
+        // There is no rate and no fee that can make a same-currency transfer
+        // unequal, so this is a rejection rather than an override.
+        await expect(
+          service.createTransfer(
+            "user-1",
+            { ...baseTransferDto, amount: 100, toAmount: 80 },
+            mockFindOne,
+          ),
+        ).rejects.toThrow(/same amount on both sides/);
+
+        expect(transactionsRepository.save).not.toHaveBeenCalled();
+        expect(accountsService.updateBalance).not.toHaveBeenCalled();
+      });
+
+      it("rejects a same-currency transfer with a rate other than 1", async () => {
+        await expect(
+          service.createTransfer(
+            "user-1",
+            { ...baseTransferDto, exchangeRate: 1.35 },
+            mockFindOne,
+          ),
+        ).rejects.toThrow(/cannot have an exchange rate other than 1/);
+      });
+
+      it("rejects a request naming a currency the account does not use", async () => {
+        // The destination row used to be labelled with whatever the request
+        // said, contaminating every later conversion that read it.
+        asCad();
+        await expect(
+          service.createTransfer(
+            "user-1",
+            { ...baseTransferDto, toCurrencyCode: "GBP" },
+            mockFindOne,
+          ),
+        ).rejects.toThrow(/must match the account currency/);
+      });
+
+      it("resolves the market rate for the transfer date when none is supplied", async () => {
+        // This is the scheduled-transfer path (audit scenario A): a schedule
+        // carries only its source currency, so it supplies no target currency,
+        // no rate and no destination amount. The pair used to post 1:1 -- 100
+        // USD landing as 100 CAD -- with the destination row labelled USD.
+        asCad();
+        exchangeRateService.getRateForDate.mockResolvedValue(1.35);
+        expectLegsSaved();
+
+        await service.createTransfer(
+          "user-1",
+          { ...baseTransferDto, amount: 100 },
+          mockFindOne,
+        );
+
+        expect(exchangeRateService.getRateForDate).toHaveBeenCalledWith(
+          "USD",
+          "CAD",
+          "2026-01-15",
+        );
+        const toLeg = transactionsRepository.create.mock.calls[1][0];
+        expect(toLeg.amount).toBe(135);
+        expect(toLeg.currencyCode).toBe("CAD");
+        expect(toLeg.exchangeRate).toBe(1.35);
+      });
+
+      it("resolves through the one rate ladder, with no dead getLatestRate chase", async () => {
+        // getRateForDate itself falls back to the latest stored rate (its
+        // documented step 3), so the transfer service asks it once through
+        // resolveFxRateOrNull and must NOT chase a null with its own
+        // getLatestRate call -- that trailing call could never return anything
+        // the first did not, and four copies of the ladder is how resolvers
+        // drift.
+        asCad();
+        exchangeRateService.getRateForDate.mockResolvedValue(1.4);
+        expectLegsSaved();
+
+        await service.createTransfer(
+          "user-1",
+          { ...baseTransferDto, amount: 100 },
+          mockFindOne,
+        );
+
+        expect(transactionsRepository.create.mock.calls[1][0].amount).toBe(140);
+        expect(exchangeRateService.getLatestRate).not.toHaveBeenCalled();
+      });
+
+      it("posts a zero cross-currency transfer without demanding a rate", async () => {
+        // Zero moves nothing on either side, so it needs no rate ("zero needs
+        // no rate"): a zero-amount scheduled placeholder between two
+        // currencies used to be refused with transferRateUnavailable for a
+        // pair nobody needed resolved.
+        asCad();
+        exchangeRateService.getRateForDate.mockResolvedValue(null);
+        exchangeRateService.getLatestRate.mockResolvedValue(null);
+        expectLegsSaved();
+
+        await service.createTransfer(
+          "user-1",
+          { ...baseTransferDto, amount: 0 },
+          mockFindOne,
+        );
+
+        expect(transactionsRepository.create.mock.calls[1][0].amount).toBe(0);
+        expect(exchangeRateService.getRateForDate).not.toHaveBeenCalled();
+      });
+
+      it("refuses a cross-currency transfer with no determinable rate", async () => {
+        // Refusing is the point: posting at 1:1 would overstate the destination
+        // by the whole FX difference and look entirely normal.
+        asCad();
+        exchangeRateService.getRateForDate.mockResolvedValue(null);
+        exchangeRateService.getLatestRate.mockResolvedValue(null);
+
+        await expect(
+          service.createTransfer(
+            "user-1",
+            { ...baseTransferDto, amount: 100 },
+            mockFindOne,
+          ),
+        ).rejects.toThrow(/Could not determine an exchange rate/);
+
+        expect(accountsService.updateBalance).not.toHaveBeenCalled();
+      });
+
+      it("ignores a non-positive supplied rate and resolves one instead", async () => {
+        // The DTO allowed @Min(0), so zero reached the service and produced a
+        // destination amount of 0 with the transfer still posted.
+        asCad();
+        exchangeRateService.getRateForDate.mockResolvedValue(1.35);
+        expectLegsSaved();
+
+        await service.createTransfer(
+          "user-1",
+          { ...baseTransferDto, amount: 100, exchangeRate: 0 },
+          mockFindOne,
+        );
+
+        expect(transactionsRepository.create.mock.calls[1][0].amount).toBe(135);
+      });
+
+      it("rejects a non-zero source with a zero destination (FR-003)", async () => {
+        // 100 out, 0 in destroys 100 of value and stores a rate of 0. Both DTO
+        // fields allow zero and the explicit-settlement branch returned before
+        // checking anything.
+        asCad();
+        await expect(
+          service.createTransfer(
+            "user-1",
+            { ...baseTransferDto, amount: 100, toAmount: 0 },
+            mockFindOne,
+          ),
+        ).rejects.toThrow(/non-zero amount on both sides/);
+        expect(accountsService.updateBalance).not.toHaveBeenCalled();
+      });
+
+      it("rejects a zero source with a non-zero destination (FR-003)", async () => {
+        // 0 out, 100 in creates 100 from nothing, and the implied rate came out
+        // as 1 only because the divisor was zero.
+        asCad();
+        await expect(
+          service.createTransfer(
+            "user-1",
+            { ...baseTransferDto, amount: 0, toAmount: 100 },
+            mockFindOne,
+          ),
+        ).rejects.toThrow(/non-zero amount on both sides/);
+        expect(accountsService.updateBalance).not.toHaveBeenCalled();
+      });
+
+      it("allows zero on both sides", async () => {
+        // A zero transfer moves nothing and has no rate to imply. Permitted
+        // because the DTO permits a zero amount; what is forbidden is the pair
+        // disagreeing about whether anything moved.
+        asCad();
+        expectLegsSaved();
+
+        await service.createTransfer(
+          "user-1",
+          { ...baseTransferDto, amount: 0, toAmount: 0 },
+          mockFindOne,
+        );
+
+        const toLeg = transactionsRepository.create.mock.calls[1][0];
+        expect(toLeg.amount).toBe(0);
+        expect(toLeg.exchangeRate).toBe(1);
+      });
+
+      it("stores the implied rate when an explicit settlement amount is given", async () => {
+        // The destination row still records how the two sides relate, so a
+        // later reader is not left guessing.
+        asCad();
+        expectLegsSaved();
+
+        await service.createTransfer(
+          "user-1",
+          { ...baseTransferDto, amount: 100, toAmount: 132 },
+          mockFindOne,
+        );
+
+        const toLeg = transactionsRepository.create.mock.calls[1][0];
+        expect(toLeg.amount).toBe(132);
+        expect(toLeg.exchangeRate).toBe(1.32);
+      });
     });
 
     it("uses custom payeeName when provided", async () => {
@@ -901,11 +1233,18 @@ describe("TransactionTransferService", () => {
       // concurrent edit makes those old values describe a version this write is
       // not replacing -- two updates each reversing the same pair corrupt both
       // accounts. A 409 the client can retry is the honest answer.
+      // Both legs are same-currency (USD, from their accounts), so the FX
+      // resolution the update runs before taking the lock is trivial and needs
+      // no rate lookup -- the flow reaches the concurrency (`unchanged`) check,
+      // which is what this test exercises. `currencyCode`/`account` are required
+      // because a real row always carries them and the resolver reads them.
       const fromTx = {
         id: "from-tx",
         userId: "user-1",
         accountId: "from-account",
         amount: -200,
+        currencyCode: "USD",
+        account: mockFromAccount,
         isTransfer: true,
         linkedTransactionId: "to-tx",
         exchangeRate: 1,
@@ -916,6 +1255,8 @@ describe("TransactionTransferService", () => {
         userId: "user-1",
         accountId: "to-account",
         amount: 200,
+        currencyCode: "USD",
+        account: mockToAccount,
         isTransfer: true,
         linkedTransactionId: "from-tx",
         exchangeRate: 1,
@@ -1005,6 +1346,87 @@ describe("TransactionTransferService", () => {
         id: "from-tx",
         userId: "user-1",
       });
+    });
+
+    it("reverses no balance when deleting a VOID pair (RR3-003)", async () => {
+      // A VOID row contributed nothing, so deleting it must reverse nothing.
+      // Every reversal site in this service's delete family fired on any
+      // past-dated row regardless of status, while `bulkDelete` had the guard --
+      // which is what proved the intended behaviour. Deleting a voided 100 USD ->
+      // 90 EUR pair credited the source 100 and debited the destination 90 out of
+      // nothing.
+      const fromTx = {
+        id: "from-tx",
+        isTransfer: true,
+        linkedTransactionId: "to-tx",
+        accountId: "from-account",
+        amount: -100,
+        status: TransactionStatus.VOID,
+        transactionDate: "2026-01-15",
+      };
+      const toTx = {
+        id: "to-tx",
+        accountId: "to-account",
+        amount: 90,
+        status: TransactionStatus.VOID,
+        transactionDate: "2026-01-15",
+      };
+
+      mockFindOne.mockResolvedValue(fromTx);
+      splitsRepository.findOne.mockResolvedValue(null);
+      transactionsRepository.findOne.mockResolvedValue(toTx);
+
+      await service.removeTransfer("user-1", "from-tx", mockFindOne);
+
+      expect(accountsService.updateBalance).not.toHaveBeenCalled();
+      // The rows still go: the record of an event that did not happen is deleted.
+      // Deletion is a conditional DELETE gated on what the database removed
+      // (removeLockedTransactionLeg -> m.delete), not manager.remove(entity).
+      expect(mockQueryRunner.manager.delete).toHaveBeenCalledWith(Transaction, {
+        id: "to-tx",
+        userId: "user-1",
+      });
+      expect(mockQueryRunner.manager.delete).toHaveBeenCalledWith(Transaction, {
+        id: "from-tx",
+        userId: "user-1",
+      });
+    });
+
+    it("reverses only the included leg when one side of a pair is VOID", async () => {
+      // Cross-owner statuses are per-ledger, so a pair can be half VOID. Each row
+      // is reversed on its own inclusion, not the pair's.
+      const fromTx = {
+        id: "from-tx",
+        isTransfer: true,
+        linkedTransactionId: "to-tx",
+        accountId: "from-account",
+        amount: -100,
+        status: TransactionStatus.VOID,
+        transactionDate: "2026-01-15",
+      };
+      const toTx = {
+        id: "to-tx",
+        accountId: "to-account",
+        amount: 90,
+        status: TransactionStatus.UNRECONCILED,
+        transactionDate: "2026-01-15",
+      };
+
+      mockFindOne.mockResolvedValue(fromTx);
+      splitsRepository.findOne.mockResolvedValue(null);
+      transactionsRepository.findOne.mockResolvedValue(toTx);
+
+      await service.removeTransfer("user-1", "from-tx", mockFindOne);
+
+      expect(accountsService.updateBalance).toHaveBeenCalledWith(
+        "to-account",
+        -90,
+      );
+      expect(accountsService.updateBalance).not.toHaveBeenCalledWith(
+        "from-account",
+        expect.anything(),
+      );
+      expect(accountsService.updateBalance).toHaveBeenCalledTimes(1);
     });
 
     it("throws when transaction is not a transfer", async () => {
@@ -1189,10 +1611,14 @@ describe("TransactionTransferService", () => {
   });
 
   describe("updateTransfer", () => {
+    // `currency_code` is NOT NULL on transactions, so a real row always carries
+    // it. Leaving it off made the derived-currency comparison see `undefined`
+    // and treat every edit as a re-denomination.
     const fromTransaction = {
       id: "from-tx",
       accountId: "from-account",
       amount: -500,
+      currencyCode: "USD",
       isTransfer: true,
       linkedTransactionId: "to-tx",
       exchangeRate: 1,
@@ -1203,6 +1629,7 @@ describe("TransactionTransferService", () => {
       id: "to-tx",
       accountId: "to-account",
       amount: 500,
+      currencyCode: "USD",
       isTransfer: true,
       linkedTransactionId: "from-tx",
       exchangeRate: 1,
@@ -1238,6 +1665,334 @@ describe("TransactionTransferService", () => {
           mockFindOne,
         ),
       ).rejects.toThrow(BadRequestException);
+    });
+
+    describe("VOID transitions (P5-001)", () => {
+      // `accountsOrAmountsChanged` did not include `status`, so a status-only
+      // edit wrote VOID onto both rows and left both balances carrying the
+      // money. The ledger then said no transfer had occurred while the accounts
+      // still reflected one, and the next recalculation moved 500 without any
+      // user action.
+      it("reverses both balances exactly once when voiding an active transfer", async () => {
+        const activeFrom = {
+          ...fromTransaction,
+          status: TransactionStatus.UNRECONCILED,
+        } as unknown as Transaction;
+        const activeTo = {
+          ...toTransaction,
+          status: TransactionStatus.UNRECONCILED,
+        } as unknown as Transaction;
+
+        mockFindOne
+          .mockResolvedValueOnce(activeFrom)
+          .mockResolvedValueOnce(activeTo)
+          .mockResolvedValueOnce({
+            ...activeFrom,
+            status: TransactionStatus.VOID,
+          })
+          .mockResolvedValueOnce({
+            ...activeTo,
+            status: TransactionStatus.VOID,
+          });
+
+        await service.updateTransfer(
+          "user-1",
+          "from-tx",
+          { status: TransactionStatus.VOID },
+          mockFindOne,
+        );
+
+        // The old pair is reversed...
+        expect(accountsService.updateBalance).toHaveBeenCalledWith(
+          "from-account",
+          500,
+        );
+        expect(accountsService.updateBalance).toHaveBeenCalledWith(
+          "to-account",
+          -500,
+        );
+        // ...and NOT re-applied, because the pair is now excluded. Exactly one
+        // adjustment per account: a second pair would net to zero and leave the
+        // void with no effect at all.
+        expect(accountsService.updateBalance).toHaveBeenCalledTimes(2);
+      });
+
+      it("re-applies both balances exactly once when unvoiding a transfer", async () => {
+        const voidFrom = {
+          ...fromTransaction,
+          status: TransactionStatus.VOID,
+        } as unknown as Transaction;
+        const voidTo = {
+          ...toTransaction,
+          status: TransactionStatus.VOID,
+        } as unknown as Transaction;
+
+        mockFindOne
+          .mockResolvedValueOnce(voidFrom)
+          .mockResolvedValueOnce(voidTo)
+          .mockResolvedValueOnce({
+            ...voidFrom,
+            status: TransactionStatus.UNRECONCILED,
+          })
+          .mockResolvedValueOnce({
+            ...voidTo,
+            status: TransactionStatus.UNRECONCILED,
+          });
+
+        await service.updateTransfer(
+          "user-1",
+          "from-tx",
+          { status: TransactionStatus.UNRECONCILED },
+          mockFindOne,
+        );
+
+        // No reversal: a VOID pair contributed nothing to reverse, and
+        // reversing it would have created the money the void withheld.
+        expect(accountsService.updateBalance).toHaveBeenCalledWith(
+          "from-account",
+          -500,
+        );
+        expect(accountsService.updateBalance).toHaveBeenCalledWith(
+          "to-account",
+          500,
+        );
+        expect(accountsService.updateBalance).toHaveBeenCalledTimes(2);
+      });
+
+      it("does not touch balances when editing a transfer that stays VOID", async () => {
+        const voidFrom = {
+          ...fromTransaction,
+          status: TransactionStatus.VOID,
+        } as unknown as Transaction;
+        const voidTo = {
+          ...toTransaction,
+          status: TransactionStatus.VOID,
+        } as unknown as Transaction;
+
+        mockFindOne
+          .mockResolvedValueOnce(voidFrom)
+          .mockResolvedValueOnce(voidTo)
+          .mockResolvedValueOnce({ ...voidFrom, amount: -750 })
+          .mockResolvedValueOnce({ ...voidTo, amount: 750 });
+
+        await service.updateTransfer(
+          "user-1",
+          "from-tx",
+          { amount: 750 },
+          mockFindOne,
+        );
+
+        // Changing the amount of a void transfer changes no balance: it was
+        // excluded before and is excluded after.
+        expect(accountsService.updateBalance).not.toHaveBeenCalled();
+      });
+    });
+
+    describe("per-leg reconciliation on same-owner edit (P6-RECHECK-004)", () => {
+      // CLEARED / RECONCILED record whether THIS account's statement has
+      // recognised THIS leg, and the two statements arrive separately. The edit
+      // form shows one status control for the transfer and used to write it onto
+      // both rows, so opening the form on one leg and saving rewrote the other
+      // account's reconciliation state. A non-VOID status change now stays on
+      // the leg the user opened; VOID still pairs because it moves both balances.
+      it("writes a reconciliation status only to the edited leg, leaving the counterpart untouched", async () => {
+        const activeFrom = {
+          ...fromTransaction,
+          status: TransactionStatus.UNRECONCILED,
+        } as unknown as Transaction;
+        const reconciledTo = {
+          ...toTransaction,
+          status: TransactionStatus.RECONCILED,
+        } as unknown as Transaction;
+
+        mockFindOne
+          .mockResolvedValueOnce(activeFrom)
+          .mockResolvedValueOnce(reconciledTo)
+          .mockResolvedValueOnce({
+            ...activeFrom,
+            status: TransactionStatus.CLEARED,
+          })
+          .mockResolvedValueOnce(reconciledTo);
+
+        // A description rides along so the counterpart IS updated (description
+        // mirrors to both legs) -- this distinguishes "status stripped from the
+        // counterpart update" from "counterpart never updated".
+        await service.updateTransfer(
+          "user-1",
+          "from-tx",
+          { status: TransactionStatus.CLEARED, description: "groceries" },
+          mockFindOne,
+        );
+
+        const updateCalls = transactionsRepository.update.mock.calls;
+        const fromUpdate = updateCalls.find((c) => c[0] === "from-tx")?.[1];
+        const toUpdate = updateCalls.find((c) => c[0] === "to-tx")?.[1];
+
+        // The edited leg takes the new status...
+        expect(fromUpdate).toMatchObject({ status: TransactionStatus.CLEARED });
+        // ...and the counterpart is written (its description mirrors) but its
+        // RECONCILED state is never rewritten. On the old behaviour toUpdate
+        // carried status: CLEARED and clobbered it.
+        expect(toUpdate).toMatchObject({ description: "groceries" });
+        expect(toUpdate.status).toBeUndefined();
+        // A non-VOID status change moves no balance.
+        expect(accountsService.updateBalance).not.toHaveBeenCalled();
+      });
+
+      it("issues no counterpart update at all for a status-only edit", async () => {
+        const activeFrom = {
+          ...fromTransaction,
+          status: TransactionStatus.UNRECONCILED,
+        } as unknown as Transaction;
+        const reconciledTo = {
+          ...toTransaction,
+          status: TransactionStatus.RECONCILED,
+        } as unknown as Transaction;
+
+        mockFindOne
+          .mockResolvedValueOnce(activeFrom)
+          .mockResolvedValueOnce(reconciledTo)
+          .mockResolvedValueOnce({
+            ...activeFrom,
+            status: TransactionStatus.CLEARED,
+          })
+          .mockResolvedValueOnce(reconciledTo);
+
+        await service.updateTransfer(
+          "user-1",
+          "from-tx",
+          { status: TransactionStatus.CLEARED },
+          mockFindOne,
+        );
+
+        // With status the only changed field, stripping it leaves the
+        // counterpart's update data empty, so `Object.keys(...).length > 0` is
+        // false and no write is issued for the counterpart at all.
+        const updateCalls = transactionsRepository.update.mock.calls;
+        expect(updateCalls.some((c) => c[0] === "to-tx")).toBe(false);
+        expect(updateCalls.find((c) => c[0] === "from-tx")?.[1]).toMatchObject({
+          status: TransactionStatus.CLEARED,
+        });
+      });
+
+      it("strips the status from the from-leg when the user opened the to-leg", async () => {
+        const reconciledFrom = {
+          ...fromTransaction,
+          status: TransactionStatus.RECONCILED,
+        } as unknown as Transaction;
+        const activeTo = {
+          ...toTransaction,
+          status: TransactionStatus.UNRECONCILED,
+        } as unknown as Transaction;
+
+        // The user opened the TO leg, so findOne returns it first and its
+        // counterpart second.
+        mockFindOne
+          .mockResolvedValueOnce(activeTo)
+          .mockResolvedValueOnce(reconciledFrom)
+          .mockResolvedValueOnce(reconciledFrom)
+          .mockResolvedValueOnce({
+            ...activeTo,
+            status: TransactionStatus.CLEARED,
+          });
+
+        await service.updateTransfer(
+          "user-1",
+          "to-tx",
+          { status: TransactionStatus.CLEARED },
+          mockFindOne,
+        );
+
+        const updateCalls = transactionsRepository.update.mock.calls;
+        const fromUpdate = updateCalls.find((c) => c[0] === "from-tx")?.[1];
+        const toUpdate = updateCalls.find((c) => c[0] === "to-tx")?.[1];
+
+        expect(toUpdate).toMatchObject({ status: TransactionStatus.CLEARED });
+        expect(fromUpdate?.status).toBeUndefined();
+      });
+
+      it("still pairs the status across both legs when the transition crosses VOID", async () => {
+        const activeFrom = {
+          ...fromTransaction,
+          status: TransactionStatus.UNRECONCILED,
+        } as unknown as Transaction;
+        const activeTo = {
+          ...toTransaction,
+          status: TransactionStatus.UNRECONCILED,
+        } as unknown as Transaction;
+
+        mockFindOne
+          .mockResolvedValueOnce(activeFrom)
+          .mockResolvedValueOnce(activeTo)
+          .mockResolvedValueOnce({
+            ...activeFrom,
+            status: TransactionStatus.VOID,
+          })
+          .mockResolvedValueOnce({
+            ...activeTo,
+            status: TransactionStatus.VOID,
+          });
+
+        await service.updateTransfer(
+          "user-1",
+          "from-tx",
+          { status: TransactionStatus.VOID },
+          mockFindOne,
+        );
+
+        const updateCalls = transactionsRepository.update.mock.calls;
+        const fromUpdate = updateCalls.find((c) => c[0] === "from-tx")?.[1];
+        const toUpdate = updateCalls.find((c) => c[0] === "to-tx")?.[1];
+
+        // VOID moves both balances, so the status belongs to both legs.
+        expect(fromUpdate).toMatchObject({ status: TransactionStatus.VOID });
+        expect(toUpdate).toMatchObject({ status: TransactionStatus.VOID });
+      });
+
+      it("pairs the submitted status onto both legs when un-voiding directly to CLEARED, matching the bulk path", async () => {
+        const voidFrom = {
+          ...fromTransaction,
+          status: TransactionStatus.VOID,
+        } as unknown as Transaction;
+        const voidTo = {
+          ...toTransaction,
+          status: TransactionStatus.VOID,
+        } as unknown as Transaction;
+
+        // Un-void the FROM leg straight to CLEARED (VOID -> CLEARED). Leaving
+        // VOID crosses the boundary, so the status is NOT stripped and both legs
+        // reactivate carrying the submitted CLEARED -- identical to a bulk
+        // un-void through `expandTransferCounterparts`. A non-UNRECONCILED
+        // target is the case that distinguishes "pair the submitted status" from
+        // "reset the counterpart to UNRECONCILED"; this pins the former.
+        mockFindOne
+          .mockResolvedValueOnce(voidFrom)
+          .mockResolvedValueOnce(voidTo)
+          .mockResolvedValueOnce({
+            ...voidFrom,
+            status: TransactionStatus.CLEARED,
+          })
+          .mockResolvedValueOnce({
+            ...voidTo,
+            status: TransactionStatus.CLEARED,
+          });
+
+        await service.updateTransfer(
+          "user-1",
+          "from-tx",
+          { status: TransactionStatus.CLEARED },
+          mockFindOne,
+        );
+
+        const updateCalls = transactionsRepository.update.mock.calls;
+        const fromUpdate = updateCalls.find((c) => c[0] === "from-tx")?.[1];
+        const toUpdate = updateCalls.find((c) => c[0] === "to-tx")?.[1];
+
+        // Both legs leave VOID together and both carry CLEARED -- the counterpart
+        // is neither stripped nor reset to UNRECONCILED.
+        expect(fromUpdate).toMatchObject({ status: TransactionStatus.CLEARED });
+        expect(toUpdate).toMatchObject({ status: TransactionStatus.CLEARED });
+      });
     });
 
     it("updates amount for both sides of the transfer", async () => {
@@ -1316,10 +2071,16 @@ describe("TransactionTransferService", () => {
       // A transfer split's counterpart in the target account. Its
       // linkedTransactionId points at the split PARENT (amount = sum of splits),
       // not a mirror leg.
+      // `currencyCode` is NOT NULL on transactions and `findOne` loads the
+      // `account` relation, so a fixture without either is a row the service
+      // could never read -- and the currency is what decides whether the split
+      // mirror is a copy or a conversion.
       const splitParent = {
         id: "parent-tx",
         accountId: "from-account",
         amount: -1000,
+        currencyCode: "USD",
+        account: { id: "from-account", currencyCode: "USD" },
         isSplit: true,
         transactionDate: "2020-01-01",
       } as unknown as Transaction;
@@ -1328,6 +2089,9 @@ describe("TransactionTransferService", () => {
         id: "leg-tx",
         accountId: "to-account",
         amount: 500,
+        currencyCode: "USD",
+        account: { id: "to-account", currencyCode: "USD" },
+        exchangeRate: 1,
         isTransfer: true,
         linkedTransactionId: "parent-tx",
         transactionDate: "2020-01-01",
@@ -1429,6 +2193,239 @@ describe("TransactionTransferService", () => {
         );
       });
 
+      // FR-006: a cross-currency split transfer. The parent is a PLN
+      // transaction; the leg lives in a EUR account and was posted at
+      // 0.2320000000 EUR per PLN, so a -1,000 PLN split produced a +232 EUR leg.
+      const crossParent = {
+        id: "parent-tx",
+        accountId: "pln-account",
+        amount: -1000,
+        currencyCode: "PLN",
+        account: { id: "pln-account", currencyCode: "PLN" },
+        isSplit: true,
+        transactionDate: "2020-01-01",
+      } as unknown as Transaction;
+
+      const crossLeg = {
+        id: "leg-tx",
+        accountId: "eur-account",
+        amount: 232,
+        currencyCode: "EUR",
+        account: { id: "eur-account", currencyCode: "EUR" },
+        exchangeRate: 0.232,
+        isTransfer: true,
+        linkedTransactionId: "parent-tx",
+        transactionDate: "2020-01-01",
+      } as unknown as Transaction;
+
+      const crossSplit = {
+        id: "split-1",
+        transactionId: "parent-tx",
+        transferAccountId: "eur-account",
+        amount: -1000,
+        linkedTransactionId: "leg-tx",
+      } as unknown as TransactionSplit;
+
+      it("converts a cross-currency leg amount back into the parent's currency", async () => {
+        splitsRepository.findOne.mockResolvedValue(crossSplit);
+        splitsRepository.find.mockResolvedValue([
+          { id: "split-1", amount: -1000 },
+        ]);
+        mockFindOne
+          .mockResolvedValueOnce(crossLeg)
+          .mockResolvedValueOnce(crossParent)
+          .mockResolvedValueOnce({ ...crossLeg, amount: 250 });
+
+        await service.updateTransfer(
+          "user-1",
+          "leg-tx",
+          { amount: 250 } as any,
+          mockFindOne,
+        );
+
+        // The leg receives what the user typed, in its own currency.
+        expect(transactionsRepository.update).toHaveBeenCalledWith(
+          "leg-tx",
+          expect.objectContaining({ amount: 250 }),
+        );
+        // The split row is in PLN: 250 EUR / 0.232 = 1,077.5862 PLN out.
+        // Copying -250 across would have cut the PLN parent from 1,000 to 250.
+        expect(transactionsRepository.update).toHaveBeenCalledWith(
+          "split-1",
+          expect.objectContaining({ amount: -1077.5862 }),
+        );
+        expect(transactionsRepository.update).toHaveBeenCalledWith(
+          "parent-tx",
+          expect.objectContaining({ amount: -1077.5862 }),
+        );
+        // Each account moves in its own currency: +18 EUR received, 77.5862 PLN
+        // more sent.
+        expect(accountsService.updateBalance).toHaveBeenCalledWith(
+          "eur-account",
+          18,
+        );
+        expect(accountsService.updateBalance).toHaveBeenCalledWith(
+          "pln-account",
+          -77.5862,
+        );
+      });
+
+      it("resolves the rate for the date when the leg carries none, and records it", async () => {
+        splitsRepository.findOne.mockResolvedValue(crossSplit);
+        splitsRepository.find.mockResolvedValue([
+          { id: "split-1", amount: -1000 },
+        ]);
+        // A leg imported before the rate column was populated.
+        const rateless = { ...crossLeg, exchangeRate: null };
+        mockFindOne
+          .mockResolvedValueOnce(rateless)
+          .mockResolvedValueOnce(crossParent)
+          .mockResolvedValueOnce({ ...rateless, amount: 250 });
+        exchangeRateService.getRateForDate.mockResolvedValue(0.25);
+
+        await service.updateTransfer(
+          "user-1",
+          "leg-tx",
+          { amount: 250 } as any,
+          mockFindOne,
+        );
+
+        expect(exchangeRateService.getRateForDate).toHaveBeenCalledWith(
+          "PLN",
+          "EUR",
+          "2020-01-01",
+        );
+        // 250 / 0.25 = 1,000 PLN, and the rate is written onto the leg so the
+        // row can answer this question itself next time.
+        expect(transactionsRepository.update).toHaveBeenCalledWith(
+          "leg-tx",
+          expect.objectContaining({ amount: 250, exchangeRate: 0.25 }),
+        );
+        expect(transactionsRepository.update).toHaveBeenCalledWith(
+          "split-1",
+          expect.objectContaining({ amount: -1000 }),
+        );
+      });
+
+      it("refuses a cross-currency leg amount change when no rate can be found", async () => {
+        splitsRepository.findOne.mockResolvedValue(crossSplit);
+        const rateless = { ...crossLeg, exchangeRate: null };
+        mockFindOne
+          .mockResolvedValueOnce(rateless)
+          .mockResolvedValueOnce(crossParent);
+        exchangeRateService.getRateForDate.mockResolvedValue(null);
+        exchangeRateService.getLatestRate.mockResolvedValue(null);
+
+        await expect(
+          service.updateTransfer(
+            "user-1",
+            "leg-tx",
+            { amount: 250 } as any,
+            mockFindOne,
+          ),
+        ).rejects.toThrow(BadRequestException);
+
+        // Refused before writing: no leg amount, no split amount, no balance.
+        expect(transactionsRepository.update).not.toHaveBeenCalled();
+        expect(accountsService.updateBalance).not.toHaveBeenCalled();
+      });
+
+      it("refuses to void a split transfer leg on its own (RR2-002)", async () => {
+        // Balance handling here was gated on the amount or date changing and never
+        // looked at either row's VOID state, so a status-only void wrote VOID and
+        // left the target balance carrying the money. Applying it to this leg alone
+        // would also leave the parent's split row and total recording money that
+        // left the source and never arrived, so it is refused and pointed at the
+        // parent -- which `applyParentStatusToTransferCounterparts` propagates from.
+        splitsRepository.findOne.mockResolvedValue(parentSplit);
+        mockFindOne
+          .mockResolvedValueOnce(counterpartLeg)
+          .mockResolvedValueOnce(splitParent);
+
+        await expect(
+          service.updateTransfer(
+            "user-1",
+            "leg-tx",
+            { status: TransactionStatus.VOID } as any,
+            mockFindOne,
+          ),
+        ).rejects.toThrow(BadRequestException);
+
+        // Refused before writing: no row, no balance.
+        expect(transactionsRepository.update).not.toHaveBeenCalled();
+        expect(accountsService.updateBalance).not.toHaveBeenCalled();
+      });
+
+      it("still allows a per-ledger reconciliation status change", async () => {
+        // Only the VOID boundary is shared. CLEARED/RECONCILED are genuinely
+        // per-ledger, exactly as they are across an ownership boundary, so the
+        // refusal above must not swallow them.
+        splitsRepository.findOne.mockResolvedValue(parentSplit);
+        mockFindOne
+          .mockResolvedValueOnce(counterpartLeg)
+          .mockResolvedValueOnce(splitParent)
+          .mockResolvedValueOnce(counterpartLeg);
+
+        await service.updateTransfer(
+          "user-1",
+          "leg-tx",
+          { status: TransactionStatus.CLEARED } as any,
+          mockFindOne,
+        );
+
+        expect(transactionsRepository.update).toHaveBeenCalledWith(
+          "leg-tx",
+          expect.objectContaining({ status: TransactionStatus.CLEARED }),
+        );
+        expect(accountsService.updateBalance).not.toHaveBeenCalled();
+      });
+
+      it("moves no balance when the leg and its parent are already VOID (RR2-002)", async () => {
+        // Editing an already-void split transfer's amount incremented the target
+        // balance by the delta and moved the source by the parent delta, though
+        // neither row contributes to either balance.
+        const voidLeg = {
+          ...counterpartLeg,
+          status: TransactionStatus.VOID,
+        } as unknown as Transaction;
+        const voidParent = {
+          ...splitParent,
+          status: TransactionStatus.VOID,
+        } as unknown as Transaction;
+
+        splitsRepository.findOne.mockResolvedValue(parentSplit);
+        splitsRepository.find.mockResolvedValue([
+          { id: "split-1", amount: -500 },
+        ]);
+        mockFindOne
+          .mockResolvedValueOnce(voidLeg)
+          .mockResolvedValueOnce(voidParent)
+          .mockResolvedValueOnce({ ...voidLeg, amount: 600 });
+
+        await service.updateTransfer(
+          "user-1",
+          "leg-tx",
+          { amount: 600, status: TransactionStatus.VOID } as any,
+          mockFindOne,
+        );
+
+        // The record still updates: leg amount, split mirror and parent total.
+        expect(transactionsRepository.update).toHaveBeenCalledWith(
+          "leg-tx",
+          expect.objectContaining({ amount: 600 }),
+        );
+        expect(transactionsRepository.update).toHaveBeenCalledWith(
+          "split-1",
+          expect.objectContaining({ amount: -600 }),
+        );
+        expect(transactionsRepository.update).toHaveBeenCalledWith(
+          "parent-tx",
+          expect.objectContaining({ amount: -600 }),
+        );
+        // No money moves, on either side.
+        expect(accountsService.updateBalance).not.toHaveBeenCalled();
+      });
+
       it("rejects moving a split transfer leg to a different account", async () => {
         splitsRepository.findOne.mockResolvedValue(parentSplit);
         mockFindOne
@@ -1474,28 +2471,25 @@ describe("TransactionTransferService", () => {
       expect(createdAtCalls[1][1][1]).toBe("to-tx");
     });
 
-    it("updates the source and destination currency codes when provided", async () => {
+    it("rejects currency codes that are not the accounts' own (P5-002)", async () => {
+      // Both accounts are USD. This test previously asserted that EUR and GBP
+      // were stored as given, under the name "updates the source and
+      // destination currency codes when provided" -- it documented the defect
+      // as intended behaviour. A transfer's currency codes are facts about its
+      // accounts, and a row labelled with something else contaminates every
+      // later conversion that reads it.
       mockFindOne
-        .mockResolvedValueOnce(fromTransaction)
-        .mockResolvedValueOnce(toTransaction)
         .mockResolvedValueOnce(fromTransaction)
         .mockResolvedValueOnce(toTransaction);
 
-      await service.updateTransfer(
-        "user-1",
-        "from-tx",
-        { fromCurrencyCode: "EUR", toCurrencyCode: "GBP" },
-        mockFindOne,
-      );
-
-      expect(transactionsRepository.update).toHaveBeenCalledWith(
-        "from-tx",
-        expect.objectContaining({ currencyCode: "EUR" }),
-      );
-      expect(transactionsRepository.update).toHaveBeenCalledWith(
-        "to-tx",
-        expect.objectContaining({ currencyCode: "GBP" }),
-      );
+      await expect(
+        service.updateTransfer(
+          "user-1",
+          "from-tx",
+          { fromCurrencyCode: "EUR", toCurrencyCode: "GBP" },
+          mockFindOne,
+        ),
+      ).rejects.toThrow(/must match the account currency/);
     });
 
     it("updates account IDs and adjusts payee names", async () => {
@@ -1547,12 +2541,246 @@ describe("TransactionTransferService", () => {
       );
     });
 
+    describe("the resolved destination tuple is persisted together", () => {
+      // A EUR destination for a USD source, posted at 0.90: 100 USD -> 90 EUR.
+      const eurTo = { ...mockToAccount, currencyCode: "EUR" };
+      const usdFromTx = {
+        ...fromTransaction,
+        amount: -100,
+      } as unknown as Transaction;
+      const eurToTx = {
+        ...toTransaction,
+        amount: 90,
+        currencyCode: "EUR",
+        exchangeRate: 0.9,
+        account: eurTo,
+      } as unknown as Transaction;
+
+      it("writes the new destination amount when only the account moves (RR2-003)", async () => {
+        // Moving the destination leg to a GBP account with no explicit rate or
+        // amount wrote the account, the currency and the resolved rate, and left
+        // the old EUR *number* on the row: 90 GBP at 0.80 against a 100 USD
+        // source, with the balance already moved by 80. The account, currency,
+        // rate and amount are one resolved tuple.
+        const gbpAccount = {
+          id: "gbp-account",
+          name: "London",
+          currencyCode: "GBP",
+        };
+        accountsService.findOne.mockImplementation((_u: string, id: string) =>
+          Promise.resolve(
+            id === "gbp-account"
+              ? gbpAccount
+              : id === "to-account"
+                ? eurTo
+                : mockFromAccount,
+          ),
+        );
+        exchangeRateService.getRateForDate.mockResolvedValue(0.8);
+
+        mockFindOne
+          .mockResolvedValueOnce(usdFromTx)
+          .mockResolvedValueOnce(eurToTx)
+          .mockResolvedValueOnce(usdFromTx)
+          .mockResolvedValueOnce(eurToTx);
+
+        await service.updateTransfer(
+          "user-1",
+          "from-tx",
+          { toAccountId: "gbp-account" },
+          mockFindOne,
+        );
+
+        // 100 USD at 0.80 is 80 GBP -- and that is what the row says.
+        expect(transactionsRepository.update).toHaveBeenCalledWith(
+          "to-tx",
+          expect.objectContaining({
+            accountId: "gbp-account",
+            currencyCode: "GBP",
+            exchangeRate: 0.8,
+            amount: 80,
+          }),
+        );
+        // The balance moved by the same 80 the row carries, so a later full
+        // recompute is a no-op rather than a silent 10 GBP correction.
+        expect(accountsService.updateBalance).toHaveBeenCalledWith(
+          "to-account",
+          -90,
+        );
+        expect(accountsService.updateBalance).toHaveBeenCalledWith(
+          "gbp-account",
+          80,
+        );
+      });
+
+      it("leaves the settlement alone on a description-only edit (RR2-004)", async () => {
+        // FX was resolved on every edit, and the FR-007 fix then wrote a resolved
+        // rate whenever it differed from the row's. So changing a description
+        // re-resolved today's 0.80 and stored it beside an unchanged 90 EUR: an
+        // internally inconsistent pair produced by an edit that touched no money.
+        accountsService.findOne.mockImplementation((_u: string, id: string) =>
+          Promise.resolve(id === "to-account" ? eurTo : mockFromAccount),
+        );
+        exchangeRateService.getRateForDate.mockResolvedValue(0.8);
+
+        mockFindOne
+          .mockResolvedValueOnce(usdFromTx)
+          .mockResolvedValueOnce(eurToTx)
+          .mockResolvedValueOnce(usdFromTx)
+          .mockResolvedValueOnce(eurToTx);
+
+        await service.updateTransfer(
+          "user-1",
+          "from-tx",
+          { description: "note" },
+          mockFindOne,
+        );
+
+        expect(transactionsRepository.update).toHaveBeenCalledWith("to-tx", {
+          description: "note",
+        });
+        expect(accountsService.updateBalance).not.toHaveBeenCalled();
+      });
+
+      it("succeeds on a description-only edit when no rate can be resolved", async () => {
+        // The other half of the same defect: the unconditional resolver refused a
+        // presentation-only edit outright when the pair had no current rate, even
+        // though the transfer already held a perfectly good settlement.
+        accountsService.findOne.mockImplementation((_u: string, id: string) =>
+          Promise.resolve(id === "to-account" ? eurTo : mockFromAccount),
+        );
+        exchangeRateService.getRateForDate.mockResolvedValue(null);
+        exchangeRateService.getLatestRate.mockResolvedValue(null);
+
+        mockFindOne
+          .mockResolvedValueOnce(usdFromTx)
+          .mockResolvedValueOnce(eurToTx)
+          .mockResolvedValueOnce(usdFromTx)
+          .mockResolvedValueOnce(eurToTx);
+
+        await expect(
+          service.updateTransfer(
+            "user-1",
+            "from-tx",
+            { referenceNumber: "chq-8812" },
+            mockFindOne,
+          ),
+        ).resolves.toBeDefined();
+
+        expect(transactionsRepository.update).toHaveBeenCalledWith("to-tx", {
+          referenceNumber: "chq-8812",
+        });
+      });
+
+      it("still rejects a supplied currency that does not match its account", async () => {
+        // Skipping resolution must not skip validation: a mismatched code cannot
+        // ride in on a presentation-only edit.
+        accountsService.findOne.mockImplementation((_u: string, id: string) =>
+          Promise.resolve(id === "to-account" ? eurTo : mockFromAccount),
+        );
+
+        mockFindOne
+          .mockResolvedValueOnce(usdFromTx)
+          .mockResolvedValueOnce(eurToTx);
+
+        await expect(
+          service.updateTransfer(
+            "user-1",
+            "from-tx",
+            { description: "note", toCurrencyCode: "GBP" },
+            mockFindOne,
+          ),
+        ).rejects.toThrow(/must match the account currency/);
+      });
+
+      it("leaves the settlement alone for a full-form payload of unchanged values (RR3-002)", async () => {
+        // The form resends the current accounts, amount and rate on every save.
+        // Keying repricing off field *presence* meant this idempotent payload
+        // re-resolved today's 0.80 rate, restated the 90 EUR destination as 80,
+        // and moved the balance with it -- from an edit that only changed a note.
+        // Presence is what the client sent; a difference is what the user changed.
+        accountsService.findOne.mockImplementation((_u: string, id: string) =>
+          Promise.resolve(id === "to-account" ? eurTo : mockFromAccount),
+        );
+        exchangeRateService.getRateForDate.mockResolvedValue(0.8);
+
+        mockFindOne
+          .mockResolvedValueOnce(usdFromTx)
+          .mockResolvedValueOnce(eurToTx)
+          .mockResolvedValueOnce(usdFromTx)
+          .mockResolvedValueOnce(eurToTx);
+
+        await service.updateTransfer(
+          "user-1",
+          "from-tx",
+          {
+            fromAccountId: "from-account",
+            toAccountId: "to-account",
+            amount: 100,
+            toAmount: 90,
+            exchangeRate: 0.9,
+            description: "updated note",
+          } as any,
+          mockFindOne,
+        );
+
+        // Only the note is written; the settlement is untouched on both rows.
+        expect(transactionsRepository.update).toHaveBeenCalledWith("to-tx", {
+          description: "updated note",
+        });
+        expect(transactionsRepository.update).toHaveBeenCalledWith("from-tx", {
+          description: "updated note",
+        });
+        // And no balance churn: an idempotent payload moves nothing.
+        expect(accountsService.updateBalance).not.toHaveBeenCalled();
+      });
+
+      it("re-prices when the user supplies a rate, writing rate and amount together", async () => {
+        // The control: an explicit financial change does re-price, and both tuple
+        // members move.
+        accountsService.findOne.mockImplementation((_u: string, id: string) =>
+          Promise.resolve(id === "to-account" ? eurTo : mockFromAccount),
+        );
+
+        mockFindOne
+          .mockResolvedValueOnce(usdFromTx)
+          .mockResolvedValueOnce(eurToTx)
+          .mockResolvedValueOnce(usdFromTx)
+          .mockResolvedValueOnce(eurToTx);
+
+        await service.updateTransfer(
+          "user-1",
+          "from-tx",
+          { exchangeRate: 0.8 },
+          mockFindOne,
+        );
+
+        expect(transactionsRepository.update).toHaveBeenCalledWith(
+          "to-tx",
+          expect.objectContaining({ exchangeRate: 0.8, amount: 80 }),
+        );
+      });
+    });
+
     it("handles cross-currency exchange rate update", async () => {
+      // Genuinely cross-currency: the destination account is CAD. The rate is
+      // applied to derive the destination amount, as before -- but the pair now
+      // has to actually differ in currency for a rate to be meaningful, so the
+      // fixture says so instead of leaving both accounts USD.
+      const cadTo = { ...mockToAccount, currencyCode: "CAD" };
+      const cadToTransaction = {
+        ...toTransaction,
+        account: cadTo,
+      } as unknown as Transaction;
+      accountsService.findOne.mockImplementation((_u: string, id: string) =>
+        Promise.resolve(id === "to-account" ? cadTo : mockFromAccount),
+      );
+
       mockFindOne
         .mockResolvedValueOnce(fromTransaction)
-        .mockResolvedValueOnce(toTransaction)
+        .mockResolvedValueOnce(cadToTransaction)
         .mockResolvedValueOnce(fromTransaction)
-        .mockResolvedValueOnce(toTransaction);
+        .mockResolvedValueOnce(cadToTransaction);
 
       await service.updateTransfer(
         "user-1",
@@ -1573,12 +2801,26 @@ describe("TransactionTransferService", () => {
       );
     });
 
-    it("uses explicit toAmount over calculated amount", async () => {
+    it("uses explicit toAmount over calculated amount for a cross-currency pair", async () => {
+      // An explicit settlement amount is a bank's real figure, which can differ
+      // from spot by fees -- legitimate only when the currencies actually
+      // differ. Both accounts were USD here, which made 500 out and 680 in: 180
+      // created from nothing (audit P5-002 scenario B). The same-currency case
+      // is now its own test below.
+      const cadTo = { ...mockToAccount, currencyCode: "CAD" };
+      const cadToTransaction = {
+        ...toTransaction,
+        account: cadTo,
+      } as unknown as Transaction;
+      accountsService.findOne.mockImplementation((_u: string, id: string) =>
+        Promise.resolve(id === "to-account" ? cadTo : mockFromAccount),
+      );
+
       mockFindOne
         .mockResolvedValueOnce(fromTransaction)
-        .mockResolvedValueOnce(toTransaction)
+        .mockResolvedValueOnce(cadToTransaction)
         .mockResolvedValueOnce(fromTransaction)
-        .mockResolvedValueOnce(toTransaction);
+        .mockResolvedValueOnce(cadToTransaction);
 
       await service.updateTransfer(
         "user-1",
@@ -1591,6 +2833,21 @@ describe("TransactionTransferService", () => {
         "to-tx",
         expect.objectContaining({ amount: 680 }),
       );
+    });
+
+    it("rejects an explicit toAmount that breaks a same-currency transfer", async () => {
+      mockFindOne
+        .mockResolvedValueOnce(fromTransaction)
+        .mockResolvedValueOnce(toTransaction);
+
+      await expect(
+        service.updateTransfer(
+          "user-1",
+          "from-tx",
+          { toAmount: 680 },
+          mockFindOne,
+        ),
+      ).rejects.toThrow(/same amount on both sides/);
     });
 
     it("correctly identifies from/to when called with to-transaction ID", async () => {
@@ -2262,7 +3519,18 @@ describe("TransactionTransferService", () => {
   });
 
   describe("previewCreateTransfer", () => {
+    // A rate other than 1 only means something across currencies, so these use a
+    // CAD destination account. The preview resolves the rate through the same
+    // path the commit does, so it cannot show a figure the commit will not post.
+    const withCadDestination = () => {
+      const cadTo = { ...mockToAccount, currencyCode: "CAD" };
+      accountsService.findOne.mockImplementation((_u: string, id: string) =>
+        Promise.resolve(id === "to-account" ? cadTo : mockFromAccount),
+      );
+    };
+
     it("resolves accounts, derives currencies, and computes toAmount from exchangeRate", async () => {
+      withCadDestination();
       const preview = await service.previewCreateTransfer("user-1", {
         fromAccountId: "from-account",
         toAccountId: "to-account",
@@ -2276,7 +3544,7 @@ describe("TransactionTransferService", () => {
         fromCurrencyCode: "USD",
         toAccountId: "to-account",
         toAccountName: "Savings",
-        toCurrencyCode: "USD",
+        toCurrencyCode: "CAD",
         amount: 100,
         toAmount: 125,
         exchangeRate: 1.25,
@@ -2286,7 +3554,27 @@ describe("TransactionTransferService", () => {
       });
     });
 
+    it("previews the same destination amount the commit would post", async () => {
+      // With no rate supplied, the preview resolves one rather than showing the
+      // source amount unchanged. A preview reading 100 CAD for 100 USD is the
+      // divergence audit P5-005 describes: the user approves one figure and the
+      // commit stores another.
+      withCadDestination();
+      exchangeRateService.getRateForDate.mockResolvedValue(1.4);
+
+      const preview = await service.previewCreateTransfer("user-1", {
+        fromAccountId: "from-account",
+        toAccountId: "to-account",
+        amount: 100,
+        transactionDate: "2026-01-15",
+      });
+
+      expect(preview.toAmount).toBe(140);
+      expect(preview.exchangeRate).toBe(1.4);
+    });
+
     it("uses an explicit toAmount over the exchange rate and strips html from description", async () => {
+      withCadDestination();
       const preview = await service.previewCreateTransfer("user-1", {
         fromAccountId: "from-account",
         toAccountId: "to-account",
@@ -2733,6 +4021,165 @@ describe("TransactionTransferService", () => {
     describe("updateTransfer (connected)", () => {
       beforeEach(connect);
 
+      it("moves only the effective user's balance when only their status changes (FR-001)", async () => {
+        // Status is per-ledger and stays off the foreign leg -- but it is not
+        // presentational for this leg's own balance. `amountsChanged` omitted
+        // status entirely, so voiding your own side of a delegated transfer wrote
+        // VOID and left the balance carrying the money. The next recompute then
+        // changed the account with no user action behind it.
+        await service.updateTransfer(
+          "user-1",
+          "own-leg",
+          { status: TransactionStatus.VOID },
+          mockFindOne,
+          actor,
+        );
+
+        // The own leg's -500 contribution is removed: +500 back to its account.
+        expect(accountsService.updateBalance).toHaveBeenCalledWith(
+          "from-account",
+          500,
+        );
+        // The foreign leg keeps its owner's status, so its balance is untouched.
+        expect(accountsService.updateBalance).not.toHaveBeenCalledWith(
+          "to-account",
+          expect.anything(),
+        );
+        expect(accountsService.updateBalance).toHaveBeenCalledTimes(1);
+      });
+
+      it("restores the balance when the effective user unvoids their leg", async () => {
+        ownLeg.status = TransactionStatus.VOID;
+
+        await service.updateTransfer(
+          "user-1",
+          "own-leg",
+          { status: TransactionStatus.UNRECONCILED },
+          mockFindOne,
+          actor,
+        );
+
+        expect(accountsService.updateBalance).toHaveBeenCalledWith(
+          "from-account",
+          -500,
+        );
+        expect(accountsService.updateBalance).toHaveBeenCalledTimes(1);
+      });
+
+      // RR2-001: cross-owner status is per-ledger, so the two legs can sit in any
+      // of the four VOID combinations. The FR-001 fix used the acting leg's state
+      // to decide both ledgers, which is right in two of the four and silently
+      // wrong in the other two.
+      describe("structural edits with asymmetric VOID states (RR2-001)", () => {
+        it("moves the foreign balance when only the acting leg is VOID", async () => {
+          ownLeg.status = TransactionStatus.VOID;
+          // The foreign leg is active and does contribute +500 to its account.
+
+          await service.updateTransfer(
+            "user-1",
+            "own-leg",
+            { amount: 600 },
+            mockFindOne,
+            actor,
+          );
+
+          // Both persisted rows follow the new amount.
+          expect(transactionsRepository.update).toHaveBeenCalledWith(
+            "own-leg",
+            {
+              amount: -600,
+            },
+          );
+          expect(transactionsRepository.update).toHaveBeenCalledWith(
+            "foreign-leg",
+            { amount: 600 },
+          );
+          // The acting leg is excluded, so its account never moves.
+          expect(accountsService.updateBalance).not.toHaveBeenCalledWith(
+            "from-account",
+            expect.anything(),
+          );
+          // The foreign leg is included, so its old contribution is reversed and
+          // the new one applied. Leaving it at +500 beside a +600 active row put
+          // the balance 100 behind its own ledger, and the next full recompute
+          // moved the account with no user action behind it.
+          expect(accountsService.updateBalance).toHaveBeenCalledWith(
+            "to-account",
+            -500,
+          );
+          expect(accountsService.updateBalance).toHaveBeenCalledWith(
+            "to-account",
+            600,
+          );
+        });
+
+        it("leaves the foreign balance alone when only the foreign leg is VOID", async () => {
+          foreignLeg.status = TransactionStatus.VOID;
+
+          await service.updateTransfer(
+            "user-1",
+            "own-leg",
+            { amount: 600 },
+            mockFindOne,
+            actor,
+          );
+
+          // The acting leg is included: reversed and re-applied.
+          expect(accountsService.updateBalance).toHaveBeenCalledWith(
+            "from-account",
+            500,
+          );
+          expect(accountsService.updateBalance).toHaveBeenCalledWith(
+            "from-account",
+            -600,
+          );
+          // The foreign row is excluded, so moving its account would create money
+          // the void withheld.
+          expect(accountsService.updateBalance).not.toHaveBeenCalledWith(
+            "to-account",
+            expect.anything(),
+          );
+        });
+
+        it("moves nothing when both legs are VOID", async () => {
+          ownLeg.status = TransactionStatus.VOID;
+          foreignLeg.status = TransactionStatus.VOID;
+
+          await service.updateTransfer(
+            "user-1",
+            "own-leg",
+            { amount: 600 },
+            mockFindOne,
+            actor,
+          );
+
+          expect(transactionsRepository.update).toHaveBeenCalledWith(
+            "own-leg",
+            {
+              amount: -600,
+            },
+          );
+          expect(accountsService.updateBalance).not.toHaveBeenCalled();
+        });
+      });
+
+      it("rejects an unconserved same-currency edit (FR-004)", async () => {
+        // This path computed `newToAmount` for itself, so every rule
+        // resolveTransferFx enforces was reachable again through a delegated
+        // transfer: 100 out and 80 in between two USD accounts destroyed 20.
+        await expect(
+          service.updateTransfer(
+            "user-1",
+            "own-leg",
+            { amount: 100, toAmount: 80 },
+            mockFindOne,
+            actor,
+          ),
+        ).rejects.toThrow(/same amount on both sides/);
+
+        expect(accountsService.updateBalance).not.toHaveBeenCalled();
+      });
+
       it("mirrors the amount across both legs and rebalances both accounts under system context", async () => {
         await service.updateTransfer(
           "user-1",
@@ -2848,6 +4295,38 @@ describe("TransactionTransferService", () => {
 
     describe("updateTransfer (frozen)", () => {
       beforeEach(freeze);
+
+      it("moves the own balance when the frozen leg is voided (FR-001)", async () => {
+        // The frozen path treats status as an own-leg presentational field, which
+        // is right for the counterpart and wrong for the balance: VOID excludes
+        // the row from recalculateCurrentBalance and every report, so writing it
+        // without moving the balance leaves the two disagreeing.
+        await service.updateTransfer(
+          "user-1",
+          "own-leg",
+          { status: TransactionStatus.VOID },
+          mockFindOne,
+          actor,
+        );
+
+        expect(accountsService.updateBalance).toHaveBeenCalledWith(
+          "from-account",
+          500,
+        );
+        expect(accountsService.updateBalance).toHaveBeenCalledTimes(1);
+      });
+
+      it("does not move the balance for a non-VOID status change", async () => {
+        await service.updateTransfer(
+          "user-1",
+          "own-leg",
+          { status: TransactionStatus.CLEARED },
+          mockFindOne,
+          actor,
+        );
+
+        expect(accountsService.updateBalance).not.toHaveBeenCalled();
+      });
 
       it("allows presentational own-leg edits without touching the counterpart or balances", async () => {
         const result = await service.updateTransfer(

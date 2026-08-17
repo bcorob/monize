@@ -43,7 +43,8 @@
     "summaryEnding": "Fin",
     "summaryLowest": "Le plus bas",
     "summaryMinBalance": "Solde min.",
-    "allAccounts": "Tous les comptes"
+    "allAccounts": "Tous les comptes",
+    "unavailableMissingRates": "Cette prévision ne peut pas être affichée en {displayCurrency} : aucun taux de change n'est disponible pour {currencies}, et un solde projeté s'appuie sur chaque jour précédent. Ajoutez un taux, ou choisissez un compte à devise unique."
   },
   "calendar": {
     "days": {

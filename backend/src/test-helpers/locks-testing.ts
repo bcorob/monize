@@ -60,6 +60,7 @@ export function locksMockModule() {
     lockAccountsForBalanceWrite: jest.fn().mockResolvedValue(undefined),
     lockTransactionRow: jest.fn().mockResolvedValue(null),
     lockTransactionRows: jest.fn().mockResolvedValue(new Map()),
+    lockInvestmentTransactionRow: jest.fn().mockResolvedValue(null),
   };
 }
 

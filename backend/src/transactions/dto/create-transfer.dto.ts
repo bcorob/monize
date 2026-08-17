@@ -9,6 +9,7 @@ import {
   MaxLength,
   Min,
   Max,
+  IsPositive,
 } from "class-validator";
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { TransactionStatus } from "../entities/transaction.entity";
@@ -38,15 +39,17 @@ export class CreateTransferDto {
   @Max(999999999999)
   amount: number;
 
-  @ApiProperty({
-    description: "Currency code of source account (e.g., CAD, USD)",
+  @ApiPropertyOptional({
+    description:
+      "Currency code of the source account. Optional: the server derives both currency codes from the accounts themselves. When supplied it must match the source account's currency, or the request is rejected.",
   })
+  @IsOptional()
   @IsCurrencyCode()
-  fromCurrencyCode: string;
+  fromCurrencyCode?: string;
 
   @ApiPropertyOptional({
     description:
-      "Currency code of destination account (defaults to fromCurrencyCode)",
+      "Currency code of the destination account. Optional and derived from the account, as above.",
   })
   @IsOptional()
   @IsCurrencyCode()
@@ -54,11 +57,14 @@ export class CreateTransferDto {
 
   @ApiPropertyOptional({
     description:
-      "Exchange rate for converting from source to destination currency (defaults to 1.0)",
+      "Exchange rate for converting from source to destination currency. " +
+      "When omitted for a cross-currency pair, the server resolves the market " +
+      "rate for the transfer date or refuses the transfer -- it never posts " +
+      "at 1:1. Must be 1 (or omitted) for a same-currency pair.",
   })
   @IsOptional()
   @IsNumber({ maxDecimalPlaces: 10 })
-  @Min(0)
+  @IsPositive()
   @Max(1_000_000)
   exchangeRate?: number;
 

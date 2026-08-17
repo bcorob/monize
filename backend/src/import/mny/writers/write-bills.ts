@@ -4,6 +4,7 @@ import { ScheduledTransaction } from "../../../scheduled-transactions/entities/s
 import { ScheduledTransactionSplit } from "../../../scheduled-transactions/entities/scheduled-transaction-split.entity";
 import { SplitKind } from "../../../transactions/entities/split-kind.enum";
 import { roundMoney } from "../../../common/round.util";
+import { FUNDING_ACCOUNT_ACTIONS } from "../../../securities/investment-replay.util";
 import { MappedBill } from "../model/mny-import-model";
 
 /**
@@ -102,9 +103,15 @@ export async function writeBills(
       investment === null
         ? null
         : (input.securityIdByHandle.get(investment.securityHandle) ?? null);
+    // A funding account only belongs on a BUY/SELL; every other action settles
+    // against the brokerage's linked cash account. Persisting one on, say, an
+    // imported DIVIDEND leaves the same stale column the scheduled-transaction
+    // service now clears on write, so gate it on the action here too (#1154).
     const fundingKey = input.linkedKeyByKey.get(bill.accountKey);
     const fundingAccountId =
-      investment === null || fundingKey === undefined
+      investment === null ||
+      fundingKey === undefined ||
+      !FUNDING_ACCOUNT_ACTIONS.has(investment.action)
         ? null
         : (input.accountIdByKey.get(fundingKey) ?? null);
 

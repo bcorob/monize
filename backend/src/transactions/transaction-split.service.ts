@@ -6,7 +6,7 @@ import {
   forwardRef,
 } from "@nestjs/common";
 import { DataSource, EntityManager, In } from "typeorm";
-import { Transaction } from "./entities/transaction.entity";
+import { Transaction, TransactionStatus } from "./entities/transaction.entity";
 import { TransactionSplit } from "./entities/transaction-split.entity";
 import { SplitKind } from "./entities/split-kind.enum";
 import { Category } from "../categories/entities/category.entity";
@@ -21,6 +21,8 @@ import {
 } from "../securities/cash-impact.util";
 import { NetWorthService } from "../net-worth/net-worth.service";
 import { roundMoney, sumMoney } from "../common/round.util";
+import { resolveFxRateOrNull } from "../common/fx-entry.util";
+import { ExchangeRateService } from "../currencies/exchange-rate.service";
 import { validateSplitAmountSum } from "../common/split-amount.util";
 import { tr } from "../i18n/translate";
 import { withScopedDb } from "../common/db/scoped-db";
@@ -44,7 +46,102 @@ export class TransactionSplitService {
     @Inject(forwardRef(() => NetWorthService))
     private netWorthService: NetWorthService,
     private dataSource: DataSource,
+    private exchangeRateService: ExchangeRateService,
   ) {}
+
+  /**
+   * The counterpart amount for a transfer child, in the TARGET account's
+   * currency, plus the rate used.
+   *
+   * A split's amounts are denominated in the parent account's currency. The
+   * counterpart used to be created at exactly `-split.amount` with
+   * `exchangeRate: 1` while being labelled with the target account's currency,
+   * so a 40 USD transfer child into a EUR account credited 40 EUR and recorded
+   * the pair as if the currencies were at par. That is the transfer-split half of
+   * audit P5-002, and it is the same silent 1:1 as the rest of that finding.
+   *
+   * Refuses rather than posting at par when the pair has no determinable rate.
+   */
+  private async resolveSplitTransferAmount(
+    amount: number,
+    sourceCurrencyCode: string,
+    targetCurrencyCode: string,
+    transactionDate: string,
+  ): Promise<{ amount: number; exchangeRate: number }> {
+    if (sourceCurrencyCode === targetCurrencyCode) {
+      return { amount: roundMoney(-amount), exchangeRate: 1 };
+    }
+
+    const rate = await resolveFxRateOrNull(
+      this.exchangeRateService,
+      sourceCurrencyCode,
+      targetCurrencyCode,
+      transactionDate || null,
+    );
+    if (rate === null) {
+      throw new BadRequestException(
+        tr(
+          "errors.transactions.transferRateUnavailable",
+          `Could not determine an exchange rate for ${sourceCurrencyCode} -> ${targetCurrencyCode}. Supply an exchangeRate or a destination amount so the transfer posts correctly.`,
+          { from: sourceCurrencyCode, to: targetCurrencyCode },
+        ),
+      );
+    }
+
+    const exchangeRate = rate;
+    return { amount: roundMoney(-amount * exchangeRate), exchangeRate };
+  }
+
+  /**
+   * Resolve -- and thereby store -- the market rate for every cross-currency
+   * transfer child BEFORE the caller opens its write transaction.
+   *
+   * A missing rate makes `getRateForDate` fetch a provider window over HTTP
+   * and persist it. Done lazily inside `createSplits`, that happened while
+   * holding the locked parent row, keeping the lock and the transaction's
+   * connection open for the provider's latency and serializing every
+   * concurrent writer of that split set. After this warm-up the
+   * in-transaction resolution is a plain database read.
+   *
+   * Best-effort by design: failures are swallowed because the transactional
+   * resolver remains authoritative -- it re-resolves and refuses with the
+   * proper error when the pair is genuinely unresolvable.
+   */
+  async prewarmSplitTransferRates(
+    userId: string,
+    splits: Pick<CreateTransactionSplitDto, "transferAccountId">[],
+    sourceAccountId: string,
+    transactionDate: string | Date | null | undefined,
+  ): Promise<void> {
+    const transferSplits = splits.filter((s) => s.transferAccountId);
+    if (transferSplits.length === 0) return;
+    const dateStr = !transactionDate
+      ? null
+      : typeof transactionDate === "string"
+        ? transactionDate.substring(0, 10)
+        : transactionDate.toISOString().substring(0, 10);
+    try {
+      const source = await this.accountsService.findOne(
+        userId,
+        sourceAccountId,
+      );
+      for (const split of transferSplits) {
+        const target = await this.accountsService.findOne(
+          userId,
+          split.transferAccountId!,
+        );
+        if (target.currencyCode === source.currencyCode) continue;
+        await resolveFxRateOrNull(
+          this.exchangeRateService,
+          source.currencyCode,
+          target.currencyCode,
+          dateStr,
+        );
+      }
+    } catch {
+      // Ownership and rate errors surface from the transactional path.
+    }
+  }
 
   private async validateCategoryOwnership(
     userId: string,
@@ -111,10 +208,17 @@ export class TransactionSplitService {
         Number(inv.price ?? 0),
         Number(inv.commission ?? 0),
       );
-      const exchangeRate =
-        inv.exchangeRate !== undefined && inv.exchangeRate !== null
-          ? Number(inv.exchangeRate)
-          : 1;
+      // Only an internal-consistency check on the payload, and only when the
+      // payload states a rate. It used to default to 1 and demand that the
+      // split's cash amount equal the UNCONVERTED cash impact -- so for a USD
+      // security in a CAD account it required the wrong number and rejected the
+      // right one, while `createEmbeddedForSplit` went on to store the investment
+      // row at the properly resolved rate. The two halves of one split then
+      // disagreed by the whole FX spread. The authoritative check lives where the
+      // rate is resolved (`createEmbeddedForSplit`), against the rate actually
+      // stored.
+      if (inv.exchangeRate === undefined || inv.exchangeRate === null) continue;
+      const exchangeRate = Number(inv.exchangeRate);
       const expectedAmount = cashImpactInSecurity * exchangeRate;
 
       const expectedRounded = roundMoney(expectedAmount);
@@ -154,6 +258,23 @@ export class TransactionSplitService {
     transactionDate?: Date,
     parentPayeeName?: string | null,
     parentPayeeId?: string | null,
+    /**
+     * The parent's status. A VOID parent describes something that did not
+     * happen, so its transfer counterpart must be VOID too and must move no
+     * balance -- this used to be unknown here, so a void split still credited
+     * the target account and left an ACTIVE counterpart leg behind it.
+     */
+    options?: { parentStatus?: TransactionStatus },
+    /**
+     * Every account this touched besides the parent's, so the caller can
+     * invalidate their balance-derived state after commit. A transfer child
+     * creates a counterpart in an account the parent never named, and an
+     * investment child moves the brokerage account -- both went stale in
+     * net worth because only the parent account was invalidated (recheck
+     * RR5-002). Populated, never triggered from in here: the recalculation must
+     * wait for the caller's commit.
+     */
+    affectedAccountIds?: Set<string>,
   ): Promise<TransactionSplit[]> {
     return withScopedDb(this.dataSource, (m) =>
       this.createSplitsInternal(
@@ -165,6 +286,8 @@ export class TransactionSplitService {
         transactionDate,
         parentPayeeName,
         parentPayeeId,
+        options,
+        affectedAccountIds,
       ),
     );
   }
@@ -178,6 +301,8 @@ export class TransactionSplitService {
     transactionDate?: Date,
     parentPayeeName?: string | null,
     parentPayeeId?: string | null,
+    options?: { parentStatus?: TransactionStatus },
+    affectedAccountIds?: Set<string>,
   ): Promise<TransactionSplit[]> {
     if (userId) {
       const categoryIds = [
@@ -331,20 +456,37 @@ export class TransactionSplitService {
         ? transactionDate.toISOString().substring(0, 10)
         : "";
 
+      // The counterpart is denominated in the TARGET account's currency, so a
+      // split amount in the parent's currency has to be converted rather than
+      // copied across with `exchangeRate: 1` (audit P5-002, transfer-split half).
+      const counterpart = await this.resolveSplitTransferAmount(
+        split.amount,
+        sourceAccount.currencyCode,
+        targetAccount.currencyCode,
+        dateStr,
+      );
+
+      // A VOID parent's counterpart is VOID: the two rows describe one movement
+      // of money, and every balance and report predicate excludes a VOID row, so
+      // an active counterpart under a void parent is money from nowhere.
+      const parentIsVoid = options?.parentStatus === TransactionStatus.VOID;
+
       const linkedTransaction = m.create(Transaction, {
         userId,
         accountId: split.transferAccountId,
         transactionDate: (dateStr || null) as any,
-        amount: -split.amount,
+        amount: counterpart.amount,
         currencyCode: targetAccount.currencyCode,
-        exchangeRate: 1,
+        exchangeRate: counterpart.exchangeRate,
         description: split.memo || null,
         isTransfer: true,
+        status: options?.parentStatus,
         payeeId: parentPayeeId || null,
         payeeName: parentPayeeName || `Transfer from ${sourceAccount.name}`,
       });
 
       const savedLinkedTransaction = await m.save(linkedTransaction);
+      affectedAccountIds?.add(split.transferAccountId!);
 
       await m.update(TransactionSplit, savedSplit.id, {
         linkedTransactionId: savedLinkedTransaction.id,
@@ -354,7 +496,9 @@ export class TransactionSplitService {
         linkedTransactionId: transactionId,
       });
 
-      if (dateStr && isTransactionInFuture(dateStr)) {
+      if (parentIsVoid) {
+        // Recorded, not applied.
+      } else if (dateStr && isTransactionInFuture(dateStr)) {
         // The transfer counterpart is created under `userId` above, so its
         // account is the caller's -- scope the balance-write lock to that owner.
         await this.accountsService.recalculateCurrentBalance(
@@ -364,7 +508,7 @@ export class TransactionSplitService {
       } else {
         await this.accountsService.updateBalance(
           split.transferAccountId!,
-          -split.amount,
+          counterpart.amount,
         );
       }
 
@@ -391,13 +535,26 @@ export class TransactionSplitService {
         brokerageAccountId!,
         sourceAccountId!,
         split.investment!,
+        // Checked against the resolved rate there: this amount and the
+        // investment row have to describe the same money.
+        Number(split.amount),
+        // A VOID parent's embedded investment row is created VOID (no
+        // holdings), for the same reason its transfer counterparts are.
+        options?.parentStatus,
       );
 
       savedSplits[index] = savedSplit;
     }
 
     if (hasInvestment && userId && brokerageAccountId) {
-      this.netWorthService.triggerDebouncedRecalc(brokerageAccountId, userId);
+      if (affectedAccountIds) {
+        // Collected for the caller to invalidate after commit; see the param doc.
+        affectedAccountIds.add(brokerageAccountId);
+      } else {
+        // No collector supplied (a caller that owns no post-commit hook): keep
+        // the original best-effort trigger rather than dropping the invalidation.
+        this.netWorthService.triggerDebouncedRecalc(brokerageAccountId, userId);
+      }
     }
 
     return savedSplits;
@@ -488,11 +645,111 @@ export class TransactionSplitService {
    * rebuilding its splits. Joins the caller's ambient transaction; every call
    * site runs inside one (transaction update/remove, updateSplits).
    */
+  /**
+   * Apply a split parent's inclusion status to every transfer counterpart its
+   * children created, moving each counterpart's balance exactly once.
+   *
+   * A split parent and the counterparts created from its transfer children are
+   * one economic event. `parentStatus` reaches the counterpart when children are
+   * created or rebuilt, but a status-only edit does not rebuild them -- so
+   * voiding a mixed category/transfer split restored the source balance and left
+   * the target holding the transferred amount, with an ACTIVE counterpart row
+   * under a VOID parent (review finding FR-002).
+   *
+   * Runs inside the caller's transaction so the parent's own status change and
+   * every counterpart's move commit together.
+   */
+  async applyParentStatusToTransferCounterparts(
+    m: EntityManager,
+    transactionId: string,
+    userId: string,
+    newStatus: TransactionStatus,
+  ): Promise<Set<string>> {
+    const splits = await m.getRepository(TransactionSplit).find({
+      where: { transactionId },
+      select: ["id", "transferAccountId", "linkedTransactionId"],
+    });
+    const counterpartIds = splits
+      .filter((split) => split.transferAccountId)
+      .map((split) => split.linkedTransactionId)
+      .filter((id): id is string => id !== null);
+
+    // Returned so the caller can invalidate the balance-derived state of every
+    // account this touched. Returning `void` left the caller invalidating only the
+    // accounts it already knew about -- the parent's -- so a target account came
+    // out with a corrected live balance beside a stale net-worth snapshot, and it
+    // stayed stale until something unrelated wrote to that account (recheck
+    // RR4-003). The recalculation is deliberately NOT dispatched from in here: this
+    // runs inside the caller's transaction, and a rollback must not leave a
+    // recompute queued for state that was never committed.
+    const affectedAccountIds = new Set<string>();
+
+    // Embedded investment rows are the parent's event too: their holdings
+    // effect follows the parent across the VOID boundary exactly as a transfer
+    // counterpart's balance does. Same transaction, same rollback.
+    const embeddedAffected =
+      await this.investmentTransactionsService.applyParentStatusToEmbeddedRows(
+        m,
+        userId,
+        transactionId,
+        newStatus,
+      );
+    for (const accountId of embeddedAffected) {
+      affectedAccountIds.add(accountId);
+    }
+
+    if (counterpartIds.length === 0) return affectedAccountIds;
+
+    // The status the transition is decided from and the amount the balance
+    // moves by are read under the row lock, like every other delta in this
+    // codebase (P4-003/FV4-002): an unlocked relation read raced a concurrent
+    // leg edit, so propagation subtracted an amount the edit had already
+    // replaced and the stored balance drifted from the recomputable one. A
+    // counterpart that does not lock is not this user's row and is skipped --
+    // inclusion there is per ledger.
+    const lockedCounterparts = await lockTransactionRows(
+      m,
+      counterpartIds,
+      userId,
+    );
+
+    for (const counterpart of lockedCounterparts.values()) {
+      const wasVoid = counterpart.status === TransactionStatus.VOID;
+      const isVoid = newStatus === TransactionStatus.VOID;
+      if (wasVoid === isVoid) continue;
+
+      await m.update(Transaction, counterpart.id, { status: newStatus });
+      affectedAccountIds.add(counterpart.accountId);
+
+      if (isTransactionInFuture(counterpart.transactionDate)) {
+        await this.accountsService.recalculateCurrentBalance(
+          userId,
+          counterpart.accountId,
+        );
+      } else {
+        await this.accountsService.updateBalance(
+          counterpart.accountId,
+          isVoid ? -counterpart.amount : counterpart.amount,
+        );
+      }
+    }
+
+    return affectedAccountIds;
+  }
+
+  /**
+   * Returns every account whose balance this reversed, besides the parent's, so
+   * the caller can invalidate their derived state after commit -- a transfer
+   * child's counterpart account and an investment child's brokerage account both
+   * went stale in net worth because only the parent account was invalidated
+   * (recheck RR5-002).
+   */
   async deleteSplitSideEffects(
     transactionId: string,
     userId: string,
-  ): Promise<void> {
+  ): Promise<Set<string>> {
     return withScopedDb(this.dataSource, async (m) => {
+      const affectedAccountIds = new Set<string>();
       const splits = await m.getRepository(TransactionSplit).find({
         where: { transactionId },
         relations: ["linkedTransaction", "investmentTransaction"],
@@ -502,6 +759,9 @@ export class TransactionSplitService {
       // deleted.
       for (const s of splits) {
         if (s.kind === SplitKind.INVESTMENT && s.investmentTransaction) {
+          if (s.investmentTransaction.accountId) {
+            affectedAccountIds.add(s.investmentTransaction.accountId);
+          }
           await this.investmentTransactionsService.reverseAndRemoveEmbedded(
             m,
             userId,
@@ -514,7 +774,7 @@ export class TransactionSplitService {
         .filter((s) => s.linkedTransactionId && s.transferAccountId)
         .map((s) => s.linkedTransactionId!);
 
-      if (linkedTxIds.length === 0) return;
+      if (linkedTxIds.length === 0) return affectedAccountIds;
 
       // Locked, re-read and conditionally deleted, exactly like the single-leg
       // path. An unlocked `find` followed by `remove(entity)` reversed whatever
@@ -522,10 +782,17 @@ export class TransactionSplitService {
       // call was the one that removed the row -- a split replacement racing a
       // counterpart edit, or racing another replacement, each moved the target
       // account's balance once for one deleted row (audit FV4-002).
+      //
+      // Each locked leg's account is collected so the caller can invalidate its
+      // net-worth state after commit -- the counterpart lives in an account the
+      // parent never named (recheck RR5-002).
       const linked = await lockTransactionRows(m, linkedTxIds, userId);
       for (const leg of linked.values()) {
+        affectedAccountIds.add(leg.accountId);
         await removeLockedTransactionLeg(m, leg, userId, this.accountsService);
       }
+
+      return affectedAccountIds;
     });
   }
 
@@ -559,7 +826,19 @@ export class TransactionSplitService {
     splits: CreateTransactionSplitDto[],
     userId: string,
   ): Promise<TransactionSplit[]> {
-    return withScopedDb(this.dataSource, async (m) => {
+    // Provider rate lookups happen out here, never while holding the parent
+    // lock below; see prewarmSplitTransferRates.
+    await this.prewarmSplitTransferRates(
+      userId,
+      splits,
+      transaction.accountId,
+      transaction.transactionDate,
+    );
+    // Every transfer target and brokerage account this replace touched besides
+    // the parent's, invalidated after the commit so a rollback leaves nothing
+    // queued (recheck RR5-002).
+    const affectedAccountIds = new Set<string>();
+    const newSplits = await withScopedDb(this.dataSource, async (m) => {
       // Same parent lock as addSplit, so full replacement and incremental
       // addition serialize against each other, and validated against the
       // parent's committed amount rather than the caller's snapshot of it.
@@ -575,7 +854,12 @@ export class TransactionSplitService {
       }
       this.validateSplits(splits, parent.amount);
 
-      await this.deleteSplitSideEffects(transaction.id, userId);
+      for (const acc of await this.deleteSplitSideEffects(
+        transaction.id,
+        userId,
+      )) {
+        affectedAccountIds.add(acc);
+      }
 
       await m.delete(TransactionSplit, {
         transactionId: transaction.id,
@@ -587,7 +871,7 @@ export class TransactionSplitService {
       // -- so a concurrent parent edit that committed after the caller read it
       // would otherwise be written into rows claiming the old values, with no
       // error and nothing to reconcile against (audit FV4-002).
-      const newSplits = await this.createSplits(
+      const created = await this.createSplits(
         parent.id,
         splits,
         userId,
@@ -595,6 +879,15 @@ export class TransactionSplitService {
         new Date(parent.transactionDate),
         parent.payeeName,
         parent.payeeId,
+        // The parent's status reaches the recreated counterparts, exactly as it
+        // does on the create and update paths in `TransactionsService`. This was
+        // the third route into a VOID parent with ACTIVE counterparts (the
+        // FR-002 family): replacing the split set of a voided transaction --
+        // reachable from `PUT /transactions/:id/splits`, the AI action and the
+        // MCP tool -- deleted the VOID legs and recreated them active, so the
+        // target account was credited money the source still showed as not sent.
+        { parentStatus: transaction.status },
+        affectedAccountIds,
       );
 
       await m.update(Transaction, transaction.id, {
@@ -602,8 +895,24 @@ export class TransactionSplitService {
         categoryId: null,
       });
 
-      return newSplits;
+      return created;
     });
+
+    // After the commit, so a rollback leaves nothing queued: every transfer
+    // target and brokerage account this replace touched had its net-worth state
+    // invalidated (recheck RR5-002), not only the parent account the caller knows.
+    this.invalidateNetWorth(affectedAccountIds, userId);
+    return newSplits;
+  }
+
+  /**
+   * Queue a net-worth recompute for each account, for use after a split
+   * mutation's transaction has committed.
+   */
+  private invalidateNetWorth(accountIds: Set<string>, userId: string): void {
+    for (const accountId of accountIds) {
+      this.netWorthService.triggerDebouncedRecalc(accountId, userId);
+    }
   }
 
   async addSplit(
@@ -623,6 +932,19 @@ export class TransactionSplitService {
       await this.validateCategoryOwnership(userId, splitDto.categoryId);
     }
 
+    // Provider rate lookups happen out here, never while holding the parent
+    // lock below; see prewarmSplitTransferRates.
+    await this.prewarmSplitTransferRates(
+      userId,
+      [splitDto],
+      transaction.accountId,
+      transaction.transactionDate,
+    );
+
+    // The target account of a transfer child added here, so its net-worth state
+    // is invalidated after commit -- the counterpart lives in an account this
+    // transaction's parent never named (recheck RR5-002).
+    let addedTransferAccountId: string | null = null;
     const savedSplitId = await withScopedDb(this.dataSource, async (m) => {
       // The aggregate check and the insert are one serialized unit.
       //
@@ -698,26 +1020,44 @@ export class TransactionSplitService {
           parent.accountId,
         );
 
+        const counterpart = await this.resolveSplitTransferAmount(
+          splitDto.amount,
+          sourceAccount.currencyCode,
+          targetAccount.currencyCode,
+          String(transaction.transactionDate),
+        );
+
         const linkedTransaction = m.create(Transaction, {
           userId,
           accountId: splitDto.transferAccountId,
+          // Date from the locked row (04-02 concurrency convention); amount is the
+          // cross-currency-converted counterpart, not a raw negation (audit P5-002).
           transactionDate: parent.transactionDate,
-          amount: -splitDto.amount,
+          amount: counterpart.amount,
           currencyCode: targetAccount.currencyCode,
-          exchangeRate: 1,
+          exchangeRate: counterpart.exchangeRate,
           description: splitDto.memo || null,
           isTransfer: true,
+          // A VOID parent's counterpart is VOID and moves no balance, exactly as
+          // on the bulk creation path (FR-002 family). The payee comes off the
+          // locked parent, not the caller's snapshot (FV4-002).
+          status: transaction.status,
           payeeId: parent.payeeId || null,
           payeeName: parent.payeeName || `Transfer from ${sourceAccount.name}`,
         });
 
         const savedLinkedTransaction = await m.save(linkedTransaction);
+        addedTransferAccountId = splitDto.transferAccountId;
 
         await m.update(TransactionSplit, savedSplit.id, {
           linkedTransactionId: savedLinkedTransaction.id,
         });
 
-        if (isTransactionInFuture(parent.transactionDate)) {
+        // Same two rules as the bulk creation path above: a VOID parent's
+        // counterpart moves no balance, and the amount is the converted one.
+        if (transaction.status === TransactionStatus.VOID) {
+          // Recorded, not applied.
+        } else if (isTransactionInFuture(parent.transactionDate)) {
           await this.accountsService.recalculateCurrentBalance(
             userId,
             splitDto.transferAccountId,
@@ -725,7 +1065,7 @@ export class TransactionSplitService {
         } else {
           await this.accountsService.updateBalance(
             splitDto.transferAccountId,
-            -splitDto.amount,
+            counterpart.amount,
           );
         }
       }
@@ -758,26 +1098,33 @@ export class TransactionSplitService {
       );
     }
 
+    if (addedTransferAccountId) {
+      this.invalidateNetWorth(new Set([addedTransferAccountId]), userId);
+    }
     return splitWithRelations;
   }
 
   /**
-   * Delete a split's transfer counterpart and reverse its balance, once.
+   * Delete a split's transfer counterpart and reverse its balance, once, and
+   * report the account it moved so the caller can invalidate that account's
+   * net-worth state after commit (recheck RR5-002).
    *
    * The leg is locked and re-read here rather than taken from the split's
    * snapshot: the amount reversed has to be the amount the delete removes, and
    * the reversal only happens when this call is the one that removed the row.
    * Both split-removal paths below go through this, so the collapse case cannot
-   * drift from the ordinary one.
+   * drift from the ordinary one. Returns the counterpart's account id, or null
+   * when another request already removed the leg (nothing was reversed).
    */
   private async removeLinkedLeg(
     m: EntityManager,
     linkedTransactionId: string,
     userId: string,
-  ): Promise<void> {
+  ): Promise<string | null> {
     const linked = await lockTransactionRow(m, linkedTransactionId, userId);
-    if (!linked) return;
+    if (!linked) return null;
     await removeLockedTransactionLeg(m, linked, userId, this.accountsService);
+    return linked.accountId;
   }
 
   async removeSplit(
@@ -785,7 +1132,10 @@ export class TransactionSplitService {
     splitId: string,
     userId: string,
   ): Promise<void> {
-    return withScopedDb(this.dataSource, async (m) => {
+    // Accounts this removal moved besides the parent's, invalidated after commit
+    // (recheck RR5-002).
+    const affectedAccountIds = new Set<string>();
+    await withScopedDb(this.dataSource, async (m) => {
       // The parent first, so a concurrent split mutation on the same parent
       // serializes behind this one, and so the split below is read from a state
       // that cannot change under us. The old code read the split in its own
@@ -822,13 +1172,23 @@ export class TransactionSplitService {
       }
 
       if (split.kind === SplitKind.INVESTMENT && split.investmentTransaction) {
+        if (split.investmentTransaction.accountId) {
+          affectedAccountIds.add(split.investmentTransaction.accountId);
+        }
         await this.investmentTransactionsService.reverseAndRemoveEmbedded(
           m,
           userId,
           split.investmentTransaction,
         );
       } else if (split.linkedTransactionId && split.transferAccountId) {
-        await this.removeLinkedLeg(m, split.linkedTransactionId, userId);
+        const movedAccountId = await this.removeLinkedLeg(
+          m,
+          split.linkedTransactionId,
+          userId,
+        );
+        if (movedAccountId) {
+          affectedAccountIds.add(movedAccountId);
+        }
       }
 
       await m.remove(split);
@@ -850,11 +1210,14 @@ export class TransactionSplitService {
           }
 
           if (lastSplit.linkedTransactionId && lastSplit.transferAccountId) {
-            await this.removeLinkedLeg(
+            const movedAccountId = await this.removeLinkedLeg(
               m,
               lastSplit.linkedTransactionId,
               userId,
             );
+            if (movedAccountId) {
+              affectedAccountIds.add(movedAccountId);
+            }
           }
 
           await m.update(Transaction, transaction.id, {
@@ -869,5 +1232,7 @@ export class TransactionSplitService {
         }
       }
     });
+
+    this.invalidateNetWorth(affectedAccountIds, userId);
   }
 }

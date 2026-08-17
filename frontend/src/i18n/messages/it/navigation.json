@@ -25,6 +25,7 @@
   "closeMenu": "Chiudi menu",
   "mainMenu": "Menu principale",
   "loggedOut": "Disconnessione effettuata con successo",
+  "logoutNotConfirmed": "Disconnesso solo su questo dispositivo — il server non ha confermato. Vedi l'avviso nella schermata di accesso.",
   "search": {
     "placeholder": "Cerca transazioni...",
     "label": "Cerca transazioni",

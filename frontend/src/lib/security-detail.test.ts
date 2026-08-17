@@ -23,6 +23,7 @@ import type {
   SecurityPrice,
   SecurityHistoryTransaction,
 } from '@/types/investment';
+import { TransactionStatus } from '@/types/transaction';
 
 function price(
   priceDate: string,
@@ -60,6 +61,7 @@ function transaction(
     commission: 0,
     totalAmount: 100,
     description: null,
+    status: TransactionStatus.CLEARED,
     runningQuantityAccount: runningQuantityAll,
     runningQuantityAll,
   };

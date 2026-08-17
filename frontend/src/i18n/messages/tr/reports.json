@@ -144,9 +144,6 @@
     "defaultMessage": "Rapor verileri yüklenemedi. Lütfen tekrar deneyin.",
     "retry": "Tekrar dene"
   },
-  "foreignCurrencyFees": {
-    "noEligibleAccounts": "Hiçbir hesapta yapılandırılmış yurt dışı işlem ücreti yok. Yabancı para birimi ücretlerini burada takip etmek için bir hesaba ücret yüzdesi ayarlayın."
-  },
   "accountBalances": {
     "totalAssets": "Toplam Varlıklar",
     "totalLiabilities": "Toplam Yükümlülükler",
@@ -333,7 +330,8 @@
     "tooltipUtilization": "Kullanım",
     "tooltipUsed": "Kullanılan",
     "tooltipAvailable": "Mevcut",
-    "pdfTitle": "Kredi Kullanımı"
+    "pdfTitle": "Kredi Kullanımı",
+    "noRate": "Kur yok"
   },
   "currencyExposure": {
     "empty": "Yatırım varlığı bulunamadı. Para birimi riskini görmek için menkul kıymet ekleyin.",
@@ -575,20 +573,20 @@
     "topRegion": "En Büyük Bölge",
     "viewByRegion": "Bölgeye Göre",
     "viewByExchange": "Borsaya Göre",
+    "viewByCountry": "Ülkeye göre",
     "regionalAllocation": "Bölgesel Dağılım",
     "exchangeAllocation": "Borsa Dağılımı",
+    "countryAllocation": "Ülke dağılımı (şeffaf bakış)",
+    "countryLookThroughNote": "Ülke maruziyeti, her menkul kıymette ayarlanan elle girilmiş ülke dağılımını kullanarak ETF ve fonların içine bakar. Tek tek hisseler işlem gördükleri borsaya göre sınıflandırılır; sınıflandırılmayanlar \"Diğer\" olarak gösterilir.",
     "colRegion": "Bölge",
     "colExchange": "Borsa",
     "colCountry": "Ülke",
     "colHoldings": "Varlıklar",
     "colMarketValue": "Piyasa Değeri",
     "colPortfolioPct": "Portföy %",
+    "other": "Diğer",
     "total": "Toplam",
-    "holdingCount": "{count, plural, one {# varlık} other {# varlık}}",
-    "viewByCountry": "Ülkeye göre",
-    "countryAllocation": "Ülke dağılımı (şeffaf bakış)",
-    "countryLookThroughNote": "Ülke maruziyeti, her menkul kıymette ayarlanan elle girilmiş ülke dağılımını kullanarak ETF ve fonların içine bakar. Tek tek hisseler işlem gördükleri borsaya göre sınıflandırılır; sınıflandırılmayanlar \"Diğer\" olarak gösterilir.",
-    "other": "Diğer"
+    "holdingCount": "{count, plural, one {# varlık} other {# varlık}}"
   },
   "healthScoreHistory": {
     "pdfTitle": "Sağlık Puanı Geçmişi",
@@ -761,7 +759,13 @@
     "actionTransferOut": "Transfer Çıkışı",
     "actionReinvest": "Yeniden Yatır",
     "actionAddShares": "Hisse Ekle",
-    "actionRemoveShares": "Hisse Çıkar"
+    "actionRemoveShares": "Hisse Çıkar",
+    "actionReinvestInterest": "Faizi Yeniden Yatır",
+    "actionReinvestCapitalGainShort": "Kısa Vadeli Kazancı Yeniden Yatır",
+    "actionReinvestCapitalGainLong": "Uzun Vadeli Kazancı Yeniden Yatır",
+    "actionCapitalGainShort": "Kısa Vadeli Sermaye Kazancı",
+    "actionCapitalGainLong": "Uzun Vadeli Sermaye Kazancı",
+    "actionRedeem": "CD/Tahvil İtfası"
   },
   "loanAmortization": {
     "empty": "Kredi veya ipotek hesabı bulunamadı. Ödeme geçmişini görmek için kredi hesabı ekleyin.",
@@ -820,6 +824,7 @@
       "maxCompare": "En fazla {max} senaryo karşılaştırabilirsiniz.",
       "loadFailed": "Monte Carlo verileri yüklenemedi. Lütfen yenileyin.",
       "currentValueFailed": "Mevcut portföy değeri alınamadı.",
+      "currentValueUnavailable": "Seçilen hesapların güncel değeri belirlenemedi. Bir başlangıç değeri girin veya fiyatlar ve döviz kurları hazır olduğunda yeniden deneyin.",
       "holdingStatsFailed": "Varlık bazında geçmiş istatistikler yüklenemedi.",
       "reorderFailed": "Senaryolar yeniden sıralanamadı."
     },
@@ -1168,7 +1173,8 @@
     "csvColProceeds": "Gelirler",
     "csvColCostBasis": "Maliyet Bazı",
     "csvColGainLoss": "Kazanç/Kayıp",
-    "csvColReturn": "Getiri %"
+    "csvColReturn": "Getiri %",
+    "csvNoRate": "Kur yok"
   },
   "recurringExpenses": {
     "recurringExpenses": "Tekrarlayan Giderler",
@@ -1376,7 +1382,8 @@
     "pdfTotalPortfolio": "Toplam Portföy",
     "pdfAssetTypes": "Varlık Türleri",
     "pdfTotalHoldings": "Toplam Varlıklar",
-    "pdfLargestType": "En Büyük Tür"
+    "pdfLargestType": "En Büyük Tür",
+    "unavailable": "Mevcut değil"
   },
   "spendingAnomalies": {
     "highPriority": "Yüksek Öncelik",
@@ -1700,5 +1707,8 @@
     "labelSelectAccount": "Kredi Hesabı Seç",
     "viewTransactions": "İşlemleri Görüntüle",
     "empty": "Kredi, ipotek veya kredi limiti hesabı bulunamadı."
+  },
+  "foreignCurrencyFees": {
+    "noEligibleAccounts": "Hiçbir hesapta yapılandırılmış yurt dışı işlem ücreti yok. Yabancı para birimi ücretlerini burada takip etmek için bir hesaba ücret yüzdesi ayarlayın."
   }
 }

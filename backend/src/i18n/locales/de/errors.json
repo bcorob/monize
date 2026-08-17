@@ -317,7 +317,9 @@
   "monteCarlo": {
     "scenarioNotFound": "Szenario {{ id }} nicht gefunden",
     "scenarioIdsMustBeArray": "scenarioIds muss ein Array sein",
-    "atLeastOneAccountRequired": "Mindestens eine accountId ist erforderlich"
+    "atLeastOneAccountRequired": "Mindestens eine accountId ist erforderlich",
+    "currentValueUnavailable": "Der aktuelle Wert der ausgewählten Konten konnte nicht ermittelt werden, daher kann eine Simulation nicht davon ausgehen. Geben Sie einen Startwert explizit ein oder versuchen Sie es erneut, sobald Kurse und Wechselkurse verfügbar sind.",
+    "historicalReturnsUnavailable": "Die historischen Renditen der ausgewählten Konten konnten nicht berechnet werden, daher kann eine Simulation sie nicht verwenden. Geben Sie erwartete Rendite und Volatilität manuell ein oder versuchen Sie es erneut, sobald Kurse und Wechselkurse verfügbar sind."
   },
   "netWorth": {
     "invalidStartDate": "startDate muss im Format YYYY-MM-DD sein",
@@ -361,6 +363,7 @@
     "requiresBrokerageAccount": "Terminierte Investmentbuchungen erfordern ein Maklerkonto",
     "notFound": "Terminierte Buchung mit ID {{ id }} nicht gefunden",
     "occurrenceAlreadyPosted": "Dieser Vorgang wurde bereits gebucht.",
+    "changedConcurrently": "The scheduled transaction changed during the operation. Reload it and retry.",
     "fxPlainOnly": "Eine abweichende Währung ist nur bei einer einfachen terminierten Buchung möglich, nicht bei einer Aufteilung, Überweisung oder Investition",
     "fxRateUnavailable": "Für {{ from }} zu {{ to }} ist am {{ date }} kein Wechselkurs verfügbar. Geben Sie den Betrag in {{ to }} ein, um ihn zu buchen.",
     "investmentActionRequired": "Investmentaktion ist für terminierte Investmentbuchungen erforderlich",
@@ -396,6 +399,7 @@
     "cannotChangeSplitAccount": "Das Konto eines Investmentteils kann nicht geändert werden; entfernen Sie den Teil und fügen Sie ihn beim neuen Konto hinzu",
     "splitNoFundingAccount": "Investmentteile verwenden kein separates Finanzierungskonto",
     "cannotChangeSplitDate": "Das Datum eines Investmentteils kann nicht geändert werden; bearbeiten Sie stattdessen das Datum der übergeordneten Buchung",
+    "embeddedStatusLocked": "Diese Investmentbuchung ist Teil einer aufgeteilten Transaktion. Ändern Sie stattdessen den Status der aufgeteilten Transaktion, damit sich beide Seiten gemeinsam ändern.",
     "invalidAccountUuid": "Ungültige Konto-UUID: {{ id }}",
     "startDateFormat": "startDate muss im Format YYYY-MM-DD sein",
     "endDateFormat": "endDate muss im Format YYYY-MM-DD sein",
@@ -435,8 +439,10 @@
     "invalidTagKey": "Ein Tag-Schlüssel (1–100 Zeichen) ist erforderlich",
     "assetOptionNameRequired": "Ein Name für die Anlageklasse ist erforderlich.",
     "documentNotFound": "Dokument nicht gefunden",
+    "embeddedSplitAmountMismatch": "Dieser Buchungsteil verzeichnet {{ amount }}, aber {{ action }} {{ quantity }} @ {{ price }} ergibt umgerechnet {{ expected }} bei einem Kurs von {{ rate }}. Verwenden Sie diesen Betrag, oder geben Sie den gemeinten Wechselkurs an.",
     "selectionNotFound": "Eine oder mehrere der ausgewählten Wertpapiere wurden nicht gefunden",
-    "comparisonSelectionEmpty": "Wählen Sie mindestens ein Wertpapier oder einen Marktindex zum Vergleich aus"
+    "comparisonSelectionEmpty": "Wählen Sie mindestens ein Wertpapier oder einen Marktindex zum Vergleich aus",
+    "exchangeRateNotPositive": "Der Wechselkurs muss größer als null sein"
   },
   "tags": {
     "notFound": "Etikett mit ID {{ id }} nicht gefunden",
@@ -490,15 +496,27 @@
     "transferAmountNegative": "Überweisungsbetrag darf nicht negativ sein",
     "notATransfer": "Buchung ist keine Überweisung",
     "splitTransferLegAccountLocked": "Diese Überweisung ist Teil einer geteilten Buchung. Ändern Sie die Konten, indem Sie stattdessen den Buchungsteil in der Ursprungsbuchung bearbeiten.",
+    "splitTransferLegStatusLocked": "Diese Übertragung ist Teil einer aufgeteilten Transaktion. Stornieren oder wiederherstellen Sie sie, indem Sie die zugehörige aufgeteilte Transaktion bearbeiten, damit sich beide Seiten gemeinsam ändern.",
+    "investmentCashLegStatusLocked": "Diese Buchung ist die Geldseite einer Investmentbuchung. Stornieren oder wiederherstellen Sie sie, indem Sie den Status der Investmentbuchung ändern, damit sich beide Seiten gemeinsam ändern.",
     "notFoundById": "Buchung mit ID {{ id }} nicht gefunden",
     "bulkUpdateNoFields": "Mindestens ein Aktualisierungsfeld muss angegeben werden",
     "bulkSplitNoMatchingLinesOne": "1 aufgeteilte Transaktion wurde übersprungen, weil keiner ihrer Buchungsteile mit der Kategorieaktualisierung übereinstimmte",
     "bulkSplitNoMatchingLinesMany": "{{ count }} aufgeteilte Transaktionen wurden übersprungen, weil keiner ihrer Buchungsteile mit der Kategorieaktualisierung übereinstimmte",
+    "bulkSplitTransferLegSkippedOne": "1 aufgeteilte Umbuchung wurde übersprungen (stornieren oder wiederherstellen Sie sie über die Splittbuchung, zu der sie gehört, damit sich beide Seiten gemeinsam ändern)",
+    "bulkSplitTransferLegSkippedMany": "{{ count }} aufgeteilte Umbuchungen wurden übersprungen (stornieren oder wiederherstellen Sie sie über die Splittbuchung, zu der sie gehören, damit sich beide Seiten gemeinsam ändern)",
+    "bulkInvestmentCashLegSkippedOne": "1 Investment-Geldbuchung wurde übersprungen (stornieren oder wiederherstellen Sie sie, indem Sie den Status der Investmentbuchung ändern, damit sich beide Seiten gemeinsam ändern)",
+    "bulkInvestmentCashLegSkippedMany": "{{ count }} Investment-Geldbuchungen wurden übersprungen (stornieren oder wiederherstellen Sie sie, indem Sie den Status der Investmentbuchungen ändern, damit sich beide Seiten gemeinsam ändern)",
     "payeeNotFound": "Zahlungsempfänger nicht gefunden",
     "fxFieldsIncomplete": "originalAmount und originalCurrencyCode müssen zusammen angegeben werden",
     "fxRateRequired": "Für eine Fremdwährungstransaktion ist ein positiver Wechselkurs erforderlich",
     "fxSignMismatch": "originalAmount und amount müssen dasselbe Vorzeichen haben",
-    "jointAccountMoveLocked": "Buchungen in einem geteilten Konto können nicht in ein anderes Konto verschoben werden."
+    "jointAccountMoveLocked": "Buchungen in einem geteilten Konto können nicht in ein anderes Konto verschoben werden.",
+    "currencyMustMatchAccount": "Transaktionswährung {{ supplied }} muss der Kontowährung {{ account }} entsprechen. Verwenden Sie originalAmount und originalCurrencyCode für eine Fremdwährungsbuchung.",
+    "transferSameCurrencyMustConserve": "Eine Übertragung zwischen zwei {{ currency }}-Konten muss auf beiden Seiten denselben Betrag bewegen",
+    "transferSameCurrencyRateMustBeOne": "Eine Übertragung zwischen zwei {{ currency }}-Konten kann keinen Wechselkurs außer 1 haben",
+    "transferRateUnavailable": "Für {{ from }} -> {{ to }} konnte kein Wechselkurs ermittelt werden. Geben Sie einen exchangeRate oder einen Zielbetrag an, damit die Übertragung korrekt gebucht wird.",
+    "transferAmountsMustAgreeOnZero": "Eine Übertragung muss auf beiden Seiten einen Betrag ungleich null bewegen oder auf beiden Seiten null",
+    "transferImpliedRateInvalid": "Der Zielbetrag ergibt im Verhältnis zum Ausgangsbetrag einen unbrauchbaren Wechselkurs"
   },
   "users": {
     "userNotFound": "Benutzer nicht gefunden",

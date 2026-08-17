@@ -202,7 +202,8 @@
     "title": "Credit Utilization by Account",
     "empty": "No credit accounts with a limit set.",
     "utilization": "Utilization",
-    "used": "Used"
+    "used": "Used",
+    "noRate": "unavailable (no {currency} rate)"
   },
   "creditUtilizationTotal": {
     "title": "Total Credit Utilization",

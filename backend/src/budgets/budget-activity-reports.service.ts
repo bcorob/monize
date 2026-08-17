@@ -11,6 +11,12 @@ import {
   FlexGroupStatusResult,
 } from "./budget-reports.service";
 import { formatDateYMD, getMonthEndYMD } from "../common/date-utils";
+import {
+  outgoingParentTransfers,
+  outgoingSplitTransfers,
+  PARENT_TRANSFER_AMOUNT,
+  SPLIT_TRANSFER_AMOUNT,
+} from "./budget-spending.util";
 import { roundMoney, roundToDecimals, sumMoney } from "../common/round.util";
 
 const MONTH_NAMES = [
@@ -251,23 +257,29 @@ export class BudgetActivityReportsService {
     }
 
     if (transferAccountIds.length > 0) {
+      const window = { userId, periodStart, periodEnd, transferAccountIds };
+      // Both transfer shapes: whole-row transfers and split lines carrying a
+      // transfer_account_id (review #1131).
       queries.push(
         withScopedDb(this.dataSource, (m) =>
-          m
-            .getRepository(Transaction)
-            .createQueryBuilder("t")
-            .innerJoin("t.linkedTransaction", "lt")
+          outgoingParentTransfers(m.getRepository(Transaction), window)
             .select("DATE(t.transaction_date)", "date")
-            .addSelect("COALESCE(ABS(SUM(t.amount)), 0)", "total")
-            .where("t.user_id = :userId", { userId })
-            .andWhere("t.is_transfer = true")
-            .andWhere("t.amount < 0")
-            .andWhere("lt.account_id IN (:...transferAccountIds)", {
-              transferAccountIds,
-            })
-            .andWhere("t.transaction_date >= :start", { start: periodStart })
-            .andWhere("t.transaction_date <= :end", { end: periodEnd })
-            .andWhere("t.status != :void", { void: "VOID" })
+            .addSelect(
+              `COALESCE(ABS(SUM(${PARENT_TRANSFER_AMOUNT})), 0)`,
+              "total",
+            )
+            .groupBy("DATE(t.transaction_date)")
+            .getRawMany(),
+        ),
+      );
+      queries.push(
+        withScopedDb(this.dataSource, (m) =>
+          outgoingSplitTransfers(m.getRepository(TransactionSplit), window)
+            .select("DATE(t.transaction_date)", "date")
+            .addSelect(
+              `COALESCE(ABS(SUM(${SPLIT_TRANSFER_AMOUNT})), 0)`,
+              "total",
+            )
             .groupBy("DATE(t.transaction_date)")
             .getRawMany(),
         ),

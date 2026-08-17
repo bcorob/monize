@@ -38,6 +38,10 @@
     "title": "ポートフォリオサマリー",
     "noData": "投資データがありません。",
     "totalPortfolioValue": "ポートフォリオ総額",
+    "knownPortfolioSubtotal": "ポートフォリオ評価額（一部）",
+    "incompleteHeading": "これらの数値は不完全です",
+    "incompletePrices": "{symbols} の現在価格が取得できないため、該当する保有分は以下のどの合計にも含まれていません。",
+    "incompleteFx": "{pairs} の為替レートが取得できないため、それらの通貨の保有分は以下のどの合計にも含まれていません。",
     "values": "評価額",
     "holdingsValue": "保有評価額",
     "holdingsValueTooltip": "最新の価格に基づく保有有価証券の現在の市場価値。",
@@ -48,9 +52,9 @@
     "netInvested": "純投資額",
     "netInvestedTooltip": "投資口座に預け入れた純額。総拠出額から引き出しを差し引いたもので、投資損益、配当、獲得利息は除きます。",
     "costBasis": "取得原価",
-    "costBasisTooltip": "取引手数料を含む、投資の購入に支払った総額。損益計算に使用されます。",
+    "costBasisTooltip": "現在の保有を取得するのにかかった費用を取引履歴から再構築したものです。購入価格に各購入時の手数料を加え、それぞれをその取引を支払ったときのレートで換算しています。表示通貨で表示され、損益の計算に使われます。",
     "gainLoss": "損益",
-    "gainLossTooltip": "現在保有の未実現損益：市場価値マイナス取得原価。過去の売却による実現損益や受取収益は含みません。",
+    "gainLossTooltip": "現在の保有の未実現損益：本日価格での時価総額から上の取得原価を差し引いたものです。過去の売却による実現益や、受け取った配当・利息は含みません。",
     "returns": "リターン",
     "simpleReturn": "単純リターン",
     "simpleReturnTooltip": "（市場価値 - 取得原価）÷ 取得原価で計算した保有の総損益パーセンテージ。拠出や引き出しのタイミングは考慮しません。",
@@ -59,26 +63,28 @@
     "twrTooltip": "資金の追加・引き出し時期に関係なく、投資のパフォーマンスを測定します。キャッシュフローのタイミングの影響を排除して純粋な投資パフォーマンスを示します。",
     "cagr": "CAGR",
     "cagrTooltip": "年平均成長率。成長が毎年完全に安定しているかのように、純投資額対現在のポートフォリオ価値に基づいた年率リターン。",
-    "notAvailable": "N/A"
+    "notAvailable": "N/A",
+    "unpricedHoldings": "部分評価：{count, plural, one {# 件の保有} other {# 件の保有}}に現在価格がありません（{symbols}）。以下の値はそれらを除きます。"
   },
   "assetAllocation": {
     "title": "資産配分",
     "noData": "配分データがありません。",
+    "knownValueOnly": "割合は評価できた分のみを対象としています。一部の保有分は評価できませんでした。",
     "cash": "現金",
     "untagged": "タグなし",
     "noTagData": "表示できるタグ付き保有銘柄がありません。タグ別のエクスポージャーを表示するには、銘柄にタグを追加してください。",
+    "noKeyData": "このタグキーの値を持つ保有銘柄がありません。この内訳を表示するには、銘柄を key:value（例: country:usa）としてタグ付けしてください。",
     "noCountryData": "国別配分データがありません。",
+    "keySelectorLabel": "集計するタグキー",
     "otherCountries": "その他の国",
     "otherAssetClasses": "その他の資産クラス",
     "groupBy": {
       "security": "銘柄別",
       "tag": "タグ別",
-      "country": "国別",
       "tagKey": "キー別",
+      "country": "国別",
       "assetClass": "資産クラス別"
-    },
-    "noKeyData": "このタグキーの値を持つ保有銘柄がありません。この内訳を表示するには、銘柄を key:value（例: country:usa）としてタグ付けしてください。",
-    "keySelectorLabel": "集計するタグキー"
+    }
   },
   "holdingsList": {
     "title": "保有銘柄",
@@ -93,6 +99,7 @@
   "groupedHoldings": {
     "title": "口座別保有銘柄",
     "noHoldings": "ポートフォリオに保有銘柄がありません。",
+    "accountIncomplete": "一部のみ: この口座の合計には、{currency} で評価できなかった保有分が含まれていません。",
     "accountSummary": "{accounts} 口座に {positions} ポジション{positionsPlural}あり{accountsPlural}",
     "positionsWithCash": "{count} ポジション{plural} + 現金",
     "positions": "{count} ポジション{plural}",
@@ -172,6 +179,12 @@
     "actionReinvest": "再投資",
     "actionAddShares": "株数追加",
     "actionRemoveShares": "株数削除",
+    "actionReinvestInterest": "利息の再投資",
+    "actionReinvestCapitalGainShort": "短期キャピタルゲインの再投資",
+    "actionReinvestCapitalGainLong": "長期キャピタルゲインの再投資",
+    "actionCapitalGainShort": "短期キャピタルゲイン",
+    "actionCapitalGainLong": "長期キャピタルゲイン",
+    "actionRedeem": "CD・債券の償還",
     "allActions": "すべてのアクション"
   },
   "transactionForm": {
@@ -186,6 +199,12 @@
     "actionReinvest": "配当再投資",
     "actionAddShares": "株数追加",
     "actionRemoveShares": "株数削除",
+    "actionReinvestInterest": "利息の再投資",
+    "actionReinvestCapitalGainShort": "短期キャピタルゲインの再投資",
+    "actionReinvestCapitalGainLong": "長期キャピタルゲインの再投資",
+    "actionCapitalGainShort": "短期キャピタルゲイン",
+    "actionCapitalGainLong": "長期キャピタルゲイン",
+    "actionRedeem": "CD・債券の償還",
     "actionTransfer": "振替",
     "brokerageAccount": "証券口座",
     "fromAccount": "出金口座",
@@ -206,6 +225,7 @@
     "pricePerShare": "1株あたりの価格（{currency}）",
     "commissionFees": "手数料 / 費用（{currency}）",
     "description": "説明（任意）",
+    "statusLockedToParent": "この取引は分割取引の一部です。両側が一緒に変更されるよう、代わりに分割取引のステータスを変更してください。",
     "descriptionPlaceholder": "任意のメモ",
     "splitRatio": "分割比率",
     "noSplitRatioWarning": "この取引に分割比率が設定されていません。保存する前に発表通りの比率を入力してください — Monizeは自動的に設定しません。",
@@ -257,7 +277,10 @@
     "toastAvailableShares": "振替可能な株式は {available} 株のみです",
     "toastSplitRatioRequired": "分割比率はゼロより大きくなければなりません",
     "toastPairedLegError": "ペアの振替部分を読み込めませんでした。再開して再試行してください",
-    "toastSaveFailed": "取引の保存に失敗しました"
+    "toastSaveFailed": "取引の保存に失敗しました",
+    "exchangeRateUnresolved": "{from} から {to} へのレートがありません。保存する前にレートか換算後の合計を入力してください。",
+    "toastExchangeRateRequired": "通貨をまたぐ取引を保存する前に為替レートを入力してください。",
+    "notAvailable": "利用不可"
   },
   "newTransactionButton": {
     "label": "+ 新規取引",

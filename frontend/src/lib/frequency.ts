@@ -73,10 +73,14 @@ export function advanceByFrequency(date: Date, frequency: FrequencyType): Date {
       return addMonthsClamped(date, 2);
     case 'QUARTERLY':
       return addMonthsClamped(date, 3);
+    case 'EVERY4MONTHS':
+      return addMonthsClamped(date, 4);
     case 'SEMIANNUAL':
       return addMonthsClamped(date, 6);
     case 'YEARLY':
       return addMonthsClamped(date, 12);
+    case 'EVERY2YEARS':
+      return addMonthsClamped(date, 24);
     case 'ONCE':
       return new Date(date.getTime());
   }
@@ -101,8 +105,10 @@ const OCCURRENCES_PER_YEAR: Record<FrequencyType, number> = {
   MONTHLY: 12,
   EVERY2MONTHS: 6,
   QUARTERLY: 4,
+  EVERY4MONTHS: 3,
   SEMIANNUAL: 2,
   YEARLY: 1,
+  EVERY2YEARS: 0.5,
 };
 
 /**

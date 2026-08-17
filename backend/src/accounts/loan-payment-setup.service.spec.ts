@@ -267,6 +267,123 @@ describe("LoanPaymentSetupService", () => {
       expect(createCall.splits[0].amount).toBe(-500);
     });
 
+    it("does not count extra principal twice on a zero-rate loan", async () => {
+      // Every other branch splits from `basePaymentAmount` (payment less extra);
+      // the zero-rate branch used the full payment, so a 0% loan with extra
+      // principal produced children summing to payment + extra against a parent
+      // of payment. `ScheduledTransactionsService.create` validates that sum to
+      // exact 4dp equality, so setup failed outright.
+      accountsRepository.findOne
+        .mockResolvedValueOnce(mockLoanAccount)
+        .mockResolvedValueOnce(mockSourceAccount);
+
+      await service.setupLoanPayments("user-1", "loan-1", {
+        paymentAmount: 500,
+        paymentFrequency: "MONTHLY",
+        sourceAccountId: "source-1",
+        nextDueDate: "2026-04-01",
+        interestRate: 0,
+        extraPrincipal: 100,
+      } as never);
+
+      const createCall = scheduledTransactionsService.create.mock.calls[0][1];
+      const sum = createCall.splits.reduce(
+        (acc: number, split: { amount: number }) => acc + split.amount,
+        0,
+      );
+      expect(createCall.amount).toBe(-500);
+      expect(sum).toBe(-500);
+      // 400 amortized principal plus the 100 the user asked to add.
+      expect(
+        createCall.splits.map((s: { memo: string; amount: number }) => [
+          s.memo,
+          s.amount,
+        ]),
+      ).toEqual([
+        ["Principal", -400],
+        ["Extra Principal", -100],
+      ]);
+    });
+
+    it("clamps the first installment to the outstanding balance", async () => {
+      // Setting up payments on a nearly-paid loan: 300 left, a 500 payment with
+      // 100 of extra principal. Nothing here clamped anything -- the
+      // recalculation after each posting does, but the first installment is
+      // written here -- so the schedule would have driven the balance to -300.
+      accountsRepository.findOne
+        .mockResolvedValueOnce({ ...mockLoanAccount, currentBalance: -300 })
+        .mockResolvedValueOnce(mockSourceAccount);
+
+      const response = await service.setupLoanPayments("user-1", "loan-1", {
+        paymentAmount: 500,
+        paymentFrequency: "MONTHLY",
+        sourceAccountId: "source-1",
+        nextDueDate: "2026-04-01",
+        interestRate: 0,
+        extraPrincipal: 100,
+      } as never);
+
+      const createCall = scheduledTransactionsService.create.mock.calls[0][1];
+      // Regular principal takes the 300 that is owed; the discretionary extra
+      // has nothing left to retire and is dropped.
+      expect(
+        createCall.splits.map((s: { memo: string; amount: number }) => [
+          s.memo,
+          s.amount,
+        ]),
+      ).toEqual([["Principal", -300]]);
+      expect(createCall.amount).toBe(-300);
+      // The account still records the payment the user configured; only this
+      // schedule's installment shrank. The standing extra instruction is
+      // recorded unclamped too -- it is what the recalculation grows back to.
+      expect(accountsRepository.update).toHaveBeenCalledWith(
+        "loan-1",
+        expect.objectContaining({
+          paymentAmount: 500,
+          extraPaymentAmount: 100,
+        }),
+      );
+      // And the caller is told what the schedule will actually post, not the
+      // figure it will never post (review #1131).
+      expect(response.paymentAmount).toBe(500);
+      expect(response.firstInstallmentAmount).toBe(-createCall.amount);
+    });
+
+    it("allocates the whole payment to interest when it does not cover the interest", async () => {
+      // A detected interest amount above the base payment left principal at 0
+      // and interest at the detected figure, so the children summed to more than
+      // the parent. A payment that does not cover the interest is applied
+      // entirely to interest.
+      accountsRepository.findOne
+        .mockResolvedValueOnce(mockLoanAccount)
+        .mockResolvedValueOnce(mockSourceAccount);
+
+      await service.setupLoanPayments("user-1", "loan-1", {
+        paymentAmount: 500,
+        paymentFrequency: "MONTHLY",
+        sourceAccountId: "source-1",
+        nextDueDate: "2026-04-01",
+        detectedInterestAmount: 620,
+      } as never);
+
+      const createCall = scheduledTransactionsService.create.mock.calls[0][1];
+      const sum = createCall.splits.reduce(
+        (acc: number, split: { amount: number }) => acc + split.amount,
+        0,
+      );
+      expect(sum).toBe(createCall.amount);
+      expect(createCall.amount).toBe(-500);
+      expect(
+        createCall.splits.map((s: { memo: string; amount: number }) => [
+          s.memo,
+          s.amount,
+        ]),
+      ).toEqual([
+        ["Principal", -0],
+        ["Interest", -500],
+      ]);
+    });
+
     it("sets mortgage-specific fields for mortgage accounts", async () => {
       const mortgageAccount = {
         ...mockLoanAccount,

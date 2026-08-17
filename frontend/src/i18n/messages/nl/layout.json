@@ -73,7 +73,13 @@
       "TRANSFER_OUT": "Uitgaand",
       "REINVEST": "Herinvesteren",
       "ADD_SHARES": "Aandelen toevoegen",
-      "REMOVE_SHARES": "Aandelen verwijderen"
+      "REMOVE_SHARES": "Aandelen verwijderen",
+      "REINVEST_INTEREST": "Rente herbeleggen",
+      "REINVEST_CAPITAL_GAIN_SHORT": "Kortetermijnwinst herbeleggen",
+      "REINVEST_CAPITAL_GAIN_LONG": "Langetermijnwinst herbeleggen",
+      "CAPITAL_GAIN_SHORT": "Kortetermijnkapitaalwinst",
+      "CAPITAL_GAIN_LONG": "Langetermijnkapitaalwinst",
+      "REDEEM": "CD/obligatie aflossen"
     },
     "descriptions": {
       "createdAccount": "Rekening \"{name}\" aangemaakt",

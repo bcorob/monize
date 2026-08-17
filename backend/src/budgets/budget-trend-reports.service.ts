@@ -12,6 +12,12 @@ import {
   CategoryTrendSeries,
 } from "./budget-reports.service";
 import { roundMoney, roundToDecimals, sumMoney } from "../common/round.util";
+import {
+  outgoingParentTransfers,
+  outgoingSplitTransfers,
+  PARENT_TRANSFER_AMOUNT,
+  SPLIT_TRANSFER_AMOUNT,
+} from "./budget-spending.util";
 
 const MONTH_NAMES = [
   "January",
@@ -268,24 +274,25 @@ export class BudgetTrendReportsService {
     }
 
     if (transferAccountIds.length > 0) {
+      const window = {
+        userId,
+        periodStart: period.periodStart,
+        periodEnd: period.periodEnd,
+        transferAccountIds,
+      };
+      // Both transfer shapes: whole-row transfers and split lines carrying a
+      // transfer_account_id (review #1131).
       queries.push(
         withScopedDb(this.dataSource, (m) =>
-          m
-            .getRepository(Transaction)
-            .createQueryBuilder("t")
-            .innerJoin("t.linkedTransaction", "lt")
-            .select("COALESCE(SUM(t.amount), 0)", "total")
-            .where("t.user_id = :userId", { userId })
-            .andWhere("t.is_transfer = true")
-            .andWhere("t.amount < 0")
-            .andWhere("lt.account_id IN (:...transferAccountIds)", {
-              transferAccountIds,
-            })
-            .andWhere("t.transaction_date >= :start", {
-              start: period.periodStart,
-            })
-            .andWhere("t.transaction_date <= :end", { end: period.periodEnd })
-            .andWhere("t.status != :void", { void: "VOID" })
+          outgoingParentTransfers(m.getRepository(Transaction), window)
+            .select(`COALESCE(SUM(${PARENT_TRANSFER_AMOUNT}), 0)`, "total")
+            .getRawOne(),
+        ),
+      );
+      queries.push(
+        withScopedDb(this.dataSource, (m) =>
+          outgoingSplitTransfers(m.getRepository(TransactionSplit), window)
+            .select(`COALESCE(SUM(${SPLIT_TRANSFER_AMOUNT}), 0)`, "total")
             .getRawOne(),
         ),
       );
@@ -588,39 +595,58 @@ export class BudgetTrendReportsService {
     }
 
     if (transferAccountIds.length > 0) {
+      const window = {
+        userId,
+        periodStart: rangeStart,
+        periodEnd: rangeEnd,
+        transferAccountIds,
+      };
+      const collectMonthly = (
+        rows: Array<{ month: string; total: string }>,
+      ) => {
+        for (const row of rows) {
+          actualByMonth.set(
+            row.month,
+            (actualByMonth.get(row.month) || 0) + parseFloat(row.total || "0"),
+          );
+        }
+      };
+      // Both transfer shapes: whole-row transfers and split lines carrying a
+      // transfer_account_id (review #1131).
       queries.push(
         withScopedDb(this.dataSource, (m) =>
-          m
-            .getRepository(Transaction)
-            .createQueryBuilder("t")
-            .innerJoin("t.linkedTransaction", "lt")
+          outgoingParentTransfers(m.getRepository(Transaction), window)
             .select(
               "TO_CHAR(DATE_TRUNC('month', t.transaction_date), 'YYYY-MM')",
               "month",
             )
-            .addSelect("COALESCE(ABS(SUM(t.amount)), 0)", "total")
-            .where("t.user_id = :userId", { userId })
-            .andWhere("t.is_transfer = true")
-            .andWhere("t.amount < 0")
-            .andWhere("lt.account_id IN (:...transferAccountIds)", {
-              transferAccountIds,
-            })
-            .andWhere("t.transaction_date >= :start", { start: rangeStart })
-            .andWhere("t.transaction_date <= :end", { end: rangeEnd })
-            .andWhere("t.status != :void", { void: "VOID" })
+            .addSelect(
+              `COALESCE(ABS(SUM(${PARENT_TRANSFER_AMOUNT})), 0)`,
+              "total",
+            )
             .groupBy(
               "TO_CHAR(DATE_TRUNC('month', t.transaction_date), 'YYYY-MM')",
             )
             .getRawMany()
-            .then((rows) => {
-              for (const row of rows) {
-                actualByMonth.set(
-                  row.month,
-                  (actualByMonth.get(row.month) || 0) +
-                    parseFloat(row.total || "0"),
-                );
-              }
-            }),
+            .then(collectMonthly),
+        ),
+      );
+      queries.push(
+        withScopedDb(this.dataSource, (m) =>
+          outgoingSplitTransfers(m.getRepository(TransactionSplit), window)
+            .select(
+              "TO_CHAR(DATE_TRUNC('month', t.transaction_date), 'YYYY-MM')",
+              "month",
+            )
+            .addSelect(
+              `COALESCE(ABS(SUM(${SPLIT_TRANSFER_AMOUNT})), 0)`,
+              "total",
+            )
+            .groupBy(
+              "TO_CHAR(DATE_TRUNC('month', t.transaction_date), 'YYYY-MM')",
+            )
+            .getRawMany()
+            .then(collectMonthly),
         ),
       );
     }

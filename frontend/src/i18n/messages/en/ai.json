@@ -143,7 +143,13 @@
       "TRANSFER_OUT": "Transfer out",
       "REINVEST": "Reinvest",
       "ADD_SHARES": "Add shares",
-      "REMOVE_SHARES": "Remove shares"
+      "REMOVE_SHARES": "Remove shares",
+      "REINVEST_INTEREST": "Reinvest interest",
+      "REINVEST_CAPITAL_GAIN_SHORT": "Reinvest short-term cap gain",
+      "REINVEST_CAPITAL_GAIN_LONG": "Reinvest long-term cap gain",
+      "CAPITAL_GAIN_SHORT": "Short-term capital gain",
+      "CAPITAL_GAIN_LONG": "Long-term capital gain",
+      "REDEEM": "Redeem CD/Bond"
     },
     "createTransferTitle": "Create this transfer?",
     "updateTransferTitle": "Apply this transfer edit?",

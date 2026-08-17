@@ -157,16 +157,26 @@ export function BankingDetailView({ account }: BankingDetailViewProps) {
   );
 
   // Projected balance is the end of the forecast (falls back to current).
-  const projectedBalance = forecastPoints.length
-    ? forecastPoints[forecastPoints.length - 1].balance
-    : Number(account.currentBalance) || 0;
+  const projectedBalance =
+    forecastPoints.length && forecastPoints[forecastPoints.length - 1].balance !== null
+      ? (forecastPoints[forecastPoints.length - 1].balance as number)
+      : Number(account.currentBalance) || 0;
 
-  const averageBalance = historicalBalances.length
-    ? Math.round(
-        (historicalBalances.reduce((sum, p) => sum + p.balance, 0) / historicalBalances.length) *
-          100,
-      ) / 100
-    : Number(account.currentBalance) || 0;
+  // An average over a series with a gap is not the average: it is the mean of
+  // the days that happen to be known, presented as the mean of all of them. Fall
+  // back to the account's own balance rather than reporting that.
+  const knownHistoricalBalances = historicalBalances.filter(
+    (p): p is typeof p & { balance: number } => p.balance !== null,
+  );
+  const averageBalance =
+    knownHistoricalBalances.length === historicalBalances.length &&
+    knownHistoricalBalances.length > 0
+      ? Math.round(
+          (knownHistoricalBalances.reduce((sum, p) => sum + p.balance, 0) /
+            knownHistoricalBalances.length) *
+            100,
+        ) / 100
+      : Number(account.currentBalance) || 0;
 
   return (
     <div className="space-y-6">

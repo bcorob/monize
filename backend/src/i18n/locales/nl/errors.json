@@ -317,7 +317,9 @@
   "monteCarlo": {
     "scenarioNotFound": "Scenario {{ id }} niet gevonden",
     "scenarioIdsMustBeArray": "scenarioIds moet een array zijn",
-    "atLeastOneAccountRequired": "Minimaal één accountId is vereist"
+    "atLeastOneAccountRequired": "Minimaal één accountId is vereist",
+    "currentValueUnavailable": "De huidige waarde van de geselecteerde rekeningen kon niet worden bepaald, dus een simulatie kan daar niet van uitgaan. Voer expliciet een startwaarde in, of probeer het opnieuw zodra koersen en wisselkoersen beschikbaar zijn.",
+    "historicalReturnsUnavailable": "Het historische rendement van de geselecteerde rekeningen kon niet worden berekend, dus een simulatie kan het niet gebruiken. Voer handmatig een verwacht rendement en volatiliteit in, of probeer het opnieuw zodra koersen en wisselkoersen beschikbaar zijn."
   },
   "netWorth": {
     "invalidStartDate": "startDate moet JJJJ-MM-DD zijn",
@@ -361,6 +363,7 @@
     "requiresBrokerageAccount": "Geplande beleggingstransacties vereisen een brokerage-rekening",
     "notFound": "Geplande transactie met ID {{ id }} niet gevonden",
     "occurrenceAlreadyPosted": "Deze keer is al geboekt.",
+    "changedConcurrently": "The scheduled transaction changed during the operation. Reload it and retry.",
     "fxPlainOnly": "Een andere valuta kan alleen bij een gewone geplande transactie, niet bij een splitsing, overboeking of belegging",
     "fxRateUnavailable": "Er is voor {{ date }} geen wisselkoers beschikbaar voor {{ from }} naar {{ to }}. Voer het bedrag in {{ to }} in om te boeken.",
     "investmentActionRequired": "Beleggingsactie is vereist voor geplande beleggingstransacties",
@@ -396,6 +399,7 @@
     "cannotChangeSplitAccount": "Kan de rekening van een beleggingssplitsing niet wijzigen; verwijder de splitsing en voeg deze toe aan de nieuwe rekening",
     "splitNoFundingAccount": "Beleggingssplitsingen gebruiken geen afzonderlijke financieringsrekening",
     "cannotChangeSplitDate": "Kan de datum van een beleggingssplitsing niet wijzigen; bewerk in plaats daarvan de datum van de bovenliggende splitsingstransactie",
+    "embeddedStatusLocked": "Deze beleggingstransactie maakt deel uit van een gesplitste transactie. Wijzig in plaats daarvan de status van de gesplitste transactie, zodat beide zijden samen wijzigen.",
     "invalidAccountUuid": "Ongeldige rekening-UUID: {{ id }}",
     "startDateFormat": "startDate moet in JJJJ-MM-DD-formaat zijn",
     "endDateFormat": "endDate moet in JJJJ-MM-DD-formaat zijn",
@@ -435,8 +439,10 @@
     "invalidTagKey": "Een tagsleutel (1-100 tekens) is vereist",
     "assetOptionNameRequired": "Een naam voor de beleggingscategorie is verplicht.",
     "documentNotFound": "Document niet gevonden",
+    "embeddedSplitAmountMismatch": "Deze splitsing registreert {{ amount }}, maar {{ action }} {{ quantity }} @ {{ price }} komt tegen een koers van {{ rate }} uit op {{ expected }}. Gebruik dat bedrag, of geef de bedoelde wisselkoers op.",
     "selectionNotFound": "Een of meer van de geselecteerde effecten zijn niet gevonden",
-    "comparisonSelectionEmpty": "Selecteer minstens één effect of marktindex om te vergelijken"
+    "comparisonSelectionEmpty": "Selecteer minstens één effect of marktindex om te vergelijken",
+    "exchangeRateNotPositive": "De wisselkoers moet groter zijn dan nul"
   },
   "tags": {
     "notFound": "Label met ID {{ id }} niet gevonden",
@@ -490,15 +496,27 @@
     "transferAmountNegative": "Overboekingsbedrag mag niet negatief zijn",
     "notATransfer": "Transactie is geen overboeking",
     "splitTransferLegAccountLocked": "Deze overboeking maakt deel uit van een gesplitste transactie. Wijzig de rekeningen door de splitsing op de brontransactie te bewerken.",
+    "splitTransferLegStatusLocked": "Deze overboeking maakt deel uit van een gesplitste transactie. Maak deze ongeldig of herstel deze door de gesplitste transactie waartoe deze behoort te bewerken, zodat beide zijden samen wijzigen.",
+    "investmentCashLegStatusLocked": "Deze transactie is de geldzijde van een beleggingstransactie. Maak deze ongeldig of herstel deze door de status van de beleggingstransactie te wijzigen, zodat beide zijden samen wijzigen.",
     "notFoundById": "Transactie met ID {{ id }} niet gevonden",
     "bulkUpdateNoFields": "Er moet minimaal één bijwerkveld worden opgegeven",
     "bulkSplitNoMatchingLinesOne": "1 gesplitste transactie is overgeslagen omdat geen van de splitsingen overeenkwam met de categorie-update",
     "bulkSplitNoMatchingLinesMany": "{{ count }} gesplitste transacties zijn overgeslagen omdat geen van hun splitsingen overeenkwam met de categorie-update",
+    "bulkSplitTransferLegSkippedOne": "1 gesplitste overboeking is overgeslagen (maak deze ongedaan of herstel deze via de gesplitste transactie waartoe deze behoort, zodat beide kanten samen veranderen)",
+    "bulkSplitTransferLegSkippedMany": "{{ count }} gesplitste overboekingen zijn overgeslagen (maak ze ongedaan of herstel ze via de gesplitste transactie waartoe ze behoren, zodat beide kanten samen veranderen)",
+    "bulkInvestmentCashLegSkippedOne": "1 beleggingsgeldtransactie is overgeslagen (maak deze ongedaan of herstel deze door de status van de beleggingstransactie te wijzigen, zodat beide kanten samen veranderen)",
+    "bulkInvestmentCashLegSkippedMany": "{{ count }} beleggingsgeldtransacties zijn overgeslagen (maak ze ongedaan of herstel ze door de status van de beleggingstransacties te wijzigen, zodat beide kanten samen veranderen)",
     "payeeNotFound": "Begunstigde niet gevonden",
     "fxFieldsIncomplete": "originalAmount en originalCurrencyCode moeten samen worden opgegeven",
     "fxRateRequired": "Een positieve wisselkoers is vereist voor een transactie in vreemde valuta",
     "fxSignMismatch": "originalAmount en amount moeten hetzelfde teken hebben",
-    "jointAccountMoveLocked": "Transacties in een gedeelde rekening kunnen niet naar een andere rekening worden verplaatst."
+    "jointAccountMoveLocked": "Transacties in een gedeelde rekening kunnen niet naar een andere rekening worden verplaatst.",
+    "currencyMustMatchAccount": "Transactievaluta {{ supplied }} moet overeenkomen met de rekeningvaluta {{ account }}. Gebruik originalAmount en originalCurrencyCode voor een invoer in vreemde valuta.",
+    "transferSameCurrencyMustConserve": "Een overboeking tussen twee {{ currency }}-rekeningen moet aan beide zijden hetzelfde bedrag verplaatsen",
+    "transferSameCurrencyRateMustBeOne": "Een overboeking tussen twee {{ currency }}-rekeningen kan geen andere wisselkoers dan 1 hebben",
+    "transferRateUnavailable": "Kon geen wisselkoers bepalen voor {{ from }} -> {{ to }}. Geef een exchangeRate of een doelbedrag op zodat de overboeking correct wordt geboekt.",
+    "transferAmountsMustAgreeOnZero": "Een overboeking moet aan beide zijden een bedrag anders dan nul verplaatsen, of nul aan beide zijden",
+    "transferImpliedRateInvalid": "Het bestemmingsbedrag impliceert een onbruikbare wisselkoers ten opzichte van het bronbedrag"
   },
   "users": {
     "userNotFound": "Gebruiker niet gevonden",

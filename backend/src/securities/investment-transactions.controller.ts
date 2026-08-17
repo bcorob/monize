@@ -24,6 +24,7 @@ import { AuthGuard } from "@nestjs/passport";
 import { InvestmentTransactionsService } from "./investment-transactions.service";
 import { CreateInvestmentTransactionDto } from "./dto/create-investment-transaction.dto";
 import { UpdateInvestmentTransactionDto } from "./dto/update-investment-transaction.dto";
+import { UpdateTransactionStatusDto } from "../transactions/dto/update-transaction-status.dto";
 import { TransferSecurityDto } from "./dto/transfer-security.dto";
 import {
   InvestmentTransaction,
@@ -472,6 +473,30 @@ export class InvestmentTransactionsController {
       req.user.id,
       id,
       updateDto,
+    );
+  }
+
+  @Patch(":id/status")
+  @ApiOperation({
+    summary: "Update only the status of an investment transaction",
+    description:
+      "UNRECONCILED/CLEARED/RECONCILED changes are presentational. Crossing the VOID boundary applies or reverses the row's holdings effect and carries the linked cash transaction (and a linked transfer leg) across with it.",
+  })
+  @ApiResponse({
+    status: 200,
+    description: "Status updated successfully",
+    type: InvestmentTransaction,
+  })
+  @ApiResponse({ status: 404, description: "Investment transaction not found" })
+  updateStatus(
+    @Request() req,
+    @Param("id", ParseUUIDPipe) id: string,
+    @Body() dto: UpdateTransactionStatusDto,
+  ): Promise<InvestmentTransaction> {
+    return this.investmentTransactionsService.updateStatus(
+      req.user.id,
+      id,
+      dto.status,
     );
   }
 

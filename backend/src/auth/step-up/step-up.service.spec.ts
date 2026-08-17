@@ -13,7 +13,10 @@ import { StepUpAuthService } from "./step-up.service";
 import { TwoFactorService } from "../two-factor.service";
 import { User } from "../../users/entities/user.entity";
 import { UserPreference } from "../../users/entities/user-preference.entity";
-import { createScopedDbMocks } from "../../test-helpers/scoped-db-testing";
+import {
+  createScopedDbMocks,
+  withStepUpClaimLedger,
+} from "../../test-helpers/scoped-db-testing";
 import { OidcReauthService } from "../oidc/oidc-reauth.service";
 
 jest.mock("../../common/db/scoped-db", () =>
@@ -59,10 +62,16 @@ describe("StepUpAuthService", () => {
         OidcReauthService,
         {
           provide: DataSource,
-          useValue: createScopedDbMocks([
-            [User, usersRepo as never],
-            [UserPreference, preferencesRepo as never],
-          ]).dataSource,
+          useValue: (() => {
+            const scoped = createScopedDbMocks([
+              [User, usersRepo as never],
+              [UserPreference, preferencesRepo as never],
+            ]);
+            // The real OidcReauthService spends each artifact's jti in the
+            // oidc_step_up_claims ledger; answer like the table does.
+            withStepUpClaimLedger(scoped.manager.query);
+            return scoped.dataSource;
+          })(),
         },
         StepUpAuthService,
         { provide: TwoFactorService, useValue: twoFactor },
@@ -210,14 +219,17 @@ describe("StepUpAuthService", () => {
     it("refuses an artifact minted for a different action", async () => {
       await expect(
         service.verifyAndIssue(userId, "emergency-access", {
-          oidcReauthToken: new OidcReauthService().issue(userId, "delete-data"),
+          oidcReauthToken: new OidcReauthService(undefined as never).issue(
+            userId,
+            "delete-data",
+          ),
         }),
       ).rejects.toBeInstanceOf(UnauthorizedException);
     });
 
     it("issues a token for a verified re-authentication artifact", async () => {
       const result = await service.verifyAndIssue(userId, "emergency-access", {
-        oidcReauthToken: new OidcReauthService().issue(
+        oidcReauthToken: new OidcReauthService(undefined as never).issue(
           userId,
           "emergency-access",
         ),

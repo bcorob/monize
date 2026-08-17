@@ -317,7 +317,9 @@
   "monteCarlo": {
     "scenarioNotFound": "Nie znaleziono scenariusza {{ id }}",
     "scenarioIdsMustBeArray": "scenarioIds musi być tablicą",
-    "atLeastOneAccountRequired": "Wymagany jest co najmniej jeden accountId"
+    "atLeastOneAccountRequired": "Wymagany jest co najmniej jeden accountId",
+    "currentValueUnavailable": "Nie udało się ustalić bieżącej wartości wybranych kont, więc symulacja nie może od niej wystartować. Podaj wartość początkową samodzielnie lub spróbuj ponownie, gdy ceny i kursy wymiany będą dostępne.",
+    "historicalReturnsUnavailable": "Nie udało się obliczyć historycznych stóp zwrotu dla wybranych kont, więc symulacja nie może z nich skorzystać. Wprowadź oczekiwaną stopę zwrotu i zmienność ręcznie lub spróbuj ponownie, gdy ceny i kursy walut będą dostępne."
   },
   "netWorth": {
     "invalidStartDate": "startDate musi mieć format YYYY-MM-DD",
@@ -361,6 +363,7 @@
     "requiresBrokerageAccount": "Zaplanowane transakcje inwestycyjne wymagają konta maklerskiego",
     "notFound": "Nie znaleziono zaplanowanej transakcji o ID {{ id }}",
     "occurrenceAlreadyPosted": "Ta rata została już zaksięgowana.",
+    "changedConcurrently": "The scheduled transaction changed during the operation. Reload it and retry.",
     "fxPlainOnly": "Innej waluty można użyć tylko w zwykłej zaplanowanej transakcji, a nie w podziale, przelewie ani inwestycji",
     "fxRateUnavailable": "Dla {{ date }} nie ma dostępnego kursu wymiany z {{ from }} na {{ to }}. Wprowadź kwotę w {{ to }}, aby ją zaksięgować.",
     "investmentActionRequired": "Operacja inwestycyjna jest wymagana dla zaplanowanych transakcji inwestycyjnych",
@@ -396,6 +399,7 @@
     "cannotChangeSplitAccount": "Nie można zmienić konta podziału inwestycyjnego; zamiast tego usuń podział i dodaj go na nowym koncie",
     "splitNoFundingAccount": "Podziały inwestycyjne nie używają osobnego konta finansującego",
     "cannotChangeSplitDate": "Nie można zmienić daty podziału inwestycyjnego; zamiast tego edytuj datę nadrzędnej transakcji podzielonej",
+    "embeddedStatusLocked": "Ta transakcja inwestycyjna jest częścią transakcji podzielonej. Zamiast tego zmień status transakcji podzielonej, aby obie strony zmieniły się razem.",
     "invalidAccountUuid": "Nieprawidłowy UUID konta: {{ id }}",
     "startDateFormat": "startDate musi być w formacie YYYY-MM-DD",
     "endDateFormat": "endDate musi być w formacie YYYY-MM-DD",
@@ -435,8 +439,10 @@
     "invalidTagKey": "Wymagany jest klucz tagu (1–100 znaków)",
     "assetOptionNameRequired": "Nazwa klasy aktywów jest wymagana.",
     "documentNotFound": "Nie znaleziono dokumentu",
+    "embeddedSplitAmountMismatch": "Ten podział zapisuje {{ amount }}, ale {{ action }} {{ quantity }} @ {{ price }} po kursie {{ rate }} daje {{ expected }}. Użyj tej kwoty lub podaj właściwy kurs wymiany.",
     "selectionNotFound": "Nie znaleziono jednego lub więcej wybranych papierów wartościowych",
-    "comparisonSelectionEmpty": "Wybierz co najmniej jeden papier wartościowy lub indeks giełdowy do porównania"
+    "comparisonSelectionEmpty": "Wybierz co najmniej jeden papier wartościowy lub indeks giełdowy do porównania",
+    "exchangeRateNotPositive": "Kurs wymiany musi być większy od zera"
   },
   "tags": {
     "notFound": "Nie znaleziono tagu o ID {{ id }}",
@@ -490,15 +496,27 @@
     "transferAmountNegative": "Kwota przelewu nie może być ujemna",
     "notATransfer": "Transakcja nie jest przelewem",
     "splitTransferLegAccountLocked": "Ten przelew jest częścią transakcji podzielonej. Aby zmienić jego konta, edytuj podział w transakcji źródłowej.",
+    "splitTransferLegStatusLocked": "Ten przelew jest częścią transakcji podzielonej. Anuluj go lub przywróć, edytując transakcję podzieloną, do której należy, aby obie strony zmieniły się razem.",
+    "investmentCashLegStatusLocked": "Ta transakcja jest gotówkową stroną transakcji inwestycyjnej. Unieważnij ją lub przywróć, zmieniając status transakcji inwestycyjnej, aby obie strony zmieniły się razem.",
     "notFoundById": "Nie znaleziono transakcji o ID {{ id }}",
     "bulkUpdateNoFields": "Należy podać co najmniej jedno pole do aktualizacji",
     "bulkSplitNoMatchingLinesOne": "Pominięto 1 transakcję podzieloną, ponieważ żaden z jej podziałów nie pasował do aktualizacji kategorii",
     "bulkSplitNoMatchingLinesMany": "Pominięto {{ count }} transakcji podzielonych, ponieważ żaden z ich podziałów nie pasował do aktualizacji kategorii",
+    "bulkSplitTransferLegSkippedOne": "Pominięto 1 podzielony przelew (unieważnij go lub przywróć z podzielonej transakcji, do której należy, aby obie strony zmieniły się razem)",
+    "bulkSplitTransferLegSkippedMany": "Pominięto {{ count }} podzielonych przelewów (unieważnij je lub przywróć z podzielonej transakcji, do której należą, aby obie strony zmieniły się razem)",
+    "bulkInvestmentCashLegSkippedOne": "Pominięto 1 gotówkową transakcję inwestycyjną (unieważnij ją lub przywróć, zmieniając status transakcji inwestycyjnej, aby obie strony zmieniły się razem)",
+    "bulkInvestmentCashLegSkippedMany": "Pominięto {{ count }} gotówkowych transakcji inwestycyjnych (unieważnij je lub przywróć, zmieniając status transakcji inwestycyjnych, aby obie strony zmieniły się razem)",
     "payeeNotFound": "Nie znaleziono odbiorcy",
     "fxFieldsIncomplete": "originalAmount i originalCurrencyCode muszą być podane razem",
     "fxRateRequired": "Do transakcji w obcej walucie wymagany jest dodatni kurs wymiany",
     "fxSignMismatch": "originalAmount i amount muszą mieć ten sam znak",
-    "jointAccountMoveLocked": "Transakcji ze wspólnego konta nie można przenieść na inne konto."
+    "jointAccountMoveLocked": "Transakcji ze wspólnego konta nie można przenieść na inne konto.",
+    "currencyMustMatchAccount": "Waluta transakcji {{ supplied }} musi być zgodna z walutą konta {{ account }}. Do wpisu w walucie obcej użyj originalAmount i originalCurrencyCode.",
+    "transferSameCurrencyMustConserve": "Przelew między dwoma kontami w {{ currency }} musi przenosić tę samą kwotę po obu stronach",
+    "transferSameCurrencyRateMustBeOne": "Przelew między dwoma kontami w {{ currency }} nie może mieć kursu wymiany innego niż 1",
+    "transferRateUnavailable": "Nie udało się ustalić kursu wymiany dla {{ from }} -> {{ to }}. Podaj exchangeRate lub kwotę docelową, aby przelew został zaksięgowany poprawnie.",
+    "transferAmountsMustAgreeOnZero": "Przelew musi przenosić kwotę różną od zera po obu stronach albo zero po obu stronach",
+    "transferImpliedRateInvalid": "Kwota docelowa daje nieprawidłowy kurs wymiany w stosunku do kwoty źródłowej"
   },
   "users": {
     "userNotFound": "Nie znaleziono użytkownika",

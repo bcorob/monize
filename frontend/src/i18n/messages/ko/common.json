@@ -228,5 +228,10 @@
     "nothingToRedo": "다시 실행할 항목이 없습니다",
     "cannotRedo": "이 작업은 다시 실행할 수 없습니다",
     "redoFailed": "다시 실행에 실패했습니다"
+  },
+  "partialTotal": {
+    "srSuffix": "(부분 합계)",
+    "explanation": "부분 합계: {count, plural, other {# 개의 금액}}을(를) 포함할 수 없어 표시된 수치에서 제외했습니다. {currencies}에 대한 {displayCurrency} 환율이 없습니다.",
+    "explanationExcluded": "부분 합계: {count, plural, other {# 개의 금액}}을(를) 계산할 수 없어 표시된 수치에서 제외했습니다."
   }
 }

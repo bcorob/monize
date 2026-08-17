@@ -65,6 +65,32 @@ export const DETAIL_ACCOUNT_TYPES: AccountType[] = [
  * "View transactions" (a row tap already opens it) by leaving `onViewTransactions`
  * undefined; the action sheet supplies it.
  */
+/**
+ * The "approximately X in your display currency" line under a foreign balance.
+ *
+ * Renders nothing when the rate is unknown. Printing the unconverted amount
+ * beside the display currency's symbol -- which is what happened before -- is a
+ * wrong number, not an approximate one, and the "approximately" sign made it
+ * look deliberate.
+ */
+function ApproxInDefault({
+  amount,
+  defaultCurrency,
+  format,
+}: {
+  amount: number | null;
+  defaultCurrency: string;
+  format: (value: number, currencyCode: string) => string;
+}) {
+  if (amount === null) return null;
+  return (
+    <div className="text-xs text-gray-400 dark:text-gray-500">
+      {'\u2248 '}
+      {format(amount, defaultCurrency)}
+    </div>
+  );
+}
+
 export function buildAccountActions(
   account: Account,
   isDeletable: boolean,
@@ -195,7 +221,8 @@ export interface AccountRowProps {
   defaultCurrency: string;
   formatCurrency: (amount: number | string | null | undefined, currency: string) => string;
   formatCurrencyBase: (value: number, currencyCode?: string) => string;
-  convertToDefault: (value: number, fromCurrency: string) => number;
+  /** Returns `null` when no rate for the pair is known. */
+  convertToDefault: (value: number, fromCurrency: string) => number | null;
   formatAccountType: (type: AccountType) => string;
   getAccountTypeColor: (type: AccountType) => string;
   actionLabels: AccountActionLabels;
@@ -437,9 +464,14 @@ export const AccountRow = memo(function AccountRow({
                 </div>
               )}
               {density !== 'dense' && account.currencyCode !== defaultCurrency && (
-                <div className="text-xs text-gray-400 dark:text-gray-500">
-                  {'≈ '}{formatCurrencyBase(convertToDefault(combined.combinedValue, account.currencyCode), defaultCurrency)}
-                </div>
+                // Nothing rather than the unconverted amount under the display
+                // currency's symbol: a missing rate makes the approximation
+                // unknown, not zero (ApproxInDefault renders null then).
+                <ApproxInDefault
+                  amount={convertToDefault(combined.combinedValue, account.currencyCode)}
+                  defaultCurrency={defaultCurrency}
+                  format={formatCurrencyBase}
+                />
               )}
             </>
           )
@@ -454,9 +486,11 @@ export const AccountRow = memo(function AccountRow({
               </div>
             )}
             {density !== 'dense' && account.currencyCode !== defaultCurrency && (
-              <div className="text-xs text-gray-400 dark:text-gray-500">
-                {'\u2248 '}{formatCurrencyBase(convertToDefault(brokerageMarketValue, account.currencyCode), defaultCurrency)}
-              </div>
+              <ApproxInDefault
+                amount={convertToDefault(brokerageMarketValue, account.currencyCode)}
+                defaultCurrency={defaultCurrency}
+                format={formatCurrencyBase}
+              />
             )}
           </>
         ) : (
@@ -473,9 +507,11 @@ export const AccountRow = memo(function AccountRow({
                     {formatCurrency(totalBalance, account.currencyCode)}
                   </div>
                   {density !== 'dense' && account.currencyCode !== defaultCurrency && (
-                    <div className="text-xs text-gray-400 dark:text-gray-500">
-                      {'\u2248 '}{formatCurrencyBase(convertToDefault(totalBalance, account.currencyCode), defaultCurrency)}
-                    </div>
+                    <ApproxInDefault
+                      amount={convertToDefault(totalBalance, account.currencyCode)}
+                      defaultCurrency={defaultCurrency}
+                      format={formatCurrencyBase}
+                    />
                   )}
                 </>
               );

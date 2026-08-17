@@ -286,6 +286,48 @@ describe('InvestmentReportViewer', () => {
     expect(screen.getByText('$100 USD')).toBeInTheDocument();
   });
 
+  it('renders an unknown marker in base mode when a row has no rate to base', async () => {
+    // baseExchangeRate is null when no rate exists for the pair. `num * null`
+    // coerces to 0, so without the guard a real foreign holding rendered as
+    // $0.00 in base currency -- unknown shown as a measured zero, worse than
+    // the 1:1 relabelling the nullable rate replaced.
+    mockGetById.mockResolvedValue(report);
+    mockExecute.mockResolvedValue({
+      ...result,
+      baseCurrency: 'CAD',
+      columns: ['symbol', 'marketValue'],
+      groups: [
+        {
+          key: 'all',
+          label: '',
+          rows: [
+            { id: '1', currency: 'USD', baseExchangeRate: null, values: { symbol: 'AAA', marketValue: 100 } },
+          ],
+        },
+      ],
+      rowCount: 1,
+    });
+    await renderViewer();
+    await screen.findByText('AAA');
+    // Native display is unaffected: the value is known in USD.
+    expect(screen.getByText('$100 USD')).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'CAD' }));
+    });
+    expect(screen.getByText('—')).toBeInTheDocument();
+    expect(screen.queryByText('$0')).not.toBeInTheDocument();
+
+    // The CSV mirrors the unknown as an empty cell, never a 0 a spreadsheet
+    // would sum.
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Export CSV' }));
+    });
+    const exportedRows = mockExportToCsv.mock.calls.at(-1)?.[2];
+    expect(exportedRows[0]).toContain('');
+    expect(exportedRows[0]).not.toContain(0);
+  });
+
   it('exports group headings for symbol and currency groupings', async () => {
     for (const [groupBy, heading] of [
       ['SYMBOL', 'Symbol'],

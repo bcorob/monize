@@ -26,7 +26,8 @@
     "editAria": "भुगतानकर्ता संपादित करें",
     "detailsAria": "भुगतानकर्ता का विवरण देखें",
     "collapseAria": "भुगतानकर्ता जानकारी छुपाएं",
-    "show": "भुगतानकर्ता जानकारी दिखाएं"
+    "show": "भुगतानकर्ता जानकारी दिखाएं",
+    "amountUnavailable": "कोई दर नहीं"
   },
   "categoryWidget": {
     "detailsAria": "श्रेणी का विवरण देखें",
@@ -47,7 +48,8 @@
     "noTransactions": "इस अवधि में कोई लेन-देन नहीं",
     "editAria": "श्रेणी संपादित करें",
     "collapseAria": "श्रेणी जानकारी छुपाएं",
-    "show": "श्रेणी जानकारी दिखाएं"
+    "show": "श्रेणी जानकारी दिखाएं",
+    "amountUnavailable": "कोई दर नहीं"
   },
   "accountWidget": {
     "currentBalance": "वर्तमान शेष",
@@ -110,10 +112,11 @@
       "paidAmount": "भुगतान की गई राशि",
       "feePaid": "भुगतान किया गया शुल्क",
       "balance": "शेष",
+      "attachments": "अटैचमेंट",
       "status": "स्थिति",
-      "actions": "क्रियाएं",
-      "attachments": "अटैचमेंट"
+      "actions": "क्रियाएं"
     },
+    "attachmentsCount": "{count, plural, one {# अटैचमेंट} other {# अटैचमेंट}}",
     "today": "आज",
     "export": {
       "button": "निर्यात",
@@ -174,8 +177,7 @@
       "editButton": "संपादित करें",
       "deleteButton": "हटाएं"
     },
-    "itemNamePlural": "लेन-देन",
-    "attachmentsCount": "{count, plural, one {# अटैचमेंट} other {# अटैचमेंट}}"
+    "itemNamePlural": "लेन-देन"
   },
   "row": {
     "copyOptions": {
@@ -230,6 +232,11 @@
       "currency": "मुद्रा",
       "hasAttachments": "अटैचमेंट"
     },
+    "hasAttachmentsOptions": {
+      "any": "कोई भी",
+      "yes": "हाँ",
+      "no": "नहीं"
+    },
     "placeholders": {
       "accounts": "सभी खाते",
       "payees": "सभी भुगतानकर्ता",
@@ -240,6 +247,13 @@
       "amountMax": "अधिकतम",
       "search": "भुगतानकर्ता, श्रेणी, राशि, टैग, विवरण, संदर्भ # खोजें...",
       "tagKeyValue": "जैसे usa"
+    },
+    "tagKeyNone": "कोई भी (कुंजी फ़िल्टर नहीं)",
+    "tagKeyOps": {
+      "hasValue": "मान मौजूद है",
+      "noValue": "कोई मान नहीं",
+      "contains": "मान में शामिल है",
+      "notContains": "मान में शामिल नहीं है"
     },
     "chips": {
       "removeAccount": "{name} फ़िल्टर हटाएं",
@@ -280,18 +294,6 @@
       "yearToDate": "वर्ष की शुरुआत से",
       "lastYear": "पिछला वर्ष",
       "custom": "कस्टम"
-    },
-    "tagKeyNone": "कोई भी (कुंजी फ़िल्टर नहीं)",
-    "tagKeyOps": {
-      "hasValue": "मान मौजूद है",
-      "noValue": "कोई मान नहीं",
-      "contains": "मान में शामिल है",
-      "notContains": "मान में शामिल नहीं है"
-    },
-    "hasAttachmentsOptions": {
-      "any": "कोई भी",
-      "yes": "हाँ",
-      "no": "नहीं"
     }
   },
   "bulk": {
@@ -399,6 +401,7 @@
       "optionLabel": "{name} ({currency}) — {owner}"
     },
     "crossOwnerLockedNote": "इस ट्रांसफर का दूसरा पक्ष ऐसे खाते में है जो अब आपके साथ साझा नहीं है। इसकी राशि, तारीख और खाते लॉक हैं, लेकिन आप अभी भी इस लेन-देन के अपने विवरण संपादित कर सकते हैं।",
+    "transferCategoryNote": "वैकल्पिक। ट्रांसफर अब भी आय या व्यय के रूप में नहीं गिना जाएगा, लेकिन यह श्रेणी इसे मासिक श्रेणी विवरण में दिखने देती है (जैसे, मासिक निवेश योगदान)।",
     "amountReceivedNote": "मुद्रा रूपांतरण के बाद प्राप्त राशि",
     "splitTransaction": "लेन-देन विभाजित करें",
     "splitDisabledDuringTour": "निर्देशित टूर के दौरान उपलब्ध नहीं",
@@ -408,6 +411,7 @@
       "transferUpdated": "ट्रांसफर अपडेट किया गया",
       "transactionCreated": "लेन-देन बनाया गया",
       "transactionUpdated": "लेन-देन अपडेट किया गया",
+      "attachmentsUploadFailed": "लेन-देन सहेजा गया, लेकिन {count} अटैचमेंट अपलोड करने में विफल रहे",
       "saveFailed": "लेन-देन सहेजने में विफल",
       "loadFailed": "फ़ॉर्म डेटा लोड करने में विफल",
       "splitsNotEqual": "विभाजन कुल ({splitTotal}) लेन-देन राशि ({txAmount}) के बराबर होना चाहिए",
@@ -422,13 +426,11 @@
       "categoryCreateFailed": "श्रेणी बनाने में विफल",
       "tagCreated": "टैग \"{name}\" बनाया गया",
       "fxRateRequired": "विदेशी मुद्रा लेनदेन सहेजने से पहले विनिमय दर या रूपांतरित राशि दर्ज करें।",
-      "attachmentsUploadFailed": "लेन-देन सहेजा गया, लेकिन {count} अटैचमेंट अपलोड करने में विफल रहे",
       "jointPayeeCreateNotGranted": "खाता स्वामी ने आपको प्राप्तकर्ता बनाने की अनुमति नहीं दी है। इसके बजाय उनके किसी मौजूदा प्राप्तकर्ता को चुनें।"
     },
     "ariaHistory": "हाल के लेन-देन दिखाएं",
     "ariaHistoryForPayee": "इस भुगतानकर्ता के हाल के लेन-देन दिखाएं",
     "historyTitle": "हाल के लेन-देन से त्वरित भरण",
-    "transferCategoryNote": "वैकल्पिक। ट्रांसफर अब भी आय या व्यय के रूप में नहीं गिना जाएगा, लेकिन यह श्रेणी इसे मासिक श्रेणी विवरण में दिखने देती है (जैसे, मासिक निवेश योगदान)।",
     "currencyPicker": {
       "label": "प्रविष्टि मुद्रा",
       "ariaLabel": "प्रविष्टि मुद्रा बदलें",
@@ -440,15 +442,15 @@
       "reactivated": "{code} पुनः सक्रिय किया गया"
     },
     "fx": {
+      "totalInCurrency": "{currency} में कुल",
+      "rateCaption": "1 {from} = {rate} {to} ({date})",
       "noRateWarning": "{date} को {from} से {to} के लिए कोई विनिमय दर नहीं मिली। रूपांतरित राशि मैन्युअल रूप से दर्ज करें।",
       "usingLatestRateHint": "नवीनतम उपलब्ध दर का उपयोग किया जा रहा है ({date} की नहीं)।",
       "displayToggle": {
         "account": "खाता",
         "original": "मूल"
       },
-      "rateCaption": "1 {from} = {rate} {to} ({date})",
-      "feeCaption": "इसमें {percent}% विदेशी लेनदेन शुल्क ({fee}) शामिल है।",
-      "totalInCurrency": "{currency} में कुल"
+      "feeCaption": "इसमें {percent}% विदेशी लेनदेन शुल्क ({fee}) शामिल है।"
     },
     "jointSplitDisabled": "साझा खाते में विभाजित लेनदेन केवल स्वामी ही प्रबंधित कर सकता है"
   },
@@ -473,6 +475,10 @@
     "remaining": "शेष: {symbol}{amount}",
     "needAmount": "{symbol}{amount} चाहिए (शेष: {symbol}{remaining})",
     "setTotal": "कुल {symbol}{amount} निर्धारित करें",
+    "currencyToggle": {
+      "title": "वह मुद्रा बदलें जिसमें विभाजित राशियाँ दिखाई और संपादित की जाती हैं",
+      "ariaAmountsIn": "{code} में विभाजित राशियाँ दिखाएँ और संपादित करें"
+    },
     "splitLabel": "विभाजन {number}",
     "columns": {
       "type": "प्रकार",
@@ -491,11 +497,7 @@
     "selectAccount": "खाता चुनें...",
     "memoPlaceholder": "वैकल्पिक मेमो",
     "mobileMemoPlaceholder": "मेमो",
-    "tagsPlaceholder": "टैग...",
-    "currencyToggle": {
-      "title": "वह मुद्रा बदलें जिसमें विभाजित राशियाँ दिखाई और संपादित की जाती हैं",
-      "ariaAmountsIn": "{code} में विभाजित राशियाँ दिखाएँ और संपादित करें"
-    }
+    "tagsPlaceholder": "टैग..."
   },
   "recentPopover": {
     "recentForPayee": "{name} के हाल के लेन-देन",
@@ -513,7 +515,11 @@
     "quantityPlaceholder": "मात्रा",
     "pricePlaceholder": "मूल्य",
     "commissionPlaceholder": "कमीशन",
-    "amountPlaceholder": "राशि ({currency})"
+    "amountPlaceholder": "राशि ({currency})",
+    "ratePlaceholder": "1 {from} पर {to}",
+    "ariaRate": "विनिमय दर (1 {from} पर {to})",
+    "rateHint": "मात्रा, कीमत और कमीशन {from} में हैं; यह दर नकदी प्रभाव को {to} में परिवर्तित करती है।",
+    "rateUnresolved": "{from} से {to} की कोई दर उपलब्ध नहीं है। एक दर्ज करें — इसके बिना नकदी प्रभाव की गणना नहीं हो सकती, और दोनों मुद्राएँ बराबर नहीं हैं।"
   },
   "charts": {
     "balanceHistory": {

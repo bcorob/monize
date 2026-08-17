@@ -284,7 +284,13 @@
       "TRANSFER_OUT": "转出",
       "REINVEST": "再投资",
       "ADD_SHARES": "增加股份",
-      "REMOVE_SHARES": "减少股份"
+      "REMOVE_SHARES": "减少股份",
+      "REINVEST_INTEREST": "利息再投资",
+      "REINVEST_CAPITAL_GAIN_SHORT": "短期资本收益再投资",
+      "REINVEST_CAPITAL_GAIN_LONG": "长期资本收益再投资",
+      "CAPITAL_GAIN_SHORT": "短期资本收益",
+      "CAPITAL_GAIN_LONG": "长期资本收益",
+      "REDEEM": "赎回存单/债券"
     },
     "toasts": {
       "loadHistoryFailed": "加载历史失败",

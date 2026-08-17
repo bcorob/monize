@@ -519,6 +519,7 @@
     "billTemplateMissing": "{count, plural, other {#개 예약된 청구}}에 파일 내 템플릿 거래가 없어 건너뛰었습니다.",
     "unusableBill": "{count, plural, other {#개 예약된 청구}}에 계정, 사용 가능한 날짜 또는 인식된 반복 주기가 없어 건너뛰었습니다.",
     "billFrequencyApproximated": "{count, plural, other {#개 예약된 청구}}가 Monize에서 정확히 표현할 수 없는 반복 주기를 사용하여 가장 가까운 더 짧은 주기를 사용했습니다.",
+    "loanInterestCategoryUnclear": "{count, plural, other {#건의 대출 상환}}에 원금 외 여러 카테고리가 포함되어 있어 대출의 이자 카테고리가 설정되지 않았습니다. 상환에 에스크로(escrow)가 포함되는지 확인하고 가져오기 후 이자 카테고리를 설정하세요.",
     "showTransactions": "{count, plural, other {#건 거래}} 표시",
     "hideTransactions": "거래 숨기기",
     "reviewInMoney": "Microsoft Money에서 이 거래들을 열어 확인하거나 수정한 뒤 다시 내보내고 가져오세요.",

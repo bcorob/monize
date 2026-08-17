@@ -202,7 +202,8 @@
     "title": "按账户信用额度使用率",
     "empty": "没有设置额度的信用账户。",
     "utilization": "使用率",
-    "used": "已用"
+    "used": "已用",
+    "noRate": "不可用（无 {currency} 汇率）"
   },
   "creditUtilizationTotal": {
     "title": "总信用额度使用率",

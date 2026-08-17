@@ -1,4 +1,5 @@
 import { AccountType } from "../../../accounts/entities/account.entity";
+import { FREQUENCY_CYCLE_DAYS } from "../../../common/recurrence";
 import { FrequencyType } from "../../../scheduled-transactions/dto/create-scheduled-transaction.dto";
 import { InvestmentAction } from "../../../securities/entities/investment-transaction.entity";
 import { TransactionStatus } from "../../../transactions/entities/transaction.entity";
@@ -350,12 +351,31 @@ export const MNY_ACTION = {
   SELL: 2,
   /** Cash dividend. Has **no** `TRN_INV` row -- the amount is on `TRN.amt`. */
   DIVIDEND: 3,
-  /** A second cash distribution, also without a `TRN_INV` row. */
-  DISTRIBUTION: 4,
+  /**
+   * Money's "Interest" activity: fixed-income interest paid out to a cash
+   * account, also without a `TRN_INV` row. Named by the reporter of issue
+   * #1149 against Money's own register, which matches Money's QIF vocabulary
+   * (`IntInc`); it lands on tax reports as interest, so mapping it to
+   * DIVIDEND -- as this table did while the name was unknown -- misfiled it.
+   *
+   * `TRN.amt` for these rows carries the opposite sign from what Money's UI
+   * displays (the same file-side convention that stores a BUY positive), which
+   * is why the raw amounts read negative in the preview's flagged rows. The
+   * mapper discards the sign and takes direction from the action, so the
+   * imported row pays into the cash sleeve regardless.
+   */
+  INTEREST: 4,
   /** Second reinvestment variant; the 3-versus-5 distinction is unconfirmed. */
   REINVEST_ALT: 5,
   /** Reinvested distribution: opens lots, and the cash never lands. */
   REINVEST: 9,
+  /**
+   * Money's "Reinvest Interest" activity: interest earned on a CD or bond
+   * accrued straight back into the holding, never landing as cash. Named in
+   * issue #1149; QIF's `ReinvInt`. Opens no lot in the one file measured,
+   * which is consistent with Money not lot-tracking fixed-income accruals.
+   */
+  REINVEST_INTEREST: 10,
   /**
    * Opens lots for a stated value that **no cash pays for**: units credited to a
    * plan account from outside it. `act` 1 pairs with a cash row through
@@ -376,6 +396,34 @@ export const MNY_ACTION = {
   ADD_SHARES: 15,
   /** Closes lots without a cash leg. **Never** a sale. */
   REMOVE_SHARES_LEGACY: 16,
+  /**
+   * Money's "S-Term Cap Gains Dist": a short-term capital-gain distribution
+   * paid out to a cash account, not reinvested. Issue #1149; QIF `CGShort`.
+   */
+  ST_CAPITAL_GAINS_DIST: 24,
+  /**
+   * Money's "L-Term Cap Gains Dist": a long-term capital-gain distribution
+   * paid out to a cash account. Issue #1149; QIF `CGLong`.
+   */
+  LT_CAPITAL_GAINS_DIST: 26,
+  /**
+   * Money's "Reinvest S-Term CG Dist": a short-term capital-gain distribution
+   * bought straight back into the security. Issue #1149; QIF `ReinvSh`.
+   */
+  REINVEST_ST_CAPITAL_GAINS: 27,
+  /**
+   * Money's "Reinvest L-Term CG Dist": the long-term twin of `act` 27.
+   * Issue #1149; QIF `ReinvLg`.
+   */
+  REINVEST_LT_CAPITAL_GAINS: 29,
+  /**
+   * Money's "Redeem CD/Bond": a fixed-income instrument sold back, optionally
+   * carrying accrued interest inside its cash figure. Issue #1149. Mapped to
+   * Monize's REDEEM (a sale in behaviour), and `TRN.amt` wins as the total
+   * (see `totalAmountOf`), so the accrued-interest component is included the
+   * same way Money includes it.
+   */
+  REDEEM_CD_BOND: 30,
   /** Opens lots with no cash: the receiving half of a share transfer. */
   TRANSFER_IN: 32,
   /** Closes lots with no cash: the sending half of a share transfer. */
@@ -387,9 +435,15 @@ const ACTION_BY_CODE: ReadonlyMap<number, InvestmentAction> = new Map([
   [MNY_ACTION.BUY, InvestmentAction.BUY],
   [MNY_ACTION.SELL, InvestmentAction.SELL],
   [MNY_ACTION.DIVIDEND, InvestmentAction.DIVIDEND],
-  [MNY_ACTION.DISTRIBUTION, InvestmentAction.DIVIDEND],
+  [MNY_ACTION.INTEREST, InvestmentAction.INTEREST],
   [MNY_ACTION.REINVEST_ALT, InvestmentAction.REINVEST],
   [MNY_ACTION.REINVEST, InvestmentAction.REINVEST],
+  // Money's activity vocabulary now exists 1:1 in Monize (issue #1149), so
+  // nothing is collapsed: the income kind -- interest versus short- versus
+  // long-term capital gain, paid out versus reinvested -- survives the import
+  // for tax reporting. Each of these behaves financially exactly as its base
+  // action does (see `baseInvestmentAction`).
+  [MNY_ACTION.REINVEST_INTEREST, InvestmentAction.REINVEST_INTEREST],
   // Value and quantity like a buy, cash like a reinvestment -- and REINVEST is
   // the only Monize action that is both, so the cost basis survives.
   [MNY_ACTION.CONTRIBUTION, InvestmentAction.REINVEST],
@@ -397,38 +451,69 @@ const ACTION_BY_CODE: ReadonlyMap<number, InvestmentAction> = new Map([
   [MNY_ACTION.CAPITAL_GAIN, InvestmentAction.CAPITAL_GAIN],
   [MNY_ACTION.ADD_SHARES, InvestmentAction.ADD_SHARES],
   [MNY_ACTION.REMOVE_SHARES_LEGACY, InvestmentAction.REMOVE_SHARES],
+  [MNY_ACTION.ST_CAPITAL_GAINS_DIST, InvestmentAction.CAPITAL_GAIN_SHORT],
+  [MNY_ACTION.LT_CAPITAL_GAINS_DIST, InvestmentAction.CAPITAL_GAIN_LONG],
+  [
+    MNY_ACTION.REINVEST_ST_CAPITAL_GAINS,
+    InvestmentAction.REINVEST_CAPITAL_GAIN_SHORT,
+  ],
+  [
+    MNY_ACTION.REINVEST_LT_CAPITAL_GAINS,
+    InvestmentAction.REINVEST_CAPITAL_GAIN_LONG,
+  ],
+  [MNY_ACTION.REDEEM_CD_BOND, InvestmentAction.REDEEM],
   [MNY_ACTION.TRANSFER_IN, InvestmentAction.TRANSFER_IN],
   [MNY_ACTION.TRANSFER_OUT, InvestmentAction.TRANSFER_OUT],
 ]);
 
 /**
- * Codes whose meaning is inferred rather than observed. A mapper must attach a
- * warning to every transaction it maps through one of these, so the
- * verification report shows the user what was assumed.
+ * Codes whose meaning is inferred or reported rather than measured here. A
+ * mapper must attach a warning to every transaction it maps through one of
+ * these, so the verification report shows the user what was assumed.
  *
- * `DISTRIBUTION` and `CONTRIBUTION` are here because the file proves what they
- * do -- to a position, and to cash -- but not what Money calls them: `act` 4 is
- * some cash distribution that is not the dividend `act` 3 already is, and `act`
- * 12 credits units to a plan account that nothing pays for. Both are mapped to
- * their measured effect and reported, which is the rule -- codes 10, 17, 18 and
- * 20 turn up in real files with no lot to explain them, so they stay unmapped
- * and are skipped with a warning rather than guessed at.
+ * `CONTRIBUTION` is here because the file proves what it does -- to a
+ * position, and to cash -- and issue #1149 supplies Money's name for it
+ * ("Add Shares"), but Monize models it as REINVEST so the stated value
+ * survives as cost basis; the warning keeps that translation reviewable.
+ * The `act` 10 / 24 / 26 / 27 / 29 / 30 distribution family is the converse:
+ * each is named by issue #1149's reporter against Money's own register and
+ * corroborated by Money's QIF vocabulary, but no file available here carries
+ * one, so their `TRN_INV` shape and lot behaviour are unmeasured. Both kinds
+ * are mapped and reported, which is the rule -- codes 17, 18 and 20 turn up
+ * in real files with no lot and no name to explain them, so they stay
+ * unmapped and are skipped with a warning rather than guessed at. `act` 4
+ * left this set when issue #1149 named it: its cash-only behaviour was
+ * already measured, so nothing about it is assumed any more.
  */
 export const MNY_UNCONFIRMED_ACTIONS: ReadonlySet<number> = new Set([
   MNY_ACTION.REINVEST_ALT,
   MNY_ACTION.CAPITAL_GAIN,
-  MNY_ACTION.DISTRIBUTION,
   MNY_ACTION.CONTRIBUTION,
+  MNY_ACTION.REINVEST_INTEREST,
+  MNY_ACTION.ST_CAPITAL_GAINS_DIST,
+  MNY_ACTION.LT_CAPITAL_GAINS_DIST,
+  MNY_ACTION.REINVEST_ST_CAPITAL_GAINS,
+  MNY_ACTION.REINVEST_LT_CAPITAL_GAINS,
+  MNY_ACTION.REDEEM_CD_BOND,
 ]);
 
 /**
  * Codes that carry their amount on `TRN.amt` alone, with no `TRN_INV` row.
  * Iterating `TRN_INV` instead of `TRN` drops every one of them, which is
  * PR #192 issue 4.
+ *
+ * `act` 3 and 4 are measured: every such row in both Money Plus files is
+ * absent from `TRN_INV`. The `act` 24 / 26 cash capital-gain distributions
+ * are inferred to share the shape -- they are cash payouts exactly like 3 and
+ * 4, and no available file carries one to measure. Membership here only
+ * suppresses the missing-detail warning; a detail row, if a file does supply
+ * one, is still read and used.
  */
 const CASH_ONLY_ACTIONS: ReadonlySet<number> = new Set([
   MNY_ACTION.DIVIDEND,
-  MNY_ACTION.DISTRIBUTION,
+  MNY_ACTION.INTEREST,
+  MNY_ACTION.ST_CAPITAL_GAINS_DIST,
+  MNY_ACTION.LT_CAPITAL_GAINS_DIST,
 ]);
 
 /**
@@ -445,8 +530,10 @@ export function mapInvestmentAction(act: number): InvestmentAction | null {
 
 /**
  * False for the actions that carry no `TRN_INV` row -- the cash distributions.
- * Both Money Plus files confirm it: every `act` 3 and `act` 4 row is absent
- * from `TRN_INV`, and every other action has a row there.
+ * Both Money Plus files confirm the measured half: every `act` 3 and `act` 4
+ * row is absent from `TRN_INV`, and every other action they contain has a row
+ * there. The `act` 24 / 26 members are inferred from being the same kind of
+ * cash payout; see `CASH_ONLY_ACTIONS`.
  */
 export function hasInvestmentDetail(act: number): boolean {
   return !CASH_ONLY_ACTIONS.has(act);
@@ -535,96 +622,133 @@ export function isIncomeCategoryType(categoryType: number): boolean | null {
 // ---------------------------------------------------------------------------
 
 /**
- * Money recurrence codes. **Unconfirmed** -- `BILL` is empty in every fixture.
- * From PR #192's format reference.
+ * `BILL.frq` -- the **unit** a Money recurrence is counted in, not the
+ * recurrence itself. The recurrence is the pair `(frq, cFrqInst)`.
+ *
+ * `cFrqInst` is how many times the bill falls due **per unit**, so the cycle is
+ * `unit / cFrqInst`. It is a rate, not an interval multiplier, and reading it
+ * as the latter inverts every non-unit cadence in the file: `frq` 3 with
+ * `cFrqInst` 2 is twice a *month* (a semi-monthly payroll), and the old table
+ * imported it as every two months -- while `frq` 3 with `cFrqInst` 0.5, the
+ * real every-other-month, rounded to 1 and imported as monthly. The values are
+ * fractional (0.5, 0.25) precisely because they are a rate; an interval
+ * multiplier has no reason to be.
+ *
+ * Every code and every rate below is read off `klasko.mny`, a Money Plus Sunset
+ * file in which the frequency of each series was written into the payee memo
+ * and matched against the stored pair, and cross-checked against the spacing of
+ * the series' own instance dates (a `frq` 4 series is 3 months apart, `frq` 2
+ * with 0.5 is 14 days apart, and so on). That replaces the guessed table issue
+ * #1150 was about -- PR #192's list claimed 4 = yearly, and 4 is quarterly.
+ *
+ * Money's picker offers thirteen cadences and all thirteen are `(unit, rate)`
+ * pairs over these five units; `MONEY_CADENCES` in the spec enumerates them.
  */
 export const MNY_FREQUENCY = {
   ONCE: 0,
   DAILY: 1,
   WEEKLY: 2,
   MONTHLY: 3,
-  YEARLY: 4,
-  EVERY_2_MONTHS: 5,
-  QUARTERLY: 6,
-  SEMIANNUAL: 7,
+  QUARTERLY: 4,
+  YEARLY: 5,
 } as const;
+
+/**
+ * Mean length of one `frq` unit, in days.
+ *
+ * Spelled as fractions of `365.25` so that `unit / cFrqInst` lands exactly on a
+ * `FREQUENCY_CYCLE_DAYS` entry for each of Money's thirteen cadences -- which
+ * is what lets the match below be an equality rather than a tolerance, and what
+ * makes an unrepresentable cadence detectable instead of merely near-miss.
+ */
+const UNIT_DAYS: Record<number, number> = {
+  [MNY_FREQUENCY.DAILY]: 1,
+  [MNY_FREQUENCY.WEEKLY]: 7,
+  [MNY_FREQUENCY.MONTHLY]: 365.25 / 12,
+  [MNY_FREQUENCY.QUARTERLY]: 365.25 / 4,
+  [MNY_FREQUENCY.YEARLY]: 365.25,
+};
 
 export interface MnyFrequencyMapping {
   readonly frequency: FrequencyType;
   /**
-   * True when Monize has no exact equivalent, so the mapping changes how often
-   * the bill falls due, and the mapper must warn per bill. Every Money
-   * recurrence *code* now maps exactly (Track B task B3 added `EVERY2MONTHS`
-   * and `SEMIANNUAL`); only an unrepresentable `cFrqInst` interval -- weekly
-   * every 3 weeks, monthly every 5 months -- still approximates.
+   * True when Monize has no type for the cadence Money recorded, so the mapping
+   * changes how often the bill falls due and the mapper must warn per bill.
+   * Every cadence Money's own picker offers maps exactly -- `EVERY4MONTHS` and
+   * `EVERY2YEARS` were added for the last two of them -- so this is reserved
+   * for a `(frq, cFrqInst)` pair the picker cannot produce, such as every three
+   * weeks or every five months.
    */
   readonly approximate: boolean;
 }
 
-const EXACT: Record<number, FrequencyType> = {
-  [MNY_FREQUENCY.ONCE]: FrequencyType.ONCE,
-  [MNY_FREQUENCY.DAILY]: FrequencyType.DAILY,
-  [MNY_FREQUENCY.WEEKLY]: FrequencyType.WEEKLY,
-  [MNY_FREQUENCY.MONTHLY]: FrequencyType.MONTHLY,
-  [MNY_FREQUENCY.YEARLY]: FrequencyType.YEARLY,
-  [MNY_FREQUENCY.EVERY_2_MONTHS]: FrequencyType.EVERY2MONTHS,
-  [MNY_FREQUENCY.QUARTERLY]: FrequencyType.QUARTERLY,
-  [MNY_FREQUENCY.SEMIANNUAL]: FrequencyType.SEMIANNUAL,
-};
+/** How close two cycle lengths must be to count as the same cadence. */
+const CYCLE_EPSILON = 1e-9;
 
-/** Weekly recurrences whose interval Monize expresses as its own type. */
-const WEEKLY_BY_INTERVAL: Record<number, FrequencyType> = {
-  2: FrequencyType.BIWEEKLY,
-  4: FrequencyType.EVERY4WEEKS,
-};
+/** The frequency whose cycle is exactly `days`, or null. */
+function frequencyForCycleDays(days: number): FrequencyType | null {
+  for (const [frequency, cycle] of Object.entries(FREQUENCY_CYCLE_DAYS)) {
+    if (cycle > 0 && Math.abs(cycle - days) <= CYCLE_EPSILON * cycle) {
+      return frequency as FrequencyType;
+    }
+  }
+  return null;
+}
 
-/** Monthly recurrences whose interval Monize expresses as its own type. */
-const MONTHLY_BY_INTERVAL: Record<number, FrequencyType> = {
-  2: FrequencyType.EVERY2MONTHS,
-  3: FrequencyType.QUARTERLY,
-  6: FrequencyType.SEMIANNUAL,
-  12: FrequencyType.YEARLY,
-};
+/**
+ * The longest frequency whose cycle does not exceed `days`.
+ *
+ * Rounding *down* is the safe direction: v1 imports bills with
+ * `auto_post = false`, so an extra reminder is noise while a missed one is a
+ * missed payment. Nothing is shorter than `DAILY`, so a sub-daily cadence lands
+ * there.
+ */
+function nearestShorterFrequency(days: number): FrequencyType {
+  return Object.entries(FREQUENCY_CYCLE_DAYS)
+    .filter(([, cycle]) => cycle > 0 && cycle <= days)
+    .reduce<[FrequencyType, number]>(
+      (best, entry) =>
+        entry[1] > best[1] ? [entry[0] as FrequencyType, entry[1]] : best,
+      [FrequencyType.DAILY, 0],
+    )[0];
+}
 
 /**
  * Maps a Money recurrence onto a Monize frequency.
  *
- * `cFrqInst` is Money's interval multiplier: weekly with an interval of 2 is
- * exactly Monize's BIWEEKLY, monthly with 3 is QUARTERLY. Every Money
- * recurrence code has an exact Monize type since task B3 added `EVERY2MONTHS`
- * and `SEMIANNUAL`, so only an interval with no matching type (weekly every 3
- * weeks, monthly every 5 months) still falls to the next **shorter** period and
- * is flagged approximate. Shorter is the safer error: v1 imports bills with
- * `auto_post = false`, so an extra reminder is noise while a missed one is a
- * missed payment. (PR #192 erred in both directions, turning bimonthly bills
- * into biweekly ones and semiannual bills into yearly ones.)
+ * Returns null for an unknown `frq`, which the mapper reports (`unusableBill`,
+ * with the raw pair) rather than guesses. The bill mapper asks the series' own
+ * instance dates before it asks this function, so an unmapped code only loses a
+ * series that has no spacing to read.
  *
- * Returns null for an unknown code, which the mapper reports rather than
- * guesses.
+ * @param frequency `BILL.frq` -- the unit, see `MNY_FREQUENCY`
+ * @param occurrencesPerUnit `BILL.cFrqInst` -- occurrences per unit, so 2 on a
+ *   monthly unit is twice a month and 0.5 is every other month
  */
 export function mapFrequency(
   frequency: number,
-  interval = 1,
+  occurrencesPerUnit = 1,
 ): MnyFrequencyMapping | null {
-  const steps =
-    Number.isFinite(interval) && interval >= 1 ? Math.round(interval) : 1;
-
-  if (frequency === MNY_FREQUENCY.WEEKLY && steps > 1) {
-    const exact = WEEKLY_BY_INTERVAL[steps];
-    return exact
-      ? { frequency: exact, approximate: false }
-      : { frequency: FrequencyType.WEEKLY, approximate: true };
+  if (frequency === MNY_FREQUENCY.ONCE) {
+    // A one-off recurs no times; whatever rate sits beside it says nothing.
+    return { frequency: FrequencyType.ONCE, approximate: false };
   }
 
-  if (frequency === MNY_FREQUENCY.MONTHLY && steps > 1) {
-    const exact = MONTHLY_BY_INTERVAL[steps];
-    return exact
-      ? { frequency: exact, approximate: false }
-      : { frequency: FrequencyType.MONTHLY, approximate: true };
+  const unit = UNIT_DAYS[frequency];
+  if (unit === undefined) {
+    return null;
   }
 
-  const exact = EXACT[frequency];
-  return exact ? { frequency: exact, approximate: false } : null;
+  const rate =
+    Number.isFinite(occurrencesPerUnit) && occurrencesPerUnit > 0
+      ? occurrencesPerUnit
+      : 1;
+  const cycleDays = unit / rate;
+
+  const exact = frequencyForCycleDays(cycleDays);
+  return exact !== null
+    ? { frequency: exact, approximate: false }
+    : { frequency: nearestShorterFrequency(cycleDays), approximate: true };
 }
 
 // ---------------------------------------------------------------------------

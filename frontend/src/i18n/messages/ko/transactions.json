@@ -26,7 +26,8 @@
     "editAria": "수취인 편집",
     "detailsAria": "수취인 상세 보기",
     "collapseAria": "수취인 정보 숨기기",
-    "show": "수취인 정보 표시"
+    "show": "수취인 정보 표시",
+    "amountUnavailable": "환율 없음"
   },
   "categoryWidget": {
     "detailsAria": "카테고리 상세 보기",
@@ -47,7 +48,8 @@
     "noTransactions": "이 기간에 거래가 없습니다",
     "editAria": "카테고리 편집",
     "collapseAria": "카테고리 정보 숨기기",
-    "show": "카테고리 정보 표시"
+    "show": "카테고리 정보 표시",
+    "amountUnavailable": "환율 없음"
   },
   "accountWidget": {
     "currentBalance": "현재 잔액",
@@ -110,10 +112,11 @@
       "paidAmount": "결제 금액",
       "feePaid": "부과된 수수료",
       "balance": "잔액",
+      "attachments": "첨부 파일",
       "status": "상태",
-      "actions": "작업",
-      "attachments": "첨부 파일"
+      "actions": "작업"
     },
+    "attachmentsCount": "{count, plural, other {# 개의 첨부 파일}}",
     "today": "오늘",
     "export": {
       "button": "내보내기",
@@ -174,8 +177,7 @@
       "editButton": "편집",
       "deleteButton": "삭제"
     },
-    "itemNamePlural": "거래",
-    "attachmentsCount": "{count, plural, other {# 개의 첨부 파일}}"
+    "itemNamePlural": "거래"
   },
   "row": {
     "copyOptions": {
@@ -230,6 +232,11 @@
       "currency": "통화",
       "hasAttachments": "첨부 파일"
     },
+    "hasAttachmentsOptions": {
+      "any": "전체",
+      "yes": "예",
+      "no": "아니오"
+    },
     "placeholders": {
       "accounts": "모든 계정",
       "payees": "모든 수취인",
@@ -240,6 +247,13 @@
       "amountMax": "최대",
       "search": "수취인, 카테고리, 금액, 태그, 설명, 참조 번호 검색...",
       "tagKeyValue": "예: usa"
+    },
+    "tagKeyNone": "모두(키 필터 없음)",
+    "tagKeyOps": {
+      "hasValue": "값 있음",
+      "noValue": "값 없음",
+      "contains": "값 포함",
+      "notContains": "값 미포함"
     },
     "chips": {
       "removeAccount": "{name} 필터 제거",
@@ -280,18 +294,6 @@
       "yearToDate": "올해",
       "lastYear": "지난 해",
       "custom": "사용자 정의"
-    },
-    "tagKeyNone": "모두(키 필터 없음)",
-    "tagKeyOps": {
-      "hasValue": "값 있음",
-      "noValue": "값 없음",
-      "contains": "값 포함",
-      "notContains": "값 미포함"
-    },
-    "hasAttachmentsOptions": {
-      "any": "전체",
-      "yes": "예",
-      "no": "아니오"
     }
   },
   "bulk": {
@@ -399,6 +401,7 @@
       "optionLabel": "{name} ({currency}) — {owner}"
     },
     "crossOwnerLockedNote": "이 이체의 상대편이 더 이상 공유되지 않는 계좌에 있습니다. 금액, 날짜, 계좌는 잠겨 있지만 이 거래의 세부 정보는 계속 편집할 수 있습니다.",
+    "transferCategoryNote": "선택사항. 이체는 여전히 수입이나 지출로 집계되지 않지만, 이 카테고리를 지정하면 월별 카테고리 분석에 표시됩니다(예: 매월 투자 납입).",
     "amountReceivedNote": "환전 후 수령 금액",
     "splitTransaction": "분할 거래",
     "splitDisabledDuringTour": "가이드 투어 중에는 사용할 수 없습니다",
@@ -408,6 +411,7 @@
       "transferUpdated": "이체가 업데이트되었습니다",
       "transactionCreated": "거래가 생성되었습니다",
       "transactionUpdated": "거래가 업데이트되었습니다",
+      "attachmentsUploadFailed": "거래가 저장되었지만 첨부 파일 {count}개를 업로드하지 못했습니다",
       "saveFailed": "거래 저장에 실패했습니다",
       "loadFailed": "양식 데이터 불러오기에 실패했습니다",
       "splitsNotEqual": "분할 합계({splitTotal})가 거래 금액({txAmount})과 일치해야 합니다",
@@ -422,13 +426,11 @@
       "categoryCreateFailed": "카테고리 생성에 실패했습니다",
       "tagCreated": "태그 \"{name}\"이(가) 생성되었습니다",
       "fxRateRequired": "외화 거래를 저장하기 전에 환율 또는 환산 금액을 입력하세요.",
-      "attachmentsUploadFailed": "거래가 저장되었지만 첨부 파일 {count}개를 업로드하지 못했습니다",
       "jointPayeeCreateNotGranted": "계좌 소유자가 수취인 생성 권한을 부여하지 않았습니다. 기존 수취인 중에서 선택하세요."
     },
     "ariaHistory": "최근 거래 보기",
     "ariaHistoryForPayee": "이 수취인의 최근 거래 보기",
     "historyTitle": "최근 거래에서 자동 완성",
-    "transferCategoryNote": "선택사항. 이체는 여전히 수입이나 지출로 집계되지 않지만, 이 카테고리를 지정하면 월별 카테고리 분석에 표시됩니다(예: 매월 투자 납입).",
     "currencyPicker": {
       "label": "입력 통화",
       "ariaLabel": "입력 통화 변경",
@@ -440,15 +442,15 @@
       "reactivated": "{code}이(가) 다시 활성화되었습니다"
     },
     "fx": {
+      "totalInCurrency": "{currency} 기준 총액",
+      "rateCaption": "1 {from} = {rate} {to} ({date})",
       "noRateWarning": "{date}에 {from}에서 {to}로의 환율을 찾을 수 없습니다. 환산 금액을 직접 입력하세요.",
       "usingLatestRateHint": "사용 가능한 최신 환율을 사용 중입니다({date} 기준 아님).",
       "displayToggle": {
         "account": "계좌",
         "original": "원 통화"
       },
-      "rateCaption": "1 {from} = {rate} {to} ({date})",
-      "feeCaption": "{percent}% 해외 거래 수수료({fee})가 포함됩니다.",
-      "totalInCurrency": "{currency} 기준 총액"
+      "feeCaption": "{percent}% 해외 거래 수수료({fee})가 포함됩니다."
     },
     "jointSplitDisabled": "공유 계좌의 분할 거래는 소유자만 관리할 수 있습니다"
   },
@@ -473,6 +475,10 @@
     "remaining": "남은 금액: {symbol}{amount}",
     "needAmount": "{symbol}{amount} 필요 (남은 금액: {symbol}{remaining})",
     "setTotal": "합계를 {symbol}{amount}으로 설정",
+    "currencyToggle": {
+      "title": "분할 금액을 표시하고 편집하는 통화를 전환합니다",
+      "ariaAmountsIn": "{code}(으)로 분할 금액 표시 및 편집"
+    },
     "splitLabel": "분할 {number}",
     "columns": {
       "type": "유형",
@@ -491,11 +497,7 @@
     "selectAccount": "계정 선택...",
     "memoPlaceholder": "선택적 메모",
     "mobileMemoPlaceholder": "메모",
-    "tagsPlaceholder": "태그...",
-    "currencyToggle": {
-      "title": "분할 금액을 표시하고 편집하는 통화를 전환합니다",
-      "ariaAmountsIn": "{code}(으)로 분할 금액 표시 및 편집"
-    }
+    "tagsPlaceholder": "태그..."
   },
   "recentPopover": {
     "recentForPayee": "{name}의 최근 거래",
@@ -513,7 +515,11 @@
     "quantityPlaceholder": "수량",
     "pricePlaceholder": "가격",
     "commissionPlaceholder": "수수료",
-    "amountPlaceholder": "금액 ({currency})"
+    "amountPlaceholder": "금액 ({currency})",
+    "ratePlaceholder": "1 {from}당 {to}",
+    "ariaRate": "환율 (1 {from}당 {to})",
+    "rateHint": "수량, 가격, 수수료는 {from} 기준입니다. 이 환율이 현금 영향액을 {to}(으)로 환산합니다.",
+    "rateUnresolved": "{from}→{to} 환율이 없습니다. 입력하세요 — 없으면 현금 영향액을 계산할 수 없고, 두 통화는 같지 않습니다."
   },
   "charts": {
     "balanceHistory": {

@@ -73,7 +73,13 @@
       "TRANSFER_OUT": "Transfer Çıkışı",
       "REINVEST": "Yeniden Yatır",
       "ADD_SHARES": "Hisse Ekle",
-      "REMOVE_SHARES": "Hisse Çıkar"
+      "REMOVE_SHARES": "Hisse Çıkar",
+      "REINVEST_INTEREST": "Faizi Yeniden Yatır",
+      "REINVEST_CAPITAL_GAIN_SHORT": "Kısa Vadeli Kazancı Yeniden Yatır",
+      "REINVEST_CAPITAL_GAIN_LONG": "Uzun Vadeli Kazancı Yeniden Yatır",
+      "CAPITAL_GAIN_SHORT": "Kısa Vadeli Sermaye Kazancı",
+      "CAPITAL_GAIN_LONG": "Uzun Vadeli Sermaye Kazancı",
+      "REDEEM": "CD/Tahvil İtfası"
     },
     "descriptions": {
       "createdAccount": "\"{name}\" hesabı oluşturuldu",

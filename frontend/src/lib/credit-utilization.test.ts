@@ -91,6 +91,8 @@ describe('computeCreditTotals', () => {
       used: 600,
       available: 1400,
       utilizationPercent: 30,
+      missingCurrencies: [],
+      excludedCount: 0,
     });
   });
 
@@ -100,6 +102,46 @@ describe('computeCreditTotals', () => {
       used: 0,
       available: 0,
       utilizationPercent: 0,
+      missingCurrencies: [],
+      excludedCount: 0,
     });
+  });
+
+  /**
+   * A row with no rate to the display currency used to be counted as a zero
+   * limit with a zero balance, which *improves* the utilisation figure this
+   * module exists to warn about: 90% drawn on an unconvertible card disappeared
+   * from the ratio entirely rather than being reported as unmeasured.
+   */
+  it('excludes an unconvertible row and names its currency', () => {
+    const rows = computeCreditRows(
+      [
+        account({ id: 'a', creditLimit: 1000, currentBalance: -300, currencyCode: 'USD' }),
+        account({ id: 'b', creditLimit: 1000, currentBalance: -900, currencyCode: 'EUR' }),
+      ],
+      // Knows USD only.
+      (value, from) => (from === 'USD' ? value : null),
+      'USD',
+    );
+    const totals = computeCreditTotals(rows);
+
+    expect(totals.limit).toBe(1000);
+    expect(totals.used).toBe(300);
+    expect(totals.utilizationPercent).toBe(30);
+    expect(totals.missingCurrencies).toEqual(['EUR']);
+    expect(totals.excludedCount).toBe(1);
+  });
+
+  // Utilisation is a ratio inside one currency, so it needs no rate and stays
+  // known even when the money figures do not.
+  it('keeps a row percentage when its money figures are unknown', () => {
+    const rows = computeCreditRows(
+      [account({ id: 'b', creditLimit: 1000, currentBalance: -900, currencyCode: 'EUR' })],
+      () => null,
+      'USD',
+    );
+    expect(rows[0].utilizationPercent).toBe(90);
+    expect(rows[0].limit).toBeNull();
+    expect(rows[0].used).toBeNull();
   });
 });

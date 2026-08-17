@@ -316,7 +316,8 @@ export class MarketIndexService implements OnApplicationBootstrap {
         withScopedDb(this.dataSource, (m) =>
           m.query(
             `SELECT MIN(transaction_date)::text AS earliest
-               FROM investment_transactions`,
+               FROM investment_transactions
+              WHERE status != 'VOID'`,
           ),
         ),
     );

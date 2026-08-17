@@ -504,6 +504,7 @@ export class TransactionAnalyticsService {
     // leak into expense/income totals as "uncategorised" spending.
     if (excludeInvestmentLinked) {
       queryBuilder.andWhere(
+        // includes VOID rows: records read -- identity, not effect.
         "NOT EXISTS (SELECT 1 FROM investment_transactions it WHERE it.transaction_id = transaction.id)",
       );
     }
@@ -1549,6 +1550,7 @@ export class TransactionAnalyticsService {
         // Exclude investment-linked cash debits so regular BUY activity
         // isn't flagged as a subscription-like "recurring charge".
         .andWhere(
+          // includes VOID rows: records read -- identity, not effect.
           "NOT EXISTS (SELECT 1 FROM investment_transactions it WHERE it.transaction_id = t.id)",
         )
         .setParameters(

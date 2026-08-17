@@ -228,5 +228,10 @@
     "nothingToRedo": "やり直す操作がありません",
     "cannotRedo": "この操作はやり直せません",
     "redoFailed": "やり直す操作に失敗しました"
+  },
+  "partialTotal": {
+    "srSuffix": "（部分合計）",
+    "explanation": "部分的な合計: {count, plural, other {# 件の金額}}を含めることができなかったため、表示されている金額はこれらを除外しています。{currencies} の {displayCurrency} への為替レートがありません。",
+    "explanationExcluded": "部分的な合計: {count, plural, other {# 件の金額}}を算出できなかったため、表示されている金額はこれらを除外しています。"
   }
 }

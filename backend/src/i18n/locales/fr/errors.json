@@ -317,7 +317,9 @@
   "monteCarlo": {
     "scenarioNotFound": "Scénario {{ id }} introuvable",
     "scenarioIdsMustBeArray": "scenarioIds doit être un tableau",
-    "atLeastOneAccountRequired": "Au moins un accountId est requis"
+    "atLeastOneAccountRequired": "Au moins un accountId est requis",
+    "currentValueUnavailable": "La valeur actuelle des comptes sélectionnés n'a pas pu être déterminée, une simulation ne peut donc pas en partir. Saisissez explicitement une valeur de départ, ou réessayez lorsque les cours et les taux de change seront disponibles.",
+    "historicalReturnsUnavailable": "Les rendements historiques des comptes sélectionnés n'ont pas pu être calculés, une simulation ne peut donc pas les utiliser. Saisissez manuellement un rendement attendu et une volatilité, ou réessayez lorsque les cours et les taux de change seront disponibles."
   },
   "netWorth": {
     "invalidStartDate": "startDate doit être au format YYYY-MM-DD",
@@ -361,6 +363,7 @@
     "requiresBrokerageAccount": "Les transactions d'investissement récurrentes nécessitent un compte de courtage",
     "notFound": "Transaction récurrente avec l'ID {{ id }} introuvable",
     "occurrenceAlreadyPosted": "Cette occurrence a déjà été enregistrée.",
+    "changedConcurrently": "The scheduled transaction changed during the operation. Reload it and retry.",
     "fxPlainOnly": "Une devise différente n'est possible que sur une transaction récurrente simple, pas sur une transaction fractionnée, un virement ou un investissement",
     "fxRateUnavailable": "Aucun taux de change n'est disponible de {{ from }} vers {{ to }} le {{ date }}. Saisissez le montant en {{ to }} pour l'enregistrer.",
     "investmentActionRequired": "Une action d'investissement est requise pour les transactions d'investissement récurrentes",
@@ -396,6 +399,7 @@
     "cannotChangeSplitAccount": "Impossible de changer le compte d'une fraction d'investissement ; supprimez la fraction et ajoutez-la sur le nouveau compte",
     "splitNoFundingAccount": "Les fractions d'investissement n'utilisent pas de compte de financement séparé",
     "cannotChangeSplitDate": "Impossible de changer la date d'une fraction d'investissement ; modifiez plutôt la date de la transaction fractionnée parente",
+    "embeddedStatusLocked": "Cette transaction d'investissement fait partie d'une transaction fractionnée. Modifiez plutôt le statut de la transaction fractionnée, afin que les deux côtés changent ensemble.",
     "invalidAccountUuid": "UUID de compte invalide : {{ id }}",
     "startDateFormat": "startDate doit être au format YYYY-MM-DD",
     "endDateFormat": "endDate doit être au format YYYY-MM-DD",
@@ -435,8 +439,10 @@
     "invalidTagKey": "Une clé d'étiquette (1 à 100 caractères) est requise",
     "assetOptionNameRequired": "Un nom de classe d'actifs est requis.",
     "documentNotFound": "Document introuvable",
+    "embeddedSplitAmountMismatch": "Cette répartition enregistre {{ amount }}, mais {{ action }} {{ quantity }} @ {{ price }} se convertit en {{ expected }} au taux de {{ rate }}. Utilisez ce montant, ou indiquez le taux de change voulu.",
     "selectionNotFound": "Un ou plusieurs des titres sélectionnés sont introuvables",
-    "comparisonSelectionEmpty": "Sélectionnez au moins un titre ou un indice de marché à comparer"
+    "comparisonSelectionEmpty": "Sélectionnez au moins un titre ou un indice de marché à comparer",
+    "exchangeRateNotPositive": "Le taux de change doit être supérieur à zéro"
   },
   "tags": {
     "notFound": "Étiquette avec l'ID {{ id }} introuvable",
@@ -490,15 +496,27 @@
     "transferAmountNegative": "Le montant du virement ne doit pas être négatif",
     "notATransfer": "La transaction n'est pas un virement",
     "splitTransferLegAccountLocked": "Ce virement fait partie d'une transaction fractionnée. Pour changer ses comptes, modifiez la fraction sur la transaction d'origine.",
+    "splitTransferLegStatusLocked": "Ce transfert fait partie d'une transaction ventilée. Annulez-le ou rétablissez-le en modifiant la transaction ventilée à laquelle il appartient, afin que les deux côtés changent ensemble.",
+    "investmentCashLegStatusLocked": "Cette transaction est le volet espèces d'une transaction d'investissement. Annulez-la ou rétablissez-la en modifiant le statut de la transaction d'investissement, afin que les deux côtés changent ensemble.",
     "notFoundById": "Transaction avec l'ID {{ id }} introuvable",
     "bulkUpdateNoFields": "Au moins un champ de mise à jour doit être fourni",
     "bulkSplitNoMatchingLinesOne": "1 transaction ventilée a été ignorée car aucune de ses fractions ne correspondait à la mise à jour de catégorie",
     "bulkSplitNoMatchingLinesMany": "{{ count }} transactions ventilées ont été ignorées car aucune de leurs fractions ne correspondait à la mise à jour de catégorie",
+    "bulkSplitTransferLegSkippedOne": "1 virement fractionné a été ignoré (annulez-le ou restaurez-le depuis la transaction fractionnée à laquelle il appartient, afin que les deux côtés changent ensemble)",
+    "bulkSplitTransferLegSkippedMany": "{{ count }} virements fractionnés ont été ignorés (annulez-les ou restaurez-les depuis la transaction fractionnée à laquelle ils appartiennent, afin que les deux côtés changent ensemble)",
+    "bulkInvestmentCashLegSkippedOne": "1 transaction d'espèces d'investissement a été ignorée (annulez-la ou restaurez-la en modifiant le statut de la transaction d'investissement, afin que les deux côtés changent ensemble)",
+    "bulkInvestmentCashLegSkippedMany": "{{ count }} transactions d'espèces d'investissement ont été ignorées (annulez-les ou restaurez-les en modifiant le statut des transactions d'investissement, afin que les deux côtés changent ensemble)",
     "payeeNotFound": "Bénéficiaire introuvable",
     "fxFieldsIncomplete": "originalAmount et originalCurrencyCode doivent être fournis ensemble",
     "fxRateRequired": "Un taux de change positif est requis pour une transaction en devise étrangère",
     "fxSignMismatch": "originalAmount et amount doivent avoir le même signe",
-    "jointAccountMoveLocked": "Les transactions d'un compte partagé ne peuvent pas être déplacées vers un autre compte."
+    "jointAccountMoveLocked": "Les transactions d'un compte partagé ne peuvent pas être déplacées vers un autre compte.",
+    "currencyMustMatchAccount": "La devise de la transaction {{ supplied }} doit correspondre à la devise du compte {{ account }}. Utilisez originalAmount et originalCurrencyCode pour une saisie en devise étrangère.",
+    "transferSameCurrencyMustConserve": "Un transfert entre deux comptes en {{ currency }} doit déplacer le même montant des deux côtés",
+    "transferSameCurrencyRateMustBeOne": "Un transfert entre deux comptes en {{ currency }} ne peut pas avoir un taux de change autre que 1",
+    "transferRateUnavailable": "Impossible de déterminer un taux de change pour {{ from }} -> {{ to }}. Fournissez un exchangeRate ou un montant de destination pour que le transfert soit enregistré correctement.",
+    "transferAmountsMustAgreeOnZero": "Un transfert doit déplacer un montant non nul des deux côtés, ou zéro des deux côtés",
+    "transferImpliedRateInvalid": "Le montant de destination implique un taux de change inutilisable par rapport au montant source"
   },
   "users": {
     "userNotFound": "Utilisateur introuvable",

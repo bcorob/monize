@@ -202,6 +202,11 @@ export class BackupRestoreService {
       // exactly as the other operation will leave it (audit DR-04-02). Staged
       // attachment bytes are discarded by the `.catch` below, since they were
       // written before the lease and this request no longer owns the restore.
+      // One thing has happened by here, though: the OIDC step-up proof was
+      // already spent in its own committed transaction during
+      // verifyAuthentication above, so a 409 (or any later throw) leaves it
+      // consumed and the user must re-authenticate to retry. That is the safe
+      // direction -- do not "fix" this path by treating it as replay-safe.
       return this.maintenance
         .withMaintenanceLease(userId, "backup restore", () =>
           withPreserveTimestamps(() =>
@@ -399,7 +404,11 @@ export class BackupRestoreService {
       // possession of the session that was already required (P2-005). Bound to
       // "restore-backup" specifically: an artifact minted to delete data must not
       // authorize overwriting everything instead.
-      this.oidcReauth.consume(user.id, "restore-backup", input.oidcIdToken);
+      await this.oidcReauth.consume(
+        user.id,
+        "restore-backup",
+        input.oidcIdToken,
+      );
     } else if (!user.passwordHash) {
       // Local account with no password (admin-provisioned, reset not completed).
       // This fell off the end of the else-if chain and proved nothing at all.

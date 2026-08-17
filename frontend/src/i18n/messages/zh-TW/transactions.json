@@ -26,7 +26,8 @@
     "editAria": "編輯收款人",
     "detailsAria": "檢視收款人詳細資料",
     "collapseAria": "隱藏收款人資訊",
-    "show": "顯示收款人資訊"
+    "show": "顯示收款人資訊",
+    "amountUnavailable": "無匯率"
   },
   "categoryWidget": {
     "detailsAria": "檢視分類詳細資料",
@@ -47,7 +48,8 @@
     "noTransactions": "此期間沒有交易",
     "editAria": "編輯分類",
     "collapseAria": "隱藏分類資訊",
-    "show": "顯示分類資訊"
+    "show": "顯示分類資訊",
+    "amountUnavailable": "無匯率"
   },
   "accountWidget": {
     "currentBalance": "目前結餘",
@@ -110,10 +112,11 @@
       "paidAmount": "支付金額",
       "feePaid": "已付手續費",
       "balance": "結餘",
+      "attachments": "附件",
       "status": "狀態",
-      "actions": "動作",
-      "attachments": "附件"
+      "actions": "動作"
     },
+    "attachmentsCount": "{count, plural, other {# 個附件}}",
     "today": "今天",
     "export": {
       "button": "匯出",
@@ -174,8 +177,7 @@
       "editButton": "編輯",
       "deleteButton": "刪除"
     },
-    "itemNamePlural": "筆交易",
-    "attachmentsCount": "{count, plural, other {# 個附件}}"
+    "itemNamePlural": "筆交易"
   },
   "row": {
     "copyOptions": {
@@ -230,6 +232,11 @@
       "currency": "幣別",
       "hasAttachments": "附件"
     },
+    "hasAttachmentsOptions": {
+      "any": "任何",
+      "yes": "是",
+      "no": "否"
+    },
     "placeholders": {
       "accounts": "所有科目",
       "payees": "所有收款人",
@@ -240,6 +247,13 @@
       "amountMax": "最大",
       "search": "搜尋收款人、類別、金額、標籤、描述、參考號碼...",
       "tagKeyValue": "例如 usa"
+    },
+    "tagKeyNone": "任意（無鍵篩選）",
+    "tagKeyOps": {
+      "hasValue": "有值",
+      "noValue": "無值",
+      "contains": "值包含",
+      "notContains": "值不包含"
     },
     "chips": {
       "removeAccount": "移除 {name} 篩選",
@@ -280,18 +294,6 @@
       "yearToDate": "年初至今",
       "lastYear": "去年",
       "custom": "自訂"
-    },
-    "tagKeyNone": "任意（無鍵篩選）",
-    "tagKeyOps": {
-      "hasValue": "有值",
-      "noValue": "無值",
-      "contains": "值包含",
-      "notContains": "值不包含"
-    },
-    "hasAttachmentsOptions": {
-      "any": "任何",
-      "yes": "是",
-      "no": "否"
     }
   },
   "bulk": {
@@ -399,6 +401,7 @@
       "optionLabel": "{name} ({currency}) — {owner}"
     },
     "crossOwnerLockedNote": "此轉帳的另一方位於不再與您分享的科目中。其金額、日期和科目已鎖定，但您仍可以編輯此交易本身的詳細資訊。",
+    "transferCategoryNote": "選填。此轉帳仍不計為收入或支出，但此類別可讓它顯示在每月類別明細中（例如每月投資繳款）。",
     "amountReceivedNote": "貨幣換算後的收到金額",
     "splitTransaction": "分割交易",
     "splitDisabledDuringTour": "導覽引導期間無法使用",
@@ -408,6 +411,7 @@
       "transferUpdated": "轉帳已更新",
       "transactionCreated": "交易已建立",
       "transactionUpdated": "交易已更新",
+      "attachmentsUploadFailed": "交易已儲存，但 {count} 個附件上傳失敗",
       "saveFailed": "儲存交易失敗",
       "loadFailed": "載入表單資料失敗",
       "splitsNotEqual": "分割總計（{splitTotal}）必須等於交易金額（{txAmount}）",
@@ -422,13 +426,11 @@
       "categoryCreateFailed": "建立類別失敗",
       "tagCreated": "標籤「{name}」已建立",
       "fxRateRequired": "儲存外幣交易前，請輸入匯率或換算後的金額。",
-      "attachmentsUploadFailed": "交易已儲存，但 {count} 個附件上傳失敗",
       "jointPayeeCreateNotGranted": "帳戶擁有者未授予您建立收款人的權限。請從其現有收款人中選擇。"
     },
     "ariaHistory": "顯示最近交易",
     "ariaHistoryForPayee": "顯示此收款人的最近交易",
     "historyTitle": "從最近的交易快速填寫",
-    "transferCategoryNote": "選填。此轉帳仍不計為收入或支出，但此類別可讓它顯示在每月類別明細中（例如每月投資繳款）。",
     "currencyPicker": {
       "label": "輸入幣別",
       "ariaLabel": "變更輸入幣別",
@@ -440,15 +442,15 @@
       "reactivated": "已重新啟用 {code}"
     },
     "fx": {
+      "totalInCurrency": "以 {currency} 計的總額",
+      "rateCaption": "1 {from} = {rate} {to} ({date})",
       "noRateWarning": "找不到 {date} 從 {from} 到 {to} 的匯率。請手動輸入換算後的金額。",
       "usingLatestRateHint": "正在使用最新可用匯率（非 {date} 當天）。",
       "displayToggle": {
         "account": "帳戶",
         "original": "原幣別"
       },
-      "rateCaption": "1 {from} = {rate} {to} ({date})",
-      "feeCaption": "包含 {percent}% 境外交易手續費（{fee}）。",
-      "totalInCurrency": "以 {currency} 計的總額"
+      "feeCaption": "包含 {percent}% 境外交易手續費（{fee}）。"
     },
     "jointSplitDisabled": "共享帳戶中的分割交易只能由擁有者管理"
   },
@@ -473,6 +475,10 @@
     "remaining": "剩餘：{symbol}{amount}",
     "needAmount": "需要 {symbol}{amount}（剩餘：{symbol}{remaining}）",
     "setTotal": "設定總計為 {symbol}{amount}",
+    "currencyToggle": {
+      "title": "切換拆分金額的顯示和編輯貨幣",
+      "ariaAmountsIn": "以 {code} 顯示和編輯拆分金額"
+    },
     "splitLabel": "分割 {number}",
     "columns": {
       "type": "類型",
@@ -491,11 +497,7 @@
     "selectAccount": "選擇科目...",
     "memoPlaceholder": "選填備註",
     "mobileMemoPlaceholder": "備註",
-    "tagsPlaceholder": "標籤...",
-    "currencyToggle": {
-      "title": "切換拆分金額的顯示和編輯貨幣",
-      "ariaAmountsIn": "以 {code} 顯示和編輯拆分金額"
-    }
+    "tagsPlaceholder": "標籤..."
   },
   "recentPopover": {
     "recentForPayee": "{name} 的最近記錄",
@@ -513,7 +515,11 @@
     "quantityPlaceholder": "數量",
     "pricePlaceholder": "價格",
     "commissionPlaceholder": "手續費",
-    "amountPlaceholder": "金額（{currency}）"
+    "amountPlaceholder": "金額（{currency}）",
+    "ratePlaceholder": "每 1 {from} 兌 {to}",
+    "ariaRate": "匯率（每 1 {from} 兌 {to}）",
+    "rateHint": "數量、價格和佣金均以 {from} 計；此匯率將現金影響換算為 {to}。",
+    "rateUnresolved": "沒有 {from} 兌 {to} 的匯率。請輸入——沒有它就無法計算現金影響，且兩種貨幣並不等值。"
   },
   "charts": {
     "balanceHistory": {

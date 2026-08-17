@@ -23,6 +23,17 @@ that turns up in a real file must become a warning in the verification report, n
 mapping: `mapAccountType`, `mapInvestmentAction` and `mapFrequency` all return null for codes they
 do not know, and `MNY_UNCONFIRMED_ACTIONS` names the ones whose meaning is inferred.
 
+### Where the file can answer for itself, do not ask the code table
+
+`BILL.frq` had eight entries carried from the format reference and no fixture to
+check them against. The one entry a bug report could check was wrong, and yearly
+bills imported recurring every two months for every user with one (issue #1150).
+`BILL` holds one row per occurrence, so the spacing between a series' `dt`
+values *is* its recurrence: `map/bill-cadence.ts` reads it and `map/map-bills.ts`
+prefers that to `frq`, which now maps only the codes there is evidence for (0, 1,
+2, 3, 5) and reports the rest. Before adding an unconfirmed constant, look for
+the column that already carries the same fact as data.
+
 ### A bit mask cannot warn you, so measure it before you trust it
 
 That null-and-warn rule protects lookups over a *value* -- an unknown `at` or `act` has no entry,

@@ -82,7 +82,14 @@ vi.mock('@/hooks/useExchangeRates', () => ({
   }),
 }));
 
-const mockBuildForecast = vi.fn().mockReturnValue([]);
+// `buildForecast` returns `{ points, missingCurrencies }`: a projected balance is
+// cumulative, so one unconvertible leg withholds the whole series. `forecastOf`
+// keeps these tests writing the series and nothing else.
+const forecastOf = (points: any[], missingCurrencies: string[] = []) => ({
+  points,
+  missingCurrencies,
+});
+const mockBuildForecast = vi.fn().mockReturnValue(forecastOf([]));
 const mockGetForecastSummary = vi.fn().mockReturnValue({
   startingBalance: 1000,
   endingBalance: 800,
@@ -115,7 +122,7 @@ const makeAccount = (overrides: Record<string, any> = {}) => ({
 describe('CashFlowForecastChart', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockBuildForecast.mockReturnValue([]);
+    mockBuildForecast.mockReturnValue(forecastOf([]));
     mockGetForecastSummary.mockReturnValue({
       startingBalance: 1000,
       endingBalance: 800,
@@ -191,7 +198,7 @@ describe('CashFlowForecastChart', () => {
       { label: 'Today', balance: 1000, transactions: [] },
       { label: 'Tomorrow', balance: 750, transactions: [{ amount: -250, name: 'Bill' }] },
     ];
-    mockBuildForecast.mockReturnValue(forecastData);
+    mockBuildForecast.mockReturnValue(forecastOf(forecastData));
     mockGetForecastSummary.mockReturnValue({
       startingBalance: 1000,
       endingBalance: 750,
@@ -215,7 +222,7 @@ describe('CashFlowForecastChart', () => {
       { label: 'Today', balance: 1000, transactions: [{ amount: -100, name: 'Bill 1' }] },
       { label: 'Tomorrow', balance: 800, transactions: [{ amount: -200, name: 'Bill 2' }] },
     ];
-    mockBuildForecast.mockReturnValue(forecastData);
+    mockBuildForecast.mockReturnValue(forecastOf(forecastData));
 
     render(
       <CashFlowForecastChart scheduledTransactions={[{} as any]} accounts={[makeAccount()]} isLoading={false} />
@@ -228,7 +235,7 @@ describe('CashFlowForecastChart', () => {
       { label: 'Today', balance: 100, transactions: [] },
       { label: 'Tomorrow', balance: -50, transactions: [{ amount: -150, name: 'Big Bill' }] },
     ];
-    mockBuildForecast.mockReturnValue(forecastData);
+    mockBuildForecast.mockReturnValue(forecastOf(forecastData));
     mockGetForecastSummary.mockReturnValue({
       startingBalance: 100,
       endingBalance: -50,
@@ -248,7 +255,7 @@ describe('CashFlowForecastChart', () => {
       { label: 'Today', balance: 1000, transactions: [] },
       { label: 'Tomorrow', balance: 1000, transactions: [] },
     ];
-    mockBuildForecast.mockReturnValue(forecastData);
+    mockBuildForecast.mockReturnValue(forecastOf(forecastData));
     mockGetForecastSummary.mockReturnValue({
       startingBalance: 1000,
       endingBalance: 1000,
@@ -351,7 +358,7 @@ describe('CashFlowForecastChart', () => {
         { label: 'Today', balance: 1000, transactions: [] },
         { label: 'Tomorrow', balance: 800, transactions: [{ amount: -200, name: 'Bill' }] },
       ];
-      mockBuildForecast.mockReturnValue(forecastData);
+      mockBuildForecast.mockReturnValue(forecastOf(forecastData));
       mockGetForecastSummary.mockReturnValue({
         startingBalance: 1000,
         endingBalance: 800,
@@ -381,7 +388,7 @@ describe('CashFlowForecastChart', () => {
         { label: 'Today', balance: 2700, transactions: [] },
         { label: 'Tomorrow', balance: 2500, transactions: [{ amount: -200, name: 'Bill' }] },
       ];
-      mockBuildForecast.mockReturnValue(forecastData);
+      mockBuildForecast.mockReturnValue(forecastOf(forecastData));
       mockGetForecastSummary.mockReturnValue({
         startingBalance: 2700,
         endingBalance: 2500,
@@ -449,7 +456,7 @@ describe('CashFlowForecastChart', () => {
         { label: 'Day 1', balance: 1000, transactions: [{ amount: 0, name: 'Open' }] },
         { label: 'Day 2', balance: -150, transactions: [{ amount: -1150, name: 'Rent' }] },
       ];
-      mockBuildForecast.mockReturnValue(forecastData);
+      mockBuildForecast.mockReturnValue(forecastOf(forecastData));
       mockGetForecastSummary.mockReturnValue({
         startingBalance: 1000,
         endingBalance: -150,
@@ -477,7 +484,7 @@ describe('CashFlowForecastChart', () => {
         { label: 'Day 1', balance: 1000, transactions: [{ amount: 0, name: 'Open' }] },
         { label: 'Day 2', balance: -150, transactions: [{ amount: -1150, name: 'Rent' }] },
       ];
-      mockBuildForecast.mockReturnValue(forecastData);
+      mockBuildForecast.mockReturnValue(forecastOf(forecastData));
       mockGetForecastSummary.mockReturnValue({
         startingBalance: 1000,
         endingBalance: -150,
@@ -512,7 +519,7 @@ describe('CashFlowForecastChart', () => {
         { label: 'Day 1', balance: 60000, transactions: [{ amount: 0, name: 'Open' }] },
         { label: 'Day 2', balance: 5000, transactions: [{ amount: -55000, name: 'Bill' }] },
       ];
-      mockBuildForecast.mockReturnValue(forecastData);
+      mockBuildForecast.mockReturnValue(forecastOf(forecastData));
       mockGetForecastSummary.mockReturnValue({
         startingBalance: 60000,
         endingBalance: 5000,
@@ -537,7 +544,7 @@ describe('CashFlowForecastChart', () => {
         { label: 'Day 1', balance: 1000, transactions: [{ amount: 0, name: 'Open' }] },
         { label: 'Day 2', balance: -150, transactions: [{ amount: -1150, name: 'Rent' }] },
       ];
-      mockBuildForecast.mockReturnValue(forecastData);
+      mockBuildForecast.mockReturnValue(forecastOf(forecastData));
       mockGetForecastSummary.mockReturnValue({
         startingBalance: 1000,
         endingBalance: -150,
@@ -561,7 +568,7 @@ describe('CashFlowForecastChart', () => {
         { label: 'Day 1', balance: 1000, transactions: [{ amount: -100, name: 'Bill' }] },
         { label: 'Day 2', balance: 800, transactions: [{ amount: -200, name: 'Bill 2' }] },
       ];
-      mockBuildForecast.mockReturnValue(forecastData);
+      mockBuildForecast.mockReturnValue(forecastOf(forecastData));
       mockGetForecastSummary.mockReturnValue({
         startingBalance: 1000,
         endingBalance: 800,
@@ -581,6 +588,57 @@ describe('CashFlowForecastChart', () => {
       // The tooltip date is localized from the data point's `date` via
       // useChartDateFormat; '2025-01-15' renders as "Jan 15" in the default locale.
       expect(screen.getByText('Jan 15')).toBeInTheDocument();
+    });
+  });
+
+  /**
+   * The chart used to draw whatever `buildForecast` produced. With a missing
+   * rate that was a line starting from only the accounts that converted -- an
+   * ordinary-looking projection understated by a whole account, with nothing on
+   * screen to say so.
+   */
+  describe('when a rate is missing', () => {
+    it('says so instead of drawing a line', () => {
+      mockBuildForecast.mockReturnValue(forecastOf([], ['EUR']));
+      render(
+        <CashFlowForecastChart
+          accounts={[makeAccount()] as any}
+          scheduledTransactions={[]}
+          isLoading={false}
+        />,
+      );
+
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'no exchange rate is available for EUR',
+      );
+    });
+
+    it('names every currency it could not convert', () => {
+      mockBuildForecast.mockReturnValue(forecastOf([], ['EUR', 'GBP']));
+      render(
+        <CashFlowForecastChart
+          accounts={[makeAccount()] as any}
+          scheduledTransactions={[]}
+          isLoading={false}
+        />,
+      );
+
+      expect(screen.getByRole('alert')).toHaveTextContent('EUR, GBP');
+    });
+
+    // An empty forecast with no missing rates is the ordinary "nothing to show"
+    // case and must keep its own empty state.
+    it('keeps the normal empty state when nothing is missing', () => {
+      mockBuildForecast.mockReturnValue(forecastOf([]));
+      render(
+        <CashFlowForecastChart
+          accounts={[makeAccount()] as any}
+          scheduledTransactions={[]}
+          isLoading={false}
+        />,
+      );
+
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     });
   });
 });

@@ -135,6 +135,26 @@ describe("ImportPostProcessingService", () => {
       expect(params).toEqual([accountA, 100.005, accountB, -50.1]);
     });
 
+    it("recomputes from the non-VOID ledger, so a voided import row moves nothing", async () => {
+      // The importers add each row's amount incrementally as they write, VOID
+      // rows included, and this absolute recomputation is what takes a voided
+      // row's contribution back out. That mattered less when a VOID cash leg
+      // was unreachable on the investment import path -- it hard-coded CLEARED
+      // -- and matters now that an imported trade carries the source's own
+      // status: a voided Money trade or a QIF row marked void writes a VOID
+      // cash leg, and its amount must not survive into current_balance.
+      await service.run(userId, false, new Set([accountA]));
+
+      const [sql] = scoped.manager.query.mock.calls.find((call: string[]) =>
+        call[0].includes("SELECT"),
+      )!;
+      expect(sql).toContain("t.status != 'VOID'");
+      // Guarded on the same two exclusions the live balance uses, so the
+      // import's answer and recalculateCurrentBalance's cannot disagree.
+      expect(sql).toContain("t.parent_transaction_id IS NULL");
+      expect(sql).toContain("t.transaction_date <= CURRENT_DATE");
+    });
+
     it("does nothing at all when no account was touched", async () => {
       await service.run(userId, false, new Set());
 

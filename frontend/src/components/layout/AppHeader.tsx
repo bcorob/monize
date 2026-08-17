@@ -7,6 +7,7 @@ import { useHideOnScroll } from '@/hooks/useHideOnScroll';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
 import { authApi } from '@/lib/auth';
+import { markLogoutIncomplete, clearLogoutIncomplete } from '@/lib/logout-state';
 import Image from 'next/image';
 import { Button } from '@/components/ui/Button';
 import { BudgetAlertBadge } from '@/components/budgets/BudgetAlertBadge';
@@ -190,11 +191,19 @@ export function AppHeader() {
   const handleLogout = async () => {
     try {
       await authApi.logout();
+      clearLogoutIncomplete();
       logout();
       toast.success(t('loggedOut'));
       router.push('/login');
     } catch {
+      // Only the server can clear the HttpOnly refresh cookie, so a failed
+      // request leaves a session this client cannot end. Local state still has
+      // to go -- this device must not keep an authenticated UI -- but calling
+      // that "logged out" is a false claim on a shared or unattended machine.
+      // Record it, warn, and let the login screen offer the retry.
+      markLogoutIncomplete();
       logout();
+      toast.error(t('logoutNotConfirmed'), { duration: 12_000, id: 'logout-failed' });
       router.push('/login');
     }
   };

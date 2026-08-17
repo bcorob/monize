@@ -202,7 +202,8 @@
     "title": "Wykorzystanie według konta",
     "empty": "Brak kont kredytowych z ustawionym limitem.",
     "utilization": "Wykorzystanie",
-    "used": "Wykorzystano"
+    "used": "Wykorzystano",
+    "noRate": "niedostępne (brak kursu {currency})"
   },
   "creditUtilizationTotal": {
     "title": "Całkowite wykorzystanie",

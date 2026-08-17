@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback, useRef, type ReactNode } from 'react';
+import { baseInvestmentAction } from '@/lib/investment-actions';
 import { useTranslations } from 'next-intl';
 import toast from 'react-hot-toast';
 import { ClipboardDocumentIcon, CheckIcon } from '@heroicons/react/24/outline';
@@ -19,6 +20,7 @@ import { Category } from '@/types/category';
 import { Account } from '@/types/account';
 import { scheduledTransactionsApi } from '@/lib/scheduled-transactions';
 import { investmentsApi } from '@/lib/investments';
+import { totalFromQuantity, quantityFromTotal, roundPrice, roundMoney, usableClose } from '@/lib/investmentFold';
 import { getLocalDateString } from '@/lib/utils';
 import { buildCategoryTree } from '@/lib/categoryUtils';
 import {
@@ -83,7 +85,7 @@ export function PostTransactionDialog({
 }: PostTransactionDialogProps) {
   const t = useTranslations('scheduledTransactions');
   const tc = useTranslations('common');
-  const { formatCurrency, formatNumber } = useNumberFormat();
+  const { formatCurrency, formatNumber, formatPrice } = useNumberFormat();
   const [isLoading, setIsLoading] = useState(false);
   const [amount, setAmount] = useState<number>(0);
   const [amountCopied, setAmountCopied] = useState(false);
@@ -102,15 +104,35 @@ export function PostTransactionDialog({
   // Not sent to the backend -- the API derives the total from qty/price/commission.
   const [investmentTotalValue, setInvestmentTotalValue] = useState<number | ''>('');
   const [marketPrice, setMarketPrice] = useState<number | null>(null);
+  // True only once a price request completes and returns no usable close -- the
+  // one state that means "this security genuinely has no price history", kept
+  // apart from marketPrice == null (also the loading window and a failed lookup).
+  // A failed lookup is not an empty dataset (frontend/CLAUDE.md).
+  const [priceHistoryEmpty, setPriceHistoryEmpty] = useState(false);
+  // True when the price OR quantity prefilled below came from a per-occurrence
+  // override -- values the user deliberately saved for THIS occurrence. They are
+  // instructions, not a stale template, so the market-price refresh below must
+  // not silently overwrite them (see OverrideEditorDialog: a stored value wins).
+  // Keyed off both fields: an override that set only a quantity would otherwise
+  // have its shares rescaled by the refresh, which is the same defect one axis
+  // over. A base schedule with no override keeps the DCA refresh: its price is a
+  // creation-time snapshot the post is meant to bring up to date.
+  const [investmentFromStoredOverride, setInvestmentFromStoredOverride] = useState(false);
+  // True once the user edits any investment field. The market fetch can resolve
+  // after the dialog opens, so without this a price/quantity typed in the
+  // meantime would be overwritten when the close finally lands.
+  const [userEditedInvestment, setUserEditedInvestment] = useState(false);
 
   const isInvestmentKind = scheduledTransaction.isInvestment;
   const investmentAction = scheduledTransaction.investmentAction;
   const isInvestmentQuantityPrice = isInvestmentKind &&
-    (investmentAction === 'BUY' || investmentAction === 'SELL' || investmentAction === 'REINVEST');
+    investmentAction != null &&
+    ['BUY', 'SELL', 'REINVEST'].includes(baseInvestmentAction(investmentAction));
   const isInvestmentQuantityOnly = isInvestmentKind &&
     (investmentAction === 'ADD_SHARES' || investmentAction === 'REMOVE_SHARES' || investmentAction === 'SPLIT');
   const isInvestmentAmountOnly = isInvestmentKind &&
-    (investmentAction === 'DIVIDEND' || investmentAction === 'INTEREST' || investmentAction === 'CAPITAL_GAIN');
+    investmentAction != null &&
+    ['DIVIDEND', 'INTEREST', 'CAPITAL_GAIN'].includes(baseInvestmentAction(investmentAction));
 
   const todayStr = useMemo(() => getLocalDateString(), []);
 
@@ -121,7 +143,17 @@ export function PostTransactionDialog({
     // paired INVESTMENT_CASH account. Fall back to the brokerage only if no
     // pair exists, so we still show *something* useful.
     if (scheduledTransaction.isInvestment) {
-      if (scheduledTransaction.investmentFundingAccountId) {
+      // Only a BUY/SELL settles through the funding account; for any other
+      // action the backend routes cash to the brokerage's linked cash account
+      // and ignores a stale stored funding account, so the preview must too or
+      // a legacy DIVIDEND projects a balance for the wrong account (issue #1154).
+      const usesExplicitFunding =
+        scheduledTransaction.investmentAction === 'BUY' ||
+        scheduledTransaction.investmentAction === 'SELL';
+      if (
+        usesExplicitFunding &&
+        scheduledTransaction.investmentFundingAccountId
+      ) {
         return (
           accounts.find(
             (a) => a.id === scheduledTransaction.investmentFundingAccountId,
@@ -150,6 +182,7 @@ export function PostTransactionDialog({
     scheduledTransaction.account,
     scheduledTransaction.accountId,
     scheduledTransaction.isInvestment,
+    scheduledTransaction.investmentAction,
     scheduledTransaction.investmentFundingAccountId,
     scheduledTransaction.investmentFundingAccount,
   ]);
@@ -416,6 +449,8 @@ export function PostTransactionDialog({
             : '';
       setInvestmentQuantity(initialQty);
       setInvestmentPrice(initialPrice);
+      setInvestmentFromStoredOverride(overridePrice != null || overrideQty != null);
+      setUserEditedInvestment(false);
       setInvestmentTotalAmount(
         overrideTotal != null
           ? Number(overrideTotal)
@@ -435,7 +470,7 @@ export function PostTransactionDialog({
             ? Number(scheduledTransaction.investmentTotalAmount)
             : null;
       if (storedTotal != null && storedTotal > 0) {
-        setInvestmentTotalValue(Math.round(storedTotal * 10_000) / 10_000);
+        setInvestmentTotalValue(roundMoney(storedTotal));
       } else if (
         typeof initialQty === 'number' &&
         initialQty > 0 &&
@@ -443,13 +478,16 @@ export function PostTransactionDialog({
         initialPrice > 0
       ) {
         const commission = Number(scheduledTransaction.investmentCommission ?? 0);
-        const sign = scheduledTransaction.investmentAction === 'SELL' ? -1 : 1;
-        const total = initialQty * initialPrice + sign * commission;
-        setInvestmentTotalValue(Math.round(total * 10_000) / 10_000);
+        const sign = baseInvestmentAction(scheduledTransaction.investmentAction as InvestmentAction) === 'SELL' ? -1 : 1;
+        setInvestmentTotalValue(totalFromQuantity(initialQty, initialPrice, sign, commission));
       } else {
         setInvestmentTotalValue('');
       }
       setMarketPrice(null);
+      // This dialog stays mounted across open/close, so reset the previous
+      // occurrence's "no history" verdict here too -- otherwise reopening for a
+      // different security paints the hint one frame before the fetch resets it.
+      setPriceHistoryEmpty(false);
     }
   }, [isOpen, scheduledTransaction]);
 
@@ -460,16 +498,22 @@ export function PostTransactionDialog({
     const securityId = scheduledTransaction.investmentSecurityId;
     if (!securityId) return;
     let cancelled = false;
+    // Reset while the request is in flight: "no price history" is a
+    // completed-empty result, not the loading window and not a failed lookup.
+    setPriceHistoryEmpty(false);
     investmentsApi
       .getSecurityPrices(securityId, { limit: 1 })
       .then((prices) => {
         if (cancelled) return;
-        const latest = prices[0];
-        setMarketPrice(latest ? Number(latest.closePrice) : null);
+        const close = usableClose(prices);
+        setMarketPrice(close ? close.price : null);
+        setPriceHistoryEmpty(close === null);
       })
       .catch((err) => {
         if (cancelled) return;
         setMarketPrice(null);
+        // A failed lookup is not an empty dataset -- leave the hint off.
+        setPriceHistoryEmpty(false);
         logger.warn?.('Failed to fetch latest price', err);
       });
     return () => {
@@ -486,65 +530,83 @@ export function PostTransactionDialog({
   // The originally-scheduled total stays fixed, so the new price recomputes the
   // share quantity rather than the amount invested. Uses the "info from
   // previous render" pattern to avoid violating react-hooks/set-state-in-effect.
+  //
+  // Two exemptions keep this from silently overwriting a user instruction:
+  // - `investmentFromStoredOverride`: a price or quantity the user saved for
+  //   this occurrence stands, exactly as saved (the same rule the override
+  //   editor enforces on its side).
+  // - `userEditedInvestment`: a value the user typed after the dialog opened but
+  //   before this fetch resolved is theirs, not something to clobber on arrival.
+  const investmentSign = baseInvestmentAction(scheduledTransaction.investmentAction as InvestmentAction) === 'SELL' ? -1 : 1;
+  const investmentCommission = Number(scheduledTransaction.investmentCommission ?? 0);
+
   const [lastSeenMarketPrice, setLastSeenMarketPrice] = useState<number | null>(null);
   if (isOpen && marketPrice !== lastSeenMarketPrice) {
     setLastSeenMarketPrice(marketPrice);
-    if (isInvestmentQuantityPrice && marketPrice != null && marketPrice > 0) {
-      const rounded = Math.round(marketPrice * 1_000_000) / 1_000_000;
+    if (
+      isInvestmentQuantityPrice &&
+      !investmentFromStoredOverride &&
+      !userEditedInvestment &&
+      marketPrice != null &&
+      marketPrice > 0
+    ) {
+      const rounded = roundPrice(marketPrice);
       setInvestmentPrice(rounded);
-      const commission = Number(scheduledTransaction.investmentCommission ?? 0);
-      const sign = scheduledTransaction.investmentAction === 'SELL' ? -1 : 1;
       if (investmentTotalValue !== '' && Number(investmentTotalValue) > 0) {
         // Preserve the scheduled total -- adjust quantity to the new price.
-        const cost = Number(investmentTotalValue) - sign * commission;
-        const qty = Math.max(0, cost / rounded);
-        setInvestmentQuantity(Math.round(qty * 100_000_000) / 100_000_000);
+        setInvestmentQuantity(quantityFromTotal(Number(investmentTotalValue), rounded, investmentSign, investmentCommission));
       } else if (investmentQuantity !== '' && Number(investmentQuantity) > 0) {
         // No scheduled total to preserve -- fall back to deriving it from qty.
-        const total = Number(investmentQuantity) * rounded + sign * commission;
-        setInvestmentTotalValue(Math.round(total * 10_000) / 10_000);
+        setInvestmentTotalValue(totalFromQuantity(Number(investmentQuantity), rounded, investmentSign, investmentCommission));
       }
     }
   }
 
-  const investmentSign = scheduledTransaction.investmentAction === 'SELL' ? -1 : 1;
-  const investmentCommission = Number(scheduledTransaction.investmentCommission ?? 0);
+  // A close rounded for display (6dp). marketPrice is already null unless it is a
+  // usable positive number (usableClose rejects zero/negative/NaN before it is
+  // set), so a plain null check is all that is needed here.
+  const roundedMarketPrice = marketPrice != null ? roundPrice(marketPrice) : null;
 
   const handleInvestmentQuantityChange = (raw: number | undefined) => {
     const qty = raw ?? '';
+    setUserEditedInvestment(true);
     setInvestmentQuantity(qty);
     if (qty !== '' && investmentPrice !== '' && Number(investmentPrice) > 0) {
-      const total = Number(qty) * Number(investmentPrice) + investmentSign * investmentCommission;
-      setInvestmentTotalValue(Math.round(total * 10_000) / 10_000);
+      setInvestmentTotalValue(
+        totalFromQuantity(Number(qty), Number(investmentPrice), investmentSign, investmentCommission),
+      );
     }
   };
 
   const handleInvestmentPriceChange = (raw: number | undefined) => {
     const price = raw ?? '';
+    setUserEditedInvestment(true);
     setInvestmentPrice(price);
     if (price !== '' && Number(price) > 0) {
       if (investmentTotalValue !== '') {
         // User has a target total -- keep it and derive quantity.
-        const cost = Number(investmentTotalValue) - investmentSign * investmentCommission;
-        const qty = Math.max(0, cost / Number(price));
-        setInvestmentQuantity(Math.round(qty * 100_000_000) / 100_000_000);
+        setInvestmentQuantity(
+          quantityFromTotal(Number(investmentTotalValue), Number(price), investmentSign, investmentCommission),
+        );
       } else if (investmentQuantity !== '') {
-        const total = Number(investmentQuantity) * Number(price) + investmentSign * investmentCommission;
-        setInvestmentTotalValue(Math.round(total * 10_000) / 10_000);
+        setInvestmentTotalValue(
+          totalFromQuantity(Number(investmentQuantity), Number(price), investmentSign, investmentCommission),
+        );
       }
     }
   };
 
   const handleInvestmentTotalValueChange = (raw: number | undefined) => {
+    setUserEditedInvestment(true);
     if (raw === undefined) {
       setInvestmentTotalValue('');
       return;
     }
     setInvestmentTotalValue(raw);
     if (investmentPrice !== '' && Number(investmentPrice) > 0) {
-      const cost = raw - investmentSign * investmentCommission;
-      const qty = Math.max(0, cost / Number(investmentPrice));
-      setInvestmentQuantity(Math.round(qty * 100_000_000) / 100_000_000);
+      setInvestmentQuantity(
+        quantityFromTotal(raw, Number(investmentPrice), investmentSign, investmentCommission),
+      );
     }
   };
 
@@ -581,7 +643,10 @@ export function PostTransactionDialog({
         }
       }
       if (isInvestmentAmountOnly) {
-        if (investmentTotalAmount === '') {
+        if (
+          investmentTotalAmount === '' ||
+          Number(investmentTotalAmount) <= 0
+        ) {
           toast.error(t('postDialog.toasts.totalAmountRequired'));
           return;
         }
@@ -845,8 +910,8 @@ export function PostTransactionDialog({
                   decimalPlaces={6}
                   min={0}
                   placeholder={
-                    marketPrice != null
-                      ? t('postDialog.latestPlaceholder', { price: formatNumber(marketPrice, 6).replace(/0+$/, '').replace(/\.$/, '') })
+                    roundedMarketPrice != null
+                      ? t('postDialog.latestPlaceholder', { price: formatPrice(roundedMarketPrice) })
                       : undefined
                   }
                   value={investmentPrice === '' ? undefined : investmentPrice}
@@ -862,7 +927,7 @@ export function PostTransactionDialog({
                   }
                   onChange={handleInvestmentTotalValueChange}
                 />
-                {scheduledTransaction.investmentSecurityId && marketPrice == null && (
+                {scheduledTransaction.investmentSecurityId && priceHistoryEmpty && investmentPrice === '' && (
                   <p className="-mt-2 text-xs text-gray-500 dark:text-gray-400">
                     {t('postDialog.noPriceHistory')}
                   </p>
@@ -875,6 +940,7 @@ export function PostTransactionDialog({
                 prefix={getCurrencySymbol(scheduledTransaction.currencyCode)}
                 value={typeof investmentTotalAmount === 'number' ? investmentTotalAmount : undefined}
                 onChange={(value) => setInvestmentTotalAmount(value ?? '')}
+                allowNegative={false}
               />
             )}
             <div>
@@ -1008,14 +1074,17 @@ export function PostTransactionDialog({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
               </svg>
               <span className="text-sm font-medium text-blue-700 dark:text-blue-300">
-                {t('postDialog.transferLabel')}: {scheduledTransaction.account?.name} → {scheduledTransaction.transferAccount?.name}
+                {t('postDialog.transferSummary', {
+                  from: scheduledTransaction.account?.name ?? '',
+                  to: scheduledTransaction.transferAccount?.name ?? '',
+                })}
               </span>
             </div>
             {/* A categorized transfer (#743) shows its category here so it is
                 clear it will be applied to both legs on posting. */}
             {currentCategoryLabel && (
               <div className="mt-2 pl-7 text-sm text-blue-700 dark:text-blue-300">
-                {t('postDialog.categoryLabel')}: {currentCategoryLabel}
+                {t('postDialog.categorySummary', { category: currentCategoryLabel })}
               </div>
             )}
           </div>

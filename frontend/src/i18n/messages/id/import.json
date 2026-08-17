@@ -519,6 +519,7 @@
     "billTemplateMissing": "{count, plural, other {# tagihan terjadwal}} tidak memiliki transaksi templat dalam berkas dan dilewati.",
     "unusableBill": "{count, plural, other {# tagihan terjadwal}} tidak memiliki akun, tanggal yang bisa dipakai, atau pengulangan yang dikenali, sehingga dilewati.",
     "billFrequencyApproximated": "{count, plural, other {# tagihan terjadwal}} memakai interval pengulangan yang tidak bisa dinyatakan persis oleh Monize, jadi dipakai interval terpendek terdekat.",
+    "loanInterestCategoryUnclear": "{count, plural, other {# pembayaran pinjaman}} menyertakan beberapa kategori selain pokok, sehingga kategori bunga pinjaman dibiarkan kosong. Periksa apakah pembayaran mencakup escrow dan atur kategori bunga setelah impor.",
     "showTransactions": "Tampilkan {count, plural, other {# transaksi}}",
     "hideTransactions": "Sembunyikan transaksi",
     "reviewInMoney": "Buka transaksi ini di Microsoft Money untuk memeriksa atau memperbaikinya, lalu ekspor dan impor ulang.",

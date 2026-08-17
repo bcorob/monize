@@ -38,6 +38,10 @@
     "title": "Portefeuillesamenvatting",
     "noData": "Geen beleggingsgegevens beschikbaar.",
     "totalPortfolioValue": "Totale portefeuillewaarde",
+    "knownPortfolioSubtotal": "Portefeuillewaarde (gedeeltelijk)",
+    "incompleteHeading": "Deze cijfers zijn onvolledig",
+    "incompletePrices": "Geen actuele koers voor {symbols}, dus die posities zijn in geen enkel totaal hieronder meegenomen.",
+    "incompleteFx": "Geen wisselkoers voor {pairs}, dus de posities in die valuta's zijn in geen enkel totaal hieronder meegenomen.",
     "values": "Waarden",
     "holdingsValue": "Waarde posities",
     "holdingsValueTooltip": "De huidige marktwaarde van alle waardepapieren die je aanhoudt, op basis van de meest recente beschikbare koersen.",
@@ -48,9 +52,9 @@
     "netInvested": "Netto belegd",
     "netInvestedTooltip": "Het nettobedrag van jouw eigen geld dat is gestort in jouw beleggingsrekeningen. Dit zijn de totale stortingen minus opnames, exclusief beleggingswinsten, dividenden of ontvangen rente.",
     "costBasis": "Kostprijs",
-    "costBasisTooltip": "Het totale bedrag dat je oorspronkelijk hebt betaald voor jouw beleggingen, inclusief aankoopprijzen en transactiekosten. Gebruikt om jouw winsten en verliezen te berekenen.",
+    "costBasisTooltip": "Wat uw huidige posities bij aanschaf hebben gekost, gereconstrueerd uit uw transactiegeschiedenis: aankoopprijzen plus de bij elke aankoop berekende commissie, elk omgerekend tegen de koers van de transactie die ervoor betaalde. Getoond in uw weergavevaluta. Gebruikt om winsten en verliezen te berekenen.",
     "gainLoss": "Winst/verlies",
-    "gainLossTooltip": "Niet-gerealiseerde winst of verlies op jouw huidige posities: marktwaarde minus kostprijs. Bevat geen gerealiseerde winsten uit eerdere verkopen of ontvangen inkomsten.",
+    "gainLossTooltip": "Ongerealiseerde winst of verlies op uw huidige posities: marktwaarde tegen de prijzen van vandaag minus de kostprijs hierboven. Bevat geen gerealiseerde winsten uit eerdere verkopen, noch ontvangen dividend en rente.",
     "returns": "Rendement",
     "simpleReturn": "Eenvoudig rendement",
     "simpleReturnTooltip": "Totaal procentueel winst of verlies op jouw posities, berekend als (marktwaarde − kostprijs) ÷ kostprijs. Houdt geen rekening met de timing van stortingen of opnames.",
@@ -59,26 +63,28 @@
     "twrTooltip": "Meet hoe goed jouw beleggingen presteerden, ongeacht wanneer je geld toevoegde of verwijderde. Elimineert de invloed van kasstroomtiming om puur beleggingsrendement te tonen.",
     "cagr": "CAGR",
     "cagrTooltip": "Samengesteld jaarlijks groeipercentage. Jouw geannualiseerd rendement op basis van netto belegd versus huidige portefeuillewaarde, alsof de groei elk jaar precies gelijkmatig was.",
-    "notAvailable": "N/A"
+    "notAvailable": "N/A",
+    "unpricedHoldings": "Gedeeltelijke waardering: {count, plural, one {# positie heeft} other {# posities hebben}} geen actuele prijs ({symbols}); de waarden hieronder laten {count, plural, one {die} other {ze}} buiten beschouwing."
   },
   "assetAllocation": {
     "title": "Activaspreiding",
     "noData": "Geen spreidingsgegevens beschikbaar.",
+    "knownValueOnly": "Percentages dekken alleen de bekende waarde; sommige posities konden niet worden gewaardeerd.",
     "cash": "Kas",
     "untagged": "Zonder labels",
     "noTagData": "Geen gelabelde posities om te tonen. Voeg labels toe aan je effecten om de verdeling per label te zien.",
+    "noKeyData": "Geen posities hebben een waarde voor deze tagsleutel. Tag effecten als key:value (bijv. country:usa) om deze verdeling te zien.",
     "noCountryData": "Geen landenspreidingsgegevens beschikbaar.",
+    "keySelectorLabel": "Tagsleutel om te aggregeren",
     "otherCountries": "Overige landen",
     "otherAssetClasses": "Overige beleggingscategorieën",
     "groupBy": {
       "security": "Per effect",
       "tag": "Per label",
-      "country": "Per land",
       "tagKey": "Op sleutel",
+      "country": "Per land",
       "assetClass": "Op beleggingscategorie"
-    },
-    "noKeyData": "Geen posities hebben een waarde voor deze tagsleutel. Tag effecten als key:value (bijv. country:usa) om deze verdeling te zien.",
-    "keySelectorLabel": "Tagsleutel om te aggregeren"
+    }
   },
   "holdingsList": {
     "title": "Posities",
@@ -93,6 +99,7 @@
   "groupedHoldings": {
     "title": "Posities per rekening",
     "noHoldings": "Geen posities in jouw portefeuille.",
+    "accountIncomplete": "Gedeeltelijk: de totalen van deze rekening laten posities weg die niet in {currency} gewaardeerd konden worden.",
     "accountSummary": "{accounts} rekening{accountsPlural} met {positions} positie{positionsPlural}",
     "positionsWithCash": "{count} positie{plural} + kas",
     "positions": "{count} positie{plural}",
@@ -172,6 +179,12 @@
     "actionReinvest": "Herbeleggen",
     "actionAddShares": "Aandelen toevoegen",
     "actionRemoveShares": "Aandelen verwijderen",
+    "actionReinvestInterest": "Rente herbeleggen",
+    "actionReinvestCapitalGainShort": "Kortetermijnwinst herbeleggen",
+    "actionReinvestCapitalGainLong": "Langetermijnwinst herbeleggen",
+    "actionCapitalGainShort": "Kortetermijnkapitaalwinst",
+    "actionCapitalGainLong": "Langetermijnkapitaalwinst",
+    "actionRedeem": "CD/obligatie aflossen",
     "allActions": "Alle acties"
   },
   "transactionForm": {
@@ -186,6 +199,12 @@
     "actionReinvest": "Dividend herbeleggen",
     "actionAddShares": "Aandelen toevoegen",
     "actionRemoveShares": "Aandelen verwijderen",
+    "actionReinvestInterest": "Rente herbeleggen",
+    "actionReinvestCapitalGainShort": "Kortetermijnwinst herbeleggen",
+    "actionReinvestCapitalGainLong": "Langetermijnwinst herbeleggen",
+    "actionCapitalGainShort": "Kortetermijnkapitaalwinst",
+    "actionCapitalGainLong": "Langetermijnkapitaalwinst",
+    "actionRedeem": "CD/obligatie aflossen",
     "actionTransfer": "Overboeken",
     "brokerageAccount": "Effectenrekening",
     "fromAccount": "Van rekening",
@@ -206,6 +225,7 @@
     "pricePerShare": "Koers per aandeel ({currency})",
     "commissionFees": "Commissie / kosten ({currency})",
     "description": "Omschrijving (optioneel)",
+    "statusLockedToParent": "Deze transactie maakt deel uit van een gesplitste transactie. Wijzig in plaats daarvan de status van de gesplitste transactie, zodat beide zijden samen wijzigen.",
     "descriptionPlaceholder": "Optionele notities",
     "splitRatio": "Splitsingsverhouding",
     "noSplitRatioWarning": "Voor deze transactie is geen splitsingsverhouding ingesteld. Voer de verhouding in zoals aangekondigd vóór het opslaan — Monize neemt er geen aan.",
@@ -257,7 +277,10 @@
     "toastAvailableShares": "Slechts {available} aandelen beschikbaar om over te boeken",
     "toastSplitRatioRequired": "Splitsingsverhouding moet groter zijn dan nul",
     "toastPairedLegError": "Kon de gekoppelde overboekingspartij niet laden; sluit opnieuw en probeer opnieuw",
-    "toastSaveFailed": "Opslaan van transactie mislukt"
+    "toastSaveFailed": "Opslaan van transactie mislukt",
+    "exchangeRateUnresolved": "Geen koers van {from} naar {to} beschikbaar. Voer er een in, of het omgerekende totaal, voordat u opslaat.",
+    "toastExchangeRateRequired": "Voer een wisselkoers in voordat u een transactie tussen valuta's opslaat.",
+    "notAvailable": "Niet beschikbaar"
   },
   "newTransactionButton": {
     "label": "+ Nieuwe transactie",

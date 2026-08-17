@@ -10,6 +10,12 @@ import { BudgetCategory } from "./entities/budget-category.entity";
 import { GenerateBudgetDto, BudgetProfile } from "./dto/generate-budget.dto";
 import { ApplyGeneratedBudgetDto } from "./dto/apply-generated-budget.dto";
 import { roundMoney, sumMoney } from "../common/round.util";
+import {
+  outgoingParentTransfers,
+  outgoingSplitTransfers,
+  PARENT_TRANSFER_AMOUNT,
+  SPLIT_TRANSFER_AMOUNT,
+} from "./budget-spending.util";
 
 export interface CategoryAnalysis {
   categoryId: string;
@@ -500,31 +506,44 @@ export class BudgetGeneratorService {
     endDate: string,
     analysisMonths: number,
   ): Promise<Omit<TransferAnalysis, "suggested">[]> {
-    const rows = await withScopedDb(this.dataSource, (m) =>
-      m
-        .getRepository(Transaction)
-        .createQueryBuilder("t")
-        .innerJoin("t.linkedTransaction", "lt")
-        .innerJoin("lt.account", "a")
-        .select("a.id", "accountId")
-        .addSelect("a.name", "accountName")
-        .addSelect("a.account_type", "accountType")
-        .addSelect("EXTRACT(YEAR FROM t.transaction_date)::int", "year")
-        .addSelect("EXTRACT(MONTH FROM t.transaction_date)::int", "month")
-        .addSelect("ABS(SUM(t.amount))", "total")
-        .where("t.user_id = :userId", { userId })
-        .andWhere("t.transaction_date >= :startDate", { startDate })
-        .andWhere("t.transaction_date <= :endDate", { endDate })
-        .andWhere("t.status != :void", { void: "VOID" })
-        .andWhere("t.is_transfer = true")
-        .andWhere("t.amount < 0")
-        .groupBy("a.id")
-        .addGroupBy("a.name")
-        .addGroupBy("a.account_type")
-        .addGroupBy("EXTRACT(YEAR FROM t.transaction_date)")
-        .addGroupBy("EXTRACT(MONTH FROM t.transaction_date)")
-        .getRawMany(),
+    // No destination filter: this sweeps every account transfers land in.
+    // Both transfer shapes -- whole-row transfers and split lines carrying a
+    // transfer_account_id -- or a savings habit recorded inside a split
+    // paycheque never surfaces as a suggested budget (review #1131).
+    const window = { userId, periodStart: startDate, periodEnd: endDate };
+    const [parentRows, splitRows] = await withScopedDb(this.dataSource, (m) =>
+      Promise.all([
+        outgoingParentTransfers(m.getRepository(Transaction), window)
+          .innerJoin("lt.account", "a")
+          .select("a.id", "accountId")
+          .addSelect("a.name", "accountName")
+          .addSelect("a.account_type", "accountType")
+          .addSelect("EXTRACT(YEAR FROM t.transaction_date)::int", "year")
+          .addSelect("EXTRACT(MONTH FROM t.transaction_date)::int", "month")
+          .addSelect(`ABS(SUM(${PARENT_TRANSFER_AMOUNT}))`, "total")
+          .groupBy("a.id")
+          .addGroupBy("a.name")
+          .addGroupBy("a.account_type")
+          .addGroupBy("EXTRACT(YEAR FROM t.transaction_date)")
+          .addGroupBy("EXTRACT(MONTH FROM t.transaction_date)")
+          .getRawMany(),
+        outgoingSplitTransfers(m.getRepository(TransactionSplit), window)
+          .innerJoin("s.transferAccount", "a")
+          .select("a.id", "accountId")
+          .addSelect("a.name", "accountName")
+          .addSelect("a.account_type", "accountType")
+          .addSelect("EXTRACT(YEAR FROM t.transaction_date)::int", "year")
+          .addSelect("EXTRACT(MONTH FROM t.transaction_date)::int", "month")
+          .addSelect(`ABS(SUM(${SPLIT_TRANSFER_AMOUNT}))`, "total")
+          .groupBy("a.id")
+          .addGroupBy("a.name")
+          .addGroupBy("a.account_type")
+          .addGroupBy("EXTRACT(YEAR FROM t.transaction_date)")
+          .addGroupBy("EXTRACT(MONTH FROM t.transaction_date)")
+          .getRawMany(),
+      ]),
     );
+    const rows = [...parentRows, ...splitRows];
 
     const accountMap = new Map<
       string,

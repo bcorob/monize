@@ -38,6 +38,10 @@
     "title": "Tóm tắt danh mục đầu tư",
     "noData": "Không có dữ liệu đầu tư.",
     "totalPortfolioValue": "Tổng giá trị danh mục",
+    "knownPortfolioSubtotal": "Giá trị danh mục (một phần)",
+    "incompleteHeading": "Các số liệu này chưa đầy đủ",
+    "incompletePrices": "Không có giá hiện tại cho {symbols}, nên các khoản nắm giữ đó không được tính vào bất kỳ tổng nào bên dưới.",
+    "incompleteFx": "Không có tỷ giá cho {pairs}, nên các khoản nắm giữ bằng những tiền tệ đó không được tính vào bất kỳ tổng nào bên dưới.",
     "values": "Giá trị",
     "holdingsValue": "Giá trị nắm giữ",
     "holdingsValueTooltip": "Giá trị thị trường hiện tại của tất cả chứng khoán bạn đang nắm giữ, dựa trên giá mới nhất.",
@@ -48,9 +52,9 @@
     "netInvested": "Đã đầu tư ròng",
     "netInvestedTooltip": "Số tiền ròng của bạn đã nạp vào tài khoản đầu tư. Đây là tổng đóng góp trừ đi rút tiền, không tính lãi đầu tư, cổ tức hoặc lãi kiếm được.",
     "costBasis": "Cơ sở chi phí",
-    "costBasisTooltip": "Tổng số tiền bạn đã trả ban đầu để mua các khoản đầu tư, bao gồm giá mua và phí giao dịch. Dùng để tính lãi lỗ của bạn.",
+    "costBasisTooltip": "Chi phí để có được các vị thế hiện tại, được dựng lại từ lịch sử giao tác: giá mua cộng hoa hồng tính trên mỗi lần mua, mỗi khoản được quy đổi theo tỷ giá của giao dịch đã thanh toán nó. Hiển thị bằng đồng tiền hiển thị của bạn. Dùng để tính lãi lỗ.",
     "gainLoss": "Lãi/Lỗ",
-    "gainLossTooltip": "Lãi lỗ chưa thực hiện trên các khoản nắm giữ hiện tại: Giá trị thị trường trừ Cơ sở chi phí. Không bao gồm lãi đã thực hiện từ các lần bán trước hoặc thu nhập nhận được.",
+    "gainLossTooltip": "Lãi hoặc lỗ chưa thực hiện của các vị thế hiện tại: giá trị thị trường theo giá hôm nay trừ cơ sở chi phí ở trên. Không bao gồm lãi đã thực hiện từ các lần bán trước, cũng như cổ tức và lãi suất đã nhận.",
     "returns": "Lợi nhuận",
     "simpleReturn": "Lợi nhuận đơn giản",
     "simpleReturnTooltip": "Tổng phần trăm lãi lỗ trên các khoản nắm giữ, tính bằng (Giá trị thị trường − Cơ sở chi phí) ÷ Cơ sở chi phí. Không tính đến thời điểm đóng góp hoặc rút tiền.",
@@ -59,26 +63,28 @@
     "twrTooltip": "Đo lường hiệu quả đầu tư bất kể thời điểm bạn thêm hoặc rút tiền. Loại bỏ tác động của thời điểm dòng tiền để cho thấy hiệu suất đầu tư thuần túy.",
     "cagr": "CAGR",
     "cagrTooltip": "Tỷ lệ tăng trưởng kép hàng năm. Lợi nhuận hàng năm của bạn dựa trên Đã đầu tư ròng so với giá trị danh mục hiện tại, như thể tăng trưởng hoàn toàn đều đặn mỗi năm.",
-    "notAvailable": "N/A"
+    "notAvailable": "N/A",
+    "unpricedHoldings": "Định giá một phần: {count, plural, one {# vị thế} other {# vị thế}} không có giá hiện tại ({symbols}), nên các giá trị bên dưới không bao gồm chúng."
   },
   "assetAllocation": {
     "title": "Phân bổ tài sản",
     "noData": "Không có dữ liệu phân bổ.",
+    "knownValueOnly": "Tỷ lệ phần trăm chỉ tính trên giá trị đã biết; một số khoản nắm giữ không thể định giá.",
     "cash": "Tiền mặt",
     "untagged": "Chưa gắn thẻ",
     "noTagData": "Không có khoản nắm giữ nào được gắn thẻ. Thêm thẻ cho chứng khoán của bạn để xem mức độ tiếp xúc theo thẻ.",
+    "noKeyData": "Không có khoản nắm giữ nào có giá trị cho khóa thẻ này. Gắn thẻ chứng khoán dạng khóa:giá_trị (ví dụ: country:usa) để xem phân tích này.",
     "noCountryData": "Không có dữ liệu phân bổ theo quốc gia.",
+    "keySelectorLabel": "Khóa thẻ để tổng hợp",
     "otherCountries": "Quốc gia khác",
     "otherAssetClasses": "Loại tài sản khác",
     "groupBy": {
       "security": "Theo chứng khoán",
       "tag": "Theo thẻ",
-      "country": "Theo quốc gia",
       "tagKey": "Theo khóa",
+      "country": "Theo quốc gia",
       "assetClass": "Theo loại tài sản"
-    },
-    "noKeyData": "Không có khoản nắm giữ nào có giá trị cho khóa thẻ này. Gắn thẻ chứng khoán dạng khóa:giá_trị (ví dụ: country:usa) để xem phân tích này.",
-    "keySelectorLabel": "Khóa thẻ để tổng hợp"
+    }
   },
   "holdingsList": {
     "title": "Nắm giữ",
@@ -93,6 +99,7 @@
   "groupedHoldings": {
     "title": "Nắm giữ theo tài khoản",
     "noHoldings": "Không có khoản nắm giữ trong danh mục của bạn.",
+    "accountIncomplete": "Một phần: tổng của tài khoản này bỏ qua các khoản nắm giữ không thể định giá bằng {currency}.",
     "accountSummary": "{accounts} tài khoản{accountsPlural} với {positions} vị thế{positionsPlural}",
     "positionsWithCash": "{count} vị thế{plural} + Tiền mặt",
     "positions": "{count} vị thế{plural}",
@@ -172,6 +179,12 @@
     "actionReinvest": "Tái đầu tư",
     "actionAddShares": "Thêm cổ phiếu",
     "actionRemoveShares": "Bớt cổ phiếu",
+    "actionReinvestInterest": "Tái đầu tư lãi",
+    "actionReinvestCapitalGainShort": "Tái đầu tư lãi vốn ngắn hạn",
+    "actionReinvestCapitalGainLong": "Tái đầu tư lãi vốn dài hạn",
+    "actionCapitalGainShort": "Lãi vốn ngắn hạn",
+    "actionCapitalGainLong": "Lãi vốn dài hạn",
+    "actionRedeem": "Đáo hạn CD/trái phiếu",
     "allActions": "Tất cả hành động"
   },
   "transactionForm": {
@@ -186,6 +199,12 @@
     "actionReinvest": "Tái đầu tư cổ tức",
     "actionAddShares": "Thêm cổ phiếu",
     "actionRemoveShares": "Bớt cổ phiếu",
+    "actionReinvestInterest": "Tái đầu tư lãi",
+    "actionReinvestCapitalGainShort": "Tái đầu tư lãi vốn ngắn hạn",
+    "actionReinvestCapitalGainLong": "Tái đầu tư lãi vốn dài hạn",
+    "actionCapitalGainShort": "Lãi vốn ngắn hạn",
+    "actionCapitalGainLong": "Lãi vốn dài hạn",
+    "actionRedeem": "Đáo hạn CD/trái phiếu",
     "actionTransfer": "Chuyển khoản",
     "brokerageAccount": "Tài khoản môi giới",
     "fromAccount": "Tài khoản nguồn",
@@ -206,6 +225,7 @@
     "pricePerShare": "Giá mỗi cổ phiếu ({currency})",
     "commissionFees": "Hoa hồng / Phí ({currency})",
     "description": "Mô tả (tùy chọn)",
+    "statusLockedToParent": "Giao dịch này là một phần của giao dịch được chia nhỏ. Hãy thay đổi trạng thái của giao dịch được chia nhỏ, để cả hai bên thay đổi cùng nhau.",
     "descriptionPlaceholder": "Ghi chú tùy chọn",
     "splitRatio": "Tỷ lệ tách",
     "noSplitRatioWarning": "Không có tỷ lệ tách nào được đặt trong giao dịch này. Nhập tỷ lệ như đã công bố trước khi lưu — Monize sẽ không tự giả định cho bạn.",
@@ -257,7 +277,10 @@
     "toastAvailableShares": "Chỉ có {available} cổ phiếu sẵn có để chuyển",
     "toastSplitRatioRequired": "Tỷ lệ tách phải lớn hơn zero",
     "toastPairedLegError": "Không thể tải lần chuyển khoản ghép đôi; mở lại và thử lại",
-    "toastSaveFailed": "Lưu giao dịch thất bại"
+    "toastSaveFailed": "Lưu giao dịch thất bại",
+    "exchangeRateUnresolved": "Không có tỷ giá {from} sang {to}. Nhập tỷ giá, hoặc tổng đã quy đổi, trước khi lưu.",
+    "toastExchangeRateRequired": "Nhập tỷ giá trước khi lưu một giao dịch giữa hai loại tiền tệ.",
+    "notAvailable": "Không có sẵn"
   },
   "newTransactionButton": {
     "label": "+ Giao dịch mới",

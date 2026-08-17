@@ -17,18 +17,13 @@ import { User } from "../../users/entities/user.entity";
 import { Security } from "../../securities/entities/security.entity";
 import { InvestmentAction } from "../../securities/entities/investment-transaction.entity";
 
-export type FrequencyType =
-  | "ONCE"
-  | "DAILY"
-  | "WEEKLY"
-  | "BIWEEKLY"
-  | "EVERY4WEEKS"
-  | "SEMIMONTHLY"
-  | "MONTHLY"
-  | "EVERY2MONTHS"
-  | "QUARTERLY"
-  | "SEMIANNUAL"
-  | "YEARLY";
+/**
+ * Re-exported rather than restated. This union used to be a second copy of the
+ * one in `common/recurrence.ts`, which is where the stepping maths lives -- so
+ * a frequency added to one and not the other compiled fine and stepped nowhere.
+ */
+import type { FrequencyType } from "../../common/recurrence";
+export type { FrequencyType };
 
 const dateStringTransformer = {
   from: (value: string | Date | null): string | null => {

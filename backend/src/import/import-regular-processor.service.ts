@@ -1,3 +1,4 @@
+import { statusFromQifFlags } from "./qif-status.util";
 import { Injectable, Logger } from "@nestjs/common";
 import { Account, AccountType } from "../accounts/entities/account.entity";
 import {
@@ -11,6 +12,7 @@ import { PayeeAlias } from "../payees/entities/payee-alias.entity";
 import { TransactionTag } from "../tags/entities/transaction-tag.entity";
 import { TransactionSplitTag } from "../tags/entities/transaction-split-tag.entity";
 import { ImportContext, updateAccountBalance } from "./import-context";
+import { deletionBalanceEffect } from "../common/deletion-balance.util";
 import { tr } from "../i18n/translate";
 
 @Injectable()
@@ -51,16 +53,9 @@ export class ImportRegularProcessorService {
     const baseTime = new Date();
     baseTime.setMilliseconds(baseTime.getMilliseconds() + counter);
 
-    // Determine status. VOID (from CSV reconciliation-status mapping) takes
-    // precedence so a source-flagged cancelled row never materializes as a
-    // live balance-affecting transaction.
-    const status = qifTx.void
-      ? TransactionStatus.VOID
-      : qifTx.reconciled
-        ? TransactionStatus.RECONCILED
-        : qifTx.cleared
-          ? TransactionStatus.CLEARED
-          : TransactionStatus.UNRECONCILED;
+    // Determine status through the one shared derivation, so the regular and
+    // investment import paths cannot disagree on what the same flags mean.
+    const status = statusFromQifFlags(qifTx);
 
     // Create transaction (use canonical payee name if alias-matched)
     const isTransfer = !isSplit && (qifTx.isTransfer || isLoanPaymentTx);
@@ -670,11 +665,16 @@ export class ImportRegularProcessorService {
         },
       });
       if (placeholderTx && placeholderTx.id !== savedTx.id) {
-        await updateAccountBalance(
-          ctx.manager,
-          ctx.accountId,
-          -Number(placeholderTx.amount),
-        );
+        // Only what the placeholder actually contributed: a VOID or future-dated
+        // one contributed nothing. `needsRecalc` (the future-dated case) is
+        // subsumed by the post-import absolute recompute of every account in
+        // `ctx.affectedAccountIds`, so membership in that set is the
+        // recalculation.
+        const delta = deletionBalanceEffect(placeholderTx).delta;
+        if (delta !== 0) {
+          await updateAccountBalance(ctx.manager, ctx.accountId, delta);
+        }
+        ctx.affectedAccountIds.add(ctx.accountId);
         await ctx.manager.delete(Transaction, placeholderTx.id);
         await ctx.manager.update(Transaction, existingLinkedTx.id, {
           linkedTransactionId: null,

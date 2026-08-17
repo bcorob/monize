@@ -1985,9 +1985,35 @@ export class ToolExecutorService {
     const lookThroughNote = data.lookThrough
       ? ` Look-through: ${data.lookThrough.byCountry.items.length} countr${data.lookThrough.byCountry.items.length === 1 ? "y" : "ies"}, ${data.lookThrough.byAssetClass.items.length} asset class${data.lookThrough.byAssetClass.items.length === 1 ? "" : "es"}.`
       : "";
+    // The model reads this line before the payload, so an incomplete total has to
+    // be described as incomplete here and not only flagged in `data`. Without it
+    // the assistant quoted a subtotal as a settled balance (recheck RR2-007).
+    const incompleteReasons = [
+      ...(data.fxComplete
+        ? []
+        : [`no exchange rate for ${data.missingRatePairs.join(", ")}`]),
+      ...(data.pricesComplete
+        ? []
+        : [`no current price for ${data.unpricedSymbols.join(", ")}`]),
+    ];
+    // A missing price and a missing rate are different causes with the same
+    // consequence, and the price half was not covered (recheck RR3-004).
+    const incompleteNote = data.valuationComplete
+      ? ""
+      : ` INCOMPLETE: ${incompleteReasons.join("; ")}, so every total above is a subtotal of what could be worked out. Say so rather than quoting these figures as complete.`;
+    // An account whose own totals could not be worked out is separately worth
+    // saying: its figures are in its own currency, so the flags above do not
+    // cover it (recheck RR3-005).
+    const incompleteAccounts = data.holdingsByAccount
+      .filter((acct) => !acct.valuationComplete)
+      .map((acct) => acct.accountName);
+    const incompleteAccountsNote =
+      incompleteAccounts.length > 0
+        ? ` Per-account totals are incomplete for ${incompleteAccounts.join(", ")}; do not quote those accounts' figures as complete.`
+        : "";
     return {
       data,
-      summary: `${data.holdingCount} holding${data.holdingCount === 1 ? "" : "s"}, total portfolio value ${data.totalPortfolioValue.toFixed(2)}, unrealized gain/loss ${sign}${data.totalGainLoss.toFixed(2)} (${sign}${data.totalGainLossPercent.toFixed(2)}%).${lookThroughNote}`,
+      summary: `${data.holdingCount} holding${data.holdingCount === 1 ? "" : "s"}, total portfolio value ${data.totalPortfolioValue.toFixed(2)}, unrealized gain/loss ${sign}${data.totalGainLoss.toFixed(2)} (${sign}${data.totalGainLossPercent.toFixed(2)}%).${lookThroughNote}${incompleteNote}${incompleteAccountsNote}`,
       sources: [
         {
           type: "portfolio",
@@ -2088,10 +2114,16 @@ export class ToolExecutorService {
     const filterDesc =
       filterParts.length > 0 ? ` (${filterParts.join("; ")})` : "";
 
+    // "unknown" rather than a number the model would quote as fact: a total is
+    // null when a position's currency could not be converted, and an LLM
+    // summary that prints 0.00 there states a figure nobody computed.
+    const money = (value: number | null) =>
+      value === null ? "unknown" : value.toFixed(2);
+
     const summaryParts = [
-      `capital gains ${data.totals.totalCapitalGain.toFixed(2)}${filterDesc}`,
-      `realized ${data.totals.realizedGain.toFixed(2)}`,
-      `unrealized ${data.totals.unrealizedGain.toFixed(2)}`,
+      `capital gains ${money(data.totals.totalCapitalGain)}${filterDesc}`,
+      `realized ${money(data.totals.realizedGain)}`,
+      `unrealized ${money(data.totals.unrealizedGain)}`,
       `grouped by ${groupBy} (${data.entryCount} ${
         data.entryCount === 1 ? "entry" : "entries"
       })`,

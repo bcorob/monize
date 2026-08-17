@@ -519,6 +519,7 @@
     "billTemplateMissing": "{count, plural, other {# 個定期帳單}}在檔案中沒有範本交易，已略過。",
     "unusableBill": "{count, plural, other {# 個定期帳單}}沒有帳戶、可用日期或可辨識的重複週期，已略過。",
     "billFrequencyApproximated": "{count, plural, other {# 個定期帳單}}使用了 Monize 無法精確表達的重複間隔，因此採用了最接近的較短間隔。",
+    "loanInterestCategoryUnclear": "{count, plural, other {# 筆貸款還款}}包含了本金以外的多個類別，因此貸款的利息類別未設定。請檢查還款是否包含代管款項（escrow），並在匯入後設定利息類別。",
     "showTransactions": "顯示{count, plural, other {# 筆交易}}",
     "hideTransactions": "隱藏交易",
     "reviewInMoney": "請在 Microsoft Money 中開啟這些交易進行核對或更正，然後重新匯出並匯入。",

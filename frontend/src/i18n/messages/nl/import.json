@@ -519,6 +519,7 @@
     "billTemplateMissing": "{count, plural, one {# geplande rekening had} other {# geplande rekeningen hadden}} geen sjabloontransactie in het bestand en zijn overgeslagen.",
     "unusableBill": "{count, plural, one {# geplande rekening had} other {# geplande rekeningen hadden}} geen rekening, geen bruikbare datum of een onbekende herhaling en zijn overgeslagen.",
     "billFrequencyApproximated": "{count, plural, one {# geplande rekening gebruikt} other {# geplande rekeningen gebruiken}} een herhalingsinterval dat Monize niet exact kan weergeven, dus het dichtstbijzijnde kortere interval is gebruikt.",
+    "loanInterestCategoryUnclear": "{count, plural, one {# leningbetaling bevatte} other {# leningbetalingen bevatten}} meerdere categorieën naast de aflossing, dus de rentecategorie van de lening is niet ingesteld. Controleer of de betaling escrow bevat en stel de rentecategorie na het importeren in.",
     "showTransactions": "{count, plural, one {De # transactie tonen} other {De # transacties tonen}}",
     "hideTransactions": "Transacties verbergen",
     "reviewInMoney": "Open deze in Microsoft Money om ze te controleren of te corrigeren en exporteer en importeer daarna opnieuw.",

@@ -202,7 +202,8 @@
     "title": "Utilizzo per conto",
     "empty": "Nessun conto di credito con un limite impostato.",
     "utilization": "Utilizzo",
-    "used": "Utilizzato"
+    "used": "Utilizzato",
+    "noRate": "non disponibile (nessun tasso {currency})"
   },
   "creditUtilizationTotal": {
     "title": "Utilizzo totale",

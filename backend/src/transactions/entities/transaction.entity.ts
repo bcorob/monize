@@ -17,12 +17,9 @@ import { Tag } from "../../tags/entities/tag.entity";
 import { TransactionSplit } from "./transaction-split.entity";
 import { User } from "../../users/entities/user.entity";
 
-export enum TransactionStatus {
-  UNRECONCILED = "UNRECONCILED",
-  CLEARED = "CLEARED",
-  RECONCILED = "RECONCILED",
-  VOID = "VOID",
-}
+import { TransactionStatus } from "./transaction-status.enum";
+
+export { TransactionStatus };
 
 @Entity("transactions")
 export class Transaction {

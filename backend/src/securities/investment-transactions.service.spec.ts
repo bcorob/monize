@@ -106,6 +106,7 @@ describe("InvestmentTransactionsService", () => {
     transactionId: cashTransactionId,
     linkedTransactionId: null,
     action: InvestmentAction.BUY,
+    status: TransactionStatus.CLEARED,
     transactionDate: "2025-01-15",
     quantity: 10,
     price: 150,
@@ -132,6 +133,7 @@ describe("InvestmentTransactionsService", () => {
     transactionId: "cash-tx-2",
     linkedTransactionId: null,
     action: InvestmentAction.SELL,
+    status: TransactionStatus.CLEARED,
     transactionDate: "2025-02-15",
     quantity: 5,
     price: 160,
@@ -158,6 +160,7 @@ describe("InvestmentTransactionsService", () => {
     transactionId: "cash-tx-3",
     linkedTransactionId: null,
     action: InvestmentAction.DIVIDEND,
+    status: TransactionStatus.CLEARED,
     transactionDate: "2025-03-15",
     quantity: 1,
     price: 25,
@@ -450,15 +453,20 @@ describe("InvestmentTransactionsService", () => {
       expect(result).toEqual(mockBuyTransaction);
     });
 
-    it("updates holdings for a BUY transaction", async () => {
+    it("updates holdings for a BUY transaction at the commission-inclusive unit cost", async () => {
       await service.create(userId, createBuyDto);
 
+      // The live holding must agree with what a rebuild would compute: a
+      // rebuild folds commission into basis (10 * 150 + 9.99 = 1509.99, so
+      // 150.999 per share), so blending the raw price in here would report the
+      // commission as gain on the eventual disposal until something happened to
+      // trigger a recompute (FR-008).
       expect(holdingsService.updateHolding).toHaveBeenCalledWith(
         userId,
         accountId,
         securityId,
         10,
-        150,
+        150.999,
         expect.anything(),
         false,
       );
@@ -472,7 +480,9 @@ describe("InvestmentTransactionsService", () => {
           userId,
           accountId: cashAccountId,
           amount: -1509.99,
-          status: TransactionStatus.CLEARED,
+          // The cash leg carries the investment row's own status; a DTO with
+          // none defaults to UNRECONCILED, matching the regular register.
+          status: TransactionStatus.UNRECONCILED,
         }),
       );
       expect(transactionRepository.save).toHaveBeenCalled();
@@ -1839,7 +1849,10 @@ describe("InvestmentTransactionsService", () => {
         accountId,
         securityId,
         -10, // Reverse: remove original 10 shares
-        150,
+        // The commissioned unit cost (10 * 150 + 9.99) / 10. Inert for this
+        // negative delta; read only if the reversal recreates a deleted
+        // holding row.
+        150.999,
         expect.anything(),
         true,
       );
@@ -2390,13 +2403,16 @@ describe("InvestmentTransactionsService", () => {
 
       await service.remove(userId, transactionId);
 
-      // Should reverse BUY holdings (remove shares)
+      // Should reverse BUY holdings (remove shares). The unit cost argument
+      // is inert for a negative delta (updateHolding blends prices only for
+      // positive ones); it is read only when the reversal has to recreate a
+      // deleted holding row, where it must be the commissioned figure.
       expect(holdingsService.updateHolding).toHaveBeenCalledWith(
         userId,
         accountId,
         securityId,
         -10,
-        150,
+        150.999,
         expect.anything(),
         true,
       );
@@ -2464,7 +2480,8 @@ describe("InvestmentTransactionsService", () => {
         accountId,
         securityId,
         -3,
-        150,
+        // (3 * 150 + 9.99) / 3
+        153.33,
         expect.anything(),
         true,
       );
@@ -2491,7 +2508,8 @@ describe("InvestmentTransactionsService", () => {
         accountId,
         securityId,
         -20,
-        100,
+        // (20 * 100 + 9.99) / 20
+        100.4995,
         expect.anything(),
         true,
       );
@@ -2734,6 +2752,409 @@ describe("InvestmentTransactionsService", () => {
       const recordCall = mockActionHistoryService.record.mock.calls[0];
       expect(recordCall[1].beforeData.linkedCashTransaction).toBeUndefined();
     });
+
+    it("reverses nothing when removing a VOID row: no holdings, no balance", async () => {
+      // Adversarial against the naive `-amount` reversal: a VOID row moved no
+      // shares and its VOID cash leg moved no balance (deletionBalanceEffect
+      // gives delta 0), so deleting the pair must move neither.
+      const tx = {
+        ...mockBuyTransaction,
+        status: TransactionStatus.VOID,
+        transactionId: cashTransactionId,
+      };
+      const mockQB = createMockQueryBuilder(tx);
+      investmentTransactionsRepository.createQueryBuilder.mockReturnValue(
+        mockQB,
+      );
+
+      transactionRepository.findOne.mockResolvedValue({
+        id: cashTransactionId,
+        userId,
+        accountId: cashAccountId,
+        amount: -1509.99,
+        transactionDate: "2025-01-15",
+        status: TransactionStatus.VOID,
+      });
+
+      await service.remove(userId, transactionId);
+
+      // Both rows are still deleted -- a VOID row is a record...
+      expect(mockQueryRunner.manager.delete).toHaveBeenCalledWith(Transaction, {
+        id: cashTransactionId,
+        userId,
+      });
+      expect(investmentTransactionsRepository.remove).toHaveBeenCalledWith(tx);
+      // ...but nothing is reversed, because nothing was contributed.
+      expect(holdingsService.updateHolding).not.toHaveBeenCalled();
+      expect(holdingsService.adjustQuantity).not.toHaveBeenCalled();
+      expect(accountsService.updateBalance).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("updateStatus", () => {
+    /**
+     * `updateStatus` reads its rows through the raw row locks
+     * (`lockInvestmentTransactionRow` / `lockTransactionRow`), which arrive via
+     * `manager.query` with snake_case columns. The two lock queries are told
+     * apart by the table named in the SQL string.
+     */
+    const invLockRow = (overrides: Record<string, unknown> = {}) => ({
+      id: transactionId,
+      account_id: accountId,
+      security_id: securityId,
+      funding_account_id: null,
+      transaction_id: cashTransactionId,
+      transaction_split_id: null,
+      linked_transaction_id: null,
+      action: InvestmentAction.BUY,
+      transaction_date: "2025-01-15",
+      quantity: "10",
+      price: "150",
+      commission: "9.99",
+      total_amount: "1509.99",
+      exchange_rate: "1",
+      status: TransactionStatus.CLEARED,
+      ...overrides,
+    });
+
+    const cashLockRow = (overrides: Record<string, unknown> = {}) => ({
+      id: cashTransactionId,
+      account_id: cashAccountId,
+      amount: "-1509.99",
+      transaction_date: "2025-01-15",
+      status: TransactionStatus.CLEARED,
+      is_split: false,
+      linked_transaction_id: null,
+      parent_transaction_id: null,
+      payee_id: null,
+      payee_name: null,
+      ...overrides,
+    });
+
+    const stageLocks = (
+      invRows: Record<string, unknown>[],
+      cashRows: Record<string, unknown>[] = [],
+    ) => {
+      mockQueryRunner.manager.query.mockImplementation(
+        async (sql: string, params?: unknown[]) => {
+          const text = String(sql);
+          if (!text.includes("FOR UPDATE")) return [];
+          const rows = text.includes("FROM investment_transactions")
+            ? invRows
+            : cashRows;
+          return rows.filter((row) => row.id === params?.[0]);
+        },
+      );
+    };
+
+    beforeEach(() => {
+      accountsService.findOne.mockImplementation((uid: string, aid: string) => {
+        if (aid === accountId) return Promise.resolve(mockInvestmentAccount);
+        if (aid === cashAccountId) return Promise.resolve(mockCashAccount);
+        return Promise.reject(new NotFoundException("Account not found"));
+      });
+      const findOneQB = createMockQueryBuilder(mockBuyTransaction);
+      investmentTransactionsRepository.createQueryBuilder.mockReturnValue(
+        findOneQB,
+      );
+    });
+
+    it("UNRECONCILED -> CLEARED updates only the column (presentational)", async () => {
+      stageLocks([invLockRow({ status: TransactionStatus.UNRECONCILED })]);
+
+      await service.updateStatus(
+        userId,
+        transactionId,
+        TransactionStatus.CLEARED,
+      );
+
+      expect(investmentTransactionsRepository.update).toHaveBeenCalledWith(
+        transactionId,
+        { status: TransactionStatus.CLEARED },
+      );
+      // Only crossing the VOID boundary moves shares or money.
+      expect(holdingsService.updateHolding).not.toHaveBeenCalled();
+      expect(holdingsService.adjustQuantity).not.toHaveBeenCalled();
+      expect(accountsService.updateBalance).not.toHaveBeenCalled();
+      expect(
+        holdingsService.validateNoNegativeHoldingsHistory,
+      ).not.toHaveBeenCalled();
+    });
+
+    it("active BUY -> VOID reverses the holdings and flips the cash leg", async () => {
+      stageLocks([invLockRow()], [cashLockRow()]);
+
+      await service.updateStatus(userId, transactionId, TransactionStatus.VOID);
+
+      // Holdings reversal at the row's stored quantities (unit cost is the
+      // commissioned figure, as everywhere else).
+      expect(holdingsService.updateHolding).toHaveBeenCalledWith(
+        userId,
+        accountId,
+        securityId,
+        -10,
+        150.999,
+        expect.anything(),
+        true,
+      );
+      expect(investmentTransactionsRepository.update).toHaveBeenCalledWith(
+        transactionId,
+        { status: TransactionStatus.VOID },
+      );
+      // The cash leg is flipped in place, not deleted, and its balance is
+      // adjusted by its own contribution: -(-1509.99).
+      expect(mockQueryRunner.manager.update).toHaveBeenCalledWith(
+        Transaction,
+        cashTransactionId,
+        { status: TransactionStatus.VOID },
+      );
+      expect(accountsService.updateBalance).toHaveBeenCalledWith(
+        cashAccountId,
+        1509.99,
+      );
+      // The crossing is validated inside the same transaction.
+      expect(
+        holdingsService.validateNoNegativeHoldingsHistory,
+      ).toHaveBeenCalled();
+    });
+
+    it("VOID -> CLEARED applies the holdings and debits the cash leg", async () => {
+      stageLocks(
+        [invLockRow({ status: TransactionStatus.VOID })],
+        [cashLockRow({ status: TransactionStatus.VOID })],
+      );
+
+      await service.updateStatus(
+        userId,
+        transactionId,
+        TransactionStatus.CLEARED,
+      );
+
+      expect(holdingsService.updateHolding).toHaveBeenCalledWith(
+        userId,
+        accountId,
+        securityId,
+        10,
+        150.999,
+        expect.anything(),
+        true,
+      );
+      expect(mockQueryRunner.manager.update).toHaveBeenCalledWith(
+        Transaction,
+        cashTransactionId,
+        { status: TransactionStatus.CLEARED },
+      );
+      // Un-voiding a BUY takes the purchase money back out of the cash account.
+      expect(accountsService.updateBalance).toHaveBeenCalledWith(
+        cashAccountId,
+        -1509.99,
+      );
+    });
+
+    it("writes nothing on a same-status no-op", async () => {
+      stageLocks([invLockRow({ status: TransactionStatus.CLEARED })]);
+
+      await service.updateStatus(
+        userId,
+        transactionId,
+        TransactionStatus.CLEARED,
+      );
+
+      expect(investmentTransactionsRepository.update).not.toHaveBeenCalled();
+      expect(mockQueryRunner.manager.update).not.toHaveBeenCalled();
+      expect(holdingsService.updateHolding).not.toHaveBeenCalled();
+      expect(accountsService.updateBalance).not.toHaveBeenCalled();
+    });
+
+    it("refuses an embedded row and writes nothing (contract 7.1)", async () => {
+      // The parent split transaction owns an embedded row's status; the
+      // refusal must precede every write.
+      stageLocks([
+        invLockRow({
+          transaction_split_id: "split-1",
+          status: TransactionStatus.CLEARED,
+        }),
+      ]);
+
+      await expect(
+        service.updateStatus(userId, transactionId, TransactionStatus.VOID),
+      ).rejects.toThrow(BadRequestException);
+
+      expect(mockQueryRunner.manager.update).not.toHaveBeenCalled();
+      expect(investmentTransactionsRepository.update).not.toHaveBeenCalled();
+      expect(holdingsService.updateHolding).not.toHaveBeenCalled();
+      expect(accountsService.updateBalance).not.toHaveBeenCalled();
+    });
+
+    it("throws NotFoundException for a missing row", async () => {
+      stageLocks([]);
+
+      await expect(
+        service.updateStatus(userId, "nonexistent", TransactionStatus.VOID),
+      ).rejects.toThrow(NotFoundException);
+
+      expect(mockQueryRunner.manager.update).not.toHaveBeenCalled();
+    });
+
+    it("propagates an oversell refusal from the history validation", async () => {
+      // Un-voiding or voiding into an oversold history is refused inside the
+      // same transaction, rolling the writes above back.
+      stageLocks([invLockRow()], [cashLockRow()]);
+      holdingsService.validateNoNegativeHoldingsHistory.mockRejectedValue(
+        new BadRequestException("Holdings would go negative"),
+      );
+
+      await expect(
+        service.updateStatus(userId, transactionId, TransactionStatus.VOID),
+      ).rejects.toThrow(/negative/);
+    });
+
+    it("carries a VOID crossing onto the linked transfer leg (both holdings move)", async () => {
+      // Two legs of one movement of shares share the VOID boundary
+      // (spec section 1). Transfer legs have no cash side.
+      const linkedLegId = "inv-tx-linked-leg";
+      stageLocks([
+        invLockRow({
+          action: InvestmentAction.TRANSFER_OUT,
+          transaction_id: null,
+          linked_transaction_id: linkedLegId,
+          quantity: "10",
+          price: "0",
+          commission: "0",
+          total_amount: "0",
+        }),
+        invLockRow({
+          id: linkedLegId,
+          account_id: "account-2",
+          action: InvestmentAction.TRANSFER_IN,
+          transaction_id: null,
+          linked_transaction_id: transactionId,
+          quantity: "10",
+          price: "0",
+          commission: "0",
+          total_amount: "0",
+        }),
+      ]);
+
+      await service.updateStatus(userId, transactionId, TransactionStatus.VOID);
+
+      // Both legs' status columns cross together.
+      expect(investmentTransactionsRepository.update).toHaveBeenCalledWith(
+        transactionId,
+        { status: TransactionStatus.VOID },
+      );
+      expect(investmentTransactionsRepository.update).toHaveBeenCalledWith(
+        linkedLegId,
+        { status: TransactionStatus.VOID },
+      );
+      // Reversing a TRANSFER_OUT returns the shares to the source; reversing
+      // the TRANSFER_IN removes them from the destination.
+      expect(holdingsService.updateHolding).toHaveBeenCalledWith(
+        userId,
+        accountId,
+        securityId,
+        10,
+        expect.anything(),
+        expect.anything(),
+        true,
+      );
+      expect(holdingsService.updateHolding).toHaveBeenCalledWith(
+        userId,
+        "account-2",
+        securityId,
+        -10,
+        expect.anything(),
+        expect.anything(),
+        true,
+      );
+      expect(accountsService.updateBalance).not.toHaveBeenCalled();
+    });
+
+    it("voids an active row over an already-VOID cash leg without moving the balance", async () => {
+      // The pre-migration half-void state (spec truth table, last row): a
+      // Money import wrote VOID onto the cash leg only. Voiding the
+      // investment row reverses the holdings but skips the leg -- it is
+      // already on the target side, and it contributed nothing to reverse.
+      stageLocks(
+        [invLockRow()],
+        [cashLockRow({ status: TransactionStatus.VOID })],
+      );
+
+      await service.updateStatus(userId, transactionId, TransactionStatus.VOID);
+
+      expect(holdingsService.updateHolding).toHaveBeenCalledWith(
+        userId,
+        accountId,
+        securityId,
+        -10,
+        150.999,
+        expect.anything(),
+        true,
+      );
+      expect(mockQueryRunner.manager.update).not.toHaveBeenCalledWith(
+        Transaction,
+        cashTransactionId,
+        expect.anything(),
+      );
+      expect(accountsService.updateBalance).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("VOID create", () => {
+    const createVoidBuyDto = {
+      accountId,
+      securityId,
+      action: InvestmentAction.BUY,
+      transactionDate: "2025-01-15",
+      quantity: 10,
+      price: 150,
+      commission: 9.99,
+      status: TransactionStatus.VOID,
+    };
+
+    beforeEach(() => {
+      accountsService.findOne.mockImplementation((uid: string, aid: string) => {
+        if (aid === accountId) return Promise.resolve(mockInvestmentAccount);
+        if (aid === cashAccountId) return Promise.resolve(mockCashAccount);
+        return Promise.reject(new NotFoundException("Account not found"));
+      });
+      const findOneQB = createMockQueryBuilder({
+        ...mockBuyTransaction,
+        status: TransactionStatus.VOID,
+      });
+      investmentTransactionsRepository.createQueryBuilder.mockReturnValue(
+        findOneQB,
+      );
+    });
+
+    it("applies no holdings, posts a VOID cash leg, and moves no balance", async () => {
+      // Adversarial against the naive implementation that applies holdings
+      // and credits the balance unconditionally and stamps the status after:
+      // a VOID trade records something that did not happen, on every axis.
+      await service.create(userId, createVoidBuyDto);
+
+      expect(investmentTransactionsRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ status: TransactionStatus.VOID }),
+      );
+      expect(holdingsService.updateHolding).not.toHaveBeenCalled();
+      // The cash leg is still created -- the event stays visible in the cash
+      // ledger -- but carries VOID and moves nothing.
+      expect(transactionRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          accountId: cashAccountId,
+          status: TransactionStatus.VOID,
+        }),
+      );
+      expect(accountsService.updateBalance).not.toHaveBeenCalled();
+    });
+
+    it("contributes no transaction-derived price row for a VOID trade", async () => {
+      await service.create(userId, createVoidBuyDto);
+
+      expect(
+        securityPriceService.upsertTransactionPrice,
+      ).not.toHaveBeenCalled();
+    });
   });
 
   describe("getSummary", () => {
@@ -2885,6 +3306,7 @@ describe("InvestmentTransactionsService", () => {
       expect(result.transactions[0]).toEqual({
         transactionDate: "2026-03-20",
         action: "SELL",
+        status: TransactionStatus.CLEARED,
         accountName: "Brokerage Account",
         symbol: "AAPL",
         securityName: "Apple Inc.",
@@ -3881,7 +4303,7 @@ describe("InvestmentTransactionsService", () => {
       );
     });
 
-    it("sets status to CLEARED for cash transactions", async () => {
+    it("gives the cash leg the investment row's status, defaulting to UNRECONCILED", async () => {
       await service.create(userId, {
         accountId,
         securityId,
@@ -3891,9 +4313,28 @@ describe("InvestmentTransactionsService", () => {
         price: 100,
       });
 
+      // The old contract hard-coded CLEARED here; the two rows are one event,
+      // so the leg now inherits the row's status instead.
       expect(transactionRepository.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          status: TransactionStatus.CLEARED,
+          status: TransactionStatus.UNRECONCILED,
+        }),
+      );
+
+      transactionRepository.create.mockClear();
+      await service.create(userId, {
+        accountId,
+        securityId,
+        action: InvestmentAction.BUY,
+        transactionDate: "2025-01-15",
+        quantity: 10,
+        price: 100,
+        status: TransactionStatus.RECONCILED,
+      });
+
+      expect(transactionRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: TransactionStatus.RECONCILED,
         }),
       );
     });
@@ -4618,6 +5059,96 @@ describe("InvestmentTransactionsService", () => {
           } as never,
         ),
       ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    // The cash side of a split and the investment side beside it have to describe
+    // the same money. `validateSplits` runs before the security is loaded, so it
+    // cannot know a conversion applies and used to assume a rate of 1 -- which
+    // demanded the UNCONVERTED cash impact and let the two halves diverge by the
+    // whole FX spread. The check therefore also happens here, against the rate
+    // actually stored.
+    describe("the parent split's cash amount", () => {
+      const cadCashAccount = {
+        ...mockCashAccount,
+        currencyCode: "CAD",
+      };
+
+      const runEmbedded = (splitAmount: number) =>
+        service.createEmbeddedForSplit(
+          mockQueryRunner.manager as never,
+          userId,
+          "2026-05-09",
+          "split-1",
+          accountId,
+          cashAccountId,
+          {
+            action: InvestmentAction.BUY,
+            securityId,
+            quantity: 75,
+            price: 10,
+            commission: 0,
+          },
+          splitAmount,
+        );
+
+      beforeEach(() => {
+        // USD security, CAD cash sleeve, 1.35 on the parent's date.
+        accountsService.findOne.mockImplementation((_u: string, id: string) =>
+          Promise.resolve(
+            id === cashAccountId ? cadCashAccount : mockInvestmentAccount,
+          ),
+        );
+        securitiesService.findOne.mockResolvedValue(mockSecurity);
+        exchangeRateService.getRateForDate.mockResolvedValue(1.35);
+      });
+
+      it("accepts the cash impact converted at the resolved rate", async () => {
+        // 75 x 10 USD = 750 out, x 1.35 = 1012.50 CAD.
+        await expect(runEmbedded(-1012.5)).resolves.toBeDefined();
+        expect(
+          mockQueryRunner.manager.create.mock.calls.at(-1)![1],
+        ).toMatchObject({ exchangeRate: 1.35 });
+      });
+
+      it("refuses the unconverted amount the old check demanded", async () => {
+        await expect(runEmbedded(-750)).rejects.toThrow(
+          /converts to -1012.5 at a rate of 1.35/,
+        );
+        expect(mockQueryRunner.manager.save).not.toHaveBeenCalled();
+      });
+
+      it("accepts the 4dp amount a real rate produces, not its cents rounding", async () => {
+        // A real FX rate rarely yields a 2dp-clean product, and the amount is
+        // stored as decimal(20,4). 75 x 10 USD = 750, x 1.36523 = 1023.9225 CAD.
+        // The producer must state that 4dp figure; the cents rounding a
+        // 2dp-only producer would send (-1023.92) is off by the sub-cent and
+        // must be refused, or the split's two halves disagree again.
+        exchangeRateService.getRateForDate.mockResolvedValue(1.36523);
+        await expect(runEmbedded(-1023.9225)).resolves.toBeDefined();
+        await expect(runEmbedded(-1023.92)).rejects.toThrow(
+          /converts to -1023.9225 at a rate of 1.36523/,
+        );
+      });
+
+      it("has nothing to check when the caller states no split amount", async () => {
+        await expect(
+          service.createEmbeddedForSplit(
+            mockQueryRunner.manager as never,
+            userId,
+            "2026-05-09",
+            "split-1",
+            accountId,
+            cashAccountId,
+            {
+              action: InvestmentAction.BUY,
+              securityId,
+              quantity: 75,
+              price: 10,
+              commission: 0,
+            },
+          ),
+        ).resolves.toBeDefined();
+      });
     });
 
     it("creates an embedded BUY without spawning a linked cash transaction", async () => {

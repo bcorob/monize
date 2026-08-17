@@ -822,7 +822,7 @@ describe("PortfolioService", () => {
         expect(result.totalHoldingsValue).toBeCloseTo(expectedHoldingsValue, 2);
       });
 
-      it("uses rate of 1 when neither direct nor reverse rate available", async () => {
+      it("omits a holding it cannot convert instead of using a rate of 1", async () => {
         prefRepository.findOne.mockResolvedValue(mockPref);
         accountsRepository.find.mockResolvedValue([
           mockBrokerageAccount,
@@ -841,8 +841,11 @@ describe("PortfolioService", () => {
 
         const result = await service.getPortfolioSummary(userId);
 
-        // Falls back to rate of 1, so USD values treated as-is
-        expect(result.totalHoldingsValue).toBe(10 * 175);
+        // A USD holding with no USD->CAD rate is NOT reported as though 1 USD
+        // were 1 CAD (audit P5-009). This assertion previously read
+        // `toBe(10 * 175)` under the name "uses rate of 1 ...", documenting the
+        // defect as intended behaviour.
+        expect(result.totalHoldingsValue).toBe(0);
       });
 
       it("caches exchange rates for repeated conversions", async () => {
@@ -1382,6 +1385,174 @@ describe("PortfolioService", () => {
     });
   });
 
+  describe("FX completeness covers every returned total", () => {
+    it("marks the summary incomplete when only net invested cannot convert (RR2-005)", async () => {
+      // A EUR brokerage account with no linked cash account and no holdings, so
+      // the cash and holdings aggregates never touch EUR -- but its investment
+      // flows give it a non-zero `netInvested`, which is denominated in the
+      // brokerage account's currency. `netInvestedAgg`'s gap was only logged, so
+      // the response carried a net-invested subtotal of 0 under
+      // `fxComplete: true` and fed it to CAGR as a complete denominator.
+      prefRepository.findOne.mockResolvedValue(mockPref);
+      accountsRepository.find.mockResolvedValue([
+        {
+          ...mockBrokerageAccount,
+          id: "acct-eur",
+          name: "Europe - Brokerage",
+          currencyCode: "EUR",
+          linkedAccountId: null,
+        },
+      ]);
+      holdingsRepository.find.mockResolvedValue([]);
+      securityPriceRepository.query.mockResolvedValue([]);
+      // The investment-flows aggregate: 1,000 EUR of buys, nothing sold.
+      accountsRepository.query.mockImplementation(async (sql: string) =>
+        /investment_transactions/.test(sql)
+          ? [
+              {
+                account_id: "acct-eur",
+                buys: "1000",
+                sells: "0",
+                income: "0",
+              },
+            ]
+          : [],
+      );
+      // No EUR->CAD rate in either direction.
+      exchangeRateService.getLatestRate.mockResolvedValue(null);
+
+      const result = await service.getPortfolioSummary(userId);
+
+      expect(result.missingRatePairs).toContain("EUR->CAD");
+      expect(result.fxComplete).toBe(false);
+      // Growth over an unknown amount invested is not a growth rate.
+      expect(result.cagr).toBeNull();
+    });
+
+    it("marks the valuation incomplete when a held position has no price (RR3-004)", async () => {
+      // The unpriced holding was skipped out of the total with nothing recorded,
+      // so a portfolio holding one priced position and one unpriced one reported a
+      // confident total of the priced one with `fxComplete: true`. A subtotal under
+      // a total's name is what section 1 of the contract forbids -- and it seeded
+      // Monte Carlo.
+      prefRepository.findOne.mockResolvedValue(mockPref);
+      accountsRepository.find.mockResolvedValue([
+        mockBrokerageAccount,
+        mockCashAccount,
+      ]);
+      holdingsRepository.find.mockResolvedValue([
+        mockHoldingAAPL,
+        mockHoldingVFV,
+      ]);
+      // Only AAPL has a price; VFV has none.
+      securityPriceRepository.query.mockResolvedValue([
+        { security_id: "sec-1", close_price: "175", price_date: "2026-02-07" },
+      ]);
+      exchangeRateService.getLatestRate.mockImplementation(
+        (from: string, to: string) =>
+          Promise.resolve(from === "USD" && to === "CAD" ? 1.35 : null),
+      );
+
+      const result = await service.getPortfolioSummary(userId);
+
+      expect(result.pricesComplete).toBe(false);
+      expect(result.unpricedSecurityIds).toEqual(["sec-2"]);
+      // FX is fine; the valuation is not. Two causes, two flags, one gate.
+      expect(result.fxComplete).toBe(true);
+      expect(result.valuationComplete).toBe(false);
+      // Growth to an unknown value is not a growth rate.
+      expect(result.cagr).toBeNull();
+    });
+
+    it("stays complete when every held position is priced", async () => {
+      // The control: the price gate must not fire on a fully priced portfolio.
+      prefRepository.findOne.mockResolvedValue(mockPref);
+      accountsRepository.find.mockResolvedValue([
+        mockBrokerageAccount,
+        mockCashAccount,
+      ]);
+      holdingsRepository.find.mockResolvedValue([
+        mockHoldingAAPL,
+        mockHoldingVFV,
+      ]);
+      securityPriceRepository.query.mockResolvedValue([
+        { security_id: "sec-1", close_price: "175", price_date: "2026-02-07" },
+        { security_id: "sec-2", close_price: "95", price_date: "2026-02-07" },
+      ]);
+      exchangeRateService.getLatestRate.mockImplementation(
+        (from: string, to: string) =>
+          Promise.resolve(from === "USD" && to === "CAD" ? 1.35 : null),
+      );
+
+      const result = await service.getPortfolioSummary(userId);
+
+      expect(result.pricesComplete).toBe(true);
+      expect(result.unpricedSecurityIds).toEqual([]);
+      expect(result.valuationComplete).toBe(true);
+    });
+
+    it("reports a per-account gap the global flag cannot see (RR3-005)", async () => {
+      // The two conversions are different paths: the top-level total converts the
+      // security straight into the user's default currency, the account total
+      // converts it into the account's own. So a USD-reporting portfolio holding a
+      // USD security in a JPY account is complete at the top and missing USD->JPY
+      // underneath -- and that gap was only logged, leaving an account screen or an
+      // AI answer free to report a confident zero for the account.
+      prefRepository.findOne.mockResolvedValue(mockPref);
+      const jpyBrokerage = {
+        ...mockBrokerageAccount,
+        currencyCode: "JPY",
+        linkedAccountId: null,
+      };
+      accountsRepository.find.mockResolvedValue([jpyBrokerage]);
+      holdingsRepository.find.mockResolvedValue([mockHoldingAAPL]);
+      securityPriceRepository.query.mockResolvedValue([
+        { security_id: "sec-1", close_price: "175", price_date: "2026-02-07" },
+      ]);
+      // USD converts into the reporting currency (CAD) but not into JPY.
+      exchangeRateService.getLatestRate.mockImplementation(
+        (from: string, to: string) =>
+          Promise.resolve(from === "USD" && to === "CAD" ? 1.35 : null),
+      );
+
+      const result = await service.getPortfolioSummary(userId);
+
+      // Complete at the top: every component of the CAD totals converted.
+      expect(result.fxComplete).toBe(true);
+      // Not complete for the account, whose totals are in JPY.
+      const account = result.holdingsByAccount[0];
+      expect(account.fxComplete).toBe(false);
+      expect(account.missingRatePairs).toContain("USD->JPY");
+      expect(account.valuationComplete).toBe(false);
+    });
+
+    it("stays complete for an empty foreign account with no rate", async () => {
+      // The control for the zero-conversion rule: an account holding nothing
+      // needs no rate, so it must not make the portfolio's totals unknown.
+      // "Nothing to report" and "could not be worked out" are different answers.
+      prefRepository.findOne.mockResolvedValue(mockPref);
+      accountsRepository.find.mockResolvedValue([
+        {
+          ...mockBrokerageAccount,
+          id: "acct-eur",
+          name: "Europe - Brokerage",
+          currencyCode: "EUR",
+          linkedAccountId: null,
+        },
+      ]);
+      holdingsRepository.find.mockResolvedValue([]);
+      securityPriceRepository.query.mockResolvedValue([]);
+      accountsRepository.query.mockResolvedValue([]);
+      exchangeRateService.getLatestRate.mockResolvedValue(null);
+
+      const result = await service.getPortfolioSummary(userId);
+
+      expect(result.missingRatePairs).toEqual([]);
+      expect(result.fxComplete).toBe(true);
+      expect(result.totalNetInvested).toBe(0);
+    });
+  });
+
   describe("getLlmSummary", () => {
     it("attaches the country and asset-class look-through when asked", async () => {
       jest.spyOn(service, "getPortfolioSummary").mockResolvedValue({
@@ -1392,6 +1563,11 @@ describe("PortfolioService", () => {
         totalPortfolioValue: 1000,
         totalGainLoss: 100,
         totalGainLossPercent: 11.11,
+        fxComplete: true,
+        missingRatePairs: [],
+        pricesComplete: true,
+        unpricedSecurityIds: [],
+        valuationComplete: true,
         timeWeightedReturn: null,
         cagr: null,
         holdings: [],
@@ -1431,6 +1607,11 @@ describe("PortfolioService", () => {
           totalPortfolioValue: 10000.6913,
           totalGainLoss: 900.5544,
           totalGainLossPercent: 10.123456,
+          fxComplete: true,
+          missingRatePairs: [],
+          pricesComplete: true,
+          unpricedSecurityIds: [],
+          valuationComplete: true,
           timeWeightedReturn: 8.56789,
           cagr: null,
           holdings: [
@@ -1511,6 +1692,11 @@ describe("PortfolioService", () => {
         totalPortfolioValue: 0,
         totalGainLoss: 0,
         totalGainLossPercent: 0,
+        fxComplete: true,
+        missingRatePairs: [],
+        pricesComplete: true,
+        unpricedSecurityIds: [],
+        valuationComplete: true,
         timeWeightedReturn: null,
         cagr: null,
         holdings: [],
@@ -1523,6 +1709,38 @@ describe("PortfolioService", () => {
       expect(spy).toHaveBeenCalledWith("user-1", ["acc-1", "acc-2"]);
     });
 
+    it("carries FX incompleteness across the LLM boundary (RR2-007)", async () => {
+      // The compact shape is what the AI Assistant and the MCP server hand to a
+      // model. It dropped `fxComplete` and `missingRatePairs`, so the same
+      // numeric subtotal the UI knew was partial was quoted to the user as a
+      // complete balance. A subtotal must not cross a consumer boundary under a
+      // `total*` name without its incompleteness.
+      jest.spyOn(service, "getPortfolioSummary").mockResolvedValue({
+        totalCashValue: 100,
+        totalHoldingsValue: 0,
+        totalCostBasis: 0,
+        totalNetInvested: 0,
+        totalPortfolioValue: 100,
+        totalGainLoss: 0,
+        totalGainLossPercent: 0,
+        fxComplete: false,
+        missingRatePairs: ["EUR->USD"],
+        pricesComplete: true,
+        unpricedSecurityIds: [],
+        valuationComplete: false,
+        timeWeightedReturn: null,
+        cagr: null,
+        holdings: [],
+        holdingsByAccount: [],
+        allocation: [],
+      });
+
+      const result = await service.getLlmSummary("user-1");
+
+      expect(result.fxComplete).toBe(false);
+      expect(result.missingRatePairs).toEqual(["EUR->USD"]);
+    });
+
     it("preserves null averageCost", async () => {
       jest.spyOn(service, "getPortfolioSummary").mockResolvedValue({
         totalCashValue: 0,
@@ -1532,6 +1750,11 @@ describe("PortfolioService", () => {
         totalPortfolioValue: 100,
         totalGainLoss: 0,
         totalGainLossPercent: 0,
+        fxComplete: true,
+        missingRatePairs: [],
+        pricesComplete: true,
+        unpricedSecurityIds: [],
+        valuationComplete: true,
         timeWeightedReturn: null,
         cagr: null,
         holdings: [
@@ -1573,6 +1796,11 @@ describe("PortfolioService", () => {
         totalPortfolioValue: 1800,
         totalGainLoss: 300,
         totalGainLossPercent: 20,
+        fxComplete: true,
+        missingRatePairs: [],
+        pricesComplete: true,
+        unpricedSecurityIds: [],
+        valuationComplete: true,
         timeWeightedReturn: null,
         cagr: null,
         holdings: [],
@@ -1608,6 +1836,13 @@ describe("PortfolioService", () => {
             totalGainLoss: 300.4444,
             totalGainLossPercent: 20.123456,
             netInvested: 1500,
+            // The real producer always sets these; a fixture without them is a row
+            // the service could not have built.
+            fxComplete: true,
+            missingRatePairs: [],
+            pricesComplete: true,
+            unpricedSecurityIds: [],
+            valuationComplete: true,
           },
         ],
         allocation: [],
@@ -3818,6 +4053,11 @@ describe("PortfolioService", () => {
         totalPortfolioValue: 200,
         totalGainLoss: 0,
         totalGainLossPercent: 0,
+        fxComplete: true,
+        missingRatePairs: [],
+        pricesComplete: true,
+        unpricedSecurityIds: [],
+        valuationComplete: true,
         timeWeightedReturn: null,
         cagr: null,
         holdings: [],

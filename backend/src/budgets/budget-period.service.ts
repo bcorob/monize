@@ -15,6 +15,14 @@ import { Transaction } from "../transactions/entities/transaction.entity";
 import { TransactionSplit } from "../transactions/entities/transaction-split.entity";
 import { BudgetsService } from "./budgets.service";
 import { getCurrentMonthPeriodDates } from "./budget-date.utils";
+import {
+  outgoingParentTransfers,
+  outgoingSplitTransfers,
+  PARENT_TRANSFER_AMOUNT,
+  PARENT_TRANSFER_DESTINATION,
+  SPLIT_TRANSFER_AMOUNT,
+  SPLIT_TRANSFER_DESTINATION,
+} from "./budget-spending.util";
 import { roundMoney, sumMoney } from "../common/round.util";
 
 @Injectable()
@@ -382,34 +390,46 @@ export class BudgetPeriodService {
     const transferSpendingMap = new Map<string, number>();
 
     if (transferBudgetCategories.length > 0) {
-      const transferAccountIds = transferBudgetCategories.map(
-        (bc) => bc.transferAccountId as string,
+      const window = {
+        userId,
+        periodStart,
+        periodEnd,
+        transferAccountIds: transferBudgetCategories.map(
+          (bc) => bc.transferAccountId as string,
+        ),
+      };
+
+      // Both transfer shapes -- whole-row transfers and split lines carrying a
+      // transfer_account_id -- or the materialized period disagrees with the
+      // live budget page for the same month (review #1131).
+      const [parentActuals, splitActuals] = await withScopedDb(
+        this.dataSource,
+        (m) =>
+          Promise.all([
+            outgoingParentTransfers(m.getRepository(Transaction), window)
+              .select(PARENT_TRANSFER_DESTINATION, "destinationAccountId")
+              .addSelect(
+                `COALESCE(ABS(SUM(${PARENT_TRANSFER_AMOUNT})), 0)`,
+                "total",
+              )
+              .groupBy(PARENT_TRANSFER_DESTINATION)
+              .getRawMany(),
+            outgoingSplitTransfers(m.getRepository(TransactionSplit), window)
+              .select(SPLIT_TRANSFER_DESTINATION, "destinationAccountId")
+              .addSelect(
+                `COALESCE(ABS(SUM(${SPLIT_TRANSFER_AMOUNT})), 0)`,
+                "total",
+              )
+              .groupBy(SPLIT_TRANSFER_DESTINATION)
+              .getRawMany(),
+          ]),
       );
 
-      const transferActuals = await withScopedDb(this.dataSource, (m) =>
-        m
-          .getRepository(Transaction)
-          .createQueryBuilder("t")
-          .innerJoin("t.linkedTransaction", "lt")
-          .select("lt.account_id", "destinationAccountId")
-          .addSelect("COALESCE(ABS(SUM(t.amount)), 0)", "total")
-          .where("t.user_id = :userId", { userId })
-          .andWhere("t.is_transfer = true")
-          .andWhere("t.amount < 0")
-          .andWhere("lt.account_id IN (:...transferAccountIds)", {
-            transferAccountIds,
-          })
-          .andWhere("t.transaction_date >= :periodStart", { periodStart })
-          .andWhere("t.transaction_date <= :periodEnd", { periodEnd })
-          .andWhere("t.status != :void", { void: "VOID" })
-          .groupBy("lt.account_id")
-          .getRawMany(),
-      );
-
-      for (const row of transferActuals) {
+      for (const row of [...parentActuals, ...splitActuals]) {
         transferSpendingMap.set(
           row.destinationAccountId,
-          parseFloat(row.total || "0"),
+          (transferSpendingMap.get(row.destinationAccountId) ?? 0) +
+            parseFloat(row.total || "0"),
         );
       }
     }

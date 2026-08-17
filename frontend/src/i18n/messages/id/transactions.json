@@ -26,7 +26,8 @@
     "editAria": "Edit penerima",
     "detailsAria": "Lihat detail penerima",
     "collapseAria": "Sembunyikan info penerima",
-    "show": "Tampilkan info penerima"
+    "show": "Tampilkan info penerima",
+    "amountUnavailable": "Tidak ada kurs"
   },
   "categoryWidget": {
     "detailsAria": "Lihat detail kategori",
@@ -47,7 +48,8 @@
     "noTransactions": "Tidak ada transaksi pada periode ini",
     "editAria": "Edit kategori",
     "collapseAria": "Sembunyikan info kategori",
-    "show": "Tampilkan info kategori"
+    "show": "Tampilkan info kategori",
+    "amountUnavailable": "Tidak ada kurs"
   },
   "accountWidget": {
     "currentBalance": "Saldo Saat Ini",
@@ -110,10 +112,11 @@
       "paidAmount": "Jumlah Dibayar",
       "feePaid": "Biaya Dibayar",
       "balance": "Saldo",
+      "attachments": "Lampiran",
       "status": "Status",
-      "actions": "Aksi",
-      "attachments": "Lampiran"
+      "actions": "Aksi"
     },
+    "attachmentsCount": "{count, plural, other {# lampiran}}",
     "today": "Hari ini",
     "export": {
       "button": "Ekspor",
@@ -174,8 +177,7 @@
       "editButton": "Edit",
       "deleteButton": "Hapus"
     },
-    "itemNamePlural": "transaksi",
-    "attachmentsCount": "{count, plural, other {# lampiran}}"
+    "itemNamePlural": "transaksi"
   },
   "row": {
     "copyOptions": {
@@ -230,6 +232,11 @@
       "currency": "Mata uang",
       "hasAttachments": "Lampiran"
     },
+    "hasAttachmentsOptions": {
+      "any": "Semua",
+      "yes": "Ya",
+      "no": "Tidak"
+    },
     "placeholders": {
       "accounts": "Semua akun",
       "payees": "Semua penerima",
@@ -240,6 +247,13 @@
       "amountMax": "Maks",
       "search": "Cari penerima, kategori, jumlah, tag, keterangan, referensi #...",
       "tagKeyValue": "mis. usa"
+    },
+    "tagKeyNone": "Semua (tanpa filter kunci)",
+    "tagKeyOps": {
+      "hasValue": "Memiliki nilai",
+      "noValue": "Tidak memiliki nilai",
+      "contains": "Nilai mengandung",
+      "notContains": "Nilai tidak mengandung"
     },
     "chips": {
       "removeAccount": "Hapus filter {name}",
@@ -280,18 +294,6 @@
       "yearToDate": "Tahun Berjalan",
       "lastYear": "Tahun Lalu",
       "custom": "Kustom"
-    },
-    "tagKeyNone": "Semua (tanpa filter kunci)",
-    "tagKeyOps": {
-      "hasValue": "Memiliki nilai",
-      "noValue": "Tidak memiliki nilai",
-      "contains": "Nilai mengandung",
-      "notContains": "Nilai tidak mengandung"
-    },
-    "hasAttachmentsOptions": {
-      "any": "Semua",
-      "yes": "Ya",
-      "no": "Tidak"
     }
   },
   "bulk": {
@@ -399,6 +401,7 @@
       "optionLabel": "{name} ({currency}) — {owner}"
     },
     "crossOwnerLockedNote": "Sisi lain dari transfer ini berada di akun yang tidak lagi dibagikan dengan Anda. Jumlah, tanggal, dan akunnya terkunci, tetapi Anda masih dapat mengedit detail transaksi ini.",
+    "transferCategoryNote": "Opsional. Transfer tetap tidak dihitung sebagai pemasukan atau pengeluaran, tetapi kategori ini membuatnya muncul dalam rincian kategori bulanan (mis. kontribusi investasi bulanan).",
     "amountReceivedNote": "Jumlah diterima setelah konversi mata uang",
     "splitTransaction": "Transaksi Terbagi",
     "splitDisabledDuringTour": "Tidak tersedia selama tur berpandu",
@@ -408,6 +411,7 @@
       "transferUpdated": "Transfer diperbarui",
       "transactionCreated": "Transaksi dibuat",
       "transactionUpdated": "Transaksi diperbarui",
+      "attachmentsUploadFailed": "Transaksi disimpan, tetapi {count} lampiran gagal diunggah",
       "saveFailed": "Gagal menyimpan transaksi",
       "loadFailed": "Gagal memuat data formulir",
       "splitsNotEqual": "Total pembagian ({splitTotal}) harus sama dengan jumlah transaksi ({txAmount})",
@@ -422,13 +426,11 @@
       "categoryCreateFailed": "Gagal membuat kategori",
       "tagCreated": "Tag \"{name}\" dibuat",
       "fxRateRequired": "Masukkan nilai tukar atau jumlah terkonversi sebelum menyimpan transaksi mata uang asing.",
-      "attachmentsUploadFailed": "Transaksi disimpan, tetapi {count} lampiran gagal diunggah",
       "jointPayeeCreateNotGranted": "Pemilik akun belum memberi Anda izin membuat penerima. Pilih salah satu penerima yang sudah ada."
     },
     "ariaHistory": "Tampilkan transaksi terbaru",
     "ariaHistoryForPayee": "Tampilkan transaksi terbaru untuk penerima ini",
     "historyTitle": "Isi cepat dari transaksi terbaru",
-    "transferCategoryNote": "Opsional. Transfer tetap tidak dihitung sebagai pemasukan atau pengeluaran, tetapi kategori ini membuatnya muncul dalam rincian kategori bulanan (mis. kontribusi investasi bulanan).",
     "currencyPicker": {
       "label": "Mata uang entri",
       "ariaLabel": "Ubah mata uang entri",
@@ -440,15 +442,15 @@
       "reactivated": "{code} diaktifkan kembali"
     },
     "fx": {
+      "totalInCurrency": "Total dalam {currency}",
+      "rateCaption": "1 {from} = {rate} {to} ({date})",
       "noRateWarning": "Tidak ada nilai tukar untuk {from} ke {to} pada {date}. Masukkan jumlah terkonversi secara manual.",
       "usingLatestRateHint": "Menggunakan nilai tukar terbaru yang tersedia (bukan tertanggal {date}).",
       "displayToggle": {
         "account": "Akun",
         "original": "Asli"
       },
-      "rateCaption": "1 {from} = {rate} {to} ({date})",
-      "feeCaption": "Termasuk biaya transaksi luar negeri {percent}% ({fee}).",
-      "totalInCurrency": "Total dalam {currency}"
+      "feeCaption": "Termasuk biaya transaksi luar negeri {percent}% ({fee})."
     },
     "jointSplitDisabled": "Transaksi split di akun bersama hanya dapat dikelola oleh pemilik"
   },
@@ -473,6 +475,10 @@
     "remaining": "Sisa: {symbol}{amount}",
     "needAmount": "Perlu {symbol}{amount} (sisa: {symbol}{remaining})",
     "setTotal": "Tetapkan total ke {symbol}{amount}",
+    "currencyToggle": {
+      "title": "Ganti mata uang untuk menampilkan dan mengedit jumlah pembagian",
+      "ariaAmountsIn": "Tampilkan dan edit jumlah pembagian dalam {code}"
+    },
     "splitLabel": "Pembagian {number}",
     "columns": {
       "type": "Tipe",
@@ -491,11 +497,7 @@
     "selectAccount": "Pilih akun...",
     "memoPlaceholder": "Memo opsional",
     "mobileMemoPlaceholder": "Memo",
-    "tagsPlaceholder": "Tag...",
-    "currencyToggle": {
-      "title": "Ganti mata uang untuk menampilkan dan mengedit jumlah pembagian",
-      "ariaAmountsIn": "Tampilkan dan edit jumlah pembagian dalam {code}"
-    }
+    "tagsPlaceholder": "Tag..."
   },
   "recentPopover": {
     "recentForPayee": "Terbaru untuk {name}",
@@ -513,7 +515,11 @@
     "quantityPlaceholder": "Kuantitas",
     "pricePlaceholder": "Harga",
     "commissionPlaceholder": "Komisi",
-    "amountPlaceholder": "Jumlah ({currency})"
+    "amountPlaceholder": "Jumlah ({currency})",
+    "ratePlaceholder": "{to} per 1 {from}",
+    "ariaRate": "Nilai tukar ({to} per 1 {from})",
+    "rateHint": "Jumlah, harga, dan komisi dalam {from}; kurs ini mengonversi dampak kas ke {to}.",
+    "rateUnresolved": "Tidak ada kurs {from} ke {to}. Masukkan satu — tanpanya dampak kas tidak dapat dihitung, dan kedua mata uang tidak sama."
   },
   "charts": {
     "balanceHistory": {

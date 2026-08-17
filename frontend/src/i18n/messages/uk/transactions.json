@@ -26,7 +26,8 @@
     "editAria": "Редагувати одержувача платежу",
     "detailsAria": "Показати відомості про одержувача",
     "collapseAria": "Приховати інформацію про одержувача",
-    "show": "Показати інформацію про одержувача"
+    "show": "Показати інформацію про одержувача",
+    "amountUnavailable": "Немає курсу"
   },
   "categoryWidget": {
     "detailsAria": "Показати відомості про категорію",
@@ -47,7 +48,8 @@
     "noTransactions": "Немає транзакцій за цей період",
     "editAria": "Редагувати категорію",
     "collapseAria": "Приховати інформацію про категорію",
-    "show": "Показати інформацію про категорію"
+    "show": "Показати інформацію про категорію",
+    "amountUnavailable": "Немає курсу"
   },
   "accountWidget": {
     "currentBalance": "Поточний баланс",
@@ -110,10 +112,11 @@
       "paidAmount": "Сплачена сума",
       "feePaid": "Сплачена комісія",
       "balance": "Баланс",
+      "attachments": "Вкладення",
       "status": "Статус",
-      "actions": "Дії",
-      "attachments": "Вкладення"
+      "actions": "Дії"
     },
+    "attachmentsCount": "{count, plural, one {# вкладення} few {# вкладення} many {# вкладень} other {# вкладення}}",
     "today": "Сьогодні",
     "export": {
       "button": "Експорт",
@@ -174,8 +177,7 @@
       "editButton": "Редагувати",
       "deleteButton": "Видалити"
     },
-    "itemNamePlural": "транзакцій",
-    "attachmentsCount": "{count, plural, one {# вкладення} few {# вкладення} many {# вкладень} other {# вкладення}}"
+    "itemNamePlural": "транзакцій"
   },
   "row": {
     "copyOptions": {
@@ -230,6 +232,11 @@
       "currency": "Валюта",
       "hasAttachments": "Вкладення"
     },
+    "hasAttachmentsOptions": {
+      "any": "Будь-які",
+      "yes": "Так",
+      "no": "Ні"
+    },
     "placeholders": {
       "accounts": "Всі рахунки",
       "payees": "Всі одержувачі платежів",
@@ -240,6 +247,13 @@
       "amountMax": "Макс",
       "search": "Пошук за одержувачем, категорією, сумою, тегом, описом, реф. №...",
       "tagKeyValue": "напр. usa"
+    },
+    "tagKeyNone": "Будь-який (без фільтра за ключем)",
+    "tagKeyOps": {
+      "hasValue": "Має значення",
+      "noValue": "Не має значення",
+      "contains": "Значення містить",
+      "notContains": "Значення не містить"
     },
     "chips": {
       "removeAccount": "Видалити фільтр {name}",
@@ -280,18 +294,6 @@
       "yearToDate": "З початку року",
       "lastYear": "Минулий рік",
       "custom": "Довільний"
-    },
-    "tagKeyNone": "Будь-який (без фільтра за ключем)",
-    "tagKeyOps": {
-      "hasValue": "Має значення",
-      "noValue": "Не має значення",
-      "contains": "Значення містить",
-      "notContains": "Значення не містить"
-    },
-    "hasAttachmentsOptions": {
-      "any": "Будь-які",
-      "yes": "Так",
-      "no": "Ні"
     }
   },
   "bulk": {
@@ -399,6 +401,7 @@
       "optionLabel": "{name} ({currency}) — {owner}"
     },
     "crossOwnerLockedNote": "Інша сторона цього переказу знаходиться на рахунку, яким з вами більше не діляться. Його сума, дата та рахунки заблоковані, але ви все ще можете редагувати деталі цієї транзакції.",
+    "transferCategoryNote": "Необов'язково. Переказ і надалі не враховуватиметься як дохід чи витрата, але ця категорія дозволяє йому з'являтися в щомісячному розподілі за категоріями (наприклад, щомісячні інвестиційні внески).",
     "amountReceivedNote": "Отримана сума після конвертації валюти",
     "splitTransaction": "Розподілити транзакцію",
     "splitDisabledDuringTour": "Недоступно під час інтерактивного туру",
@@ -408,6 +411,7 @@
       "transferUpdated": "Переказ оновлено",
       "transactionCreated": "Транзакцію створено",
       "transactionUpdated": "Транзакцію оновлено",
+      "attachmentsUploadFailed": "Транзакцію збережено, але не вдалося завантажити вкладень: {count}",
       "saveFailed": "Не вдалося зберегти транзакцію",
       "loadFailed": "Не вдалося завантажити дані форми",
       "splitsNotEqual": "Сума розподілів ({splitTotal}) має дорівнювати сумі транзакції ({txAmount})",
@@ -422,13 +426,11 @@
       "categoryCreateFailed": "Не вдалося створити категорію",
       "tagCreated": "Тег «{name}» створено",
       "fxRateRequired": "Введіть курс обміну або конвертовану суму перед збереженням операції в іноземній валюті.",
-      "attachmentsUploadFailed": "Транзакцію збережено, але не вдалося завантажити вкладень: {count}",
       "jointPayeeCreateNotGranted": "Власник рахунку не надав вам дозволу створювати отримувачів. Виберіть одного з наявних отримувачів."
     },
     "ariaHistory": "Показати нещодавні транзакції",
     "ariaHistoryForPayee": "Показати нещодавні транзакції для цього одержувача",
     "historyTitle": "Швидке заповнення з нещодавньої транзакції",
-    "transferCategoryNote": "Необов'язково. Переказ і надалі не враховуватиметься як дохід чи витрата, але ця категорія дозволяє йому з'являтися в щомісячному розподілі за категоріями (наприклад, щомісячні інвестиційні внески).",
     "currencyPicker": {
       "label": "Валюта введення",
       "ariaLabel": "Змінити валюту введення",
@@ -440,15 +442,15 @@
       "reactivated": "{code} знову активовано"
     },
     "fx": {
+      "totalInCurrency": "Разом у {currency}",
+      "rateCaption": "1 {from} = {rate} {to} ({date})",
       "noRateWarning": "Не знайдено курс обміну {from} на {to} на {date}. Введіть конвертовану суму вручну.",
       "usingLatestRateHint": "Використовується останній доступний курс (не на дату {date}).",
       "displayToggle": {
         "account": "Рахунок",
         "original": "Оригінал"
       },
-      "rateCaption": "1 {from} = {rate} {to} ({date})",
-      "feeCaption": "Включає комісію за закордонну операцію {percent}% ({fee}).",
-      "totalInCurrency": "Разом у {currency}"
+      "feeCaption": "Включає комісію за закордонну операцію {percent}% ({fee})."
     },
     "jointSplitDisabled": "Розділеними транзакціями на спільному рахунку може керувати лише власник"
   },
@@ -473,6 +475,10 @@
     "remaining": "Залишок: {symbol}{amount}",
     "needAmount": "Потрібно {symbol}{amount} (залишок: {symbol}{remaining})",
     "setTotal": "Встановити загальну суму {symbol}{amount}",
+    "currencyToggle": {
+      "title": "Змінити валюту, у якій відображаються та редагуються суми розбиття",
+      "ariaAmountsIn": "Показувати та редагувати суми розбиття в {code}"
+    },
     "splitLabel": "Розподіл {number}",
     "columns": {
       "type": "Тип",
@@ -491,11 +497,7 @@
     "selectAccount": "Оберіть рахунок...",
     "memoPlaceholder": "Необов'язкова примітка",
     "mobileMemoPlaceholder": "Примітка",
-    "tagsPlaceholder": "Теги...",
-    "currencyToggle": {
-      "title": "Змінити валюту, у якій відображаються та редагуються суми розбиття",
-      "ariaAmountsIn": "Показувати та редагувати суми розбиття в {code}"
-    }
+    "tagsPlaceholder": "Теги..."
   },
   "recentPopover": {
     "recentForPayee": "Нещодавні для {name}",
@@ -513,7 +515,11 @@
     "quantityPlaceholder": "Кількість",
     "pricePlaceholder": "Ціна",
     "commissionPlaceholder": "Комісія",
-    "amountPlaceholder": "Сума ({currency})"
+    "amountPlaceholder": "Сума ({currency})",
+    "ratePlaceholder": "{to} за 1 {from}",
+    "ariaRate": "Курс обміну ({to} за 1 {from})",
+    "rateHint": "Кількість, ціна та комісія вказані у {from}; цей курс переводить грошовий результат у {to}.",
+    "rateUnresolved": "Немає курсу {from} до {to}. Введіть його — без нього грошовий результат не обчислити, а дві валюти не рівні."
   },
   "charts": {
     "balanceHistory": {

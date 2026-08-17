@@ -602,6 +602,44 @@ describe('MonteCarloReport', () => {
         expect(mockApi.historicalStats).toHaveBeenCalledWith(['acc-1']),
       );
     });
+
+    it('surfaces a null currentBalance instead of writing 0 into the form', async () => {
+      // The server sends null when it could not value the accounts. The old
+      // consumer coerced it to 0, so the user saw -- and could save -- a
+      // simulation started from a fabricated empty portfolio (audit P5-010,
+      // review #1132). The failure is a toast; the stored value survives.
+      const toast = (await import('react-hot-toast')).default;
+      mockApi.historicalStats.mockResolvedValue({
+        yearsObserved: 0,
+        meanReturn: null,
+        volatility: null,
+        returnsComplete: false,
+        missingRatePairs: ['JPY->USD'],
+        unpricedSecurityIds: [],
+        currentBalance: null,
+      });
+      mockApi.list.mockResolvedValueOnce([
+        scenario({
+          id: 's',
+          useCurrentBalance: true,
+          accountIds: ['acc-1'],
+          startingValue: 100000,
+        }),
+      ]);
+      await renderReport();
+      const item = await screen.findByRole('button', { name: /Retirement/i });
+      fireEvent.click(item);
+      await waitFor(() =>
+        expect(mockApi.historicalStats).toHaveBeenCalledWith(['acc-1']),
+      );
+
+      await waitFor(() => expect(toast.error).toHaveBeenCalled());
+      // The scenario's stored starting value is untouched -- not overwritten
+      // with a zero nobody computed.
+      const startField = screen.getByLabelText(/Starting value/i);
+      expect(startField).not.toHaveValue('0.00');
+      expect(startField).toHaveValue('100,000.00');
+    });
   });
 
   describe('Inputs collapse/expand', () => {

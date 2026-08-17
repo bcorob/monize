@@ -26,7 +26,8 @@
     "editAria": "支払先を編集",
     "detailsAria": "支払先の詳細を表示",
     "collapseAria": "支払先情報を非表示",
-    "show": "支払先情報を表示"
+    "show": "支払先情報を表示",
+    "amountUnavailable": "レートなし"
   },
   "categoryWidget": {
     "detailsAria": "カテゴリの詳細を表示",
@@ -47,7 +48,8 @@
     "noTransactions": "この期間の取引はありません",
     "editAria": "カテゴリを編集",
     "collapseAria": "カテゴリ情報を非表示",
-    "show": "カテゴリ情報を表示"
+    "show": "カテゴリ情報を表示",
+    "amountUnavailable": "レートなし"
   },
   "accountWidget": {
     "currentBalance": "現在残高",
@@ -110,10 +112,11 @@
       "paidAmount": "支払金額",
       "feePaid": "支払手数料",
       "balance": "残高",
+      "attachments": "添付ファイル",
       "status": "状態",
-      "actions": "操作",
-      "attachments": "添付ファイル"
+      "actions": "操作"
     },
+    "attachmentsCount": "{count, plural, other {# 件の添付ファイル}}",
     "today": "今日",
     "export": {
       "button": "エクスポート",
@@ -174,8 +177,7 @@
       "editButton": "編集",
       "deleteButton": "削除"
     },
-    "itemNamePlural": "件の取引",
-    "attachmentsCount": "{count, plural, other {# 件の添付ファイル}}"
+    "itemNamePlural": "件の取引"
   },
   "row": {
     "copyOptions": {
@@ -230,6 +232,11 @@
       "currency": "通貨",
       "hasAttachments": "添付ファイル"
     },
+    "hasAttachmentsOptions": {
+      "any": "すべて",
+      "yes": "はい",
+      "no": "いいえ"
+    },
     "placeholders": {
       "accounts": "すべての口座",
       "payees": "すべての支払先",
@@ -240,6 +247,13 @@
       "amountMax": "最大",
       "search": "支払先、カテゴリ、金額、タグ、説明、参照番号で検索...",
       "tagKeyValue": "例: usa"
+    },
+    "tagKeyNone": "すべて（キーフィルターなし）",
+    "tagKeyOps": {
+      "hasValue": "値がある",
+      "noValue": "値がない",
+      "contains": "値が次を含む",
+      "notContains": "値が次を含まない"
     },
     "chips": {
       "removeAccount": "{name}フィルターを削除",
@@ -280,18 +294,6 @@
       "yearToDate": "今年初めから",
       "lastYear": "昨年",
       "custom": "カスタム"
-    },
-    "tagKeyNone": "すべて（キーフィルターなし）",
-    "tagKeyOps": {
-      "hasValue": "値がある",
-      "noValue": "値がない",
-      "contains": "値が次を含む",
-      "notContains": "値が次を含まない"
-    },
-    "hasAttachmentsOptions": {
-      "any": "すべて",
-      "yes": "はい",
-      "no": "いいえ"
     }
   },
   "bulk": {
@@ -399,6 +401,7 @@
       "optionLabel": "{name} ({currency}) — {owner}"
     },
     "crossOwnerLockedNote": "この振替の相手側は、共有が解除された口座にあります。金額、日付、口座はロックされていますが、この取引自体の詳細は引き続き編集できます。",
+    "transferCategoryNote": "任意。この振替は引き続き収入や支出として計上されませんが、このカテゴリを設定すると月次カテゴリ内訳に表示されます（例: 毎月の投資拠出）。",
     "amountReceivedNote": "通貨変換後の受取金額",
     "splitTransaction": "取引を分割",
     "splitDisabledDuringTour": "ガイド付きツアー中は利用できません",
@@ -408,6 +411,7 @@
       "transferUpdated": "振替を更新しました",
       "transactionCreated": "取引を作成しました",
       "transactionUpdated": "取引を更新しました",
+      "attachmentsUploadFailed": "取引は保存されましたが、{count} 件の添付ファイルのアップロードに失敗しました",
       "saveFailed": "取引の保存に失敗しました",
       "loadFailed": "フォームデータの読み込みに失敗しました",
       "splitsNotEqual": "分割合計（{splitTotal}）は取引金額（{txAmount}）と一致する必要があります",
@@ -422,13 +426,11 @@
       "categoryCreateFailed": "カテゴリの作成に失敗しました",
       "tagCreated": "タグ「{name}」を作成しました",
       "fxRateRequired": "外貨取引を保存する前に、為替レートまたは換算後の金額を入力してください。",
-      "attachmentsUploadFailed": "取引は保存されましたが、{count} 件の添付ファイルのアップロードに失敗しました",
       "jointPayeeCreateNotGranted": "口座の所有者から支払先を作成する権限が付与されていません。既存の支払先から選択してください。"
     },
     "ariaHistory": "最近の取引を表示",
     "ariaHistoryForPayee": "この支払先の最近の取引を表示",
     "historyTitle": "最近の取引からクイック入力",
-    "transferCategoryNote": "任意。この振替は引き続き収入や支出として計上されませんが、このカテゴリを設定すると月次カテゴリ内訳に表示されます（例: 毎月の投資拠出）。",
     "currencyPicker": {
       "label": "入力通貨",
       "ariaLabel": "入力通貨を変更",
@@ -440,15 +442,15 @@
       "reactivated": "{code} を再有効化しました"
     },
     "fx": {
+      "totalInCurrency": "{currency} での合計",
+      "rateCaption": "1 {from} = {rate} {to} ({date})",
       "noRateWarning": "{date} の {from} から {to} への為替レートが見つかりません。換算後の金額を手動で入力してください。",
       "usingLatestRateHint": "最新の利用可能なレートを使用しています（{date} 時点ではありません）。",
       "displayToggle": {
         "account": "口座",
         "original": "元の通貨"
       },
-      "rateCaption": "1 {from} = {rate} {to} ({date})",
-      "feeCaption": "{percent}% の外貨取引手数料（{fee}）が含まれます。",
-      "totalInCurrency": "{currency} での合計"
+      "feeCaption": "{percent}% の外貨取引手数料（{fee}）が含まれます。"
     },
     "jointSplitDisabled": "共有口座の分割取引を管理できるのは所有者のみです"
   },
@@ -473,6 +475,10 @@
     "remaining": "残り: {symbol}{amount}",
     "needAmount": "{symbol}{amount}が必要（残り: {symbol}{remaining}）",
     "setTotal": "合計を{symbol}{amount}に設定",
+    "currencyToggle": {
+      "title": "分割金額を表示・編集する通貨を切り替えます",
+      "ariaAmountsIn": "{code} で分割金額を表示・編集"
+    },
     "splitLabel": "分割{number}",
     "columns": {
       "type": "種類",
@@ -491,11 +497,7 @@
     "selectAccount": "口座を選択...",
     "memoPlaceholder": "任意のメモ",
     "mobileMemoPlaceholder": "メモ",
-    "tagsPlaceholder": "タグ...",
-    "currencyToggle": {
-      "title": "分割金額を表示・編集する通貨を切り替えます",
-      "ariaAmountsIn": "{code} で分割金額を表示・編集"
-    }
+    "tagsPlaceholder": "タグ..."
   },
   "recentPopover": {
     "recentForPayee": "{name}の最近の取引",
@@ -513,7 +515,11 @@
     "quantityPlaceholder": "数量",
     "pricePlaceholder": "価格",
     "commissionPlaceholder": "手数料",
-    "amountPlaceholder": "金額（{currency}）"
+    "amountPlaceholder": "金額（{currency}）",
+    "ratePlaceholder": "1 {from} あたりの {to}",
+    "ariaRate": "為替レート（1 {from} あたりの {to}）",
+    "rateHint": "数量・価格・手数料は {from} 建てです。このレートで現金への影響を {to} に換算します。",
+    "rateUnresolved": "{from} から {to} へのレートがありません。入力してください — レートがないと現金への影響を計算できず、2 つの通貨は等価ではありません。"
   },
   "charts": {
     "balanceHistory": {

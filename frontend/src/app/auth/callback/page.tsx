@@ -75,6 +75,12 @@ function CallbackContent() {
           window.history.replaceState(null, '', window.location.pathname);
           if (artifact) {
             stashOidcReauthArtifact(artifact);
+          } else if (error === 'reauth_not_fresh') {
+            // The provider answered from its existing SSO session instead of
+            // prompting for credentials, so the server refused to mint a
+            // proof. The session itself is fine -- say what has to happen
+            // (a real prompt), not "sign-in failed".
+            toast.error(t('callback.toasts.reauthNotFresh'));
           } else {
             toast.error(t('callback.toasts.oidcFailed'));
           }

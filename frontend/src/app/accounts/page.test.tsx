@@ -184,9 +184,16 @@ vi.mock('@/hooks/useFormModal', () => ({
   }),
 }));
 
+// `convertToDefault` returns null for a pair it has no rate for. The mock has to
+// do the same, or the missing-rate assertions below would pass over a hook that
+// still fabricates a figure.
+let mockRates: Record<string, number> = { USD: 1 };
 vi.mock('@/hooks/useExchangeRates', () => ({
   useExchangeRates: () => ({
-    convertToDefault: (val: number) => val,
+    convertToDefault: (val: number, from: string) => {
+      const rate = mockRates[from];
+      return rate === undefined ? null : val * rate;
+    },
     defaultCurrency: 'USD',
   }),
 }));
@@ -211,6 +218,7 @@ describe('AccountsPage', () => {
     vi.clearAllMocks();
     mockGetAll.mockResolvedValue([]);
     mockGetPortfolioSummary.mockResolvedValue(null);
+    mockRates = { USD: 1 };
     // Reset form modal state
     formModalState.showForm = false;
     formModalState.editingItem = null;
@@ -393,6 +401,112 @@ describe('AccountsPage', () => {
     // Page should still render without crashing
     await waitFor(() => {
       expect(screen.getByTestId('account-list')).toBeInTheDocument();
+    });
+  });
+
+  /**
+   * The two ways this page used to turn an unknown into a measured figure.
+   *
+   * A failed portfolio request became `null` and each brokerage account's market
+   * value `?? 0`, so 100,000 of holdings dropped silently out of Assets and Net
+   * Worth. And a missing exchange rate returned the amount unconverted, so a
+   * 100.00 EUR balance was summed into a USD total as 100.00 and labelled USD.
+   */
+  describe('an unknown value is not a measured zero', () => {
+    it('marks the totals partial when the portfolio request fails', async () => {
+      mockGetAll.mockResolvedValue([
+        { id: 'acc-1', name: 'Checking', accountType: 'CHECKING', accountSubType: null, currencyCode: 'USD', currentBalance: 20000, isClosed: false, canDelete: true },
+        { id: 'acc-5', name: 'Brokerage', accountType: 'INVESTMENT', accountSubType: 'INVESTMENT_BROKERAGE', currencyCode: 'USD', currentBalance: 0, isClosed: false, canDelete: false },
+      ]);
+      mockGetPortfolioSummary.mockRejectedValue(new Error('API error'));
+      render(<AccountsPage />);
+
+      await waitFor(() => {
+        // The 20,000 that is known still shows, but it is flagged rather than
+        // presented as the whole of Assets.
+        expect(screen.getByTestId('summary-Total Assets')).toHaveTextContent('$20000.00');
+      });
+      expect(screen.getByTestId('summary-Total Assets')).toHaveTextContent('partial total');
+      expect(screen.getByTestId('summary-Net Worth')).toHaveTextContent('partial total');
+    });
+
+    it('leaves the totals complete when the portfolio request succeeds', async () => {
+      mockGetAll.mockResolvedValue([
+        { id: 'acc-5', name: 'Brokerage', accountType: 'INVESTMENT', accountSubType: 'INVESTMENT_BROKERAGE', currencyCode: 'USD', currentBalance: 0, isClosed: false, canDelete: false },
+      ]);
+      mockGetPortfolioSummary.mockResolvedValue({
+        holdingsByAccount: [{ accountId: 'acc-5', totalMarketValue: 50000, cashBalance: 0 }],
+      });
+      render(<AccountsPage />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('summary-Total Assets')).toHaveTextContent('$50000.00');
+      });
+      expect(screen.getByTestId('summary-Total Assets')).not.toHaveTextContent('partial total');
+    });
+
+    // A brokerage account absent from a *successful* summary holds no positions.
+    // That is a real zero and must not be flagged.
+    it('treats an empty brokerage in a successful summary as zero', async () => {
+      mockGetAll.mockResolvedValue([
+        { id: 'acc-5', name: 'Brokerage', accountType: 'INVESTMENT', accountSubType: 'INVESTMENT_BROKERAGE', currencyCode: 'USD', currentBalance: 0, isClosed: false, canDelete: false },
+      ]);
+      mockGetPortfolioSummary.mockResolvedValue({ holdingsByAccount: [] });
+      render(<AccountsPage />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('summary-Total Assets')).toHaveTextContent('$0.00');
+      });
+      expect(screen.getByTestId('summary-Total Assets')).not.toHaveTextContent('partial total');
+    });
+
+    it('excludes an account with no exchange rate and marks the total partial', async () => {
+      mockRates = { USD: 1 };
+      mockGetAll.mockResolvedValue([
+        { id: 'acc-1', name: 'Checking', accountType: 'CHECKING', accountSubType: null, currencyCode: 'USD', currentBalance: 20000, isClosed: false, canDelete: true },
+        { id: 'acc-eur', name: 'Euro', accountType: 'SAVINGS', accountSubType: null, currencyCode: 'EUR', currentBalance: 100, isClosed: false, canDelete: true },
+      ]);
+      render(<AccountsPage />);
+
+      await waitFor(() => {
+        // Not 20,100: the euro balance is unknown in USD, not equal to it.
+        expect(screen.getByTestId('summary-Total Assets')).toHaveTextContent('$20000.00');
+      });
+      expect(screen.getByTestId('summary-Total Assets')).toHaveTextContent('partial total');
+    });
+
+    it('converts an account whose rate is known', async () => {
+      mockRates = { USD: 1, EUR: 1.1 };
+      mockGetAll.mockResolvedValue([
+        { id: 'acc-1', name: 'Checking', accountType: 'CHECKING', accountSubType: null, currencyCode: 'USD', currentBalance: 20000, isClosed: false, canDelete: true },
+        { id: 'acc-eur', name: 'Euro', accountType: 'SAVINGS', accountSubType: null, currencyCode: 'EUR', currentBalance: 100, isClosed: false, canDelete: true },
+      ]);
+      render(<AccountsPage />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('summary-Total Assets')).toHaveTextContent('$20110.00');
+      });
+      expect(screen.getByTestId('summary-Total Assets')).not.toHaveTextContent('partial total');
+    });
+
+    // Net worth is assets minus liabilities, so a hole in the liability side
+    // makes the difference partial too.
+    it('propagates incompleteness from liabilities into net worth', async () => {
+      mockRates = { USD: 1 };
+      mockGetAll.mockResolvedValue([
+        { id: 'acc-1', name: 'Checking', accountType: 'CHECKING', accountSubType: null, currencyCode: 'USD', currentBalance: 20000, isClosed: false, canDelete: true },
+        { id: 'acc-cc', name: 'Euro card', accountType: 'CREDIT_CARD', accountSubType: null, currencyCode: 'EUR', currentBalance: -500, isClosed: false, canDelete: true },
+      ]);
+      render(<AccountsPage />);
+
+      // Wait for the loaded state, not merely for the card to exist: before the
+      // accounts arrive every total is a complete zero.
+      await waitFor(() => {
+        expect(screen.getByTestId('summary-Total Assets')).toHaveTextContent('$20000.00');
+      });
+      expect(screen.getByTestId('summary-Total Assets')).not.toHaveTextContent('partial total');
+      expect(screen.getByTestId('summary-Total Liabilities')).toHaveTextContent('partial total');
+      expect(screen.getByTestId('summary-Net Worth')).toHaveTextContent('partial total');
     });
   });
 

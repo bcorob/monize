@@ -21,6 +21,7 @@ import {
   rememberTransactionDate,
 } from '@/lib/lastTransactionDate';
 import { Account } from '@/types/account';
+import { TransactionStatus } from '@/types/transaction';
 import {
   InvestmentAction,
   InvestmentTransaction,
@@ -28,8 +29,14 @@ import {
   CreateSecurityData,
   Holding,
 } from '@/types/investment';
-import { getCurrencySymbol, roundToDecimals } from '@/lib/format';
+import {
+  getCurrencySymbol,
+  roundToDecimals,
+  roundFxRate,
+  FX_RATE_DISPLAY_DECIMALS,
+} from '@/lib/format';
 import { getErrorMessage } from '@/lib/errors';
+import { baseInvestmentAction } from '@/lib/investment-actions';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
 import { useExchangeRates } from '@/hooks/useExchangeRates';
 import { useDateFormat } from '@/hooks/useDateFormat';
@@ -53,7 +60,13 @@ export const buildInvestmentTransactionSchema = (t: (key: string) => string) => 
   accountId: z.string().min(1, t('validation.accountRequired')),
   // 'TRANSFER' is a UI-only action that creates a TRANSFER_OUT + TRANSFER_IN
   // pair on the backend; it is offered only when creating, not editing.
-  action: z.enum(['BUY', 'SELL', 'DIVIDEND', 'INTEREST', 'CAPITAL_GAIN', 'SPLIT', 'TRANSFER_IN', 'TRANSFER_OUT', 'REINVEST', 'ADD_SHARES', 'REMOVE_SHARES', 'TRANSFER']),
+  action: z.enum([
+    'BUY', 'SELL', 'DIVIDEND', 'INTEREST', 'CAPITAL_GAIN', 'SPLIT',
+    'TRANSFER_IN', 'TRANSFER_OUT', 'REINVEST', 'ADD_SHARES', 'REMOVE_SHARES',
+    'REINVEST_INTEREST', 'REINVEST_CAPITAL_GAIN_SHORT', 'REINVEST_CAPITAL_GAIN_LONG',
+    'CAPITAL_GAIN_SHORT', 'CAPITAL_GAIN_LONG', 'REDEEM',
+    'TRANSFER',
+  ]),
   transactionDate: z.string().min(1, t('validation.dateRequired')),
   securityId: z.string().optional(),
   fundingAccountId: z.string().optional(),
@@ -64,6 +77,7 @@ export const buildInvestmentTransactionSchema = (t: (key: string) => string) => 
   commission: z.coerce.number().min(0).optional(),
   exchangeRate: z.coerce.number().gt(0).optional(),
   description: z.string().optional(),
+  status: z.nativeEnum(TransactionStatus).default(TransactionStatus.UNRECONCILED),
   // SPLIT-only fields, combined into `quantity` (the ratio) on submit.
   splitNewShares: z.coerce.number().gt(0).optional(),
   splitOldShares: z.coerce.number().gt(0).optional(),
@@ -76,7 +90,8 @@ export const buildInvestmentTransactionSchema = (t: (key: string) => string) => 
   // shared with actions that legitimately allow zero (a SPLIT's optional new
   // price, the amount-only actions that borrow the field), so the rule is keyed
   // on the action instead of tightened on the field.
-  if (data.action !== 'BUY' && data.action !== 'REINVEST') return;
+  const base = data.action === 'TRANSFER' ? 'TRANSFER' : baseInvestmentAction(data.action);
+  if (base !== 'BUY' && base !== 'REINVEST') return;
   if (data.price !== undefined && data.price > 0) return;
   ctx.addIssue({
     code: 'custom',
@@ -115,6 +130,13 @@ interface InvestmentTransactionFormFieldsProps
 // Actions that require a security selection. Transfers (the combined create
 // action and the TRANSFER_IN/TRANSFER_OUT edit legs) render their own security
 // + quantity + cost fields via `transferMode`, so they're excluded here.
+// Every list below is written over base actions and consulted through
+// `actionIn`, so a Money-vocabulary refinement (REDEEM, CAPITAL_GAIN_SHORT/
+// LONG, REINVEST_*) behaves exactly as its base without each list restating
+// the whole family.
+const actionIn = (action: InvestmentAction, list: InvestmentAction[]): boolean =>
+  list.includes(baseInvestmentAction(action));
+
 const securityRequiredActions: InvestmentAction[] = ['BUY', 'SELL', 'DIVIDEND', 'CAPITAL_GAIN', 'SPLIT', 'REINVEST', 'ADD_SHARES', 'REMOVE_SHARES'];
 
 // Actions that require quantity and price
@@ -183,6 +205,11 @@ function InvestmentTransactionFormFields({
   onCreateAnother,
 }: InvestmentTransactionFormFieldsProps) {
   const t = useTranslations('investments');
+  // Status strings are shared with the cash register's form.
+  const tStatus = useTranslations('transactions');
+  // Embedded inside a split transaction: the parent owns account, date and
+  // status; the backend refuses direct changes to them.
+  const isEmbedded = !!transaction?.transactionSplitId;
   const actionLabels: Record<InvestmentAction, string> = {
     BUY: t('transactionForm.actionBuy'),
     SELL: t('transactionForm.actionSell'),
@@ -195,6 +222,12 @@ function InvestmentTransactionFormFields({
     REINVEST: t('transactionForm.actionReinvest'),
     ADD_SHARES: t('transactionForm.actionAddShares'),
     REMOVE_SHARES: t('transactionForm.actionRemoveShares'),
+    REINVEST_INTEREST: t('transactionForm.actionReinvestInterest'),
+    REINVEST_CAPITAL_GAIN_SHORT: t('transactionForm.actionReinvestCapitalGainShort'),
+    REINVEST_CAPITAL_GAIN_LONG: t('transactionForm.actionReinvestCapitalGainLong'),
+    CAPITAL_GAIN_SHORT: t('transactionForm.actionCapitalGainShort'),
+    CAPITAL_GAIN_LONG: t('transactionForm.actionCapitalGainLong'),
+    REDEEM: t('transactionForm.actionRedeem'),
   };
   const { defaultCurrency, formatCurrency } = useNumberFormat();
   const { formatDate } = useDateFormat();
@@ -282,12 +315,15 @@ function InvestmentTransactionFormFields({
           destinationAccountId: '',
           quantity: transaction.quantity ?? 0,
           // For amount-only actions, use totalAmount as the price field value
-          price: amountOnlyActions.includes(transaction.action)
+          price: actionIn(transaction.action, amountOnlyActions)
             ? (transaction.totalAmount ?? 0)
             : (transaction.price ?? 0),
           commission: transaction.commission ?? 0,
           exchangeRate: transaction.exchangeRate ?? 1,
           description: transaction.description || '',
+          // Rows from a backend that predates the column have no status;
+          // absent means "no information", shown as the default.
+          status: transaction.status || TransactionStatus.UNRECONCILED,
           // For SPLIT, only pre-fill the new/old shares from a stored ratio
           // when the ratio looks like a value the user (or the current QIF
           // parser) actually entered: a positive non-integer or one of a
@@ -317,6 +353,7 @@ function InvestmentTransactionFormFields({
           commission: undefined,
           exchangeRate: undefined,
           description: '',
+          status: TransactionStatus.UNRECONCILED,
           splitNewShares: undefined,
           splitOldShares: undefined,
         },
@@ -370,8 +407,8 @@ function InvestmentTransactionFormFields({
   // otherwise it's the brokerage's linked investment cash account.
   const cashAccount = useMemo(() => {
     if (
-      (fundingAccountActions.includes(watchedAction) ||
-        cashDestinationActions.includes(watchedAction)) &&
+      (actionIn(watchedAction, fundingAccountActions) ||
+        actionIn(watchedAction, cashDestinationActions)) &&
       watchedFundingAccountId
     ) {
       return allAccountsSource.find((a) => a.id === watchedFundingAccountId) ?? null;
@@ -402,7 +439,7 @@ function InvestmentTransactionFormFields({
   const cashCurrencySymbol = getCurrencySymbol(cashCurrency);
 
   const needsConversion =
-    cashPostingActions.includes(watchedAction) &&
+    actionIn(watchedAction, cashPostingActions) &&
     !!transactionCurrency &&
     !!cashCurrency &&
     transactionCurrency !== cashCurrency;
@@ -414,9 +451,9 @@ function InvestmentTransactionFormFields({
 
   // Calculate total amount
   const totalAmount = useMemo(() => {
-    if (quantityPriceActions.includes(watchedAction)) {
+    if (actionIn(watchedAction, quantityPriceActions)) {
       const subtotal = roundToDecimals(watchedQuantity * watchedPrice, 4);
-      if (watchedAction === 'BUY' || watchedAction === 'REINVEST') {
+      if (baseInvestmentAction(watchedAction) === 'BUY' || baseInvestmentAction(watchedAction) === 'REINVEST') {
         return roundToDecimals(subtotal + watchedCommission, 4);
       } else {
         return roundToDecimals(subtotal - watchedCommission, 4);
@@ -452,9 +489,21 @@ function InvestmentTransactionFormFields({
     }
     const marketRate = getMarketRate(transactionCurrency, cashCurrency);
     if (marketRate && marketRate !== 1) {
-      setValue('exchangeRate', roundToDecimals(marketRate, 6), {
+      // Rates are NUMERIC(20,10) and every conversion multiplies at that
+      // precision; six is what the field *shows*. Rounding the stored value to
+      // six made the persisted rate disagree with the quote it came from.
+      setValue('exchangeRate', roundFxRate(marketRate), {
         shouldDirty: false,
       });
+      return;
+    }
+    // Nothing resolved. The 1 this field carries is the one the branch above
+    // wrote while the currencies still matched -- it means "no conversion", not
+    // "the rate is one", and leaving it here is what let a cross-currency trade
+    // preview at 1:1. Clear it so the state reads as unknown and the commit is
+    // blocked until a rate is supplied.
+    if (watchedExchangeRate !== 0) {
+      setValue('exchangeRate', 0, { shouldDirty: false });
     }
   }, [
     securitiesLoaded,
@@ -466,11 +515,24 @@ function InvestmentTransactionFormFields({
     watchedExchangeRate,
   ]);
 
+  /**
+   * The cash movement this trade will post, or `null` when the currencies differ
+   * and no rate has been resolved.
+   *
+   * `|| 1` used to stand in for the missing rate, so the preview showed
+   * 10 x 100.00 USD as 1,000.00 CAD while the request omitted `exchangeRate`
+   * entirely and the server resolved its own dated or latest rate -- persisting
+   * 1,350.00 CAD against a preview the user had just confirmed. An unresolved
+   * rate is not a rate of one; it is a reason not to commit.
+   */
   const convertedAmount = useMemo(() => {
     if (!needsConversion) return totalAmount;
-    const rate = watchedExchangeRate || 1;
-    return roundToDecimals(totalAmount * rate, 4);
+    if (!watchedExchangeRate || watchedExchangeRate <= 0) return null;
+    return roundToDecimals(totalAmount * watchedExchangeRate, 4);
   }, [needsConversion, totalAmount, watchedExchangeRate]);
+
+  /** True when the cash leg cannot be priced, so the trade must not be posted. */
+  const conversionUnresolved = needsConversion && convertedAmount === null;
 
   const handleConvertedAmountChange = (value: number | undefined) => {
     if (!needsConversion || totalAmount === 0) return;
@@ -510,8 +572,8 @@ function InvestmentTransactionFormFields({
   // accept one, so the value doesn't silently carry over to a hidden field.
   useEffect(() => {
     if (
-      !fundingAccountActions.includes(watchedAction) &&
-      !cashDestinationActions.includes(watchedAction) &&
+      !actionIn(watchedAction, fundingAccountActions) &&
+      !actionIn(watchedAction, cashDestinationActions) &&
       watchedFundingAccountId
     ) {
       setValue('fundingAccountId', '', { shouldDirty: false });
@@ -838,6 +900,7 @@ function InvestmentTransactionFormFields({
           price: costPerShare,
           transactionDate: data.transactionDate,
           description: data.description,
+          status: data.status,
         });
         toast.success(t('transactionForm.toastTransferUpdated'));
         onSuccess?.();
@@ -845,7 +908,7 @@ function InvestmentTransactionFormFields({
       }
 
       const action = data.action as InvestmentAction;
-      const postsCash = cashPostingActions.includes(action);
+      const postsCash = actionIn(action, cashPostingActions);
       const isSplit = action === 'SPLIT';
       // For splits the new/old-shares inputs are the source of truth; the
       // hidden `quantity` field is kept in sync via effect, but we recompute
@@ -861,30 +924,38 @@ function InvestmentTransactionFormFields({
         setIsLoading(false);
         return;
       }
+      // A cross-currency trade may not be committed on an unresolved rate. The
+      // preview would have to invent one, and omitting the field lets the server
+      // resolve a different rate than the figure the user just confirmed.
+      if (postsCash && conversionUnresolved) {
+        toast.error(t('transactionForm.toastExchangeRateRequired'));
+        setIsLoading(false);
+        return;
+      }
       const payload = {
         accountId: data.accountId,
         action,
         transactionDate: data.transactionDate,
-        securityId: securityRequiredActions.includes(action)
+        securityId: actionIn(action, securityRequiredActions)
           ? data.securityId
           : undefined,
         fundingAccountId:
-          (fundingAccountActions.includes(action) ||
-            cashDestinationActions.includes(action)) &&
+          (actionIn(action, fundingAccountActions) ||
+            actionIn(action, cashDestinationActions)) &&
           data.fundingAccountId
             ? data.fundingAccountId
             : undefined,
         quantity: isSplit
           ? ratio
-          : (quantityPriceActions.includes(action) || quantityOnlyActions.includes(action))
+          : (actionIn(action, quantityPriceActions) || actionIn(action, quantityOnlyActions))
             ? data.quantity
             : undefined,
-        price: quantityOnlyActions.includes(action)
+        price: actionIn(action, quantityOnlyActions)
           ? undefined
           : isSplit
             ? (data.price && data.price > 0 ? data.price : undefined)
             : data.price,
-        commission: quantityOnlyActions.includes(action) || isSplit
+        commission: actionIn(action, quantityOnlyActions) || isSplit
           ? undefined
           : data.commission,
         // Only send the exchange rate for actions that post a cash transaction.
@@ -893,6 +964,7 @@ function InvestmentTransactionFormFields({
             ? data.exchangeRate
             : undefined,
         description: data.description,
+        status: data.status,
       };
 
       if (transaction) {
@@ -917,10 +989,10 @@ function InvestmentTransactionFormFields({
 
   useFormSubmitRef(submitRef, handleSubmit, onSubmit);
 
-  const needsSecurity = securityRequiredActions.includes(watchedAction);
-  const needsQuantityPrice = quantityPriceActions.includes(watchedAction);
-  const isQuantityOnly = quantityOnlyActions.includes(watchedAction);
-  const isAmountOnly = amountOnlyActions.includes(watchedAction);
+  const needsSecurity = actionIn(watchedAction, securityRequiredActions);
+  const needsQuantityPrice = actionIn(watchedAction, quantityPriceActions);
+  const isQuantityOnly = actionIn(watchedAction, quantityOnlyActions);
+  const isAmountOnly = actionIn(watchedAction, amountOnlyActions);
   const isSplit = watchedAction === 'SPLIT';
   // An individual posted transfer leg (TRANSFER_IN/TRANSFER_OUT). These only
   // appear when editing an existing transfer; the create flow uses the
@@ -930,8 +1002,8 @@ function InvestmentTransactionFormFields({
   // Either creating a transfer (combined action) or editing an existing leg.
   // Both render the From/To + security + quantity + cost-per-share UI.
   const transferMode = isTransfer || isTransferLeg;
-  const canHaveFundingAccount = fundingAccountActions.includes(watchedAction);
-  const canHaveCashDestination = cashDestinationActions.includes(watchedAction);
+  const canHaveFundingAccount = actionIn(watchedAction, fundingAccountActions);
+  const canHaveCashDestination = actionIn(watchedAction, cashDestinationActions);
 
   // When creating, offer a single "Transfer" option and hide the raw
   // TRANSFER_IN/TRANSFER_OUT legs (they are produced as a pair by the backend).
@@ -1008,7 +1080,7 @@ function InvestmentTransactionFormFields({
       {/* Funding Account - for Buy/Sell to specify where funds come from/go to */}
       {canHaveFundingAccount && (
         <Select
-          label={watchedAction === 'BUY' ? t('transactionForm.fundsFrom') : t('transactionForm.fundsTo')}
+          label={baseInvestmentAction(watchedAction) === 'BUY' ? t('transactionForm.fundsFrom') : t('transactionForm.fundsTo')}
           options={[
             { value: '', label: t('transactionForm.linkedCashDefault') },
             ...fundingAccounts.map((a) => ({
@@ -1312,6 +1384,29 @@ function InvestmentTransactionFormFields({
         {...register('description')}
       />
 
+      {/* Status selector -- same four options as the cash register's form (the
+          only place VOID can be set or cleared). An embedded split row's
+          status is owned by its parent split transaction, so the field is
+          disabled there and the hint points at the parent. */}
+      <div>
+        <Select
+          label={tStatus('form.fields.status')}
+          options={[
+            { value: TransactionStatus.UNRECONCILED, label: tStatus('form.statusOptions.unreconciled') },
+            { value: TransactionStatus.CLEARED, label: tStatus('form.statusOptions.cleared') },
+            { value: TransactionStatus.RECONCILED, label: tStatus('form.statusOptions.reconciled') },
+            { value: TransactionStatus.VOID, label: tStatus('form.statusOptions.void') },
+          ]}
+          disabled={isEmbedded}
+          {...register('status')}
+        />
+        {isEmbedded && (
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            {t('transactionForm.statusLockedToParent')}
+          </p>
+        )}
+      </div>
+
       {/* Currency Conversion - when security currency differs from cash account currency */}
       {needsConversion && (needsQuantityPrice || isAmountOnly) && (
         <div className="space-y-3 rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
@@ -1323,28 +1418,53 @@ function InvestmentTransactionFormFields({
               label={t('transactionForm.exchangeRate', { from: transactionCurrency })}
               suffix={cashCurrency}
               value={watchedExchangeRate || undefined}
-              onChange={(value) =>
-                setValue('exchangeRate', value ?? 0, {
+              onChange={(value) => {
+                const incoming = value ?? 0;
+                // The field shows FX_RATE_DISPLAY_DECIMALS (6) but the
+                // auto-filled market rate is stored at 10dp (roundFxRate). A
+                // blur on an untouched field hands back the 6dp rounding of that
+                // value, which is not an edit: adopting it would truncate the
+                // stored precision this PR exists to keep and mark the form dirty
+                // for a change the user never made. Ignore a re-report that
+                // matches the stored rate at the field's display precision.
+                if (
+                  roundToDecimals(
+                    watchedExchangeRate ?? 0,
+                    FX_RATE_DISPLAY_DECIMALS,
+                  ) === roundToDecimals(incoming, FX_RATE_DISPLAY_DECIMALS)
+                ) {
+                  return;
+                }
+                setValue('exchangeRate', incoming, {
                   shouldDirty: true,
                   shouldValidate: true,
-                })
-              }
-              decimalPlaces={6}
+                });
+              }}
+              decimalPlaces={FX_RATE_DISPLAY_DECIMALS}
               min={0}
               error={errors.exchangeRate?.message}
             />
             <NumericInput
               label={t('transactionForm.convertedTotal', { currency: cashCurrency })}
               prefix={cashCurrencySymbol}
-              value={convertedAmount || undefined}
+              value={convertedAmount ?? undefined}
               onChange={handleConvertedAmountChange}
               decimalPlaces={4}
               min={0}
             />
           </div>
-          <div className="text-xs text-gray-500 dark:text-gray-400">
-            {t('transactionForm.conversionHelp')}
-          </div>
+          {conversionUnresolved ? (
+            <p role="alert" className="text-xs text-red-600 dark:text-red-400">
+              {t('transactionForm.exchangeRateUnresolved', {
+                from: transactionCurrency,
+                to: cashCurrency,
+              })}
+            </p>
+          ) : (
+            <div className="text-xs text-gray-500 dark:text-gray-400">
+              {t('transactionForm.conversionHelp')}
+            </div>
+          )}
         </div>
       )}
 
@@ -1362,7 +1482,7 @@ function InvestmentTransactionFormFields({
           {needsQuantityPrice && (
             <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
               {t('transactionForm.sharesAtPrice', { shares: watchedQuantity, symbol: currencySymbol, price: watchedPrice.toFixed(6) })}
-              {watchedCommission > 0 && ` ${watchedAction === 'SELL' ? '-' : '+'} ${formatCurrency(watchedCommission, transactionCurrency)} ${t('transactionForm.commissionSuffix')}`}
+              {watchedCommission > 0 && ` ${baseInvestmentAction(watchedAction) === 'SELL' ? '-' : '+'} ${formatCurrency(watchedCommission, transactionCurrency)} ${t('transactionForm.commissionSuffix')}`}
             </div>
           )}
           {needsConversion && (
@@ -1371,7 +1491,13 @@ function InvestmentTransactionFormFields({
                 {t('transactionForm.postsToCashAccount', { currency: cashCurrency })}
               </span>
               <span className="text-base font-semibold text-gray-900 dark:text-gray-100">
-                {formatCurrency(convertedAmount, cashCurrency)}
+                {convertedAmount === null ? (
+                  <span className="text-sm font-normal text-gray-400 dark:text-gray-500">
+                    {t('transactionForm.notAvailable')}
+                  </span>
+                ) : (
+                  formatCurrency(convertedAmount, cashCurrency)
+                )}
               </span>
             </div>
           )}
@@ -1387,6 +1513,7 @@ function InvestmentTransactionFormFields({
         selectedSubmitOptionId={submitMode}
         onSubmitOptionChange={(id) => setSubmitMode(id === 'new' ? 'new' : 'close')}
         submitOptionsLabel={t('transactionForm.submitOptions')}
+        submitDisabled={conversionUnresolved}
       />
     </form>
 

@@ -519,6 +519,7 @@
     "billTemplateMissing": "{count, plural, other {# 件の予定された支払い}} にファイル内のテンプレート取引がなく、スキップしました。",
     "unusableBill": "{count, plural, other {# 件の予定された支払い}} に口座、利用可能な日付、または認識できる繰り返し設定がなく、スキップしました。",
     "billFrequencyApproximated": "{count, plural, other {# 件の予定された支払い}} は Monize が正確に表現できない繰り返し間隔を使用しているため、最も近い短い間隔を使用しました。",
+    "loanInterestCategoryUnclear": "{count, plural, other {# 件のローン返済}}に元本以外の複数のカテゴリが含まれていたため、ローンの利息カテゴリは未設定のままになりました。支払いにエスクロー（escrow）が含まれるか確認し、インポート後に利息カテゴリを設定してください。",
     "showTransactions": "{count, plural, other {# 件の取引}}を表示",
     "hideTransactions": "取引を隠す",
     "reviewInMoney": "Microsoft Money でこれらを開いて確認または修正し、あらためてエクスポートしてインポートしてください。",

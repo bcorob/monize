@@ -161,6 +161,13 @@ interface AssetAllocationChartProps {
    * tagged holdings.
    */
   enableTagGrouping?: boolean;
+  /**
+   * False when the portfolio valuation is incomplete (a missing price or FX
+   * rate). The percentages here are then shares of the known subtotal, not of the
+   * whole portfolio, so the chart says so rather than presenting them as
+   * definitive (recheck RR5-005). Absent reads as complete.
+   */
+  valuationComplete?: boolean;
 }
 
 export function AssetAllocationChart({
@@ -171,6 +178,7 @@ export function AssetAllocationChart({
   titleSuffix,
   accountIds,
   enableTagGrouping = true,
+  valuationComplete,
 }: AssetAllocationChartProps) {
   const t = useTranslations('investments');
   const { formatCurrencyCompact: formatCurrency } = useNumberFormat();
@@ -535,9 +543,33 @@ export function AssetAllocationChart({
     );
   }
 
+  // The warning gates on the view actually RENDERED (`effectiveGroupBy`), not
+  // the user's stored choice: the no-tags fallback can draw the security view
+  // while `groupBy` still says 'tag', and keying off the stored value dropped
+  // the warning over exactly the numbers it was written for (review #1133).
+  //
+  // And completeness is read from the same aggregate that produced the numbers
+  // on screen. In the single foreign-account view the tooltip's values come
+  // from `foreignTotal` -- an account-currency aggregate over
+  // `holdingsByAccount` -- whose conversion path can be incomplete even when
+  // the top-level default-currency flag is clean, so that view checks the
+  // per-account flags as well (RR5-001 again; review #1133). Absent fields
+  // read as complete, the usual rolling-deploy defence.
+  const foreignAggregateIncomplete =
+    foreignCurrency !== null &&
+    (holdingsByAccount ?? []).some((a) => a.valuationComplete === false);
+  const knownValueOnly =
+    effectiveGroupBy === 'security' &&
+    (valuationComplete === false || foreignAggregateIncomplete);
+
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-3 sm:p-6 lg:min-h-[420px]">
       {heading}
+      {knownValueOnly && (
+        <p className="text-xs text-amber-700 dark:text-amber-300 mb-2">
+          {t('assetAllocation.knownValueOnly')}
+        </p>
+      )}
       <div className="h-64">
         <ResponsiveContainer width="100%" height="100%" minWidth={0}>
           <PieChart>

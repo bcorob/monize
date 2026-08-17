@@ -151,6 +151,22 @@ describe('MnyWarningsPanel', () => {
   });
 
   describe('warnings that are not about a transaction', () => {
+    it('explains when a loan interest category cannot be inferred', () => {
+      renderPanel([
+        warning({
+          code: 'loanInterestCategoryUnclear',
+          count: 1,
+          samples: ['Mortgage'],
+          rows: [],
+        }),
+      ]);
+
+      expect(
+        screen.getByText(/loan's interest category was left unset/),
+      ).toBeInTheDocument();
+      expect(screen.getByText('Mortgage')).toBeInTheDocument();
+    });
+
     it('renders as a plain line with no expander', () => {
       renderPanel([
         {

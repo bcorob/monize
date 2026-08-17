@@ -118,6 +118,7 @@ export function InvestmentDetailView({ account }: InvestmentDetailViewProps) {
           singleAccountCurrency={currency}
           holdingsByAccount={summary?.holdingsByAccount}
           accountIds={accountIds}
+          valuationComplete={summary?.valuationComplete}
         />
         <InvestmentValueChart accountIds={accountIds} displayCurrency={currency} />
       </div>
@@ -126,6 +127,7 @@ export function InvestmentDetailView({ account }: InvestmentDetailViewProps) {
         holdingsByAccount={summary?.holdingsByAccount ?? []}
         isLoading={isLoading}
         totalPortfolioValue={summary?.totalPortfolioValue ?? 0}
+        valuationComplete={summary?.valuationComplete}
       />
 
       <InvestmentIncomePanel

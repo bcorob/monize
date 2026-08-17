@@ -133,3 +133,75 @@ export function applyFxConversion(
       : 0;
   return { base, fee, amount: roundMoney(base + fee) };
 }
+
+/**
+ * The primary `currencyCode` a transaction row must carry: its account's.
+ *
+ * `amount` and `currencyCode` are the account-currency pair -- the schema and
+ * entity model a foreign entry separately, in `originalAmount` /
+ * `originalCurrencyCode` / `exchangeRate`, which is what shows that a mismatched
+ * primary currency is not an alternative supported shape.
+ *
+ * Nothing checked it. Creation spread the client's `currencyCode` straight into
+ * the entity and incremented the balance by the numeric `amount`, so a request
+ * of `amount=100, currencyCode=USD` against a EUR account moved the balance by
+ * 100 EUR and left a row reporting 100 USD. Both fields persist, so the error
+ * survives backups and every later report (audit P5-003).
+ *
+ * Case-insensitive, because a correct client always sends the account's own
+ * code and only its casing is worth tolerating. Returns the canonical value to
+ * store.
+ */
+/**
+ * The one market-rate ladder: the rate for `from -> to` at `date`, rounded to
+ * FX_RATE_DECIMALS, or `null` when no usable rate exists anywhere. Zero and
+ * negative rates are absent, not applicable.
+ *
+ * `ExchangeRateService.getRateForDate` already falls back to the latest stored
+ * rate internally (its documented step 3), so callers must not chase a `null`
+ * from this helper with their own `getLatestRate` -- four hand-rolled copies of
+ * this sequence existed and three carried exactly that dead trailing call.
+ * Copies are how resolvers drift; this is the only one.
+ */
+export async function resolveFxRateOrNull(
+  rates: {
+    getRateForDate(
+      from: string,
+      to: string,
+      date: string,
+    ): Promise<number | null>;
+    getLatestRate(from: string, to: string): Promise<number | null>;
+  },
+  from: string,
+  to: string,
+  /** `null` when the caller has no date: the latest stored rate is asked directly. */
+  date: string | null,
+): Promise<number | null> {
+  const rate = date
+    ? await rates.getRateForDate(from, to, date)
+    : await rates.getLatestRate(from, to);
+  if (rate === null || !(Number(rate) > 0)) return null;
+  return roundFxRate(Number(rate));
+}
+
+export function assertTransactionCurrencyMatchesAccount(
+  suppliedCurrencyCode: string | null | undefined,
+  accountCurrencyCode: string,
+): string {
+  const account = accountCurrencyCode.toUpperCase();
+  if (suppliedCurrencyCode === null || suppliedCurrencyCode === undefined) {
+    return account;
+  }
+
+  const supplied = String(suppliedCurrencyCode).toUpperCase();
+  if (supplied !== account) {
+    throw new BadRequestException(
+      tr(
+        "errors.transactions.currencyMustMatchAccount",
+        `Transaction currency ${supplied} must match the account currency ${account}. Use originalAmount and originalCurrencyCode for a foreign-currency entry.`,
+        { supplied, account },
+      ),
+    );
+  }
+  return account;
+}

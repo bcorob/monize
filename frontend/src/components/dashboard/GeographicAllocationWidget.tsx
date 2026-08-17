@@ -49,8 +49,9 @@ export function GeographicAllocationWidget({
   isLoading,
 }: GeographicAllocationWidgetProps) {
   const t = useTranslations('dashboard');
+  const tCommon = useTranslations('common');
   const { formatCurrency, formatCurrencyAxis } = useNumberFormat();
-  const { convertToDefault } = useExchangeRates();
+  const { convertToDefault, defaultCurrency } = useExchangeRates();
   const { config, updateConfig } = useWidgetConfig<GeographicConfig>(
     WIDGET_ID,
     GEOGRAPHIC_ALLOCATION_DEFAULT,
@@ -91,7 +92,7 @@ export function GeographicAllocationWidget({
     return map;
   }, [securities]);
 
-  const { exchangeData, regionData } = useMemo(
+  const { exchangeData, regionData, missingCurrencies, excludedCount } = useMemo(
     () => computeGeographicAllocation(holdings, securityExchangeMap, convertToDefault),
     [holdings, securityExchangeMap, convertToDefault],
   );
@@ -156,6 +157,23 @@ export function GeographicAllocationWidget({
   const isEmpty =
     config.view === 'exchange' ? exchangeBars.length === 0 : activeSlices.length === 0;
 
+  // Region and exchange shares are computed from the holdings converted into the
+  // display currency; the country view comes from a separate backend endpoint,
+  // so its slices are not touched by the FX exclusions tracked here. Only mark
+  // the two client-computed views, and only when a holding was actually dropped
+  // -- otherwise the percentage bars read as 100% of the portfolio when they are
+  // a subtotal of the convertible part.
+  const showPartial = config.view !== 'country' && excludedCount > 0;
+  const partialNote = showPartial
+    ? missingCurrencies.length > 0
+      ? tCommon('partialTotal.explanation', {
+          count: excludedCount,
+          displayCurrency: defaultCurrency,
+          currencies: missingCurrencies.join(', '),
+        })
+      : tCommon('partialTotal.explanationExcluded', { count: excludedCount })
+    : null;
+
   const sliceTooltip = (active: boolean | undefined, rawPayload: unknown) => {
     const payload = rawPayload as Array<{ payload: SimpleSlice }> | undefined;
     if (!active || !payload?.length) return null;
@@ -180,7 +198,10 @@ export function GeographicAllocationWidget({
       {loading ? (
         <div className="flex-1 min-h-[260px] animate-pulse rounded-md bg-gray-100 dark:bg-gray-700/50" />
       ) : isEmpty ? (
-        <WidgetMessage>{t('geographicAllocation.empty')}</WidgetMessage>
+        // Nothing to draw: either there are no holdings, or every one was
+        // dropped for want of a price or rate. Say which so an all-excluded
+        // portfolio is not shown as an ordinary empty state.
+        <WidgetMessage>{partialNote ?? t('geographicAllocation.empty')}</WidgetMessage>
       ) : config.view === 'exchange' ? (
         <div className="flex-1 min-h-[260px]">
           <ResponsiveContainer width="100%" height="100%" minWidth={0}>
@@ -245,6 +266,11 @@ export function GeographicAllocationWidget({
             ))}
           </div>
         </>
+      )}
+      {!loading && !isEmpty && partialNote && (
+        // Some holdings converted and some did not: the shares above are of the
+        // convertible subset, so mark them a subtotal rather than 100%.
+        <p className="mt-2 text-xs text-amber-600 dark:text-amber-400" data-testid="partial-note">{partialNote}</p>
       )}
     </WidgetCard>
   );

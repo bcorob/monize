@@ -28,15 +28,20 @@ export function aggregateHoldingsBySecurity(
 
     const totalQuantity = Number(existing.quantity) + Number(h.quantity);
     const totalCostBasis = Number(existing.costBasis) + Number(h.costBasis);
+    // A sum with an unknown component is unknown: `Number(null)` is 0, which
+    // silently dropped a whole account's basis from the rollup and overstated
+    // the gain computed against it.
     const totalCostBasisAccountCurrency =
-      Number(existing.costBasisAccountCurrency) +
-      Number(h.costBasisAccountCurrency);
+      existing.costBasisAccountCurrency === null ||
+      h.costBasisAccountCurrency === null
+        ? null
+        : existing.costBasisAccountCurrency + h.costBasisAccountCurrency;
     const existingMv = existing.marketValue;
     const addMv = h.marketValue;
+    // Same rule for market value: one unpriced account makes the security's
+    // aggregate value unknown, not the priced accounts' subtotal.
     const totalMarketValue =
-      existingMv === null && addMv === null
-        ? null
-        : (existingMv ?? 0) + (addMv ?? 0);
+      existingMv === null || addMv === null ? null : existingMv + addMv;
     const gainLoss =
       totalMarketValue !== null ? totalMarketValue - totalCostBasis : null;
     const gainLossPercent =

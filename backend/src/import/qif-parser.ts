@@ -9,7 +9,7 @@
  * - P = Payee
  * - M = Memo
  * - N = Number (cheque number) OR Action (for investment transactions)
- * - C = Cleared status (* = cleared, X = reconciled)
+ * - C = Cleared status (* or c = cleared, X or R = reconciled)
  * - L = Category (transfers start with [])
  * - S = Split category
  * - E = Split memo
@@ -23,6 +23,8 @@
  * - N = Action (Buy, Sell, Div, ReinvDiv, ShrsIn, ShrsOut, etc.)
  * - O = Commission
  */
+
+import { applyQifClearedField } from "./qif-status.util";
 
 export interface QifTransaction {
   date: string;
@@ -318,12 +320,8 @@ export function parseQif(
         currentTransaction.action = value;
         break;
 
-      case "C": // Cleared status (* = cleared, X = reconciled)
-        if (value === "*") {
-          currentTransaction.cleared = true;
-        } else if (value === "X" || value === "x") {
-          currentTransaction.reconciled = true;
-        }
+      case "C": // Cleared status (*/c = cleared, X/R = reconciled)
+        applyQifClearedField(currentTransaction, value);
         break;
 
       case "L": {
@@ -1210,11 +1208,7 @@ export function parseQifFull(
         break;
 
       case "C":
-        if (value === "*") {
-          currentTransaction.cleared = true;
-        } else if (value === "X" || value === "x") {
-          currentTransaction.reconciled = true;
-        }
+        applyQifClearedField(currentTransaction, value);
         break;
 
       case "L": {

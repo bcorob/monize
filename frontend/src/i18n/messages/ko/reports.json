@@ -144,9 +144,6 @@
     "defaultMessage": "보고서 데이터를 불러오지 못했습니다. 다시 시도해 주세요.",
     "retry": "다시 시도"
   },
-  "foreignCurrencyFees": {
-    "noEligibleAccounts": "해외 거래 수수료가 설정된 계정이 없습니다. 계정에 수수료 비율을 설정하면 해당 외화 수수료를 여기에서 추적할 수 있습니다."
-  },
   "accountBalances": {
     "totalAssets": "총 자산",
     "totalLiabilities": "총 부채",
@@ -333,7 +330,8 @@
     "tooltipUtilization": "활용도",
     "tooltipUsed": "사용액",
     "tooltipAvailable": "가용 한도",
-    "pdfTitle": "신용 활용도"
+    "pdfTitle": "신용 활용도",
+    "noRate": "환율 없음"
   },
   "currencyExposure": {
     "empty": "투자 보유 항목을 찾을 수 없습니다. 통화 노출을 보려면 유가증권을 추가하세요.",
@@ -575,20 +573,20 @@
     "topRegion": "주요 지역",
     "viewByRegion": "지역별",
     "viewByExchange": "거래소별",
+    "viewByCountry": "국가별",
     "regionalAllocation": "지역별 배분",
     "exchangeAllocation": "거래소별 배분",
+    "countryAllocation": "국가별 배분 (룩스루)",
+    "countryLookThroughNote": "국가별 익스포저는 각 종목에 설정된 수동 국가 배분을 사용하여 ETF와 펀드를 룩스루합니다. 개별 주식은 상장 거래소에 따라 분류되며, 분류되지 않은 항목은 \"기타\"로 표시됩니다.",
     "colRegion": "지역",
     "colExchange": "거래소",
     "colCountry": "국가",
     "colHoldings": "보유 항목",
     "colMarketValue": "시장 가치",
     "colPortfolioPct": "포트폴리오 비율",
+    "other": "기타",
     "total": "합계",
-    "holdingCount": "{count, plural, one {# 개의 보유 항목} other {# 개의 보유 항목}}",
-    "viewByCountry": "국가별",
-    "countryAllocation": "국가별 배분 (룩스루)",
-    "countryLookThroughNote": "국가별 익스포저는 각 종목에 설정된 수동 국가 배분을 사용하여 ETF와 펀드를 룩스루합니다. 개별 주식은 상장 거래소에 따라 분류되며, 분류되지 않은 항목은 \"기타\"로 표시됩니다.",
-    "other": "기타"
+    "holdingCount": "{count, plural, one {# 개의 보유 항목} other {# 개의 보유 항목}}"
   },
   "healthScoreHistory": {
     "pdfTitle": "건전성 점수 이력",
@@ -761,7 +759,13 @@
     "actionTransferOut": "이체 출금",
     "actionReinvest": "재투자",
     "actionAddShares": "수량 추가",
-    "actionRemoveShares": "수량 제거"
+    "actionRemoveShares": "수량 제거",
+    "actionReinvestInterest": "이자 재투자",
+    "actionReinvestCapitalGainShort": "단기 자본이득 재투자",
+    "actionReinvestCapitalGainLong": "장기 자본이득 재투자",
+    "actionCapitalGainShort": "단기 자본이득",
+    "actionCapitalGainLong": "장기 자본이득",
+    "actionRedeem": "CD/채권 상환"
   },
   "loanAmortization": {
     "empty": "대출 또는 주택 담보 대출 계정을 찾을 수 없습니다. 납부 이력을 보려면 대출 계정을 추가하세요.",
@@ -820,6 +824,7 @@
       "maxCompare": "최대 {max}개의 시나리오를 비교할 수 있습니다.",
       "loadFailed": "몬테카를로 데이터를 불러오지 못했습니다. 새로 고침해 주세요.",
       "currentValueFailed": "현재 포트폴리오 가치를 가져오지 못했습니다.",
+      "currentValueUnavailable": "선택한 계좌의 현재 가치를 확인할 수 없습니다. 시작 금액을 입력하거나, 가격과 환율을 사용할 수 있게 된 후 다시 시도하세요.",
       "holdingStatsFailed": "보유 항목별 과거 통계를 불러오지 못했습니다.",
       "reorderFailed": "시나리오 순서를 변경하지 못했습니다."
     },
@@ -1168,7 +1173,8 @@
     "csvColProceeds": "매각 대금",
     "csvColCostBasis": "취득 원가",
     "csvColGainLoss": "이익/손실",
-    "csvColReturn": "수익률 %"
+    "csvColReturn": "수익률 %",
+    "csvNoRate": "환율 없음"
   },
   "recurringExpenses": {
     "recurringExpenses": "반복 지출",
@@ -1376,7 +1382,8 @@
     "pdfTotalPortfolio": "총 포트폴리오",
     "pdfAssetTypes": "자산 유형",
     "pdfTotalHoldings": "총 보유 항목",
-    "pdfLargestType": "최대 유형"
+    "pdfLargestType": "최대 유형",
+    "unavailable": "사용 불가"
   },
   "spendingAnomalies": {
     "highPriority": "높은 우선순위",
@@ -1700,5 +1707,8 @@
     "labelSelectAccount": "대출 계좌 선택",
     "viewTransactions": "거래 보기",
     "empty": "대출, 주택담보대출 또는 신용한도 계좌를 찾을 수 없습니다."
+  },
+  "foreignCurrencyFees": {
+    "noEligibleAccounts": "해외 거래 수수료가 설정된 계정이 없습니다. 계정에 수수료 비율을 설정하면 해당 외화 수수료를 여기에서 추적할 수 있습니다."
   }
 }

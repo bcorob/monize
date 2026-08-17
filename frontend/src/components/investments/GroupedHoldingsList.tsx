@@ -13,6 +13,13 @@ interface GroupedHoldingsListProps {
   holdingsByAccount: AccountHoldings[];
   isLoading: boolean;
   totalPortfolioValue: number;
+  /**
+   * False when `totalPortfolioValue` is a known subtotal rather than the whole
+   * portfolio (a missing price or FX rate). A share of a subtotal is not a
+   * share of the portfolio, so the "% Port" column reads unknown then
+   * (review #1133). Absent reads as complete.
+   */
+  valuationComplete?: boolean;
   onSecurityClick?: (securityId: string) => void;
   onCashClick?: (cashAccountId: string) => void;
 }
@@ -21,12 +28,13 @@ export function GroupedHoldingsList({
   holdingsByAccount,
   isLoading,
   totalPortfolioValue,
+  valuationComplete,
   onSecurityClick,
   onCashClick,
 }: GroupedHoldingsListProps) {
   const t = useTranslations('investments');
   const { formatCurrency: formatCurrencyBase, formatCurrencyPrecise, formatSignedPercent, formatNumber, formatQuantity } = useNumberFormat();
-  const { convert, convertToDefault, defaultCurrency } = useExchangeRates();
+  const { getRate, defaultCurrency } = useExchangeRates();
 
   const [expandedAccounts, setExpandedAccounts] = useState<Set<string>>(
     new Set(holdingsByAccount.map((a) => a.accountId)),
@@ -66,12 +74,36 @@ export function GroupedHoldingsList({
     return gainLossColor(value);
   };
 
+  // A share of a known subtotal is not a share of the portfolio, and a value
+  // whose pair has no rate cannot join the numerator: both read unknown ('-')
+  // rather than a definitive-looking percentage of the wrong denominator
+  // (review #1133). getRate returns null for an unresolved pair, so the missing
+  // conversion surfaces here rather than being silently dropped.
   const getPortfolioPercent = (value: number | null, currencyCode?: string): string => {
     if (value === null || totalPortfolioValue === 0) return '-';
-    const converted = currencyCode && currencyCode !== defaultCurrency
-      ? convertToDefault(value, currencyCode)
-      : value;
+    if (valuationComplete === false) return '-';
+    let converted = value;
+    if (currencyCode && currencyCode !== defaultCurrency) {
+      const rate = getRate(currencyCode, defaultCurrency);
+      if (rate === null) return '-';
+      converted = value * rate;
+    }
     return ((converted / totalPortfolioValue) * 100).toFixed(1) + '%';
+  };
+
+  // The "~ default currency" approximation under an account's total: unknown --
+  // and unrendered -- when the pair has no rate (getRate returns null) or when
+  // the account's own valuation is incomplete (the total being approximated is a
+  // subtotal the marker beside it just called partial). The summary card
+  // suppresses its ~ line the same way.
+  const accountDefaultApprox = (
+    account: AccountHoldings,
+    accountTotalValue: number,
+  ): number | null => {
+    if (account.valuationComplete === false) return null;
+    const rate = getRate(account.currencyCode, defaultCurrency);
+    if (rate === null) return null;
+    return accountTotalValue * rate;
   };
 
   if (isLoading) {
@@ -137,6 +169,9 @@ export function GroupedHoldingsList({
           const acctDisplayCurrency = account.currencyCode !== defaultCurrency
             ? account.currencyCode
             : null;
+          const defaultApprox = acctDisplayCurrency
+            ? accountDefaultApprox(account, accountTotalValue)
+            : null;
           const fmtAcct = (value: number | null) => {
             if (value === null) return '-';
             if (acctDisplayCurrency) return `${formatCurrencyBase(value, acctDisplayCurrency)} ${acctDisplayCurrency}`;
@@ -165,15 +200,25 @@ export function GroupedHoldingsList({
                         ? t('groupedHoldings.positionsWithCash', { count: account.holdings.length, plural: account.holdings.length !== 1 ? 's' : '' })
                         : t('groupedHoldings.positions', { count: account.holdings.length, plural: account.holdings.length !== 1 ? 's' : '' })}
                     </div>
+                    {/* This account's totals are in its OWN currency, a different
+                        conversion from the portfolio's, so the global state cannot
+                        speak for them (recheck RR4-002 / RR3-005). */}
+                    {account.valuationComplete === false && (
+                      <div className="text-xs text-amber-700 dark:text-amber-300">
+                        {t('groupedHoldings.accountIncomplete', {
+                          currency: account.currencyCode,
+                        })}
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div className="text-right">
                   <div className="font-semibold text-gray-900 dark:text-gray-100">
                     {fmtAcct(accountTotalValue)}
                   </div>
-                  {acctDisplayCurrency && (
+                  {defaultApprox !== null && (
                     <div className="text-xs text-gray-400 dark:text-gray-500">
-                      {'\u2248 '}{formatCurrencyBase(convertToDefault(accountTotalValue, acctDisplayCurrency), defaultCurrency)} {defaultCurrency}
+                      {'\u2248 '}{formatCurrencyBase(defaultApprox, defaultCurrency)} {defaultCurrency}
                     </div>
                   )}
                   <div className={`text-sm ${getGainLossColor(account.totalGainLoss)}`}>
@@ -221,7 +266,7 @@ export function GroupedHoldingsList({
                           holding={holding}
                           defaultCurrency={defaultCurrency}
                           accountCurrency={account.currencyCode}
-                          convert={convert}
+                          getRate={getRate}
                           formatCurrency={formatCurrency}
                           formatCurrencyWithCode={formatCurrencyBase}
                           formatPrice={formatPrice}
@@ -285,9 +330,9 @@ export function GroupedHoldingsList({
                         </td>
                         <td className="px-1.5 sm:px-4 py-3 text-right text-sm text-gray-900 dark:text-gray-100">
                           <div>{fmtAcct(accountTotalValue)}</div>
-                          {acctDisplayCurrency && (
+                          {defaultApprox !== null && (
                             <div className="text-xs font-normal text-gray-400 dark:text-gray-500">
-                              {'\u2248 '}{formatCurrencyBase(convertToDefault(accountTotalValue, acctDisplayCurrency), defaultCurrency)} {defaultCurrency}
+                              {'\u2248 '}{formatCurrencyBase(defaultApprox, defaultCurrency)} {defaultCurrency}
                             </div>
                           )}
                         </td>
@@ -319,7 +364,7 @@ interface HoldingRowProps {
   holding: HoldingWithMarketValue;
   defaultCurrency: string;
   accountCurrency: string;
-  convert: (amount: number, fromCurrency: string, toCurrency?: string) => number;
+  getRate: (fromCurrency: string, toCurrency?: string) => number | null;
   formatCurrency: (value: number | null) => string;
   formatCurrencyWithCode: (value: number, currencyCode: string) => string;
   formatPrice: (value: number | null, currencyCode?: string) => string;
@@ -334,7 +379,7 @@ const HoldingRow = memo(function HoldingRow({
   holding,
   defaultCurrency,
   accountCurrency,
-  convert,
+  getRate,
   formatCurrency,
   formatCurrencyWithCode,
   formatPrice,
@@ -366,12 +411,23 @@ const HoldingRow = memo(function HoldingRow({
   // current rate (shares are worth what the market says today), so the
   // gain/loss line below it is derived from those two values — keeping the
   // displayed rows aligned with the account total row beneath the table.
+  //
+  // Through getRate, not convert(): convert passes the amount through
+  // unchanged when the pair has no rate, so a EUR value rendered as
+  // "≈ ¥600 JPY" directly beside the account's Partial marker saying the
+  // value could not be worked out in JPY (review #1133). No rate means the
+  // account-currency value is unknown, and the ≈ sub-line stays absent like
+  // the backend's own costBasisAccountCurrency does.
+  const acctRate = isForeignToAccount
+    ? getRate(holding.currencyCode, accountCurrency)
+    : 1;
   const marketValueAcct =
-    holding.marketValue !== null
-      ? convert(holding.marketValue, holding.currencyCode, accountCurrency)
+    holding.marketValue !== null && acctRate !== null
+      ? holding.marketValue * acctRate
       : null;
+  // Unknown basis makes the gain unknown, not equal to the market value.
   const gainLossAcct =
-    marketValueAcct !== null
+    marketValueAcct !== null && holding.costBasisAccountCurrency !== null
       ? marketValueAcct - holding.costBasisAccountCurrency
       : null;
 

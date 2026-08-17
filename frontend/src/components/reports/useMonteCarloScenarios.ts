@@ -242,19 +242,21 @@ export function useMonteCarloScenarios() {
       .historicalStats(accountIds)
       .then((stats) => {
         if (cancelled) return;
-        // NaN serializes to JSON null; guard against that and any other
-        // non-numeric server quirks so we never feed null into a required
-        // numeric form field.
-        const safe =
-          typeof stats.currentBalance === 'number' &&
-          Number.isFinite(stats.currentBalance)
-            ? stats.currentBalance
-            : 0;
+        // The server sends null when it could not value the accounts. Filling
+        // the field with 0 would let the user run a projection from an empty
+        // portfolio and read it as real, so the failure is surfaced and the
+        // field is left for them to enter (audit P5-010). Zero is a real value
+        // and is applied normally.
+        const value = stats.currentBalance;
+        if (typeof value !== 'number' || !Number.isFinite(value)) {
+          toast.error(t('monteCarlo.toasts.currentValueUnavailable'));
+          return;
+        }
         setForm((prev) =>
           prev.useCurrentBalance &&
           prev.accountIds.length > 0 &&
           prev.accountIds.every((id) => accountIds.includes(id))
-            ? { ...prev, startingValue: safe }
+            ? { ...prev, startingValue: value }
             : prev,
         );
       })

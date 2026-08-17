@@ -202,7 +202,8 @@
     "title": "Benutting per rekening",
     "empty": "Geen kredietrekeningen met een ingestelde limiet.",
     "utilization": "Benutting",
-    "used": "Gebruikt"
+    "used": "Gebruikt",
+    "noRate": "niet beschikbaar (geen {currency}-koers)"
   },
   "creditUtilizationTotal": {
     "title": "Totale benutting",

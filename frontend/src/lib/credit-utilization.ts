@@ -27,9 +27,14 @@ export interface CreditUtilizationRow {
   name: string;
   accountType: Account['accountType'];
   currencyCode: string;
-  limit: number;
-  used: number;
-  available: number;
+  /**
+   * Amounts in the display currency, or `null` when no rate for this account's
+   * currency was available. The *percentage* is computed natively and is always
+   * known -- utilisation is a ratio within one currency, so it needs no rate.
+   */
+  limit: number | null;
+  used: number | null;
+  available: number | null;
   utilizationPercent: number;
 }
 
@@ -38,6 +43,15 @@ export interface CreditUtilizationTotals {
   used: number;
   available: number;
   utilizationPercent: number;
+  /**
+   * Currencies excluded from the money totals for want of a rate. Non-empty
+   * means `limit`, `used` and `available` are subtotals -- and that
+   * `utilizationPercent`, being their ratio, describes only the included
+   * accounts.
+   */
+  missingCurrencies: string[];
+  /** Number of accounts left out of the totals (a component count, not a currency count). */
+  excludedCount: number;
 }
 
 /**
@@ -47,7 +61,7 @@ export interface CreditUtilizationTotals {
  */
 export function computeCreditRows(
   accounts: Account[],
-  convert: (value: number, from: string, to: string) => number,
+  convert: (value: number, from: string, to: string) => number | null,
   displayCurrency: string,
 ): CreditUtilizationRow[] {
   return accounts.map((account) => {
@@ -71,13 +85,30 @@ export function computeCreditRows(
 export function computeCreditTotals(
   rows: CreditUtilizationRow[],
 ): CreditUtilizationTotals {
-  const limit = rows.reduce((sum, r) => sum + r.limit, 0);
-  const used = rows.reduce((sum, r) => sum + r.used, 0);
-  const available = rows.reduce((sum, r) => sum + r.available, 0);
+  // A row with no rate contributes nothing and is named, rather than being
+  // counted as a zero limit and a zero balance -- which would quietly improve
+  // the utilisation figure the widget exists to warn about.
+  const missing = new Set<string>();
+  let excludedCount = 0;
+  let limit = 0;
+  let used = 0;
+  let available = 0;
+  for (const row of rows) {
+    if (row.limit === null || row.used === null || row.available === null) {
+      missing.add(row.currencyCode);
+      excludedCount += 1;
+      continue;
+    }
+    limit += row.limit;
+    used += row.used;
+    available += row.available;
+  }
   return {
     limit,
     used,
     available,
     utilizationPercent: limit > 0 ? (used / limit) * 100 : 0,
+    missingCurrencies: [...missing],
+    excludedCount,
   };
 }

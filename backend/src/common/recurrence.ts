@@ -8,8 +8,42 @@ export type FrequencyType =
   | "MONTHLY"
   | "EVERY2MONTHS"
   | "QUARTERLY"
+  | "EVERY4MONTHS"
   | "SEMIANNUAL"
-  | "YEARLY";
+  | "YEARLY"
+  | "EVERY2YEARS";
+
+/**
+ * Mean length of one cycle of each frequency, in days. `ONCE` is 0 -- it has no
+ * cycle, and callers matching an observed or computed spacing must skip it.
+ *
+ * Means, not whole cycles: a value here is matched against a number of days, so
+ * February and a 31-day month have to average out rather than round up. That is
+ * why the calendar frequencies are written as fractions of `365.25` -- the
+ * spellings are chosen so that a cadence expressed as "one <unit> divided by n
+ * occurrences" lands on exactly one of these numbers rather than near it, which
+ * is what lets a code table be matched by equality instead of by tolerance.
+ *
+ * This is the one place a frequency's length is written down. The `.mny`
+ * importer reads it from both ends -- `bill-cadence.ts` matches observed
+ * instance spacing against it, `mny-model.ts` matches Money's own recurrence
+ * codes against it -- and the compiler forces a new frequency to declare one.
+ */
+export const FREQUENCY_CYCLE_DAYS: Record<FrequencyType, number> = {
+  ONCE: 0,
+  DAILY: 1,
+  WEEKLY: 7,
+  BIWEEKLY: 14,
+  EVERY4WEEKS: 28,
+  SEMIMONTHLY: 365.25 / 24,
+  MONTHLY: 365.25 / 12,
+  EVERY2MONTHS: 365.25 / 6,
+  QUARTERLY: 365.25 / 4,
+  EVERY4MONTHS: 365.25 / 3,
+  SEMIANNUAL: 365.25 / 2,
+  YEARLY: 365.25,
+  EVERY2YEARS: 365.25 * 2,
+};
 
 const YMD_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
 
@@ -90,10 +124,14 @@ export function calculateNextDueDate(
       return addMonthsClamped(ymd, 2);
     case "QUARTERLY":
       return addMonthsClamped(ymd, 3);
+    case "EVERY4MONTHS":
+      return addMonthsClamped(ymd, 4);
     case "SEMIANNUAL":
       return addMonthsClamped(ymd, 6);
     case "YEARLY":
       return addYearsClamped(ymd, 1);
+    case "EVERY2YEARS":
+      return addYearsClamped(ymd, 2);
     default:
       return ymd;
   }

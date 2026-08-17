@@ -1,5 +1,6 @@
 import apiClient from './api';
 import { Account } from '@/types/account';
+import { TransactionStatus } from '@/types/transaction';
 /**
  * Mirrors `BACKFILL_RANGES` in the backend's `backfill-prices-query.dto.ts`.
  * The server validates against its own allowlist; this keeps a caller from
@@ -326,6 +327,22 @@ export const investmentsApi = {
     const response = await apiClient.patch<InvestmentTransaction>(
       `/investment-transactions/${id}`,
       data,
+    );
+    invalidateBalanceCaches();
+    return response.data;
+  },
+
+  // Update only the status of an investment transaction (the register's
+  // click-to-cycle path). Crossing the VOID boundary moves holdings and the
+  // linked cash balance server-side, so the balance caches are invalidated
+  // exactly as transactionsApi.updateStatus does.
+  updateStatus: async (
+    id: string,
+    status: TransactionStatus,
+  ): Promise<InvestmentTransaction> => {
+    const response = await apiClient.patch<InvestmentTransaction>(
+      `/investment-transactions/${id}/status`,
+      { status },
     );
     invalidateBalanceCaches();
     return response.data;

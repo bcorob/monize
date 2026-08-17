@@ -21,13 +21,17 @@ export function convertWithRateLookup(
     return amount;
   }
 
+  // A rate must be strictly positive to be a rate at all. Zero and negatives
+  // are treated as absent rather than applied: multiplying by 0 would report a
+  // real holding as worthless, and the inverse branch already had to guard
+  // against dividing by it.
   const direct = getRate(from, to);
-  if (direct != null) {
+  if (direct != null && direct > 0) {
     return amount * direct;
   }
 
   const inverse = getRate(to, from);
-  if (inverse != null && inverse !== 0) {
+  if (inverse != null && inverse > 0) {
     return amount / inverse;
   }
 

@@ -124,9 +124,13 @@ export function UsageDashboard({ usage, configs, onPeriodChange }: UsageDashboar
   const renderBucket = (bucket: EstimatedCostByCurrency): string => {
     if (!hasAnyCost(bucket)) return '-';
     if (showInHomeCurrency || !hasForeignCurrency) {
+      // A bucket that cannot be fully converted is reported as unavailable
+      // rather than as the sum of the currencies that happened to have rates.
       let total = 0;
       for (const [currency, amount] of Object.entries(bucket)) {
-        total += convert(amount, currency, homeCurrency);
+        const converted = convert(amount, currency, homeCurrency);
+        if (converted === null) return '-';
+        total += converted;
       }
       return currencyFormatter(homeCurrency).format(total);
     }
@@ -142,9 +146,9 @@ export function UsageDashboard({ usage, configs, onPeriodChange }: UsageDashboar
   ): string => {
     if (cost === null || !costCurrency) return '-';
     if (showInHomeCurrency) {
-      return currencyFormatter(homeCurrency).format(
-        convert(cost, costCurrency, homeCurrency),
-      );
+      const converted = convert(cost, costCurrency, homeCurrency);
+      if (converted === null) return '-';
+      return currencyFormatter(homeCurrency).format(converted);
     }
     return currencyFormatter(costCurrency).format(cost);
   };

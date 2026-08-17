@@ -284,7 +284,13 @@
       "TRANSFER_OUT": "Przeniesienie wychodzące",
       "REINVEST": "Reinwestycja",
       "ADD_SHARES": "Dodaj udziały",
-      "REMOVE_SHARES": "Usuń udziały"
+      "REMOVE_SHARES": "Usuń udziały",
+      "REINVEST_INTEREST": "Reinwestycja odsetek",
+      "REINVEST_CAPITAL_GAIN_SHORT": "Reinwestycja krótkoterminowych zysków kapitałowych",
+      "REINVEST_CAPITAL_GAIN_LONG": "Reinwestycja długoterminowych zysków kapitałowych",
+      "CAPITAL_GAIN_SHORT": "Krótkoterminowy zysk kapitałowy",
+      "CAPITAL_GAIN_LONG": "Długoterminowy zysk kapitałowy",
+      "REDEEM": "Wykup CD/obligacji"
     },
     "toasts": {
       "loadHistoryFailed": "Nie udało się wczytać historii",

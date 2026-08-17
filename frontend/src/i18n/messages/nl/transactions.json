@@ -26,7 +26,8 @@
     "editAria": "Begunstigde bewerken",
     "detailsAria": "Begunstigde-details bekijken",
     "collapseAria": "Begunstigde-info verbergen",
-    "show": "Begunstigde-info tonen"
+    "show": "Begunstigde-info tonen",
+    "amountUnavailable": "Geen koers"
   },
   "categoryWidget": {
     "detailsAria": "Categorie-details bekijken",
@@ -47,7 +48,8 @@
     "noTransactions": "Geen transacties in deze periode",
     "editAria": "Categorie bewerken",
     "collapseAria": "Categorie-info verbergen",
-    "show": "Categorie-info tonen"
+    "show": "Categorie-info tonen",
+    "amountUnavailable": "Geen koers"
   },
   "accountWidget": {
     "currentBalance": "Huidig saldo",
@@ -110,10 +112,11 @@
       "paidAmount": "Betaald bedrag",
       "feePaid": "Betaalde kosten",
       "balance": "Saldo",
+      "attachments": "Bijlagen",
       "status": "Status",
-      "actions": "Acties",
-      "attachments": "Bijlagen"
+      "actions": "Acties"
     },
+    "attachmentsCount": "{count, plural, one {# bijlage} other {# bijlagen}}",
     "today": "Vandaag",
     "export": {
       "button": "Exporteren",
@@ -174,8 +177,7 @@
       "editButton": "Bewerken",
       "deleteButton": "Verwijderen"
     },
-    "itemNamePlural": "transacties",
-    "attachmentsCount": "{count, plural, one {# bijlage} other {# bijlagen}}"
+    "itemNamePlural": "transacties"
   },
   "row": {
     "copyOptions": {
@@ -230,6 +232,11 @@
       "currency": "Valuta",
       "hasAttachments": "Bijlagen"
     },
+    "hasAttachmentsOptions": {
+      "any": "Alle",
+      "yes": "Ja",
+      "no": "Nee"
+    },
     "placeholders": {
       "accounts": "Alle rekeningen",
       "payees": "Alle begunstigden",
@@ -240,6 +247,13 @@
       "amountMax": "Max",
       "search": "Zoek op begunstigde, categorie, bedrag, label, omschrijving, referentie #...",
       "tagKeyValue": "bijv. usa"
+    },
+    "tagKeyNone": "Alle (geen sleutelfilter)",
+    "tagKeyOps": {
+      "hasValue": "Heeft een waarde",
+      "noValue": "Heeft geen waarde",
+      "contains": "Waarde bevat",
+      "notContains": "Waarde bevat niet"
     },
     "chips": {
       "removeAccount": "Filter {name} verwijderen",
@@ -280,18 +294,6 @@
       "yearToDate": "Jaar tot nu toe",
       "lastYear": "Vorig jaar",
       "custom": "Aangepast"
-    },
-    "tagKeyNone": "Alle (geen sleutelfilter)",
-    "tagKeyOps": {
-      "hasValue": "Heeft een waarde",
-      "noValue": "Heeft geen waarde",
-      "contains": "Waarde bevat",
-      "notContains": "Waarde bevat niet"
-    },
-    "hasAttachmentsOptions": {
-      "any": "Alle",
-      "yes": "Ja",
-      "no": "Nee"
     }
   },
   "bulk": {
@@ -399,6 +401,7 @@
       "optionLabel": "{name} ({currency}) — {owner}"
     },
     "crossOwnerLockedNote": "De andere kant van deze overboeking staat op een rekening die niet meer met je wordt gedeeld. Het bedrag, de datum en de rekeningen zijn vergrendeld, maar je kunt de details van deze transactie nog steeds bewerken.",
+    "transferCategoryNote": "Optioneel. De overboeking telt nog steeds niet mee als inkomsten of uitgaven, maar met deze categorie verschijnt hij wel in het maandelijkse categorieoverzicht (bijv. maandelijkse beleggingsinleg).",
     "amountReceivedNote": "Ontvangen bedrag na valutaomrekening",
     "splitTransaction": "Transactie splitsen",
     "splitDisabledDuringTour": "Niet beschikbaar tijdens de begeleide rondleiding",
@@ -408,6 +411,7 @@
       "transferUpdated": "Overboeking bijgewerkt",
       "transactionCreated": "Transactie aangemaakt",
       "transactionUpdated": "Transactie bijgewerkt",
+      "attachmentsUploadFailed": "Transactie opgeslagen, maar {count} bijlage(n) konden niet worden geüpload",
       "saveFailed": "Opslaan van transactie mislukt",
       "loadFailed": "Laden van formuliergegevens mislukt",
       "splitsNotEqual": "Totaal splitsingen ({splitTotal}) moet gelijk zijn aan transactiebedrag ({txAmount})",
@@ -422,13 +426,11 @@
       "categoryCreateFailed": "Aanmaken van categorie mislukt",
       "tagCreated": "Label \"{name}\" aangemaakt",
       "fxRateRequired": "Voer een wisselkoers of het omgerekende bedrag in voordat je een transactie in vreemde valuta opslaat.",
-      "attachmentsUploadFailed": "Transactie opgeslagen, maar {count} bijlage(n) konden niet worden geüpload",
       "jointPayeeCreateNotGranted": "De eigenaar van de rekening heeft u geen toestemming gegeven om begunstigden aan te maken. Kies in plaats daarvan een bestaande begunstigde."
     },
     "ariaHistory": "Recente transacties tonen",
     "ariaHistoryForPayee": "Recente transacties voor deze begunstigde tonen",
     "historyTitle": "Snel invullen vanuit een recente transactie",
-    "transferCategoryNote": "Optioneel. De overboeking telt nog steeds niet mee als inkomsten of uitgaven, maar met deze categorie verschijnt hij wel in het maandelijkse categorieoverzicht (bijv. maandelijkse beleggingsinleg).",
     "currencyPicker": {
       "label": "Invoervaluta",
       "ariaLabel": "Invoervaluta wijzigen",
@@ -440,15 +442,15 @@
       "reactivated": "{code} opnieuw geactiveerd"
     },
     "fx": {
+      "totalInCurrency": "Totaal in {currency}",
+      "rateCaption": "1 {from} = {rate} {to} ({date})",
       "noRateWarning": "Geen wisselkoers gevonden voor {from} naar {to} op {date}. Voer het omgerekende bedrag handmatig in.",
       "usingLatestRateHint": "De laatst beschikbare koers wordt gebruikt (niet van {date}).",
       "displayToggle": {
         "account": "Rekening",
         "original": "Origineel"
       },
-      "rateCaption": "1 {from} = {rate} {to} ({date})",
-      "feeCaption": "Inclusief {percent}% kosten voor buitenlandse transactie ({fee}).",
-      "totalInCurrency": "Totaal in {currency}"
+      "feeCaption": "Inclusief {percent}% kosten voor buitenlandse transactie ({fee})."
     },
     "jointSplitDisabled": "Gesplitste transacties in een gedeelde rekening kunnen alleen door de eigenaar worden beheerd"
   },
@@ -473,6 +475,10 @@
     "remaining": "Resterend: {symbol}{amount}",
     "needAmount": "Nodig {symbol}{amount} (resterend: {symbol}{remaining})",
     "setTotal": "Totaal instellen op {symbol}{amount}",
+    "currencyToggle": {
+      "title": "Wissel de valuta waarin de splitsbedragen worden getoond en bewerkt",
+      "ariaAmountsIn": "Splitsbedragen tonen en bewerken in {code}"
+    },
     "splitLabel": "Splitsing {number}",
     "columns": {
       "type": "Type",
@@ -491,11 +497,7 @@
     "selectAccount": "Selecteer rekening...",
     "memoPlaceholder": "Optionele memo",
     "mobileMemoPlaceholder": "Memo",
-    "tagsPlaceholder": "Labels...",
-    "currencyToggle": {
-      "title": "Wissel de valuta waarin de splitsbedragen worden getoond en bewerkt",
-      "ariaAmountsIn": "Splitsbedragen tonen en bewerken in {code}"
-    }
+    "tagsPlaceholder": "Labels..."
   },
   "recentPopover": {
     "recentForPayee": "Recent voor {name}",
@@ -513,7 +515,11 @@
     "quantityPlaceholder": "Aantal",
     "pricePlaceholder": "Koers",
     "commissionPlaceholder": "Commissie",
-    "amountPlaceholder": "Bedrag ({currency})"
+    "amountPlaceholder": "Bedrag ({currency})",
+    "ratePlaceholder": "{to} per 1 {from}",
+    "ariaRate": "Wisselkoers ({to} per 1 {from})",
+    "rateHint": "Aantal, prijs en commissie zijn in {from}; deze koers rekent het kaseffect om naar {to}.",
+    "rateUnresolved": "Geen koers van {from} naar {to} beschikbaar. Voer er een in — zonder is het kaseffect niet te bepalen, en de twee valuta's zijn niet gelijk."
   },
   "charts": {
     "balanceHistory": {

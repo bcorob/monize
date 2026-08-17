@@ -26,7 +26,8 @@
     "editAria": "Edit payee",
     "detailsAria": "View payee details",
     "collapseAria": "Hide payee info",
-    "show": "Show payee info"
+    "show": "Show payee info",
+    "amountUnavailable": "No rate"
   },
   "categoryWidget": {
     "detailsAria": "View category details",
@@ -47,7 +48,8 @@
     "noTransactions": "No transactions in this period",
     "editAria": "Edit category",
     "collapseAria": "Hide category info",
-    "show": "Show category info"
+    "show": "Show category info",
+    "amountUnavailable": "No rate"
   },
   "accountWidget": {
     "currentBalance": "Current Balance",
@@ -513,7 +515,11 @@
     "quantityPlaceholder": "Quantity",
     "pricePlaceholder": "Price",
     "commissionPlaceholder": "Commission",
-    "amountPlaceholder": "Amount ({currency})"
+    "amountPlaceholder": "Amount ({currency})",
+    "ratePlaceholder": "{to} per 1 {from}",
+    "ariaRate": "Exchange rate ({to} per 1 {from})",
+    "rateHint": "Quantity, price and commission are in {from}; this rate converts the cash impact into {to}.",
+    "rateUnresolved": "No {from} to {to} rate is available. Enter one — the cash impact cannot be worked out without it, and the two currencies are not equal."
   },
   "charts": {
     "balanceHistory": {

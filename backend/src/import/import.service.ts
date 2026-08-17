@@ -55,7 +55,11 @@ import { ImportInvestmentProcessorService } from "./import-investment-processor.
 import { ImportRegularProcessorService } from "./import-regular-processor.service";
 import { Security } from "../securities/entities/security.entity";
 import { Tag } from "../tags/entities/tag.entity";
-import { Transaction } from "../transactions/entities/transaction.entity";
+import {
+  Transaction,
+  TransactionStatus,
+} from "../transactions/entities/transaction.entity";
+import { deletionBalanceEffect } from "../common/deletion-balance.util";
 import { TransactionSplit } from "../transactions/entities/transaction-split.entity";
 import { tr } from "../i18n/translate";
 
@@ -1542,6 +1546,10 @@ export class ImportService {
       transaction_date: string;
       account_id: string;
       linked_transaction_id: string | null;
+      // Selected because the deletion below must not reverse a VOID row's
+      // contribution -- it has none. A raw select that omits the column would
+      // hand `deletionBalanceEffect` an `undefined` status and quietly reverse it.
+      status: TransactionStatus;
     }> = await manager
       .createQueryBuilder(Transaction, "t")
       .leftJoin(TransactionSplit, "split", "split.linked_transaction_id = t.id")
@@ -1557,6 +1565,7 @@ export class ImportService {
         "t.transaction_date AS transaction_date",
         "t.account_id AS account_id",
         "t.linked_transaction_id AS linked_transaction_id",
+        "t.status AS status",
       ])
       .getRawMany();
 
@@ -1614,23 +1623,44 @@ export class ImportService {
           // Reliable match: delete the merged transfer and its linked counterpart
           const linkedId = candidate.linked_transaction_id;
 
-          // Reverse balance impacts
-          await updateAccountBalance(
-            manager,
-            candidate.account_id,
-            -Number(candidate.amount),
-          );
+          // Reverse only what each row contributed: a VOID or future-dated row
+          // was never in the balance, and reversing it would create money.
+          // `needsRecalc` (the future-dated case) is deliberately subsumed
+          // here rather than acted on: the import pipeline ends with
+          // ImportPostProcessingService recomputing every account in
+          // `affectedAccountIds` absolutely, so membership in that set is the
+          // recalculation -- which is why each deleted row's account is added
+          // to it below.
+          const candidateDelta = deletionBalanceEffect({
+            amount: candidate.amount,
+            status: candidate.status,
+            transactionDate: candidate.transaction_date,
+          }).delta;
+          if (candidateDelta !== 0) {
+            await updateAccountBalance(
+              manager,
+              candidate.account_id,
+              candidateDelta,
+            );
+          }
+          affectedAccountIds.add(candidate.account_id);
 
           if (linkedId) {
             const linkedTx = await manager.findOne(Transaction, {
               where: { id: linkedId },
             });
             if (linkedTx) {
-              await updateAccountBalance(
-                manager,
-                linkedTx.accountId,
-                -Number(linkedTx.amount),
-              );
+              const linkedDelta = deletionBalanceEffect(linkedTx).delta;
+              if (linkedDelta !== 0) {
+                await updateAccountBalance(
+                  manager,
+                  linkedTx.accountId,
+                  linkedDelta,
+                );
+              }
+              // The counterpart can live in an account this import never
+              // touched; without this the post-import recompute skips it.
+              affectedAccountIds.add(linkedTx.accountId);
               await manager.delete(Transaction, linkedId);
             }
           }

@@ -519,6 +519,7 @@
     "billTemplateMissing": "{count, plural, one {# geplante Rechnung hatte} other {# geplante Rechnungen hatten}} keine Vorlagentransaktion in der Datei und wurden übersprungen.",
     "unusableBill": "{count, plural, one {# geplante Rechnung hatte} other {# geplante Rechnungen hatten}} kein Konto, kein brauchbares Datum oder eine unbekannte Wiederholung und wurden übersprungen.",
     "billFrequencyApproximated": "{count, plural, one {# geplante Rechnung verwendet} other {# geplante Rechnungen verwenden}} ein Wiederholungsintervall, das Monize nicht exakt abbilden kann; das nächstkürzere wurde verwendet.",
+    "loanInterestCategoryUnclear": "{count, plural, one {# Kreditzahlung enthielt} other {# Kreditzahlungen enthielten}} mehrere Kategorien außer der Tilgung, daher wurde die Zinskategorie des Kredits nicht gesetzt. Prüfe, ob die Zahlung eine Treuhandkomponente (Escrow) enthält, und lege die Zinskategorie nach dem Import fest.",
     "showTransactions": "{count, plural, one {Die # Transaktion anzeigen} other {Die # Transaktionen anzeigen}}",
     "hideTransactions": "Transaktionen ausblenden",
     "reviewInMoney": "Öffnen Sie diese in Microsoft Money, um sie zu prüfen oder zu korrigieren, und exportieren und importieren Sie danach erneut.",

@@ -330,6 +330,15 @@ const lookThroughBreakdown = looseObject({
 
 export const getPortfolioSummaryOutput = {
   holdingCount: num,
+  // The declared shape is the contract the model sees, and the SDK parses
+  // structuredContent against it -- an undeclared field is dropped. Leaving these
+  // out would have stripped the completeness signal back off at the MCP boundary
+  // the moment it was added to `LlmPortfolioSummary` (recheck RR2-007).
+  fxComplete: bool,
+  missingRatePairs: z.array(str),
+  pricesComplete: bool,
+  unpricedSymbols: z.array(str),
+  valuationComplete: bool,
   totalCashValue: num,
   totalHoldingsValue: num,
   totalCostBasis: num,
@@ -361,6 +370,13 @@ export const getPortfolioSummaryOutput = {
       totalCostBasis: num,
       totalMarketValue: num,
       totalGainLoss: num,
+      // This account's own completeness, which is a different question from the
+      // top-level flags: these totals are in the account's currency, those are in
+      // the user's default (recheck RR3-005).
+      fxComplete: bool,
+      missingRatePairs: z.array(str),
+      pricesComplete: bool,
+      valuationComplete: bool,
       totalGainLossPercent: num,
       holdings: z.array(
         looseObject({
@@ -427,6 +443,8 @@ export const listInvestmentTransactionsOutput = {
       totalAmount: num,
       currency: strNull,
       description: strNull,
+      // A VOID row is listed but excluded from every total and group sum.
+      status: str,
     }),
   ),
   truncatedTransactionList: bool,

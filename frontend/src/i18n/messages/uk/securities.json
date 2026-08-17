@@ -284,7 +284,13 @@
       "TRANSFER_OUT": "Переказ вихідний",
       "REINVEST": "Реінвестування",
       "ADD_SHARES": "Додати акції",
-      "REMOVE_SHARES": "Видалити акції"
+      "REMOVE_SHARES": "Видалити акції",
+      "REINVEST_INTEREST": "Реінвестування відсотків",
+      "REINVEST_CAPITAL_GAIN_SHORT": "Реінвестування короткострокового приросту капіталу",
+      "REINVEST_CAPITAL_GAIN_LONG": "Реінвестування довгострокового приросту капіталу",
+      "CAPITAL_GAIN_SHORT": "Короткостроковий приріст капіталу",
+      "CAPITAL_GAIN_LONG": "Довгостроковий приріст капіталу",
+      "REDEEM": "Погашення CD/облігації"
     },
     "toasts": {
       "loadHistoryFailed": "Не вдалося завантажити історію",

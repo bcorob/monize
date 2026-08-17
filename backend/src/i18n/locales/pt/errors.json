@@ -317,7 +317,9 @@
   "monteCarlo": {
     "scenarioNotFound": "Cenário {{ id }} não encontrado",
     "scenarioIdsMustBeArray": "scenarioIds deve ser um array",
-    "atLeastOneAccountRequired": "É necessário pelo menos um accountId"
+    "atLeastOneAccountRequired": "É necessário pelo menos um accountId",
+    "currentValueUnavailable": "Não foi possível determinar o valor atual das contas selecionadas, pelo que uma simulação não pode partir dele. Introduza um valor inicial explicitamente ou tente novamente quando os preços e as taxas de câmbio estiverem disponíveis.",
+    "historicalReturnsUnavailable": "Não foi possível calcular os retornos históricos das contas selecionadas, pelo que uma simulação não os pode usar. Introduza manualmente um retorno esperado e uma volatilidade, ou tente novamente quando os preços e as taxas de câmbio estiverem disponíveis."
   },
   "netWorth": {
     "invalidStartDate": "startDate deve estar no formato YYYY-MM-DD",
@@ -361,6 +363,7 @@
     "requiresBrokerageAccount": "As transações de investimento agendadas requerem uma conta de corretagem",
     "notFound": "Transação agendada com ID {{ id }} não encontrada",
     "occurrenceAlreadyPosted": "Esta ocorrência já foi lançada.",
+    "changedConcurrently": "The scheduled transaction changed during the operation. Reload it and retry.",
     "fxPlainOnly": "Só é possível usar outra moeda numa transação agendada simples, não numa divisão, transferência ou investimento",
     "fxRateUnavailable": "Não há uma taxa de câmbio disponível de {{ from }} para {{ to }} em {{ date }}. Introduza o montante em {{ to }} para a lançar.",
     "investmentActionRequired": "A ação de investimento é obrigatória para transações de investimento agendadas",
@@ -396,6 +399,7 @@
     "cannotChangeSplitAccount": "Não é possível alterar a conta de uma parcela de investimento; remova a parcela e adicione-a na nova conta",
     "splitNoFundingAccount": "As parcelas de investimento não utilizam uma conta de financiamento separada",
     "cannotChangeSplitDate": "Não é possível alterar a data de uma parcela de investimento; edite a data da transação-mãe dividida",
+    "embeddedStatusLocked": "Esta transação de investimento faz parte de uma transação dividida. Altere antes o estado da transação dividida, para que ambos os lados mudem em conjunto.",
     "invalidAccountUuid": "UUID de conta inválido: {{ id }}",
     "startDateFormat": "startDate deve estar no formato YYYY-MM-DD",
     "endDateFormat": "endDate deve estar no formato YYYY-MM-DD",
@@ -435,8 +439,10 @@
     "invalidTagKey": "É necessária uma chave de etiqueta (1-100 caracteres)",
     "assetOptionNameRequired": "É necessário um nome de classe de ativos.",
     "documentNotFound": "Documento não encontrado",
+    "embeddedSplitAmountMismatch": "Esta parcela regista {{ amount }}, mas {{ action }} {{ quantity }} @ {{ price }} converte-se em {{ expected }} à taxa de {{ rate }}. Use esse montante, ou indique a taxa de câmbio que pretendia.",
     "selectionNotFound": "Um ou mais dos títulos selecionados não foram encontrados",
-    "comparisonSelectionEmpty": "Selecione pelo menos um título ou índice de mercado para comparar"
+    "comparisonSelectionEmpty": "Selecione pelo menos um título ou índice de mercado para comparar",
+    "exchangeRateNotPositive": "A taxa de câmbio deve ser maior do que zero"
   },
   "tags": {
     "notFound": "Etiqueta com ID {{ id }} não encontrada",
@@ -490,15 +496,27 @@
     "transferAmountNegative": "O montante da transferência não deve ser negativo",
     "notATransfer": "A transação não é uma transferência",
     "splitTransferLegAccountLocked": "Esta transferência faz parte de uma transação dividida. Para alterar as contas, edite a parcela na transação de origem.",
+    "splitTransferLegStatusLocked": "Esta transferência faz parte de uma transação dividida. Anule-a ou restaure-a editando a transação dividida a que pertence, para que ambos os lados mudem em conjunto.",
+    "investmentCashLegStatusLocked": "Esta transação é o lado de numerário de uma transação de investimento. Anule-a ou restaure-a alterando o estado da transação de investimento, para que ambos os lados mudem em conjunto.",
     "notFoundById": "Transação com ID {{ id }} não encontrada",
     "bulkUpdateNoFields": "Deve ser fornecido pelo menos um campo de atualização",
     "bulkSplitNoMatchingLinesOne": "1 transação dividida foi ignorada porque nenhuma das suas parcelas correspondia à atualização de categoria",
     "bulkSplitNoMatchingLinesMany": "{{ count }} transações divididas foram ignoradas porque nenhuma das suas parcelas correspondia à atualização de categoria",
+    "bulkSplitTransferLegSkippedOne": "1 transferência dividida foi ignorada (anule-a ou restaure-a a partir da transação dividida a que pertence, para que ambos os lados mudem juntos)",
+    "bulkSplitTransferLegSkippedMany": "{{ count }} transferências divididas foram ignoradas (anule-as ou restaure-as a partir da transação dividida a que pertencem, para que ambos os lados mudem juntos)",
+    "bulkInvestmentCashLegSkippedOne": "1 transação de numerário de investimento foi ignorada (anule-a ou restaure-a alterando o estado da transação de investimento, para que ambos os lados mudem juntos)",
+    "bulkInvestmentCashLegSkippedMany": "{{ count }} transações de numerário de investimento foram ignoradas (anule-as ou restaure-as alterando o estado das transações de investimento, para que ambos os lados mudem juntos)",
     "payeeNotFound": "Beneficiário não encontrado",
     "fxFieldsIncomplete": "originalAmount e originalCurrencyCode devem ser fornecidos em conjunto",
     "fxRateRequired": "É necessária uma taxa de câmbio positiva para uma transação em moeda estrangeira",
     "fxSignMismatch": "originalAmount e amount devem ter o mesmo sinal",
-    "jointAccountMoveLocked": "As transações de uma conta partilhada não podem ser movidas para outra conta."
+    "jointAccountMoveLocked": "As transações de uma conta partilhada não podem ser movidas para outra conta.",
+    "currencyMustMatchAccount": "A moeda da transação {{ supplied }} deve corresponder à moeda da conta {{ account }}. Utilize originalAmount e originalCurrencyCode para um lançamento em moeda estrangeira.",
+    "transferSameCurrencyMustConserve": "Uma transferência entre duas contas em {{ currency }} deve movimentar o mesmo valor em ambos os lados",
+    "transferSameCurrencyRateMustBeOne": "Uma transferência entre duas contas em {{ currency }} não pode ter uma taxa de câmbio diferente de 1",
+    "transferRateUnavailable": "Não foi possível determinar uma taxa de câmbio para {{ from }} -> {{ to }}. Forneça um exchangeRate ou um valor de destino para que a transferência seja registada corretamente.",
+    "transferAmountsMustAgreeOnZero": "Uma transferência tem de mover um valor diferente de zero em ambos os lados, ou zero em ambos",
+    "transferImpliedRateInvalid": "O valor de destino implica uma taxa de câmbio inutilizável face ao valor de origem"
   },
   "users": {
     "userNotFound": "Utilizador não encontrado",

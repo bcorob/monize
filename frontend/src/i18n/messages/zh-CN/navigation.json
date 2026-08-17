@@ -25,6 +25,7 @@
   "closeMenu": "关闭菜单",
   "mainMenu": "主菜单",
   "loggedOut": "已成功退出登录",
+  "logoutNotConfirmed": "仅在此设备上退出登录——服务器未确认。请查看登录屏幕上的通知。",
   "search": {
     "placeholder": "搜索交易...",
     "label": "搜索交易",

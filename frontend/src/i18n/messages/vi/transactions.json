@@ -26,7 +26,8 @@
     "editAria": "Chỉnh sửa người nhận",
     "detailsAria": "Xem chi tiết người nhận",
     "collapseAria": "Ẩn thông tin người nhận",
-    "show": "Hiển thị thông tin người nhận"
+    "show": "Hiển thị thông tin người nhận",
+    "amountUnavailable": "Không có tỷ giá"
   },
   "categoryWidget": {
     "detailsAria": "Xem chi tiết danh mục",
@@ -47,7 +48,8 @@
     "noTransactions": "Không có giao tác trong khoảng thời gian này",
     "editAria": "Chỉnh sửa danh mục",
     "collapseAria": "Ẩn thông tin danh mục",
-    "show": "Hiển thị thông tin danh mục"
+    "show": "Hiển thị thông tin danh mục",
+    "amountUnavailable": "Không có tỷ giá"
   },
   "accountWidget": {
     "currentBalance": "Số tiền còn lại",
@@ -110,10 +112,11 @@
       "paidAmount": "Số tiền đã trả",
       "feePaid": "Phí đã trả",
       "balance": "Số tiền còn lại",
+      "attachments": "Tệp đính kèm",
       "status": "Trạng thái",
-      "actions": "Hành động",
-      "attachments": "Tệp đính kèm"
+      "actions": "Hành động"
     },
+    "attachmentsCount": "{count, plural, other {# tệp đính kèm}}",
     "today": "Hôm nay",
     "export": {
       "button": "Xuất",
@@ -174,8 +177,7 @@
       "editButton": "Chỉnh sửa",
       "deleteButton": "Xóa"
     },
-    "itemNamePlural": "giao tác",
-    "attachmentsCount": "{count, plural, other {# tệp đính kèm}}"
+    "itemNamePlural": "giao tác"
   },
   "row": {
     "copyOptions": {
@@ -230,6 +232,11 @@
       "currency": "Tiền tệ",
       "hasAttachments": "Tệp đính kèm"
     },
+    "hasAttachmentsOptions": {
+      "any": "Bất kỳ",
+      "yes": "Có",
+      "no": "Không"
+    },
     "placeholders": {
       "accounts": "Tất cả tài khoản",
       "payees": "Tất cả người nhận",
@@ -240,6 +247,13 @@
       "amountMax": "Tối đa",
       "search": "Tìm kiếm người nhận, danh mục, số tiền, thẻ, mô tả, số tham chiếu...",
       "tagKeyValue": "ví dụ: usa"
+    },
+    "tagKeyNone": "Bất kỳ (không lọc theo khóa)",
+    "tagKeyOps": {
+      "hasValue": "Có giá trị",
+      "noValue": "Không có giá trị",
+      "contains": "Giá trị chứa",
+      "notContains": "Giá trị không chứa"
     },
     "chips": {
       "removeAccount": "Xóa bộ lọc {name}",
@@ -280,18 +294,6 @@
       "yearToDate": "Năm đến nay",
       "lastYear": "Năm ngoái",
       "custom": "Tùy chọn"
-    },
-    "tagKeyNone": "Bất kỳ (không lọc theo khóa)",
-    "tagKeyOps": {
-      "hasValue": "Có giá trị",
-      "noValue": "Không có giá trị",
-      "contains": "Giá trị chứa",
-      "notContains": "Giá trị không chứa"
-    },
-    "hasAttachmentsOptions": {
-      "any": "Bất kỳ",
-      "yes": "Có",
-      "no": "Không"
     }
   },
   "bulk": {
@@ -399,6 +401,7 @@
       "optionLabel": "{name} ({currency}) — {owner}"
     },
     "crossOwnerLockedNote": "Phía bên kia của khoản chuyển khoản này nằm trong tài khoản không còn được chia sẻ với bạn. Số tiền, ngày và tài khoản đã bị khóa, nhưng bạn vẫn có thể chỉnh sửa chi tiết của giao dịch này.",
+    "transferCategoryNote": "Tùy chọn. Giao dịch chuyển khoản vẫn không được tính là thu nhập hay chi phí, nhưng danh mục này giúp nó xuất hiện trong bảng phân tích danh mục hằng tháng (ví dụ: khoản đóng góp đầu tư hằng tháng).",
     "amountReceivedNote": "Số tiền nhận sau khi quy đổi tiền tệ",
     "splitTransaction": "Chia giao tác",
     "splitDisabledDuringTour": "Không khả dụng trong lúc hướng dẫn",
@@ -408,6 +411,7 @@
       "transferUpdated": "Chuyển khoản đã được cập nhật",
       "transactionCreated": "Giao tác đã được tạo",
       "transactionUpdated": "Giao tác đã được cập nhật",
+      "attachmentsUploadFailed": "Đã lưu giao tác, nhưng {count} tệp đính kèm tải lên không thành công",
       "saveFailed": "Không thể lưu giao tác",
       "loadFailed": "Không thể tải dữ liệu biểu mẫu",
       "splitsNotEqual": "Tổng các phần ({splitTotal}) phải bằng số tiền giao tác ({txAmount})",
@@ -422,13 +426,11 @@
       "categoryCreateFailed": "Không thể tạo danh mục",
       "tagCreated": "Thẻ \"{name}\" đã được tạo",
       "fxRateRequired": "Nhập tỷ giá hoặc số tiền đã quy đổi trước khi lưu giao dịch bằng ngoại tệ.",
-      "attachmentsUploadFailed": "Đã lưu giao tác, nhưng {count} tệp đính kèm tải lên không thành công",
       "jointPayeeCreateNotGranted": "Chủ tài khoản chưa cấp cho bạn quyền tạo người nhận. Hãy chọn một người nhận hiện có."
     },
     "ariaHistory": "Hiển thị giao tác gần đây",
     "ariaHistoryForPayee": "Hiển thị giao tác gần đây cho người nhận này",
     "historyTitle": "Điền nhanh từ giao tác gần đây",
-    "transferCategoryNote": "Tùy chọn. Giao dịch chuyển khoản vẫn không được tính là thu nhập hay chi phí, nhưng danh mục này giúp nó xuất hiện trong bảng phân tích danh mục hằng tháng (ví dụ: khoản đóng góp đầu tư hằng tháng).",
     "currencyPicker": {
       "label": "Tiền tệ nhập",
       "ariaLabel": "Thay đổi tiền tệ nhập",
@@ -440,15 +442,15 @@
       "reactivated": "Đã kích hoạt lại {code}"
     },
     "fx": {
+      "totalInCurrency": "Tổng bằng {currency}",
+      "rateCaption": "1 {from} = {rate} {to} ({date})",
       "noRateWarning": "Không tìm thấy tỷ giá từ {from} sang {to} vào {date}. Vui lòng nhập số tiền đã quy đổi theo cách thủ công.",
       "usingLatestRateHint": "Đang dùng tỷ giá mới nhất hiện có (không phải ngày {date}).",
       "displayToggle": {
         "account": "Tài khoản",
         "original": "Gốc"
       },
-      "rateCaption": "1 {from} = {rate} {to} ({date})",
-      "feeCaption": "Bao gồm phí giao dịch nước ngoài {percent}% ({fee}).",
-      "totalInCurrency": "Tổng bằng {currency}"
+      "feeCaption": "Bao gồm phí giao dịch nước ngoài {percent}% ({fee})."
     },
     "jointSplitDisabled": "Chỉ chủ sở hữu mới có thể quản lý giao dịch tách trong tài khoản được chia sẻ"
   },
@@ -473,6 +475,10 @@
     "remaining": "Còn lại: {symbol}{amount}",
     "needAmount": "Cần {symbol}{amount} (còn lại: {symbol}{remaining})",
     "setTotal": "Đặt tổng thành {symbol}{amount}",
+    "currencyToggle": {
+      "title": "Chuyển đổi tiền tệ dùng để hiển thị và chỉnh sửa các khoản chia",
+      "ariaAmountsIn": "Hiển thị và chỉnh sửa các khoản chia bằng {code}"
+    },
     "splitLabel": "Phần {number}",
     "columns": {
       "type": "Loại",
@@ -491,11 +497,7 @@
     "selectAccount": "Chọn tài khoản...",
     "memoPlaceholder": "Ghi nhớ tùy chọn",
     "mobileMemoPlaceholder": "Ghi nhớ",
-    "tagsPlaceholder": "Thẻ...",
-    "currencyToggle": {
-      "title": "Chuyển đổi tiền tệ dùng để hiển thị và chỉnh sửa các khoản chia",
-      "ariaAmountsIn": "Hiển thị và chỉnh sửa các khoản chia bằng {code}"
-    }
+    "tagsPlaceholder": "Thẻ..."
   },
   "recentPopover": {
     "recentForPayee": "Gần đây cho {name}",
@@ -513,7 +515,11 @@
     "quantityPlaceholder": "Số lượng",
     "pricePlaceholder": "Giá",
     "commissionPlaceholder": "Hoa hồng",
-    "amountPlaceholder": "Số tiền ({currency})"
+    "amountPlaceholder": "Số tiền ({currency})",
+    "ratePlaceholder": "{to} cho 1 {from}",
+    "ariaRate": "Tỷ giá ({to} cho 1 {from})",
+    "rateHint": "Số lượng, giá và hoa hồng tính bằng {from}; tỷ giá này quy đổi tác động tiền mặt sang {to}.",
+    "rateUnresolved": "Không có tỷ giá {from} sang {to}. Hãy nhập — thiếu nó thì không tính được tác động tiền mặt, và hai loại tiền tệ không bằng nhau."
   },
   "charts": {
     "balanceHistory": {

@@ -98,6 +98,12 @@ export const INVESTMENT_ACTIONS = [
   "REINVEST",
   "ADD_SHARES",
   "REMOVE_SHARES",
+  "REINVEST_INTEREST",
+  "REINVEST_CAPITAL_GAIN_SHORT",
+  "REINVEST_CAPITAL_GAIN_LONG",
+  "CAPITAL_GAIN_SHORT",
+  "CAPITAL_GAIN_LONG",
+  "REDEEM",
 ] as const;
 
 const investmentActionSchema = z.preprocess(

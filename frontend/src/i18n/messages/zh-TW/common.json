@@ -228,5 +228,10 @@
     "nothingToRedo": "沒有可重做的操作",
     "cannotRedo": "無法重做此操作",
     "redoFailed": "重做失敗"
+  },
+  "partialTotal": {
+    "srSuffix": "（部分合計）",
+    "explanation": "部分合計：有 {count, plural, other {# 筆金額}} 無法計入，因此所示數字已將其排除。沒有 {currencies} 兌 {displayCurrency} 的匯率。",
+    "explanationExcluded": "部分合計：有 {count, plural, other {# 筆金額}} 無法計算，因此所示數字已將其排除。"
   }
 }

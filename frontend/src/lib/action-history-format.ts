@@ -38,6 +38,9 @@ const ACTION_PARAM_KEYS = new Set<string>([
 const KNOWN_INVESTMENT_ACTIONS = new Set<string>([
   'BUY', 'SELL', 'DIVIDEND', 'INTEREST', 'CAPITAL_GAIN', 'SPLIT',
   'TRANSFER_IN', 'TRANSFER_OUT', 'REINVEST', 'ADD_SHARES', 'REMOVE_SHARES',
+  'REINVEST_INTEREST', 'REINVEST_CAPITAL_GAIN_SHORT',
+  'REINVEST_CAPITAL_GAIN_LONG', 'CAPITAL_GAIN_SHORT', 'CAPITAL_GAIN_LONG',
+  'REDEEM',
 ]);
 
 type LayoutTranslator = ReturnType<typeof useTranslations<'layout'>>;

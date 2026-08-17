@@ -144,9 +144,6 @@
     "defaultMessage": "Falha ao carregar dados do relatório. Tente novamente.",
     "retry": "Tentar novamente"
   },
-  "foreignCurrencyFees": {
-    "noEligibleAccounts": "Nenhuma conta tem uma comissão de transação estrangeira configurada. Defina uma percentagem de comissão numa conta para acompanhar aqui as suas comissões em moeda estrangeira."
-  },
   "accountBalances": {
     "totalAssets": "Total de Ativos",
     "totalLiabilities": "Total de Passivos",
@@ -333,7 +330,8 @@
     "tooltipUtilization": "Utilização",
     "tooltipUsed": "Utilizado",
     "tooltipAvailable": "Disponível",
-    "pdfTitle": "Utilização de Crédito"
+    "pdfTitle": "Utilização de Crédito",
+    "noRate": "Sem taxa"
   },
   "currencyExposure": {
     "empty": "Nenhuma posição de investimento encontrada. Adicione títulos para ver a exposição cambial.",
@@ -575,20 +573,20 @@
     "topRegion": "Região Principal",
     "viewByRegion": "Por Região",
     "viewByExchange": "Por Bolsa",
+    "viewByCountry": "Por país",
     "regionalAllocation": "Alocação Regional",
     "exchangeAllocation": "Alocação por Bolsa",
+    "countryAllocation": "Alocação por país (transparência)",
+    "countryLookThroughNote": "A exposição por país analisa em transparência os ETF e fundos usando a alocação por país definida manualmente em cada título. As ações individuais são classificadas pela bolsa de cotação; o que não está classificado é apresentado como «Outros».",
     "colRegion": "Região",
     "colExchange": "Bolsa",
     "colCountry": "País",
     "colHoldings": "Posições",
     "colMarketValue": "Valor de Mercado",
     "colPortfolioPct": "% do Portefólio",
+    "other": "Outros",
     "total": "Total",
-    "holdingCount": "{count, plural, one {# posição} other {# posições}}",
-    "viewByCountry": "Por país",
-    "countryAllocation": "Alocação por país (transparência)",
-    "countryLookThroughNote": "A exposição por país analisa em transparência os ETF e fundos usando a alocação por país definida manualmente em cada título. As ações individuais são classificadas pela bolsa de cotação; o que não está classificado é apresentado como «Outros».",
-    "other": "Outros"
+    "holdingCount": "{count, plural, one {# posição} other {# posições}}"
   },
   "healthScoreHistory": {
     "pdfTitle": "Histórico da Pontuação de Saúde",
@@ -761,7 +759,13 @@
     "actionTransferOut": "Transferência de Saída",
     "actionReinvest": "Reinvestir",
     "actionAddShares": "Adicionar Ações",
-    "actionRemoveShares": "Remover Ações"
+    "actionRemoveShares": "Remover Ações",
+    "actionReinvestInterest": "Reinvestimento de juros",
+    "actionReinvestCapitalGainShort": "Reinvestimento de rendimento de curto prazo",
+    "actionReinvestCapitalGainLong": "Reinvestimento de rendimento de longo prazo",
+    "actionCapitalGainShort": "Rendimento de capital de curto prazo",
+    "actionCapitalGainLong": "Rendimento de capital de longo prazo",
+    "actionRedeem": "Resgate de CD/obrigação"
   },
   "loanAmortization": {
     "empty": "Nenhuma conta de empréstimo ou crédito habitação encontrada. Adicione uma conta de empréstimo para ver o histórico de pagamentos.",
@@ -820,6 +824,7 @@
       "maxCompare": "Pode comparar até {max} cenários.",
       "loadFailed": "Não foi possível carregar os dados de Monte Carlo. Atualize a página.",
       "currentValueFailed": "Não foi possível obter o valor atual do portefólio.",
+      "currentValueUnavailable": "Não foi possível determinar o valor atual das contas selecionadas. Introduza um valor inicial ou tente novamente quando os preços e as taxas de câmbio estiverem disponíveis.",
       "holdingStatsFailed": "Não foi possível carregar as estatísticas históricas por posição.",
       "reorderFailed": "Não foi possível reordenar os cenários."
     },
@@ -1168,7 +1173,8 @@
     "csvColProceeds": "Receitas",
     "csvColCostBasis": "Custo de Aquisição",
     "csvColGainLoss": "Ganho/Perda",
-    "csvColReturn": "Rentabilidade %"
+    "csvColReturn": "Rentabilidade %",
+    "csvNoRate": "Sem taxa"
   },
   "recurringExpenses": {
     "recurringExpenses": "Despesas Recorrentes",
@@ -1376,7 +1382,8 @@
     "pdfTotalPortfolio": "Total do Portefólio",
     "pdfAssetTypes": "Tipos de Ativo",
     "pdfTotalHoldings": "Total de Posições",
-    "pdfLargestType": "Tipo Principal"
+    "pdfLargestType": "Tipo Principal",
+    "unavailable": "Indisponível"
   },
   "spendingAnomalies": {
     "highPriority": "Alta Prioridade",
@@ -1700,5 +1707,8 @@
     "labelSelectAccount": "Selecionar conta de empréstimo",
     "viewTransactions": "Ver transações",
     "empty": "Nenhuma conta de empréstimo, hipoteca ou linha de crédito encontrada."
+  },
+  "foreignCurrencyFees": {
+    "noEligibleAccounts": "Nenhuma conta tem uma comissão de transação estrangeira configurada. Defina uma percentagem de comissão numa conta para acompanhar aqui as suas comissões em moeda estrangeira."
   }
 }

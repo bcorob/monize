@@ -13,13 +13,17 @@ import {
   AccountType,
   AccountSubType,
 } from "../accounts/entities/account.entity";
+import { NON_VOID_INVESTMENT_STATUS } from "../securities/investment-row-effects.util";
+import { InvestmentTransaction } from "../securities/entities/investment-transaction.entity";
 import {
-  InvestmentTransaction,
-  InvestmentAction,
-} from "../securities/entities/investment-transaction.entity";
+  baseInvestmentAction,
+  MARKET_PRICED_TRADE_ACTIONS,
+} from "../securities/investment-replay.util";
 import { Security } from "../securities/entities/security.entity";
 import { UserPreference } from "../users/entities/user-preference.entity";
 import { convertWithRateLookup } from "../common/currency-conversion.util";
+import { FxAggregate } from "../common/fx-aggregate";
+import { applyActionToQuantity } from "../securities/investment-replay.util";
 import { formatDateYMDLocal } from "../common/date-utils";
 
 const LIABILITY_TYPES: AccountType[] = [
@@ -76,6 +80,19 @@ export interface InvestmentBreakdown {
   currency: string;
   series: InvestmentBreakdownSeries[];
   points: InvestmentBreakdownPoint[];
+  /**
+   * False when at least one component could not be converted into `currency`
+   * because no exchange rate was available for its pair, which makes every
+   * `total` here a subtotal of what did convert.
+   *
+   * A missing rate used to be applied as 1:1, so a consumer had no way to tell
+   * a complete figure from a wrong one (audit P5-009). See
+   * `docs/specs/fx-conversion-completeness.md` -- stage 2 makes the totals
+   * themselves nullable.
+   */
+  fxComplete: boolean;
+  /** `"USD->EUR"` for each pair with no available rate; empty when complete. */
+  missingRatePairs: string[];
 }
 
 @Injectable()
@@ -453,7 +470,21 @@ export class NetWorthService {
     startDate?: string,
     endDate?: string,
   ): Promise<
-    { month: string; assets: number; liabilities: number; netWorth: number }[]
+    {
+      month: string;
+      assets: number;
+      liabilities: number;
+      netWorth: number;
+      /**
+       * False when a component of this month could not be converted into the
+       * reporting currency, which makes the three figures above subtotals of
+       * what did convert. A missing rate used to be applied as 1:1 (audit
+       * P5-009); see docs/specs/fx-conversion-completeness.md.
+       */
+      fxComplete: boolean;
+      /** `"JPY->USD"` for each pair with no available rate. */
+      missingRatePairs: string[];
+    }[]
   > {
     const today = new Date();
     const defaultStart = new Date(today.getFullYear() - 1, today.getMonth(), 1)
@@ -470,7 +501,21 @@ export class NetWorthService {
     endDate?: string,
     jointScope?: JointNetWorthScope,
   ): Promise<
-    { month: string; assets: number; liabilities: number; netWorth: number }[]
+    {
+      month: string;
+      assets: number;
+      liabilities: number;
+      netWorth: number;
+      /**
+       * False when a component of this month could not be converted into the
+       * reporting currency, which makes the three figures above subtotals of
+       * what did convert. A missing rate used to be applied as 1:1 (audit
+       * P5-009); see docs/specs/fx-conversion-completeness.md.
+       */
+      fxComplete: boolean;
+      /** `"JPY->USD"` for each pair with no available rate. */
+      missingRatePairs: string[];
+    }[]
   > {
     await this.ensurePopulated(userId);
     const jointIds = jointScope?.accounts.map((a) => a.accountId) ?? [];
@@ -520,14 +565,22 @@ export class NetWorthService {
       end,
     );
 
-    // Aggregate by month
-    const monthMap = new Map<string, { assets: number; liabilities: number }>();
+    // Aggregate by month. Assets and liabilities each accumulate through an
+    // FxAggregate so a month containing a component with no available rate
+    // reports an unknown total instead of a plausible wrong one (P5-009).
+    const monthMap = new Map<
+      string,
+      { assets: FxAggregate; liabilities: FxAggregate }
+    >();
 
     for (const s of snapshots) {
       const monthKey = this.toDateString(s.month);
 
       if (!monthMap.has(monthKey)) {
-        monthMap.set(monthKey, { assets: 0, liabilities: 0 });
+        monthMap.set(monthKey, {
+          assets: new FxAggregate(),
+          liabilities: new FxAggregate(),
+        });
       }
       const entry = monthMap.get(monthKey)!;
 
@@ -562,20 +615,45 @@ export class NetWorthService {
 
       const accountType = s.account_type as AccountType;
       if (LIABILITY_TYPES.includes(accountType)) {
-        entry.liabilities += Math.abs(converted);
+        entry.liabilities.add(
+          converted === null ? null : Math.abs(converted),
+          s.currency_code,
+          defaultCurrency,
+        );
       } else {
-        entry.assets += converted;
+        entry.assets.add(converted, s.currency_code, defaultCurrency);
       }
     }
 
     return Array.from(monthMap.entries())
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([month, data]) => ({
-        month,
-        assets: Math.round(data.assets),
-        liabilities: Math.round(data.liabilities),
-        netWorth: Math.round(data.assets - data.liabilities),
-      }));
+      .map(([month, data]) => {
+        // Per docs/financial-calculation-contract.md section 1: the total is
+        // null unless every component converted, the partial sum travels in a
+        // separately named field, and the response says what is missing.
+        const missingRatePairs = [
+          ...new Set([
+            ...data.assets.missingPairs,
+            ...data.liabilities.missingPairs,
+          ]),
+        ].sort();
+        return {
+          month,
+          assets: Math.round(data.assets.knownSubtotal),
+          liabilities: Math.round(data.liabilities.knownSubtotal),
+          netWorth: Math.round(
+            data.assets.knownSubtotal - data.liabilities.knownSubtotal,
+          ),
+          // Stage 1 of docs/specs/fx-conversion-completeness.md: the three
+          // figures above are the subtotal of what converted, and these two
+          // fields say so. They are NOT yet nullable -- that is stage 2, with
+          // the frontend and copy work it needs -- but a consumer can now tell
+          // a complete total from a partial one, which it could not when a
+          // missing rate silently became 1:1.
+          fxComplete: missingRatePairs.length === 0,
+          missingRatePairs,
+        };
+      });
   }
 
   /**
@@ -623,7 +701,16 @@ export class NetWorthService {
     endDate?: string,
     accountIds?: string[],
     displayCurrency?: string,
-  ): Promise<{ month: string; value: number }[]> {
+  ): Promise<
+    {
+      month: string;
+      value: number;
+      /** False when a component could not be converted; see missingRatePairs. */
+      fxComplete: boolean;
+      /** `"USD->EUR"` for each pair with no available rate. */
+      missingRatePairs: string[];
+    }[]
+  > {
     await this.ensurePopulated(userId);
 
     const pref = await withScopedDb(this.dataSource, (m) =>
@@ -711,31 +798,37 @@ export class NetWorthService {
       end,
     );
 
-    const monthMap = new Map<string, number>();
+    const monthMap = new Map<string, FxAggregate>();
 
     for (const s of snapshots) {
       const monthKey = this.toDateString(s.month);
 
       if (!monthMap.has(monthKey)) {
-        monthMap.set(monthKey, 0);
+        monthMap.set(monthKey, new FxAggregate());
       }
 
       const monthEnd = this.monthEndDate(monthKey);
       const adjKey = `${s.account_id}:${monthKey}`;
       const costBasisInDefault = firstMonthCostBasisInDefault.get(adjKey);
 
-      let convertedValue: number;
+      const monthAggregate = monthMap.get(monthKey)!;
       if (costBasisInDefault !== undefined) {
-        convertedValue = costBasisInDefault;
+        // merge, not addConverted: the seed's gaps travel with its subtotal,
+        // so an unconvertible first-month component marks the month incomplete.
+        monthAggregate.merge(costBasisInDefault);
         // Standalone investment accounts hold cash inside the same account, so
         // include the month-end cash balance alongside the cost basis.
         if (s.account_type === "INVESTMENT" && s.account_sub_type === null) {
-          convertedValue += this.convertCurrency(
-            Number(s.balance),
+          monthAggregate.add(
+            this.convertCurrency(
+              Number(s.balance),
+              s.currency_code,
+              defaultCurrency,
+              monthEnd,
+              rateIndex,
+            ),
             s.currency_code,
             defaultCurrency,
-            monthEnd,
-            rateIndex,
           );
         }
       } else {
@@ -755,23 +848,27 @@ export class NetWorthService {
           rawValue = Number(s.balance);
         }
 
-        convertedValue = this.convertCurrency(
-          rawValue,
+        monthAggregate.add(
+          this.convertCurrency(
+            rawValue,
+            s.currency_code,
+            defaultCurrency,
+            monthEnd,
+            rateIndex,
+          ),
           s.currency_code,
           defaultCurrency,
-          monthEnd,
-          rateIndex,
         );
       }
-
-      monthMap.set(monthKey, monthMap.get(monthKey)! + convertedValue);
     }
 
     return Array.from(monthMap.entries())
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([month, value]) => ({
+      .map(([month, aggregate]) => ({
         month,
-        value: Math.round(value),
+        value: Math.round(aggregate.knownSubtotal),
+        fxComplete: aggregate.isComplete,
+        missingRatePairs: aggregate.missingPairs,
       }));
   }
 
@@ -780,7 +877,10 @@ export class NetWorthService {
    * snapshot row coincides with that account's first-ever active month,
    * compute the net cost basis of all in-month investment transactions
    * converted to `defaultCurrency`. Returns a map keyed by
-   * `${accountId}:${monthKey}` -> value in `defaultCurrency`.
+   * `${accountId}:${monthKey}` -> an `FxAggregate` carrying the converted
+   * value *and* any conversion gaps, so a component the seed could not convert
+   * marks the month incomplete instead of being dropped into a partial sum
+   * that ships under `fxComplete: true`.
    */
   private async computeFirstActiveMonthCostBasis(
     userId: string,
@@ -788,8 +888,8 @@ export class NetWorthService {
     defaultCurrency: string,
     start: string,
     end: string,
-  ): Promise<Map<string, number>> {
-    const result = new Map<string, number>();
+  ): Promise<Map<string, FxAggregate>> {
+    const result = new Map<string, FxAggregate>();
 
     const eligibleSnapshots = snapshots.filter((s) => {
       const isBrokerage = s.account_sub_type === "INVESTMENT_BROKERAGE";
@@ -830,8 +930,9 @@ export class NetWorthService {
        LEFT JOIN securities s ON s.id = it.security_id
        WHERE it.account_id = ANY($1::UUID[])
          AND it.price IS NOT NULL AND it.price > 0
-         AND it.action IN ('BUY', 'SELL', 'REINVEST', 'TRANSFER_IN', 'TRANSFER_OUT')`,
-      [targetAccountIds],
+         AND it.status != 'VOID'
+         AND (it.action = ANY($2) OR it.action IN ('TRANSFER_IN', 'TRANSFER_OUT'))`,
+      [targetAccountIds, MARKET_PRICED_TRADE_ACTIONS],
     );
 
     const adjCurrencies = new Set<string>();
@@ -856,7 +957,7 @@ export class NetWorthService {
       if (qty === 0 || price <= 0) continue;
 
       let signed: number;
-      switch (r.action) {
+      switch (baseInvestmentAction(r.action)) {
         case "BUY":
         case "REINVEST":
         case "TRANSFER_IN":
@@ -880,8 +981,18 @@ export class NetWorthService {
         rateIndex,
       );
 
+      // A cost-basis component with no rate is recorded as a gap on the
+      // month's aggregate rather than added at 1:1 -- or silently dropped: a
+      // seed that skipped it left the month's value understated while the
+      // response still said `fxComplete: true`, the exact "flag that does not
+      // cover every total" shape the completeness contract forbids.
       const key = `${r.account_id}:${targetMonth}`;
-      result.set(key, (result.get(key) || 0) + inDefault);
+      let aggregate = result.get(key);
+      if (!aggregate) {
+        aggregate = new FxAggregate();
+        result.set(key, aggregate);
+      }
+      aggregate.add(inDefault, secCurrency, defaultCurrency);
     }
 
     return result;
@@ -927,6 +1038,7 @@ export class NetWorthService {
                   JOIN accounts a ON a.id = it.account_id
                  WHERE a.user_id = $1
                    AND it.security_id IS NOT NULL
+                   AND it.status != 'VOID'
                    AND it.transaction_date <= $2::DATE
                    ${accountFilter}
               )`,
@@ -941,7 +1053,16 @@ export class NetWorthService {
     endDate?: string,
     accountIds?: string[],
     displayCurrency?: string,
-  ): Promise<{ date: string; value: number }[]> {
+  ): Promise<
+    {
+      date: string;
+      value: number;
+      /** False when a component could not be converted; see missingRatePairs. */
+      fxComplete: boolean;
+      /** "USD->EUR" for each pair with no available rate. */
+      missingRatePairs: string[];
+    }[]
+  > {
     const pref = await withScopedDb(this.dataSource, (m) =>
       m.getRepository(UserPreference).findOne({ where: { userId } }),
     );
@@ -1017,7 +1138,8 @@ export class NetWorthService {
            FROM investment_transactions
            WHERE account_id = ANY($1::UUID[])
              AND transaction_date <= $2
-           ORDER BY transaction_date ASC`,
+             AND status != 'VOID'
+           ORDER BY transaction_date ASC, created_at ASC`,
             [brokerageIds, end],
           )
         : [];
@@ -1080,10 +1202,11 @@ export class NetWorthService {
             `SELECT security_id, transaction_date, price
            FROM investment_transactions
            WHERE security_id = ANY($1::UUID[])
-             AND action IN ('BUY', 'SELL', 'REINVEST')
+             AND action = ANY($2)
              AND price IS NOT NULL AND price > 0
-           ORDER BY security_id, transaction_date`,
-            [skipSecIds],
+             AND status != 'VOID'
+           ORDER BY security_id, transaction_date, created_at`,
+            [skipSecIds, MARKET_PRICED_TRADE_ACTIONS],
           )
         : [];
 
@@ -1192,7 +1315,14 @@ export class NetWorthService {
     const holdingsByAccount = new Map<string, Map<string, number>>();
     let txIdx = 0;
 
-    const result: { date: string; value: number }[] = [];
+    const result: {
+      date: string;
+      value: number;
+      /** False when a component could not be converted; see missingRatePairs. */
+      fxComplete: boolean;
+      /** "USD->EUR" for each pair with no available rate. */
+      missingRatePairs: string[];
+    }[] = [];
 
     for (const dateStr of dates) {
       // Process investment transactions up to this date
@@ -1210,20 +1340,10 @@ export class NetWorthService {
             holdingsByAccount.set(acctId, new Map());
           const acctHoldings = holdingsByAccount.get(acctId)!;
 
-          switch (tx.action) {
-            case "BUY":
-            case "REINVEST":
-            case "TRANSFER_IN":
-              acctHoldings.set(secId, (acctHoldings.get(secId) || 0) + qty);
-              break;
-            case "SELL":
-            case "TRANSFER_OUT":
-              acctHoldings.set(secId, (acctHoldings.get(secId) || 0) - qty);
-              break;
-            case "SPLIT":
-              acctHoldings.set(secId, (acctHoldings.get(secId) || 0) + qty);
-              break;
-          }
+          acctHoldings.set(
+            secId,
+            applyActionToQuantity(acctHoldings.get(secId) || 0, tx.action, qty),
+          );
         }
         txIdx++;
       }
@@ -1232,7 +1352,7 @@ export class NetWorthService {
       // to default currency. Security prices are stored in the security's
       // native currency, so we must convert each holding individually rather
       // than treating the total as being in the account's currency.
-      let totalValue = 0;
+      const dayValue = new FxAggregate();
 
       for (const [, acctHoldings] of holdingsByAccount) {
         for (const [secId, qty] of acctHoldings) {
@@ -1264,12 +1384,16 @@ export class NetWorthService {
           if (price != null) {
             const valueInSecCurrency = qty * price;
             const secCurrency = security?.currencyCode || defaultCurrency;
-            totalValue += this.convertCurrency(
-              valueInSecCurrency,
+            dayValue.add(
+              this.convertCurrency(
+                valueInSecCurrency,
+                secCurrency,
+                defaultCurrency,
+                dateStr,
+                rateIndex,
+              ),
               secCurrency,
               defaultCurrency,
-              dateStr,
-              rateIndex,
             );
           }
         }
@@ -1279,18 +1403,24 @@ export class NetWorthService {
       for (const [acctId, dailyMap] of cashBalances) {
         const bal = dailyMap.get(dateStr) ?? 0;
         const currency = acctCurrency.get(acctId) || defaultCurrency;
-        totalValue += this.convertCurrency(
-          bal,
+        dayValue.add(
+          this.convertCurrency(
+            bal,
+            currency,
+            defaultCurrency,
+            dateStr,
+            rateIndex,
+          ),
           currency,
           defaultCurrency,
-          dateStr,
-          rateIndex,
         );
       }
 
       result.push({
         date: dateStr,
-        value: Math.round(totalValue),
+        value: Math.round(dayValue.knownSubtotal),
+        fxComplete: dayValue.isComplete,
+        missingRatePairs: dayValue.missingPairs,
       });
     }
 
@@ -1337,6 +1467,9 @@ export class NetWorthService {
       currency: defaultCurrency,
       series: [],
       points: [],
+      // Nothing to convert is complete, not unknown.
+      fxComplete: true,
+      missingRatePairs: [],
     };
 
     const investAccounts = await this.resolveScopedInvestmentAccounts(
@@ -1377,7 +1510,8 @@ export class NetWorthService {
              FROM investment_transactions
              WHERE account_id = ANY($1::UUID[])
                AND transaction_date <= $2
-             ORDER BY transaction_date ASC`,
+               AND status != 'VOID'
+             ORDER BY transaction_date ASC, created_at ASC`,
             [brokerageIds, end],
           )
         : [];
@@ -1452,10 +1586,11 @@ export class NetWorthService {
           `SELECT security_id, transaction_date, price
              FROM investment_transactions
              WHERE security_id = ANY($1::UUID[])
-               AND action IN ('BUY', 'SELL', 'REINVEST')
+               AND action = ANY($2)
                AND price IS NOT NULL AND price > 0
-             ORDER BY security_id, transaction_date`,
-          [skipSecIds],
+               AND status != 'VOID'
+             ORDER BY security_id, transaction_date, created_at`,
+          [skipSecIds, MARKET_PRICED_TRADE_ACTIONS],
         );
         for (const r of txPriceRows) {
           const arr = txPricesBySec.get(r.security_id) ?? [];
@@ -1530,6 +1665,11 @@ export class NetWorthService {
       cash: number;
     }> = [];
 
+    // Pairs the whole breakdown could not resolve a rate for. Collected across
+    // every sample so the response can name them rather than presenting a
+    // subtotal as a total (P5-009).
+    const missingPairs = new Set<string>();
+
     for (const sampleDate of sampleDates) {
       const valuationDate =
         granularity === "monthly" ? this.monthEndDate(sampleDate) : sampleDate;
@@ -1550,18 +1690,10 @@ export class NetWorthService {
         const secId = tx.security_id;
         const qty = Number(tx.quantity) || 0;
         if (secId) {
-          switch (tx.action) {
-            case "BUY":
-            case "REINVEST":
-            case "TRANSFER_IN":
-            case "SPLIT":
-              holdings.set(secId, (holdings.get(secId) || 0) + qty);
-              break;
-            case "SELL":
-            case "TRANSFER_OUT":
-              holdings.set(secId, (holdings.get(secId) || 0) - qty);
-              break;
-          }
+          holdings.set(
+            secId,
+            applyActionToQuantity(holdings.get(secId) || 0, tx.action, qty),
+          );
         }
         txIdx++;
       }
@@ -1587,26 +1719,41 @@ export class NetWorthService {
           valuationDate,
           rateIndex,
         );
+        // A position with no rate for its pair is left out of the breakdown
+        // rather than entered at 1:1, and recorded so the point can say so.
+        if (value === null) {
+          missingPairs.add(`${secCurrency}->${defaultCurrency}`);
+          continue;
+        }
         valuesBySec.set(secId, (valuesBySec.get(secId) ?? 0) + value);
       }
 
       // Cash maps are keyed by the sample date itself: day strings for daily,
       // month-first strings for monthly.
-      let cash = 0;
+      const cashAggregate = new FxAggregate();
       for (const [acctId, dailyMap] of cashBalances) {
         const bal = dailyMap.get(sampleDate) ?? 0;
         if (bal === 0) continue;
         const currency = acctCurrency.get(acctId) || defaultCurrency;
-        cash += this.convertCurrency(
-          bal,
+        cashAggregate.add(
+          this.convertCurrency(
+            bal,
+            currency,
+            defaultCurrency,
+            valuationDate,
+            rateIndex,
+          ),
           currency,
           defaultCurrency,
-          valuationDate,
-          rateIndex,
         );
       }
+      for (const pair of cashAggregate.missingPairs) missingPairs.add(pair);
 
-      ungrouped.push({ date: sampleDate, valuesBySec, cash });
+      ungrouped.push({
+        date: sampleDate,
+        valuesBySec,
+        cash: cashAggregate.knownSubtotal,
+      });
     }
 
     const { series, points } = this.groupSecurityBreakdown(
@@ -1614,7 +1761,14 @@ export class NetWorthService {
       securityMap,
       limit,
     );
-    return { granularity, currency: defaultCurrency, series, points };
+    return {
+      granularity,
+      currency: defaultCurrency,
+      series,
+      points,
+      fxComplete: missingPairs.size === 0,
+      missingRatePairs: [...missingPairs].sort(),
+    };
   }
 
   // ---- Private helpers ----
@@ -1708,6 +1862,7 @@ export class NetWorthService {
             SELECT it.account_id, MIN(it.transaction_date) AS d
               FROM investment_transactions it
              WHERE it.account_id = ANY($1::UUID[])
+               AND it.status != 'VOID'
              GROUP BY it.account_id
           )
           SELECT MIN(
@@ -2072,7 +2227,8 @@ export class NetWorthService {
     const [{ inv_earliest }] = await this.scopedQuery(
       `SELECT MIN(transaction_date) as inv_earliest
        FROM investment_transactions
-       WHERE account_id = $1`,
+       WHERE account_id = $1
+         AND status != 'VOID'`,
       [account.id],
     );
 
@@ -2126,8 +2282,10 @@ export class NetWorthService {
         where: {
           accountId: account.id,
           transactionDate: LessThanOrEqual(today),
+          // Rows as effects: a VOID transaction moved no shares.
+          status: NON_VOID_INVESTMENT_STATUS,
         },
-        order: { transactionDate: "ASC" },
+        order: { transactionDate: "ASC", createdAt: "ASC" },
       }),
     );
 
@@ -2193,20 +2351,10 @@ export class NetWorthService {
         const qty = Number(tx.quantity) || 0;
 
         if (secId) {
-          switch (tx.action) {
-            case InvestmentAction.BUY:
-            case InvestmentAction.REINVEST:
-            case InvestmentAction.TRANSFER_IN:
-              holdings.set(secId, (holdings.get(secId) || 0) + qty);
-              break;
-            case InvestmentAction.SELL:
-            case InvestmentAction.TRANSFER_OUT:
-              holdings.set(secId, (holdings.get(secId) || 0) - qty);
-              break;
-            case InvestmentAction.SPLIT:
-              holdings.set(secId, (holdings.get(secId) || 0) + qty);
-              break;
-          }
+          holdings.set(
+            secId,
+            applyActionToQuantity(holdings.get(secId) || 0, tx.action, qty),
+          );
         }
         txIdx++;
       }
@@ -2214,7 +2362,7 @@ export class NetWorthService {
       // Compute market value from holdings. Each holding's value is in the
       // security's native currency; convert to the account's currency at the
       // month-end exchange rate before summing.
-      let marketValue = 0;
+      const monthValue = new FxAggregate();
       const monthEndStr = this.monthEndDate(monthStr);
       for (const [secId, qty] of holdings) {
         if (Math.abs(qty) < 0.00000001) continue;
@@ -2231,17 +2379,32 @@ export class NetWorthService {
         if (price != null) {
           const valueInSecCurrency = qty * price;
           const secCurrency = security?.currencyCode || account.currencyCode;
-          marketValue += this.convertCurrency(
-            valueInSecCurrency,
+          monthValue.add(
+            this.convertCurrency(
+              valueInSecCurrency,
+              secCurrency,
+              account.currencyCode,
+              monthEndStr,
+              mvRateIndex,
+            ),
             secCurrency,
             account.currencyCode,
-            monthEndStr,
-            mvRateIndex,
           );
         }
       }
 
-      marketValueByMonth.set(monthStr, marketValue);
+      // This value is persisted to monthly_account_balances, which has no
+      // column to record that a conversion was incomplete. Per
+      // docs/specs/fx-conversion-completeness.md section 5, the snapshot is
+      // written from the subtotal and the gap is logged rather than silently
+      // absorbed at 1:1; adding a completeness column is a separate migration.
+      if (!monthValue.isComplete) {
+        this.logger.warn(
+          `Snapshot for account ${account.id} month ${monthStr} omits positions with no exchange rate (${monthValue.missingPairs.join(", ")}); the stored market value is a subtotal`,
+        );
+      }
+
+      marketValueByMonth.set(monthStr, monthValue.knownSubtotal);
     }
 
     // Atomic write
@@ -2327,11 +2490,12 @@ export class NetWorthService {
       `SELECT security_id, transaction_date, price
        FROM investment_transactions
        WHERE security_id = ANY($1::UUID[])
-         AND action IN ('BUY', 'SELL', 'REINVEST')
+         AND action = ANY($2)
          AND price IS NOT NULL
          AND price > 0
-       ORDER BY security_id, transaction_date`,
-      [skipSecIds],
+         AND status != 'VOID'
+       ORDER BY security_id, transaction_date, created_at`,
+      [skipSecIds, MARKET_PRICED_TRADE_ACTIONS],
     );
 
     const bySecId = new Map<string, Array<{ date: string; price: number }>>();
@@ -2395,25 +2559,56 @@ export class NetWorthService {
     return index;
   }
 
+  /**
+   * Date-aware conversion into the reporting currency. Returns `null` when no
+   * rate exists for the pair.
+   *
+   * `null`, not the amount unchanged: this used to end in `result ?? amount`,
+   * which reported 1,000 USD as 1,000 EUR and left a consumer unable to tell
+   * that from a genuine 1:1 pair (audit P5-009). The direct/inverse decision
+   * lives in the shared `convertWithRateLookup` so reports and net worth cannot
+   * diverge on how a pair resolves. Callers accumulate through `FxAggregate`;
+   * see `docs/specs/fx-conversion-completeness.md`.
+   */
   private convertCurrency(
     amount: number,
     from: string,
     to: string,
     monthEnd: string,
     rateIndex: RateIndex,
-  ): number {
-    // Date-aware rate lookup: resolve the best rate on or before monthEnd from
-    // the historical index. The direct/inverse decision lives in the shared
-    // convertWithRateLookup helper so reports and net worth stay consistent.
-    const result = convertWithRateLookup(amount, from, to, (f, t) => {
+  ): number | null {
+    // Zero converts to zero at any rate, so it needs none (and records no
+    // gap): an emptied account in a currency with no stored rates is a settled
+    // zero, not an unknowable value, and flagging it incomplete would report a
+    // question that was never open as one that could not be answered.
+    if (amount === 0) return 0;
+
+    const converted = convertWithRateLookup(amount, from, to, (f, t) => {
       const rates = rateIndex.get(`${f}->${t}`);
-      return rates ? this.findBestRate(rates, monthEnd) : undefined;
+      return rates
+        ? this.findBestRate(rates, `${f}->${t}`, monthEnd)
+        : undefined;
     });
-    return result ?? amount;
+    if (converted === null) {
+      this.logger.warn(
+        `No exchange rate available for ${from}->${to} on or around ${monthEnd}; the affected total is reported as unknown rather than converted 1:1`,
+      );
+    }
+    return converted;
   }
+
+  /**
+   * Rate arrays whose look-ahead fallback has already been logged. Keyed by the
+   * per-request array object in the RateIndex, so each pair warns once per
+   * computation instead of once per chart point.
+   */
+  private readonly lookAheadWarned = new WeakSet<
+    Array<{ date: string; rate: number }>
+  >();
 
   private findBestRate(
     rates: Array<{ date: string; rate: number }>,
+    pair: string,
     beforeOrOn: string,
   ): number | undefined {
     let best: number | undefined;
@@ -2421,8 +2616,22 @@ export class NetWorthService {
       if (r.date <= beforeOrOn) best = r.rate;
       else break;
     }
-    // If no rate before this date, use the earliest available
+    // No rate on or before this date: fall back to the earliest one there is.
+    //
+    // This is look-ahead -- valuing a point with a rate from its future -- and
+    // the time-series contract forbids it in general. It is kept deliberately
+    // (DR-02 in the audit): a chart point that predates the rate history is
+    // more useful approximated than absent. What is NOT acceptable is it being
+    // invisible, so it is logged below; changing the fallback itself is a
+    // product decision recorded in docs/specs/fx-conversion-completeness.md
+    // section 6.
     if (best === undefined && rates.length > 0) {
+      if (!this.lookAheadWarned.has(rates)) {
+        this.lookAheadWarned.add(rates);
+        this.logger.warn(
+          `Valuation on or before ${beforeOrOn} predates the stored ${pair} rate history; using the earliest stored rate (look-ahead, DR-02)`,
+        );
+      }
       best = rates[0].rate;
     }
     return best;

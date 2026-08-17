@@ -26,7 +26,8 @@
     "editAria": "Zahlungsempfänger bearbeiten",
     "detailsAria": "Zahlungsempfänger-Details anzeigen",
     "collapseAria": "Zahlungsempfänger-Informationen ausblenden",
-    "show": "Zahlungsempfänger-Informationen anzeigen"
+    "show": "Zahlungsempfänger-Informationen anzeigen",
+    "amountUnavailable": "Kein Kurs"
   },
   "categoryWidget": {
     "detailsAria": "Kategorie-Details anzeigen",
@@ -47,7 +48,8 @@
     "noTransactions": "Keine Buchungen in diesem Zeitraum",
     "editAria": "Kategorie bearbeiten",
     "collapseAria": "Kategorie-Informationen ausblenden",
-    "show": "Kategorie-Informationen anzeigen"
+    "show": "Kategorie-Informationen anzeigen",
+    "amountUnavailable": "Kein Kurs"
   },
   "accountWidget": {
     "currentBalance": "Aktueller Saldo",
@@ -110,10 +112,11 @@
       "paidAmount": "Gezahlter Betrag",
       "feePaid": "Gezahlte Gebühr",
       "balance": "Saldo",
+      "attachments": "Anhänge",
       "status": "Status",
-      "actions": "Aktionen",
-      "attachments": "Anhänge"
+      "actions": "Aktionen"
     },
+    "attachmentsCount": "{count, plural, one {# Anhang} other {# Anhänge}}",
     "today": "Heute",
     "export": {
       "button": "Exportieren",
@@ -174,8 +177,7 @@
       "editButton": "Bearbeiten",
       "deleteButton": "Löschen"
     },
-    "itemNamePlural": "Buchungen",
-    "attachmentsCount": "{count, plural, one {# Anhang} other {# Anhänge}}"
+    "itemNamePlural": "Buchungen"
   },
   "row": {
     "copyOptions": {
@@ -230,6 +232,11 @@
       "currency": "Währung",
       "hasAttachments": "Anhänge"
     },
+    "hasAttachmentsOptions": {
+      "any": "Beliebig",
+      "yes": "Ja",
+      "no": "Nein"
+    },
     "placeholders": {
       "accounts": "Alle Konten",
       "payees": "Alle Zahlungsempfänger",
@@ -240,6 +247,13 @@
       "amountMax": "Max.",
       "search": "Zahlungsempfänger, Kategorie, Betrag, Tag, Beschreibung, Referenz-Nr. suchen...",
       "tagKeyValue": "z. B. usa"
+    },
+    "tagKeyNone": "Beliebig (kein Schlüsselfilter)",
+    "tagKeyOps": {
+      "hasValue": "Hat einen Wert",
+      "noValue": "Hat keinen Wert",
+      "contains": "Wert enthält",
+      "notContains": "Wert enthält nicht"
     },
     "chips": {
       "removeAccount": "Filter {name} entfernen",
@@ -280,18 +294,6 @@
       "yearToDate": "Jahr bis heute",
       "lastYear": "Letztes Jahr",
       "custom": "Benutzerdefiniert"
-    },
-    "tagKeyNone": "Beliebig (kein Schlüsselfilter)",
-    "tagKeyOps": {
-      "hasValue": "Hat einen Wert",
-      "noValue": "Hat keinen Wert",
-      "contains": "Wert enthält",
-      "notContains": "Wert enthält nicht"
-    },
-    "hasAttachmentsOptions": {
-      "any": "Beliebig",
-      "yes": "Ja",
-      "no": "Nein"
     }
   },
   "bulk": {
@@ -399,6 +401,7 @@
       "optionLabel": "{name} ({currency}) — {owner}"
     },
     "crossOwnerLockedNote": "Die Gegenseite dieser Überweisung liegt in einem Konto, das nicht mehr mit Ihnen geteilt wird. Betrag, Datum und Konten sind gesperrt, aber Sie können die Details dieser Transaktion weiterhin bearbeiten.",
+    "transferCategoryNote": "Optional. Der Transfer zählt weiterhin nicht als Einnahme oder Ausgabe, aber diese Kategorie lässt ihn in der monatlichen Kategorienübersicht erscheinen (z. B. monatliche Investitionsbeiträge).",
     "amountReceivedNote": "Erhaltener Betrag nach Währungsumrechnung",
     "splitTransaction": "Buchung aufteilen",
     "splitDisabledDuringTour": "Während der geführten Tour nicht verfügbar",
@@ -408,6 +411,7 @@
       "transferUpdated": "Überweisung aktualisiert",
       "transactionCreated": "Buchung erstellt",
       "transactionUpdated": "Buchung aktualisiert",
+      "attachmentsUploadFailed": "Transaktion gespeichert, aber {count} Anhang/Anhänge konnten nicht hochgeladen werden",
       "saveFailed": "Buchung konnte nicht gespeichert werden",
       "loadFailed": "Formulardaten konnten nicht geladen werden",
       "splitsNotEqual": "Summe der Buchungsteile ({splitTotal}) muss dem Buchungsbetrag ({txAmount}) entsprechen",
@@ -422,13 +426,11 @@
       "categoryCreateFailed": "Kategorie konnte nicht erstellt werden",
       "tagCreated": "Tag „{name}” erstellt",
       "fxRateRequired": "Geben Sie einen Wechselkurs oder den umgerechneten Betrag ein, bevor Sie eine Fremdwährungstransaktion speichern.",
-      "attachmentsUploadFailed": "Transaktion gespeichert, aber {count} Anhang/Anhänge konnten nicht hochgeladen werden",
       "jointPayeeCreateNotGranted": "Der Kontoinhaber hat Ihnen nicht erlaubt, Zahlungsempfänger zu erstellen. Wählen Sie stattdessen einen vorhandenen Zahlungsempfänger."
     },
     "ariaHistory": "Letzte Buchungen anzeigen",
     "ariaHistoryForPayee": "Letzte Buchungen für diesen Zahlungsempfänger anzeigen",
     "historyTitle": "Aus einer aktuellen Buchung übernehmen",
-    "transferCategoryNote": "Optional. Der Transfer zählt weiterhin nicht als Einnahme oder Ausgabe, aber diese Kategorie lässt ihn in der monatlichen Kategorienübersicht erscheinen (z. B. monatliche Investitionsbeiträge).",
     "currencyPicker": {
       "label": "Eingabewährung",
       "ariaLabel": "Eingabewährung ändern",
@@ -440,15 +442,15 @@
       "reactivated": "{code} reaktiviert"
     },
     "fx": {
+      "totalInCurrency": "Gesamt in {currency}",
+      "rateCaption": "1 {from} = {rate} {to} ({date})",
       "noRateWarning": "Kein Wechselkurs für {from} zu {to} am {date} gefunden. Bitte den umgerechneten Betrag manuell eingeben.",
       "usingLatestRateHint": "Es wird der neueste verfügbare Kurs verwendet (nicht vom {date}).",
       "displayToggle": {
         "account": "Konto",
         "original": "Original"
       },
-      "rateCaption": "1 {from} = {rate} {to} ({date})",
-      "feeCaption": "Enthält eine Fremdwährungsgebühr von {percent}% ({fee}).",
-      "totalInCurrency": "Gesamt in {currency}"
+      "feeCaption": "Enthält eine Fremdwährungsgebühr von {percent}% ({fee})."
     },
     "jointSplitDisabled": "Splitbuchungen in einem geteilten Konto kann nur der Eigentümer verwalten"
   },
@@ -473,6 +475,10 @@
     "remaining": "Verbleibend: {symbol}{amount}",
     "needAmount": "Benötigt {symbol}{amount} (verbleibend: {symbol}{remaining})",
     "setTotal": "Gesamt auf {symbol}{amount} setzen",
+    "currencyToggle": {
+      "title": "Währung wechseln, in der die Teilbeträge angezeigt und bearbeitet werden",
+      "ariaAmountsIn": "Teilbeträge in {code} anzeigen und bearbeiten"
+    },
     "splitLabel": "Buchungsteil {number}",
     "columns": {
       "type": "Typ",
@@ -491,11 +497,7 @@
     "selectAccount": "Konto auswählen...",
     "memoPlaceholder": "Optionales Memo",
     "mobileMemoPlaceholder": "Memo",
-    "tagsPlaceholder": "Tags...",
-    "currencyToggle": {
-      "title": "Währung wechseln, in der die Teilbeträge angezeigt und bearbeitet werden",
-      "ariaAmountsIn": "Teilbeträge in {code} anzeigen und bearbeiten"
-    }
+    "tagsPlaceholder": "Tags..."
   },
   "recentPopover": {
     "recentForPayee": "Zuletzt für {name}",
@@ -513,7 +515,11 @@
     "quantityPlaceholder": "Menge",
     "pricePlaceholder": "Preis",
     "commissionPlaceholder": "Provision",
-    "amountPlaceholder": "Betrag ({currency})"
+    "amountPlaceholder": "Betrag ({currency})",
+    "ratePlaceholder": "{to} pro 1 {from}",
+    "ariaRate": "Wechselkurs ({to} pro 1 {from})",
+    "rateHint": "Stückzahl, Preis und Provision sind in {from}; dieser Kurs rechnet die Zahlungswirkung in {to} um.",
+    "rateUnresolved": "Kein Kurs für {from} zu {to} verfügbar. Geben Sie einen ein — ohne ihn lässt sich die Zahlungswirkung nicht ermitteln, und die beiden Währungen sind nicht gleichwertig."
   },
   "charts": {
     "balanceHistory": {

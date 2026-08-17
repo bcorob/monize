@@ -497,12 +497,20 @@ export interface MinMaxFlagIndices {
 export function computeMinMaxFlagIndices(
   values: readonly number[],
 ): MinMaxFlagIndices {
-  if (values.length === 0) return { maxIndex: -1, minIndex: -1, show: false };
-  let maxIndex = 0;
-  let minIndex = 0;
-  for (let i = 1; i < values.length; i++) {
-    if (values[i] > values[maxIndex]) maxIndex = i;
-    if (values[i] < values[minIndex]) minIndex = i;
+  // A gap (NaN/Infinity) is neither a high nor a low. Anchoring the running
+  // indices at 0 breaks when index 0 is a gap: every `NaN > NaN` / `NaN < NaN`
+  // comparison is false, so both flags stay pinned to the gap and `show`
+  // (NaN !== NaN) is true, drawing callouts on a point with no value. Seed the
+  // indices from the first finite point and skip the rest.
+  let maxIndex = -1;
+  let minIndex = -1;
+  for (let i = 0; i < values.length; i++) {
+    if (!Number.isFinite(values[i])) continue;
+    if (maxIndex === -1 || values[i] > values[maxIndex]) maxIndex = i;
+    if (minIndex === -1 || values[i] < values[minIndex]) minIndex = i;
+  }
+  if (maxIndex === -1 || minIndex === -1) {
+    return { maxIndex: -1, minIndex: -1, show: false };
   }
   return { maxIndex, minIndex, show: values[maxIndex] !== values[minIndex] };
 }

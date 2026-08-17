@@ -11,6 +11,9 @@ import {
 import { ApiProperty } from "@nestjs/swagger";
 import { Account } from "../../accounts/entities/account.entity";
 import { Transaction } from "../../transactions/entities/transaction.entity";
+// From the enum's own module, not transaction.entity: the entity import
+// closes a require cycle that leaves the enum undefined at decoration time.
+import { TransactionStatus } from "../../transactions/entities/transaction-status.enum";
 import { TransactionSplit } from "../../transactions/entities/transaction-split.entity";
 import { Security } from "./security.entity";
 import { User } from "../../users/entities/user.entity";
@@ -21,6 +24,27 @@ const numericTransformer = {
     value === null ? null : Number(value),
 };
 
+/**
+ * The action vocabulary, including Microsoft Money's full distribution set
+ * (issue #1149). Six of these are refinements of a base action: they move
+ * shares and cash exactly as their base does, and exist so the *kind* of
+ * income survives into the register and future tax reporting instead of being
+ * collapsed at import time.
+ *
+ * | Action | Base | Shares | Cash | Income kind |
+ * |---|---|---|---|---|
+ * | REINVEST_INTEREST | REINVEST | + | none | interest, reinvested |
+ * | REINVEST_CAPITAL_GAIN_SHORT | REINVEST | + | none | short-term gain, reinvested |
+ * | REINVEST_CAPITAL_GAIN_LONG | REINVEST | + | none | long-term gain, reinvested |
+ * | CAPITAL_GAIN_SHORT | CAPITAL_GAIN | none | in | short-term gain distribution |
+ * | CAPITAL_GAIN_LONG | CAPITAL_GAIN | none | in | long-term gain distribution |
+ * | REDEEM | SELL | - | in | CD/bond redemption (proceeds may include accrued interest) |
+ *
+ * Every financial fold normalizes through `baseInvestmentAction`
+ * (`securities/investment-replay.util.ts`) so a refinement cannot behave
+ * differently from its base by accident; only income-classification surfaces
+ * read the raw value.
+ */
 export enum InvestmentAction {
   BUY = "BUY",
   SELL = "SELL",
@@ -33,6 +57,12 @@ export enum InvestmentAction {
   REINVEST = "REINVEST",
   ADD_SHARES = "ADD_SHARES",
   REMOVE_SHARES = "REMOVE_SHARES",
+  REINVEST_INTEREST = "REINVEST_INTEREST",
+  REINVEST_CAPITAL_GAIN_SHORT = "REINVEST_CAPITAL_GAIN_SHORT",
+  REINVEST_CAPITAL_GAIN_LONG = "REINVEST_CAPITAL_GAIN_LONG",
+  CAPITAL_GAIN_SHORT = "CAPITAL_GAIN_SHORT",
+  CAPITAL_GAIN_LONG = "CAPITAL_GAIN_LONG",
+  REDEEM = "REDEEM",
 }
 
 @Entity("investment_transactions")
@@ -172,6 +202,17 @@ export class InvestmentTransaction {
   @ApiProperty({ required: false })
   @Column({ type: "text", nullable: true })
   description: string | null;
+
+  // Same enum as transactions.status, never forked. A VOID investment row
+  // moves no shares and no cash, and its linked cash transaction shares the
+  // VOID boundary with it. Spec: docs/specs/investment-transaction-status.md.
+  @ApiProperty({ enum: TransactionStatus })
+  @Column({
+    type: "varchar",
+    length: 20,
+    default: TransactionStatus.UNRECONCILED,
+  })
+  status: TransactionStatus;
 
   @ManyToOne(() => Account)
   @JoinColumn({ name: "account_id" })

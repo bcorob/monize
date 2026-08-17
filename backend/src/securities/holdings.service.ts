@@ -16,11 +16,19 @@ import { withSystemContext, withUserContext } from "../common/db/with-context";
 import { EntityManager, In, LessThanOrEqual, DataSource } from "typeorm";
 import { withScopedDb } from "../common/db/scoped-db";
 import { lockHoldingScope } from "../common/db/locks";
+import {
+  applyActionToQuantity,
+  baseInvestmentAction,
+  SHARE_MOVING_ACTIONS,
+  acquisitionCost,
+  isQuantityOnlyAction,
+} from "./investment-replay.util";
 import { Holding } from "./entities/holding.entity";
 import {
   InvestmentTransaction,
   InvestmentAction,
 } from "./entities/investment-transaction.entity";
+import { NON_VOID_INVESTMENT_STATUS } from "./investment-row-effects.util";
 import {
   Account,
   AccountType,
@@ -131,11 +139,14 @@ export class HoldingsService {
     // Verify the user owns the account before exposing transaction history.
     await this.accountsService.findOne(userId, accountId);
 
-    const where: {
-      userId: string;
-      accountId: string;
-      securityId: string;
-    } = { userId, accountId, securityId };
+    // Rows as effects: a VOID transaction moved no shares, so the replay
+    // skips it (docs/specs/investment-transaction-status.md).
+    const where = {
+      userId,
+      accountId,
+      securityId,
+      status: NON_VOID_INVESTMENT_STATUS,
+    };
 
     const transactions = await withScopedDb(this.dataSource, (m) =>
       m.getRepository(InvestmentTransaction).find({
@@ -153,14 +164,24 @@ export class HoldingsService {
       if (tx.transactionDate >= asOfDate) break;
       if (excludeTransactionId && tx.id === excludeTransactionId) continue;
       const txQty = Number(tx.quantity) || 0;
-      const txPrice = Number(tx.price) || 0;
-      switch (tx.action) {
+      switch (baseInvestmentAction(tx.action)) {
         case InvestmentAction.BUY:
         case InvestmentAction.REINVEST:
-        case InvestmentAction.TRANSFER_IN:
-          totalCost += txQty * txPrice;
+        case InvestmentAction.TRANSFER_IN: {
+          // Same basis rule as the full rebuild: commission included, and an
+          // unpriced acquisition adds no cost rather than being treated as free.
+          // This replay feeds the SPLIT form's "holdings as they were" preview,
+          // so a different average cost here than computeHoldingsMap produces
+          // shows the user one number and stores another.
+          const cost = acquisitionCost({
+            quantity: tx.quantity,
+            price: tx.price,
+            commission: tx.commission,
+          });
+          if (cost !== null) totalCost += cost;
           qty += txQty;
           break;
+        }
         case InvestmentAction.SELL:
         case InvestmentAction.TRANSFER_OUT: {
           const sellQty = Math.min(txQty, qty);
@@ -171,19 +192,12 @@ export class HoldingsService {
           qty -= txQty;
           break;
         }
-        case InvestmentAction.ADD_SHARES:
-          qty += txQty;
-          break;
-        case InvestmentAction.REMOVE_SHARES:
-          qty -= txQty;
-          break;
-        case InvestmentAction.SPLIT:
-          if (txQty > 0) {
-            qty *= txQty;
-          }
-          break;
         default:
-          // DIVIDEND / INTEREST / CAPITAL_GAIN don't move shares.
+          // ADD_SHARES / REMOVE_SHARES move shares without a cost; SPLIT scales
+          // the position by its ratio; cash actions leave it alone. All three
+          // go through the shared reducer so this replay cannot drift from the
+          // net-worth and cost-basis ones.
+          qty = applyActionToQuantity(qty, tx.action, txQty);
           break;
       }
     }
@@ -545,6 +559,9 @@ export class HoldingsService {
       const where: Record<string, unknown> = {
         userId,
         accountId: In(eligibleAccountIds),
+        // Rows as effects: a VOID transaction moved no shares, so it cannot
+        // be what oversells a position.
+        status: NON_VOID_INVESTMENT_STATUS,
       };
       if (securityIds && securityIds.length > 0) {
         where.securityId = In(securityIds);
@@ -571,25 +588,8 @@ export class HoldingsService {
       const current = balances.get(key) || 0;
       const quantity = Number(tx.quantity) || 0;
 
-      let next = current;
-      switch (tx.action) {
-        case InvestmentAction.BUY:
-        case InvestmentAction.REINVEST:
-        case InvestmentAction.TRANSFER_IN:
-        case InvestmentAction.ADD_SHARES:
-          next = current + quantity;
-          break;
-        case InvestmentAction.SELL:
-        case InvestmentAction.TRANSFER_OUT:
-        case InvestmentAction.REMOVE_SHARES:
-          next = current - quantity;
-          break;
-        case InvestmentAction.SPLIT:
-          next = current * quantity;
-          break;
-        default:
-          continue;
-      }
+      if (!SHARE_MOVING_ACTIONS.includes(tx.action)) continue;
+      const next = applyActionToQuantity(current, tx.action, quantity);
 
       if (next < -0.00000001) {
         const symbol = tx.security?.symbol || "this security";
@@ -622,45 +622,24 @@ export class HoldingsService {
   private computeHoldingsMap(
     transactions: InvestmentTransaction[],
   ): Map<string, Map<string, { quantity: number; totalCost: number }>> {
-    // Actions that affect holdings
-    const holdingsActions = [
-      InvestmentAction.BUY,
-      InvestmentAction.SELL,
-      InvestmentAction.REINVEST,
-      InvestmentAction.TRANSFER_IN,
-      InvestmentAction.TRANSFER_OUT,
-      InvestmentAction.ADD_SHARES,
-      InvestmentAction.REMOVE_SHARES,
-      InvestmentAction.SPLIT,
-    ];
-
-    // Actions that adjust quantity only (no cost basis change)
-    const quantityOnlyActions = [
-      InvestmentAction.ADD_SHARES,
-      InvestmentAction.REMOVE_SHARES,
-    ];
-
     const holdingsMap = new Map<
       string,
       Map<string, { quantity: number; totalCost: number }>
     >();
 
     for (const tx of transactions) {
-      if (!holdingsActions.includes(tx.action) || !tx.securityId) {
+      if (!SHARE_MOVING_ACTIONS.includes(tx.action) || !tx.securityId) {
         continue;
       }
 
       const quantity = Number(tx.quantity) || 0;
-      const price = Number(tx.price) || 0;
 
-      // Determine quantity change
-      const quantityChange = [
-        InvestmentAction.SELL,
-        InvestmentAction.TRANSFER_OUT,
-        InvestmentAction.REMOVE_SHARES,
-      ].includes(tx.action)
-        ? -quantity
-        : quantity;
+      // Whether this action moved shares in or out, used only to pick the basis
+      // treatment below -- the quantity itself folds through the shared reducer.
+      const quantityChange =
+        applyActionToQuantity(0, tx.action, quantity) < 0
+          ? -quantity
+          : quantity;
 
       // Get or create account map
       if (!holdingsMap.has(tx.accountId)) {
@@ -674,30 +653,43 @@ export class HoldingsService {
       }
       const holding = accountHoldings.get(tx.securityId)!;
 
+      // Quantity always moves through the shared reducer; only the basis
+      // treatment varies by action. Note that a disposal subtracts in full
+      // rather than drawing down to zero: an over-sell is history the import
+      // cross-check (`check-holdings.ts`, which mirrors this fold and always
+      // subtracted) and `recomputeAsOf` both already carry as negative, and
+      // clamping it here made the same position reconcile in one replay and
+      // not another.
       if (tx.action === InvestmentAction.SPLIT) {
-        // Stock split: scale quantity by the ratio and preserve total cost
-        // basis. totalCost is left untouched because the per-share cost is
-        // implicitly recomputed from totalCost / quantity below.
-        const ratio = quantity;
-        if (ratio > 0) {
-          holding.quantity *= ratio;
-        }
-      } else if (quantityOnlyActions.includes(tx.action)) {
-        // ADD_SHARES / REMOVE_SHARES: adjust quantity only, no cost basis change
-        holding.quantity += quantityChange;
+        // Total cost basis is preserved across a split; the per-share cost
+        // falls out of totalCost / quantity once the ratio is applied.
+      } else if (isQuantityOnlyAction(tx.action)) {
+        // ADD_SHARES / REMOVE_SHARES: quantity only, no cost basis change.
       } else if (quantityChange > 0) {
-        // Buying: add to total cost
-        holding.totalCost += quantityChange * price;
-        holding.quantity += quantityChange;
-      } else {
-        // Selling: reduce quantity but keep proportional cost
-        const sellQuantity = Math.abs(quantityChange);
-        if (holding.quantity > 0) {
-          const avgCost = holding.totalCost / holding.quantity;
-          holding.totalCost -= sellQuantity * avgCost;
-          holding.quantity -= sellQuantity;
-        }
+        // Includes the acquisition commission, so average cost is what a share
+        // actually cost to acquire: 10 shares at 100 with 10 commission is
+        // 101.00 per share, not 100.00. The old figure understated basis and so
+        // reported the commission as gain on the eventual disposal (P5-006).
+        // Prices here are in the security's currency, as is `averageCost`, so
+        // the row's exchange rate is deliberately not applied.
+        const cost = acquisitionCost({
+          quantity: tx.quantity,
+          price: tx.price,
+          commission: tx.commission,
+        });
+        if (cost !== null) holding.totalCost += cost;
+      } else if (holding.quantity > 0) {
+        // Relieve basis proportionally, for at most the shares actually held.
+        const avgCost = holding.totalCost / holding.quantity;
+        const relieved = Math.min(Math.abs(quantityChange), holding.quantity);
+        holding.totalCost -= relieved * avgCost;
       }
+
+      holding.quantity = applyActionToQuantity(
+        holding.quantity,
+        tx.action,
+        quantity,
+      );
 
       // Snap near-zero to exactly zero to prevent ghost holdings
       if (Math.abs(holding.quantity) < 0.0001) {
@@ -762,6 +754,8 @@ export class HoldingsService {
         userId,
         accountId: In(eligibleIds),
         transactionDate: LessThanOrEqual(cutoff),
+        // Rows as effects: a VOID transaction moved no shares.
+        status: NON_VOID_INVESTMENT_STATUS,
       },
       order: {
         transactionDate: "ASC",
@@ -862,6 +856,8 @@ export class HoldingsService {
           userId,
           accountId: In(brokerageAccountIds),
           transactionDate: LessThanOrEqual(cutoff),
+          // Rows as effects: a VOID transaction moved no shares.
+          status: NON_VOID_INVESTMENT_STATUS,
         },
         order: {
           transactionDate: "ASC",
@@ -952,7 +948,8 @@ export class HoldingsService {
               `SELECT DISTINCT user_id
              FROM investment_transactions
              WHERE user_id = ANY($1)
-               AND transaction_date = $2`,
+               AND transaction_date = $2
+               AND status != 'VOID'`,
               [userIds, today],
             ),
         );

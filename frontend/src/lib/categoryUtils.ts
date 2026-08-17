@@ -163,7 +163,7 @@ export interface SubcategoryShare {
  * when the category has no children -- a rollup of one bucket says nothing.
  */
 export function rollupToDirectChildren(
-  rows: ReadonlyArray<{ id: string | null; total: number; count?: number }>,
+  rows: ReadonlyArray<{ id: string | null; total: number | null; count?: number }>,
   categories: Category[],
   categoryId: string,
 ): SubcategoryShare[] {
@@ -187,6 +187,10 @@ export function rollupToDirectChildren(
   for (const row of rows) {
     const target = rollupTarget(row.id);
     if (!target) continue;
+    // An unconvertible row (no rate for its currency) is left out of the rollup
+    // rather than counted at its unconverted face value, which would size the
+    // share in the wrong currency.
+    if (row.total === null) continue;
     const bucket = buckets.get(target) ?? { total: 0, count: 0 };
     buckets.set(target, {
       total: bucket.total + row.total,

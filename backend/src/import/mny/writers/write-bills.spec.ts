@@ -259,6 +259,45 @@ describe("writeBills", () => {
     );
   });
 
+  it("does not persist a funding account on a non-BUY/SELL investment bill (issue #1154)", async () => {
+    // A DIVIDEND settles against the brokerage's linked cash account, not a
+    // funding account, so even though the account pair has a linked cash sleeve
+    // the imported row must not carry one -- the same stale-column invariant the
+    // scheduled-transaction service enforces on write.
+    const scheduled = repoDouble();
+    const splits = repoDouble();
+
+    await writeBills(
+      managerFor(scheduled, splits),
+      "user-1",
+      input({
+        bills: [
+          bill({
+            accountKey: "acct-10",
+            categoryHandle: null,
+            amount: 75,
+            investment: {
+              action: InvestmentAction.DIVIDEND,
+              securityHandle: 1,
+              quantity: null,
+              price: null,
+              commission: 0,
+            },
+          }),
+        ],
+      }),
+    );
+
+    expect(scheduled.insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        isInvestment: true,
+        investmentAction: InvestmentAction.DIVIDEND,
+        investmentSecurityId: "security-1",
+        investmentFundingAccountId: null,
+      }),
+    );
+  });
+
   it("still creates a bill whose payee, category or transfer account did not import", async () => {
     // A reference that did not survive the import must not take the bill down
     // with it: the schedule is still worth having with a blank field.

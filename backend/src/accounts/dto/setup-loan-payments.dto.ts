@@ -223,6 +223,12 @@ export class SetupLoanPaymentsResponseDto {
   @ApiProperty({ description: "Payment amount set on the account" })
   paymentAmount: number;
 
+  @ApiProperty({
+    description:
+      "Amount of the first scheduled installment after clamping against the outstanding balance -- equals paymentAmount except on a nearly-paid loan",
+  })
+  firstInstallmentAmount: number;
+
   @ApiProperty({ description: "Payment frequency set on the account" })
   paymentFrequency: string;
 

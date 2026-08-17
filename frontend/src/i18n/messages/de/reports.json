@@ -144,9 +144,6 @@
     "defaultMessage": "Berichtsdaten konnten nicht geladen werden. Bitte versuchen Sie es erneut.",
     "retry": "Erneut versuchen"
   },
-  "foreignCurrencyFees": {
-    "noEligibleAccounts": "Für kein Konto ist eine Fremdwährungsgebühr konfiguriert. Legen Sie einen Gebührensatz für ein Konto fest, um dessen Fremdwährungsgebühren hier zu verfolgen."
-  },
   "accountBalances": {
     "totalAssets": "Gesamte Aktiva",
     "totalLiabilities": "Gesamte Verbindlichkeiten",
@@ -333,7 +330,8 @@
     "tooltipUtilization": "Auslastung",
     "tooltipUsed": "Genutzt",
     "tooltipAvailable": "Verfügbar",
-    "pdfTitle": "Kreditauslastung"
+    "pdfTitle": "Kreditauslastung",
+    "noRate": "Kein Kurs"
   },
   "currencyExposure": {
     "empty": "Keine Anlagebestände gefunden. Fügen Sie Wertpapiere hinzu, um das Währungsrisiko zu sehen.",
@@ -575,20 +573,20 @@
     "topRegion": "Top-Region",
     "viewByRegion": "Nach Region",
     "viewByExchange": "Nach Börse",
+    "viewByCountry": "Nach Land",
     "regionalAllocation": "Regionale Allokation",
     "exchangeAllocation": "Börsenallokation",
+    "countryAllocation": "Länderaufteilung (Durchschau)",
+    "countryLookThroughNote": "Das Länderengagement schaut anhand der je Wertpapier hinterlegten manuellen Länderaufteilung durch ETFs und Fonds hindurch. Einzelaktien werden anhand der Börse zugeordnet; nicht klassifizierte Bestände werden als „Sonstige“ angezeigt.",
     "colRegion": "Region",
     "colExchange": "Börse",
     "colCountry": "Land",
     "colHoldings": "Bestände",
     "colMarketValue": "Marktwert",
     "colPortfolioPct": "% des Portfolios",
+    "other": "Sonstige",
     "total": "Gesamt",
-    "holdingCount": "{count, plural, one {# Position} other {# Positionen}}",
-    "viewByCountry": "Nach Land",
-    "countryAllocation": "Länderaufteilung (Durchschau)",
-    "countryLookThroughNote": "Das Länderengagement schaut anhand der je Wertpapier hinterlegten manuellen Länderaufteilung durch ETFs und Fonds hindurch. Einzelaktien werden anhand der Börse zugeordnet; nicht klassifizierte Bestände werden als „Sonstige“ angezeigt.",
-    "other": "Sonstige"
+    "holdingCount": "{count, plural, one {# Position} other {# Positionen}}"
   },
   "healthScoreHistory": {
     "pdfTitle": "Gesundheitsscore-Verlauf",
@@ -761,7 +759,13 @@
     "actionTransferOut": "Überweisung aus",
     "actionReinvest": "Wiederanlage",
     "actionAddShares": "Anteile hinzufügen",
-    "actionRemoveShares": "Anteile entfernen"
+    "actionRemoveShares": "Anteile entfernen",
+    "actionReinvestInterest": "Wiederanlage von Zinsen",
+    "actionReinvestCapitalGainShort": "Wiederanlage kurzfristiger Kapitalerträge",
+    "actionReinvestCapitalGainLong": "Wiederanlage langfristiger Kapitalerträge",
+    "actionCapitalGainShort": "Kurzfristiger Kapitalertrag",
+    "actionCapitalGainLong": "Langfristiger Kapitalertrag",
+    "actionRedeem": "CD/Anleihe einlösen"
   },
   "loanAmortization": {
     "empty": "Keine Darlehens- oder Hypothekenkonten gefunden. Fügen Sie ein Darlehensskonto hinzu, um die Zahlungshistorie zu sehen.",
@@ -820,6 +824,7 @@
       "maxCompare": "Sie können bis zu {max} Szenarien vergleichen.",
       "loadFailed": "Monte-Carlo-Daten konnten nicht geladen werden. Bitte aktualisieren Sie die Seite.",
       "currentValueFailed": "Der aktuelle Portfoliowert konnte nicht abgerufen werden.",
+      "currentValueUnavailable": "Der aktuelle Wert der ausgewählten Konten konnte nicht ermittelt werden. Geben Sie einen Startwert ein oder versuchen Sie es erneut, sobald Kurse und Wechselkurse verfügbar sind.",
       "holdingStatsFailed": "Historische Statistiken je Position konnten nicht geladen werden.",
       "reorderFailed": "Szenarien konnten nicht neu angeordnet werden."
     },
@@ -1168,7 +1173,8 @@
     "csvColProceeds": "Erlöse",
     "csvColCostBasis": "Einstandswert",
     "csvColGainLoss": "Gewinn/Verlust",
-    "csvColReturn": "Rendite %"
+    "csvColReturn": "Rendite %",
+    "csvNoRate": "Kein Kurs"
   },
   "recurringExpenses": {
     "recurringExpenses": "Wiederkehrende Ausgaben",
@@ -1376,7 +1382,8 @@
     "pdfTotalPortfolio": "Gesamtportfolio",
     "pdfAssetTypes": "Anlageklassen",
     "pdfTotalHoldings": "Positionen gesamt",
-    "pdfLargestType": "Größte Klasse"
+    "pdfLargestType": "Größte Klasse",
+    "unavailable": "Nicht verfügbar"
   },
   "spendingAnomalies": {
     "highPriority": "Hohe Priorität",
@@ -1700,5 +1707,8 @@
     "labelSelectAccount": "Kreditkonto auswählen",
     "viewTransactions": "Transaktionen anzeigen",
     "empty": "Keine Kredit-, Hypotheken- oder Kreditlinienkonten gefunden."
+  },
+  "foreignCurrencyFees": {
+    "noEligibleAccounts": "Für kein Konto ist eine Fremdwährungsgebühr konfiguriert. Legen Sie einen Gebührensatz für ein Konto fest, um dessen Fremdwährungsgebühren hier zu verfolgen."
   }
 }

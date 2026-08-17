@@ -92,6 +92,142 @@ describe('AssetAllocationChart', () => {
     expect(screen.getByText('MSFT')).toBeInTheDocument();
   });
 
+  it('marks percentages as known-value-only when valuation is incomplete (RR5-005)', async () => {
+    const allocation = {
+      totalValue: 10000,
+      allocation: [
+        { symbol: 'VTI', name: 'Vanguard Total', type: 'security' as const, value: 10000, percentage: 100, color: '#22c55e', currencyCode: 'CAD' },
+      ],
+    };
+
+    await renderChart({ allocation, isLoading: false, valuationComplete: false });
+
+    // The user is told the 100% is a share of what could be valued, not the whole.
+    expect(
+      screen.getByText(/Percentages cover known value only/),
+    ).toBeInTheDocument();
+  });
+
+  it('says nothing when the valuation is complete', async () => {
+    const allocation = {
+      totalValue: 10000,
+      allocation: [
+        { symbol: 'VTI', name: 'Vanguard Total', type: 'security' as const, value: 10000, percentage: 100, color: '#22c55e', currencyCode: 'CAD' },
+      ],
+    };
+
+    await renderChart({ allocation, isLoading: false, valuationComplete: true });
+
+    expect(
+      screen.queryByText(/Percentages cover known value only/),
+    ).not.toBeInTheDocument();
+  });
+
+  it('warns from the account-currency aggregate in the single foreign-account view (review #1133)', async () => {
+    // The tooltip's values there are percentage * foreignTotal, an
+    // account-currency aggregate over holdingsByAccount -- a different
+    // conversion from the top-level default-currency flag, which can be clean
+    // while the account's own valuation is not (RR5-001 again).
+    const allocation = {
+      totalValue: 100,
+      allocation: [
+        { symbol: 'EUSTX', name: 'Euro Stoxx', type: 'security' as const, value: 100, percentage: 100, color: '#22c55e', currencyCode: 'EUR' },
+      ],
+    };
+
+    await renderChart({
+      allocation,
+      isLoading: false,
+      valuationComplete: true,
+      singleAccountCurrency: 'JPY',
+      holdingsByAccount: [
+        {
+          accountId: 'a1',
+          accountName: 'Tokyo Brokerage',
+          currencyCode: 'JPY',
+          cashAccountId: null,
+          cashBalance: 0,
+          holdings: [],
+          totalCostBasis: 0,
+          totalMarketValue: 0,
+          unpricedHoldingsCount: 0,
+          totalGainLoss: 0,
+          totalGainLossPercent: 0,
+          netInvested: 0,
+          fxComplete: false,
+          missingRatePairs: ['EUR->JPY'],
+          pricesComplete: true,
+          unpricedSecurityIds: [],
+          valuationComplete: false,
+        },
+      ],
+    });
+
+    expect(
+      screen.getByText(/Percentages cover known value only/),
+    ).toBeInTheDocument();
+  });
+
+  it('keeps the warning when the tag view falls back to the security view (review #1133)', async () => {
+    // The no-tags fallback renders the security view while the STORED groupBy
+    // still says 'tag'; gating the warning on the stored value dropped it over
+    // exactly the numbers it was written for.
+    const tagAllocation = {
+      totalValue: 10000,
+      allocation: [
+        { symbol: null, name: 'AI', type: 'tag' as any, value: 10000, percentage: 100, color: '#abcdef', currencyCode: 'CAD' },
+      ],
+    };
+    const untaggedOnly = {
+      totalValue: 10000,
+      allocation: [
+        { symbol: null, name: 'Untagged', type: 'untagged' as any, value: 10000, percentage: 100, color: '#9ca3af', currencyCode: 'CAD' },
+      ],
+    };
+    (investmentsApi.getAllocationByTag as any).mockImplementation(
+      async (ids?: string[]) => (ids ? untaggedOnly : tagAllocation),
+    );
+    const allocation = {
+      totalValue: 10000,
+      allocation: [
+        { symbol: 'VTI', name: 'Vanguard Total', type: 'security' as const, value: 10000, percentage: 100, color: '#22c55e', currencyCode: 'CAD' },
+      ],
+    };
+
+    const { rerender } = await renderChart({
+      allocation,
+      isLoading: false,
+      valuationComplete: false,
+      accountIds: [],
+    });
+    await act(async () => {
+      fireEvent.click(await screen.findByText('By tag'));
+    });
+    // The tag view is active; the warning is about the security view only.
+    expect(
+      screen.queryByText(/Percentages cover known value only/),
+    ).not.toBeInTheDocument();
+
+    // Account filter changes to accounts with no tags: the chart falls back to
+    // the security view while groupBy still says 'tag'.
+    await act(async () => {
+      rerender(
+        <AssetAllocationChart
+          allocation={allocation}
+          isLoading={false}
+          valuationComplete={false}
+          accountIds={['acct-untagged']}
+        />,
+      );
+    });
+    await act(async () => {});
+
+    expect(screen.getByText('VTI')).toBeInTheDocument();
+    expect(
+      screen.getByText(/Percentages cover known value only/),
+    ).toBeInTheDocument();
+  });
+
   it('shows percentages in legend', async () => {
     const allocation = {
       totalValue: 10000,

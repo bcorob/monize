@@ -54,6 +54,7 @@ const ACCOUNTS_STORAGE_KEY = 'monize-reports-foreign-currency-fees-accounts';
 export function ForeignCurrencyFeesReport() {
   const t = useTranslations('accountDetail-fxFees');
   const tr = useTranslations('reports');
+  const tCommon = useTranslations('common');
   const router = useRouter();
   const { defaultCurrency, convertToDefault } = useExchangeRates();
 
@@ -139,7 +140,7 @@ export function ForeignCurrencyFeesReport() {
   }, [effectiveAccountIds, accountsById, defaultCurrency]);
 
   const convertFee = useCallback(
-    (amount: number, accountCurrency: string): number => {
+    (amount: number, accountCurrency: string): number | null => {
       if (accountCurrency === displayCurrency) return amount;
       return convertToDefault(amount, accountCurrency || defaultCurrency);
     },
@@ -196,26 +197,38 @@ export function ForeignCurrencyFeesReport() {
 
   // Roll every account's rows up to one converted fee total per month, honouring
   // the currency filter. Accumulated in integer ten-thousandths to avoid drift.
-  const monthlyFees = useMemo<MonthlyTotal[]>(() => {
+  const monthlyFees = useMemo(() => {
     const active = selectedCurrencies.length > 0 ? new Set(selectedCurrencies) : null;
     const byMonth = new Map<string, { cents: number; count: number }>();
+    // A fee whose currency has no rate to the display currency is left out of
+    // the chart (added at its face value it would be a figure in another
+    // currency), so its currency is named and it is counted -- the chart is a
+    // subtotal, not the whole, and the note beside it says so.
+    const missing = new Set<string>();
+    let excludedCount = 0;
     for (const result of feeResults) {
       for (const row of result.rows) {
         if (active && !active.has(row.currencyCode)) continue;
         const converted = convertFee(row.feeTotal, result.currency);
+        if (converted === null) {
+          missing.add(result.currency);
+          excludedCount += row.count;
+          continue;
+        }
         const bucket = byMonth.get(row.month) ?? { cents: 0, count: 0 };
         bucket.cents += Math.round(converted * SCALE);
         bucket.count += row.count;
         byMonth.set(row.month, bucket);
       }
     }
-    return [...byMonth.entries()]
+    const data: MonthlyTotal[] = [...byMonth.entries()]
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([month, bucket]) => ({
         month,
         total: bucket.cents / SCALE,
         count: bucket.count,
       }));
+    return { data, missingCurrencies: [...missing], excludedCount };
   }, [feeResults, selectedCurrencies, convertFee]);
 
   const currencyKey = selectedCurrencies.join(',');
@@ -351,10 +364,19 @@ export function ForeignCurrencyFeesReport() {
       {/* Chart */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-3 sm:p-6">
         <ForeignCurrencyFeeChart
-          data={monthlyFees}
+          data={monthlyFees.data}
           isLoading={isFeeLoading}
           currencyCode={displayCurrency}
         />
+        {monthlyFees.missingCurrencies.length > 0 && (
+          <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
+            {tCommon('partialTotal.explanation', {
+              count: monthlyFees.excludedCount,
+              displayCurrency,
+              currencies: monthlyFees.missingCurrencies.join(', '),
+            })}
+          </p>
+        )}
       </div>
 
       {/* Transactions */}

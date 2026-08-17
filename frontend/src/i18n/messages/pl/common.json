@@ -228,5 +228,10 @@
     "nothingToRedo": "Nie ma nic do ponowienia",
     "cannotRedo": "Nie można ponowić tej operacji",
     "redoFailed": "Ponowienie nie powiodło się"
+  },
+  "partialTotal": {
+    "srSuffix": "(suma częściowa)",
+    "explanation": "Suma częściowa: {count, plural, one {# kwoty} few {# kwot} many {# kwot} other {# kwoty}} nie udało się uwzględnić, więc pokazana wartość ich nie obejmuje. Brak kursu do {displayCurrency} dla {currencies}.",
+    "explanationExcluded": "Suma częściowa: {count, plural, one {# kwoty} few {# kwot} many {# kwot} other {# kwoty}} nie udało się ustalić, więc pokazana liczba ich nie obejmuje."
   }
 }

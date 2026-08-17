@@ -1,6 +1,7 @@
 import { BadRequestException } from "@nestjs/common";
 import {
   applyFxConversion,
+  resolveFxRateOrNull,
   normalizeFxEntry,
   roundFxRate,
   FX_RATE_DECIMALS,
@@ -131,6 +132,45 @@ describe("fx-entry.util", () => {
       const rounded = applyFxConversion(1000, 1.3652, null).amount;
       expect(precise).toBe(1365.234);
       expect(precise).not.toBe(rounded);
+    });
+  });
+
+  describe("resolveFxRateOrNull", () => {
+    it("resolves and rounds the dated rate, without a dead getLatestRate chase", async () => {
+      const rates = {
+        getRateForDate: jest.fn().mockResolvedValue(1.36523449999),
+        getLatestRate: jest.fn(),
+      };
+      await expect(
+        resolveFxRateOrNull(rates, "USD", "CAD", "2026-01-15"),
+      ).resolves.toBe(1.3652345);
+      // getRateForDate already falls back to the latest stored rate internally
+      // (its documented step 3); a caller-side chase is the dead call four
+      // hand-rolled copies of this ladder used to carry.
+      expect(rates.getLatestRate).not.toHaveBeenCalled();
+    });
+
+    it("asks for the latest stored rate directly when there is no date", async () => {
+      const rates = {
+        getRateForDate: jest.fn(),
+        getLatestRate: jest.fn().mockResolvedValue(0.8),
+      };
+      await expect(
+        resolveFxRateOrNull(rates, "USD", "EUR", null),
+      ).resolves.toBe(0.8);
+      expect(rates.getRateForDate).not.toHaveBeenCalled();
+    });
+
+    it("treats zero, negative and missing rates as absent", async () => {
+      for (const bad of [0, -1, null]) {
+        const rates = {
+          getRateForDate: jest.fn().mockResolvedValue(bad),
+          getLatestRate: jest.fn(),
+        };
+        await expect(
+          resolveFxRateOrNull(rates, "USD", "THB", "2026-01-15"),
+        ).resolves.toBeNull();
+      }
     });
   });
 });

@@ -284,7 +284,13 @@
       "TRANSFER_OUT": "Trasferimento in uscita",
       "REINVEST": "Reinvestimento",
       "ADD_SHARES": "Aggiungi azioni",
-      "REMOVE_SHARES": "Rimuovi azioni"
+      "REMOVE_SHARES": "Rimuovi azioni",
+      "REINVEST_INTEREST": "Reinvestimento interessi",
+      "REINVEST_CAPITAL_GAIN_SHORT": "Reinvestimento plusvalenza a breve termine",
+      "REINVEST_CAPITAL_GAIN_LONG": "Reinvestimento plusvalenza a lungo termine",
+      "CAPITAL_GAIN_SHORT": "Plusvalenza a breve termine",
+      "CAPITAL_GAIN_LONG": "Plusvalenza a lungo termine",
+      "REDEEM": "Rimborso CD/obbligazione"
     },
     "toasts": {
       "loadHistoryFailed": "Caricamento storico non riuscito",

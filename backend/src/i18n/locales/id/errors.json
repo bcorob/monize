@@ -317,7 +317,9 @@
   "monteCarlo": {
     "scenarioNotFound": "Skenario {{ id }} tidak ditemukan",
     "scenarioIdsMustBeArray": "scenarioIds harus berupa array",
-    "atLeastOneAccountRequired": "Diperlukan minimal satu accountId"
+    "atLeastOneAccountRequired": "Diperlukan minimal satu accountId",
+    "currentValueUnavailable": "Nilai saat ini dari akun yang dipilih tidak dapat ditentukan, sehingga simulasi tidak dapat dimulai dari nilai itu. Masukkan nilai awal secara eksplisit, atau coba lagi setelah harga dan nilai tukar tersedia.",
+    "historicalReturnsUnavailable": "Imbal hasil historis untuk akun yang dipilih tidak dapat dihitung, sehingga simulasi tidak dapat menggunakannya. Masukkan imbal hasil yang diharapkan dan volatilitas secara manual, atau coba lagi setelah harga dan kurs tersedia."
   },
   "netWorth": {
     "invalidStartDate": "startDate harus dalam format YYYY-MM-DD",
@@ -361,6 +363,7 @@
     "requiresBrokerageAccount": "Transaksi investasi terjadwal memerlukan akun pialang",
     "notFound": "Transaksi terjadwal dengan ID {{ id }} tidak ditemukan",
     "occurrenceAlreadyPosted": "Kejadian ini sudah dicatat.",
+    "changedConcurrently": "The scheduled transaction changed during the operation. Reload it and retry.",
     "fxPlainOnly": "Mata uang lain hanya dapat dipakai pada transaksi terjadwal biasa, bukan pada transaksi terbagi, transfer, atau investasi",
     "fxRateUnavailable": "Tidak ada nilai tukar yang tersedia untuk {{ from }} ke {{ to }} pada {{ date }}. Masukkan jumlah dalam {{ to }} untuk mempostingnya.",
     "investmentActionRequired": "Tindakan investasi diperlukan untuk transaksi investasi terjadwal",
@@ -396,6 +399,7 @@
     "cannotChangeSplitAccount": "Tidak dapat mengubah akun dari pembagian investasi; hapus pembagian dan tambahkan di akun baru",
     "splitNoFundingAccount": "Pembagian investasi tidak menggunakan akun pendanaan terpisah",
     "cannotChangeSplitDate": "Tidak dapat mengubah tanggal pembagian investasi; edit tanggal transaksi pembagian induk",
+    "embeddedStatusLocked": "Transaksi investasi ini merupakan bagian dari transaksi terpisah. Ubah status transaksi terpisah tersebut, agar kedua sisi berubah bersama-sama.",
     "invalidAccountUuid": "UUID akun tidak valid: {{ id }}",
     "startDateFormat": "startDate harus dalam format YYYY-MM-DD",
     "endDateFormat": "endDate harus dalam format YYYY-MM-DD",
@@ -435,8 +439,10 @@
     "invalidTagKey": "Kunci tag (1-100 karakter) diperlukan",
     "assetOptionNameRequired": "Nama kelas aset wajib diisi.",
     "documentNotFound": "Dokumen tidak ditemukan",
+    "embeddedSplitAmountMismatch": "Pembagian ini mencatat {{ amount }}, tetapi {{ action }} {{ quantity }} @ {{ price }} dikonversi menjadi {{ expected }} dengan kurs {{ rate }}. Gunakan jumlah itu, atau nyatakan nilai tukar yang Anda maksud.",
     "selectionNotFound": "Satu atau beberapa efek yang dipilih tidak ditemukan",
-    "comparisonSelectionEmpty": "Pilih setidaknya satu efek atau indeks pasar untuk dibandingkan"
+    "comparisonSelectionEmpty": "Pilih setidaknya satu efek atau indeks pasar untuk dibandingkan",
+    "exchangeRateNotPositive": "Nilai tukar harus lebih besar dari nol"
   },
   "tags": {
     "notFound": "Tag dengan ID {{ id }} tidak ditemukan",
@@ -490,15 +496,27 @@
     "transferAmountNegative": "Jumlah transfer tidak boleh negatif",
     "notATransfer": "Transaksi bukan merupakan transfer",
     "splitTransferLegAccountLocked": "Transfer ini adalah bagian dari transaksi terbagi. Ubah akunnya dengan mengedit pembagian pada transaksi sumber.",
+    "splitTransferLegStatusLocked": "Transfer ini merupakan bagian dari transaksi terpisah. Batalkan atau pulihkan dengan mengedit transaksi terpisah yang memuatnya, agar kedua sisi berubah bersama-sama.",
+    "investmentCashLegStatusLocked": "Transaksi ini adalah sisi kas dari sebuah transaksi investasi. Batalkan atau pulihkan dengan mengubah status transaksi investasi tersebut, agar kedua sisi berubah bersama-sama.",
     "notFoundById": "Transaksi dengan ID {{ id }} tidak ditemukan",
     "bulkUpdateNoFields": "Minimal satu kolom pembaruan harus diberikan",
     "bulkSplitNoMatchingLinesOne": "1 transaksi terbagi dilewati karena tidak ada baris pembagiannya yang cocok dengan pembaruan kategori",
     "bulkSplitNoMatchingLinesMany": "{{ count }} transaksi terbagi dilewati karena tidak ada baris pembagiannya yang cocok dengan pembaruan kategori",
+    "bulkSplitTransferLegSkippedOne": "1 transfer terpisah dilewati (batalkan atau pulihkan dari transaksi terpisah tempatnya berada, agar kedua sisi berubah bersama)",
+    "bulkSplitTransferLegSkippedMany": "{{ count }} transfer terpisah dilewati (batalkan atau pulihkan dari transaksi terpisah tempatnya berada, agar kedua sisi berubah bersama)",
+    "bulkInvestmentCashLegSkippedOne": "1 transaksi kas investasi dilewati (batalkan atau pulihkan dengan mengubah status transaksi investasinya, agar kedua sisi berubah bersama)",
+    "bulkInvestmentCashLegSkippedMany": "{{ count }} transaksi kas investasi dilewati (batalkan atau pulihkan dengan mengubah status transaksi investasinya, agar kedua sisi berubah bersama)",
     "payeeNotFound": "Penerima tidak ditemukan",
     "fxFieldsIncomplete": "originalAmount dan originalCurrencyCode harus diberikan bersama",
     "fxRateRequired": "Nilai tukar positif diperlukan untuk transaksi mata uang asing",
     "fxSignMismatch": "originalAmount dan amount harus memiliki tanda yang sama",
-    "jointAccountMoveLocked": "Transaksi di akun bersama tidak dapat dipindahkan ke akun lain."
+    "jointAccountMoveLocked": "Transaksi di akun bersama tidak dapat dipindahkan ke akun lain.",
+    "currencyMustMatchAccount": "Mata uang transaksi {{ supplied }} harus sama dengan mata uang akun {{ account }}. Gunakan originalAmount dan originalCurrencyCode untuk entri mata uang asing.",
+    "transferSameCurrencyMustConserve": "Transfer antara dua akun {{ currency }} harus memindahkan jumlah yang sama di kedua sisi",
+    "transferSameCurrencyRateMustBeOne": "Transfer antara dua akun {{ currency }} tidak boleh memiliki nilai tukar selain 1",
+    "transferRateUnavailable": "Tidak dapat menentukan nilai tukar untuk {{ from }} -> {{ to }}. Berikan exchangeRate atau jumlah tujuan agar transfer tercatat dengan benar.",
+    "transferAmountsMustAgreeOnZero": "Transfer harus memindahkan jumlah bukan nol di kedua sisi, atau nol di kedua sisi",
+    "transferImpliedRateInvalid": "Jumlah tujuan menghasilkan nilai tukar yang tidak dapat digunakan terhadap jumlah sumber"
   },
   "users": {
     "userNotFound": "Pengguna tidak ditemukan",

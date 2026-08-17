@@ -284,7 +284,13 @@
       "TRANSFER_OUT": "[XX-Transfer Out-XX]",
       "REINVEST": "[XX-Reinvest-XX]",
       "ADD_SHARES": "[XX-Add Shares-XX]",
-      "REMOVE_SHARES": "[XX-Remove Shares-XX]"
+      "REMOVE_SHARES": "[XX-Remove Shares-XX]",
+      "REINVEST_INTEREST": "[XX-Reinvest Interest-XX]",
+      "REINVEST_CAPITAL_GAIN_SHORT": "[XX-Reinvest Short-Term Cap Gain-XX]",
+      "REINVEST_CAPITAL_GAIN_LONG": "[XX-Reinvest Long-Term Cap Gain-XX]",
+      "CAPITAL_GAIN_SHORT": "[XX-Short-Term Capital Gain-XX]",
+      "CAPITAL_GAIN_LONG": "[XX-Long-Term Capital Gain-XX]",
+      "REDEEM": "[XX-Redeem CD/Bond-XX]"
     },
     "toasts": {
       "loadHistoryFailed": "[XX-Failed to load history-XX]",

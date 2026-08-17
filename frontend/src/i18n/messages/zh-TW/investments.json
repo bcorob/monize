@@ -38,6 +38,10 @@
     "title": "投資組合摘要",
     "noData": "無可用的投資資料。",
     "totalPortfolioValue": "投資組合總值",
+    "knownPortfolioSubtotal": "投資組合價值（部分）",
+    "incompleteHeading": "這些數字並不完整",
+    "incompletePrices": "缺少 {symbols} 的目前價格，因此相關持倉未計入下方任何合計。",
+    "incompleteFx": "缺少 {pairs} 的匯率，因此這些貨幣的持倉未計入下方任何合計。",
     "values": "價值",
     "holdingsValue": "持倉價值",
     "holdingsValueTooltip": "您所持有的所有證券的目前市值，依最新可用價格計算。",
@@ -48,9 +52,9 @@
     "netInvested": "淨投入金額",
     "netInvestedTooltip": "存入投資科目的淨額，即總投入減去提款，不含投資獲利、股利或利息。",
     "costBasis": "成本基礎",
-    "costBasisTooltip": "您取得投資時支付的總金額，包含買入價格及交易手續費，用於計算損益。",
+    "costBasisTooltip": "目前持倉的取得成本，由交易歷史重建：買入價格加上每次買入收取的佣金，各自按支付該筆交易時的匯率換算。以您的顯示貨幣顯示。用於計算損益。",
     "gainLoss": "獲利/虧損",
-    "gainLossTooltip": "目前持倉的未實現損益：市值減去成本基礎，不含已實現獲利或已收取的收益。",
+    "gainLossTooltip": "目前持倉的未實現損益：按今日價格計算的市值減去上面的成本基礎。不包括過去賣出已實現的收益，也不包括已收到的股息和利息。",
     "returns": "報酬",
     "simpleReturn": "簡單報酬率",
     "simpleReturnTooltip": "持倉的總百分比損益，計算方式為（市值 − 成本基礎）÷ 成本基礎，不考慮投入或提款的時間點。",
@@ -59,26 +63,28 @@
     "twrTooltip": "衡量您的投資表現，不受資金進出時間的影響，排除現金流時機以呈現純粹的投資績效。",
     "cagr": "CAGR",
     "cagrTooltip": "複合年均成長率。以淨投入金額對比目前投資組合價值計算的年化報酬率，假設每年增長均勻穩定。",
-    "notAvailable": "不適用"
+    "notAvailable": "不適用",
+    "unpricedHoldings": "部分估值：{count, plural, one {# 項持倉} other {# 項持倉}}沒有目前價格（{symbols}），以下數值不包含這些持倉。"
   },
   "assetAllocation": {
     "title": "資產配置",
     "noData": "無可用的配置資料。",
+    "knownValueOnly": "百分比僅涵蓋可估值部分；部分持倉無法估值。",
     "cash": "現金",
     "untagged": "無標籤",
     "noTagData": "沒有可顯示的帶標籤持倉。為你的證券新增標籤即可按標籤查看曝險。",
+    "noKeyData": "沒有持倉包含此標籤鍵的值。將證券標記為 key:value（例如 country:usa）以檢視此細分。",
     "noCountryData": "無國家/地區配置資料。",
+    "keySelectorLabel": "用於彙總的標籤鍵",
     "otherCountries": "其他國家/地區",
     "otherAssetClasses": "其他資產類別",
     "groupBy": {
       "security": "按證券",
       "tag": "按標籤",
-      "country": "依國家/地區",
       "tagKey": "依鍵",
+      "country": "依國家/地區",
       "assetClass": "按資產類別"
-    },
-    "noKeyData": "沒有持倉包含此標籤鍵的值。將證券標記為 key:value（例如 country:usa）以檢視此細分。",
-    "keySelectorLabel": "用於彙總的標籤鍵"
+    }
   },
   "holdingsList": {
     "title": "持倉",
@@ -93,6 +99,7 @@
   "groupedHoldings": {
     "title": "依科目分組持倉",
     "noHoldings": "您的投資組合中無持倉。",
+    "accountIncomplete": "部分：此帳戶的合計不包含無法以 {currency} 計價的持倉。",
     "accountSummary": "{accounts} 個科目，共 {positions} 個部位",
     "positionsWithCash": "{count} 個部位 + 現金",
     "positions": "{count} 個部位",
@@ -172,6 +179,12 @@
     "actionReinvest": "再投資",
     "actionAddShares": "增加股數",
     "actionRemoveShares": "減少股數",
+    "actionReinvestInterest": "利息再投資",
+    "actionReinvestCapitalGainShort": "短期資本利得再投資",
+    "actionReinvestCapitalGainLong": "長期資本利得再投資",
+    "actionCapitalGainShort": "短期資本利得",
+    "actionCapitalGainLong": "長期資本利得",
+    "actionRedeem": "贖回定存單/債券",
     "allActions": "所有操作"
   },
   "transactionForm": {
@@ -186,6 +199,12 @@
     "actionReinvest": "股利再投資",
     "actionAddShares": "增加股數",
     "actionRemoveShares": "減少股數",
+    "actionReinvestInterest": "利息再投資",
+    "actionReinvestCapitalGainShort": "短期資本利得再投資",
+    "actionReinvestCapitalGainLong": "長期資本利得再投資",
+    "actionCapitalGainShort": "短期資本利得",
+    "actionCapitalGainLong": "長期資本利得",
+    "actionRedeem": "贖回定存單/債券",
     "actionTransfer": "轉帳",
     "brokerageAccount": "券商科目",
     "fromAccount": "來源科目",
@@ -206,6 +225,7 @@
     "pricePerShare": "每股價格（{currency}）",
     "commissionFees": "手續費（{currency}）",
     "description": "描述（選填）",
+    "statusLockedToParent": "此交易屬於拆分交易的一部分。請改為變更拆分交易的狀態，使兩側一併變更。",
     "descriptionPlaceholder": "選填備註",
     "splitRatio": "分割比例",
     "noSplitRatioWarning": "此交易未設定分割比例。請在儲存前按公告輸入比例，Monize 不會自動假設。",
@@ -257,7 +277,10 @@
     "toastAvailableShares": "僅有 {available} 股可供移轉",
     "toastSplitRatioRequired": "分割比例必須大於零",
     "toastPairedLegError": "無法載入配對移轉腳；請重新開啟後再試",
-    "toastSaveFailed": "儲存交易失敗"
+    "toastSaveFailed": "儲存交易失敗",
+    "exchangeRateUnresolved": "沒有 {from} 兌 {to} 的匯率。請在儲存前輸入匯率或換算後的總額。",
+    "toastExchangeRateRequired": "在儲存跨貨幣交易前請輸入匯率。",
+    "notAvailable": "無法使用"
   },
   "newTransactionButton": {
     "label": "+ 新增交易",

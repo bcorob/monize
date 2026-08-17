@@ -2110,7 +2110,11 @@ describe("ImportService", () => {
           { qifAction: "Sell", expected: InvestmentAction.SELL },
           { qifAction: "Div", expected: InvestmentAction.DIVIDEND },
           { qifAction: "IntInc", expected: InvestmentAction.INTEREST },
-          { qifAction: "CGLong", expected: InvestmentAction.CAPITAL_GAIN },
+          { qifAction: "CGLong", expected: InvestmentAction.CAPITAL_GAIN_LONG },
+          {
+            qifAction: "CGShort",
+            expected: InvestmentAction.CAPITAL_GAIN_SHORT,
+          },
           { qifAction: "StkSplit", expected: InvestmentAction.SPLIT },
           { qifAction: "ShrsIn", expected: InvestmentAction.TRANSFER_IN },
           { qifAction: "ShrsOut", expected: InvestmentAction.TRANSFER_OUT },

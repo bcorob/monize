@@ -1,4 +1,5 @@
 import { InvestmentAction } from '@/types/investment';
+import { baseInvestmentAction } from '@/lib/investment-actions';
 
 export const EMBEDDED_INVESTMENT_SPLIT_ACTIONS: ReadonlyArray<InvestmentAction> = [
   'BUY',
@@ -7,6 +8,13 @@ export const EMBEDDED_INVESTMENT_SPLIT_ACTIONS: ReadonlyArray<InvestmentAction> 
   'INTEREST',
   'CAPITAL_GAIN',
   'REINVEST',
+  // Money-vocabulary refinements: allowed wherever their base is.
+  'REDEEM',
+  'CAPITAL_GAIN_SHORT',
+  'CAPITAL_GAIN_LONG',
+  'REINVEST_INTEREST',
+  'REINVEST_CAPITAL_GAIN_SHORT',
+  'REINVEST_CAPITAL_GAIN_LONG',
 ];
 
 export function isInvestmentActionAllowedInSplit(action: InvestmentAction): boolean {
@@ -26,7 +34,7 @@ export function computeInvestmentCashImpact(
   const q = Number(quantity) || 0;
   const p = Number(price) || 0;
   const c = Number(commission) || 0;
-  switch (action) {
+  switch (baseInvestmentAction(action)) {
     case 'BUY':
       return -(q * p + c);
     case 'SELL':

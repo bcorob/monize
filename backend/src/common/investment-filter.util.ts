@@ -23,6 +23,7 @@ export function applyInvestmentTransactionFilters<T extends object>(
     `(${accountAlias}.accountSubType IS NULL OR ${accountAlias}.accountSubType != 'INVESTMENT_BROKERAGE')`,
   );
   qb.andWhere(
+    // includes VOID rows: records read -- identity, not effect.
     `NOT EXISTS (SELECT 1 FROM investment_transactions it WHERE it.transaction_id = ${transactionAlias}.id)`,
   );
   return qb;

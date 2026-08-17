@@ -468,17 +468,23 @@ describe("BudgetTrendReportsService", () => {
       const transferQb = createMockQueryBuilder({
         getRawOne: jest.fn().mockResolvedValue({ total: "-150" }),
       });
+      // a transfer recorded as one line of a split parent (audit P5-007)
+      const splitTransferQb = createMockQueryBuilder({
+        getRawOne: jest.fn().mockResolvedValue({ total: "-25" }),
+      });
 
       transactionsRepository.createQueryBuilder
         .mockReturnValueOnce(directQb)
         .mockReturnValueOnce(transferQb);
-      splitsRepository.createQueryBuilder.mockReturnValueOnce(splitQb);
+      splitsRepository.createQueryBuilder
+        .mockReturnValueOnce(splitQb)
+        .mockReturnValueOnce(splitTransferQb);
 
       const result = await service.getTrend("user-1", "budget-1", 6);
 
       expect(result).toHaveLength(2);
-      // actuals = -(-300 + -50 + -150) = 500
-      expect(result[1].actual).toBe(500);
+      // actuals = -(-300 + -50 + -150 + -25) = 525
+      expect(result[1].actual).toBe(525);
     });
 
     it("should handle budget with only transfer categories (no regular categories)", async () => {
@@ -516,13 +522,19 @@ describe("BudgetTrendReportsService", () => {
       const transferQb = createMockQueryBuilder({
         getRawOne: jest.fn().mockResolvedValue({ total: "-175" }),
       });
+      // The split-transfer read runs even with no regular categories: a
+      // transfer can arrive as one line of a split parent (audit P5-007).
+      const splitTransferQb = createMockQueryBuilder({
+        getRawOne: jest.fn().mockResolvedValue({ total: "-25" }),
+      });
 
       transactionsRepository.createQueryBuilder.mockReturnValueOnce(transferQb);
+      splitsRepository.createQueryBuilder.mockReturnValueOnce(splitTransferQb);
 
       const result = await service.getTrend("user-1", "budget-1", 6);
 
       expect(result).toHaveLength(2);
-      expect(result[1].actual).toBe(175);
+      expect(result[1].actual).toBe(200);
     });
   });
 
@@ -604,19 +616,27 @@ describe("BudgetTrendReportsService", () => {
           .fn()
           .mockResolvedValue([{ month: monthKey, total: "150" }]),
       });
+      // a transfer recorded as one line of a split parent (audit P5-007)
+      const splitTransferQb = createMockQueryBuilder({
+        getRawMany: jest
+          .fn()
+          .mockResolvedValue([{ month: monthKey, total: "30" }]),
+      });
 
       transactionsRepository.createQueryBuilder
         .mockReturnValueOnce(directQb)
         .mockReturnValueOnce(transferQb);
-      splitsRepository.createQueryBuilder.mockReturnValueOnce(splitQb);
+      splitsRepository.createQueryBuilder
+        .mockReturnValueOnce(splitQb)
+        .mockReturnValueOnce(splitTransferQb);
 
       const result = await service.getTrend("user-1", "budget-1", 3);
 
       expect(result).toHaveLength(3);
 
       const currentMonth = result[result.length - 1];
-      // 200 (direct) + 150 (transfer)
-      expect(currentMonth.actual).toBe(350);
+      // 200 (direct) + 150 (whole-row transfer) + 30 (split-line transfer)
+      expect(currentMonth.actual).toBe(380);
 
       // totalBudgeted = 500 (cat) + 200 (transfer) = 700
       expect(currentMonth.budgeted).toBe(700);
@@ -638,8 +658,12 @@ describe("BudgetTrendReportsService", () => {
           .fn()
           .mockResolvedValue([{ month: monthKey, total: "180" }]),
       });
+      const splitTransferQb = createMockQueryBuilder({
+        getRawMany: jest.fn().mockResolvedValue([]),
+      });
 
       transactionsRepository.createQueryBuilder.mockReturnValueOnce(transferQb);
+      splitsRepository.createQueryBuilder.mockReturnValueOnce(splitTransferQb);
 
       const result = await service.getTrend("user-1", "budget-1", 3);
 

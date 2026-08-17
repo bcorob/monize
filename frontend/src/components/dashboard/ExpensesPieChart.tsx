@@ -10,6 +10,7 @@ import { Category } from '@/types/category';
 import { transactionsApi } from '@/lib/transactions';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
 import { useExchangeRates } from '@/hooks/useExchangeRates';
+import { PartialTotal } from '@/components/ui/PartialTotal';
 import { useReportData } from '@/hooks/useReportData';
 import { useWidgetConfig } from '@/hooks/useWidgetConfig';
 import { resolveRangePreset } from '@/lib/date-range';
@@ -41,7 +42,7 @@ export function ExpensesPieChart({
   const t = useTranslations('dashboard');
   const router = useRouter();
   const { formatCurrencyCompact: formatCurrency } = useNumberFormat();
-  const { convertToDefault } = useExchangeRates();
+  const { convertToDefault, defaultCurrency } = useExchangeRates();
   const { config, updateConfig } = useWidgetConfig<RangeAccountsConfig>(
     WIDGET_ID,
     EXPENSES_PIE_DEFAULT,
@@ -61,8 +62,13 @@ export function ExpensesPieChart({
   );
 
   // Calculate spending by category
-  const chartData = useMemo(() => {
+  const breakdown = useMemo(() => {
     const categoryMap = new Map<string, { id: string; name: string; value: number; colour: string }>();
+    // Currencies left out of the breakdown for want of a rate, so the chart can
+    // say the slices do not add up to everything spent, and how many individual
+    // amounts (a component count) were dropped.
+    const missingCurrencies = new Set<string>();
+    let excludedCount = 0;
     let uncategorizedTotal = 0;
 
     // Build category lookup
@@ -79,14 +85,51 @@ export function ExpensesPieChart({
       // up net-credit are dropped below, which is what keeps income out.
       const txAmount = Number(tx.amount) || 0;
       if (txAmount === 0) return;
-      const expenseAmount = -convertToDefault(txAmount, tx.currencyCode);
+      const convertedTx = convertToDefault(txAmount, tx.currencyCode);
+      // No rate, no slice. A pie slice cannot say "unknown", and counting the
+      // unconverted figure would size it in the wrong currency. Only a
+      // transaction that could land in the expense breakdown makes the total
+      // partial: a non-split income-category transaction is dropped by the
+      // net-credit filter regardless, so naming its currency here would warn
+      // about a currency that has no expenses.
+      if (convertedTx === null) {
+        // A transaction that would not land in the expense breakdown even with a
+        // rate does not make the expense total partial. Only a *positive* amount
+        // on an income category, or an uncategorized positive one, nets credit and
+        // is dropped regardless; a negative amount (a clawback of income) can
+        // become an expense slice, so it still counts as excluded. This is a
+        // per-transaction heuristic and cannot see the category-level net, so it
+        // errs toward marking partial rather than hiding a real gap -- the safe
+        // direction under "a subtotal is not a total".
+        const uncategorized = !tx.categoryId || !tx.category;
+        const incomeOnly =
+          !tx.isSplit &&
+          txAmount > 0 &&
+          (tx.category?.isIncome === true || uncategorized);
+        if (!incomeOnly) {
+          missingCurrencies.add(tx.currencyCode);
+          excludedCount += 1;
+        }
+        return;
+      }
+      const expenseAmount = -convertedTx;
 
       if (tx.isSplit && tx.splits && tx.splits.length > 0) {
         // Handle split transactions
         tx.splits.forEach((split) => {
           const splitAmt = Number(split.amount) || 0;
           if (splitAmt === 0) return;
-          const splitAmount = -convertToDefault(splitAmt, tx.currencyCode);
+          // Splits carry the transaction's currency, which the whole-amount
+          // conversion above already resolved, so this null branch is a defensive
+          // guard rather than a reachable exclusion -- the missing rate is caught
+          // once at the transaction level, not per split.
+          const convertedSplit = convertToDefault(splitAmt, tx.currencyCode);
+          if (convertedSplit === null) {
+            missingCurrencies.add(tx.currencyCode);
+            excludedCount += 1;
+            return;
+          }
+          const splitAmount = -convertedSplit;
           if (split.categoryId && split.category) {
             const cat = categoryLookup.get(split.categoryId) || split.category;
             const existing = categoryMap.get(split.categoryId);
@@ -164,9 +207,10 @@ export function ExpensesPieChart({
       }
     });
 
-    return data;
+    return { data, missingCurrencies: [...missingCurrencies], excludedCount };
   }, [transactions, categories, convertToDefault, t]);
 
+  const chartData = breakdown.data;
   const totalExpenses = chartData.reduce((sum, item) => sum + item.value, 0);
 
   const handleCategoryClick = (categoryId: string) => {
@@ -279,7 +323,16 @@ export function ExpensesPieChart({
           <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 text-center flex-shrink-0">
             <div className="text-sm text-gray-500 dark:text-gray-400">{t('expensesPieChart.total')}</div>
             <div className="font-semibold text-gray-900 dark:text-gray-100">
-              {formatCurrency(totalExpenses)}
+              <PartialTotal
+                total={{
+                  value: totalExpenses,
+                  missingCurrencies: breakdown.missingCurrencies,
+                  excludedCount: breakdown.excludedCount,
+                }}
+                displayCurrency={defaultCurrency}
+              >
+                {formatCurrency(totalExpenses)}
+              </PartialTotal>
             </div>
           </div>
         </>

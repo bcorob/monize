@@ -202,7 +202,8 @@
     "title": "계정별 신용 활용도",
     "empty": "한도가 설정된 신용 계정이 없습니다.",
     "utilization": "활용도",
-    "used": "사용액"
+    "used": "사용액",
+    "noRate": "사용 불가 ({currency} 환율 없음)"
   },
   "creditUtilizationTotal": {
     "title": "총 신용 활용도",

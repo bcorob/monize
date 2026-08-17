@@ -13,6 +13,9 @@ import { useMainAccountName } from '@/hooks/useMainAccountName';
 import { PortfolioSummary } from '@/types/investment';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
 import { useExchangeRates } from '@/hooks/useExchangeRates';
+import { sumConverted } from '@/lib/currency-total';
+import { PartialTotal } from '@/components/ui/PartialTotal';
+import { sumMoney } from '@/lib/format';
 import { useReportData } from '@/hooks/useReportData';
 import { CHART_COLOURS } from '@/lib/chart-colours';
 import { ExportDropdown } from '@/components/ui/ExportDropdown';
@@ -28,6 +31,7 @@ const LIABILITY_TYPES = ['CREDIT_CARD', 'LOAN', 'MORTGAGE', 'LINE_OF_CREDIT'];
 export function AccountBalancesReport() {
   const t = useTranslations('reports');
   const tAccounts = useTranslations('accounts');
+  const tCommon = useTranslations('common');
   const router = useRouter();
   const { formatCurrency } = useNumberFormat();
   const { convertToDefault, defaultCurrency } = useExchangeRates();
@@ -53,9 +57,15 @@ export function AccountBalancesReport() {
     async () => {
       const [data, portfolio] = await Promise.all([
         accountsApi.getAll(),
-        investmentsApi.getPortfolioSummary().catch(() => null),
+        // A failed request is not an empty portfolio: kept apart so a brokerage
+        // is excluded (unknown) only on failure, not treated as unknown when the
+        // summary resolves empty -- matching the Accounts page.
+        investmentsApi
+          .getPortfolioSummary()
+          .then((summary) => ({ ok: true as const, summary }))
+          .catch(() => ({ ok: false as const, summary: null })),
       ]);
-      return { accounts: data, portfolioSummary: portfolio };
+      return { accounts: data, portfolioSummary: portfolio.summary, portfolioFailed: !portfolio.ok };
     },
     [],
   );
@@ -65,6 +75,7 @@ export function AccountBalancesReport() {
     () => response?.portfolioSummary ?? null,
     [response],
   );
+  const portfolioFailed = response?.portfolioFailed ?? false;
 
   // Build a map of brokerage account ID -> market value of holdings only.
   // Cash balance is tracked separately via the linked INVESTMENT_CASH account
@@ -139,11 +150,31 @@ export function AccountBalancesReport() {
     let assets = 0;
     let liabilities = 0;
 
+    // A component is left out when its value is not a measured figure: no rate
+    // to the display currency (currency named), a failed portfolio valuation, or
+    // a brokerage holding the server could not price. Each excludes the account
+    // and increments the count, so the headline figures are marked as subtotals
+    // -- matching the account row, which already shows an unknown marker -- rather
+    // than under-reporting silently.
+    const missing = new Set<string>();
+    let excludedCount = 0;
     filteredAccounts.forEach((acc) => {
-      const rawBalance = acc.accountSubType === 'INVESTMENT_BROKERAGE'
+      const isBrokerage = acc.accountSubType === 'INVESTMENT_BROKERAGE';
+      if (isBrokerage && (portfolioFailed || (unpricedHoldingCounts.get(acc.id) ?? 0) > 0)) {
+        // Its market value is unknown (valuation failed) or a subtotal (unpriced
+        // holdings), so it is not summed as a measured number.
+        excludedCount += 1;
+        return;
+      }
+      const rawBalance = isBrokerage
         ? (brokerageMarketValues.get(acc.id) ?? 0)
         : (Number(acc.currentBalance) || 0) + (Number(acc.futureTransactionsSum) || 0);
       const convertedBalance = convertToDefault(rawBalance, acc.currencyCode);
+      if (convertedBalance === null) {
+        missing.add(acc.currencyCode);
+        excludedCount += 1;
+        return;
+      }
 
       if (LIABILITY_TYPES.includes(acc.accountType)) {
         liabilities += Math.abs(convertedBalance);
@@ -152,8 +183,22 @@ export function AccountBalancesReport() {
       }
     });
 
-    return { assets, liabilities, netWorth: assets - liabilities };
-  }, [filteredAccounts, brokerageMarketValues, convertToDefault]);
+    return {
+      assets,
+      liabilities,
+      // The difference of two 4dp values is not itself 4dp; round it.
+      netWorth: sumMoney([assets, -liabilities]),
+      missingCurrencies: [...missing],
+      excludedCount,
+    };
+  }, [filteredAccounts, brokerageMarketValues, unpricedHoldingCounts, portfolioFailed, convertToDefault]);
+
+  // The partial-total marker the three summary cards share: any account left out
+  // is left out of every one of assets/liabilities/net worth.
+  const totalsMarker = {
+    missingCurrencies: totals.missingCurrencies,
+    excludedCount: totals.excludedCount,
+  };
 
   // Build chart data
   const chartData = useMemo(() => {
@@ -163,12 +208,10 @@ export function AccountBalancesReport() {
       groupedAccounts.forEach((entries, type) => {
         const total = entries.reduce((sum, entry) => {
           if (entry.combinedValue === null) return sum;
-          return (
-            sum +
-            Math.abs(
-              convertToDefault(entry.combinedValue, entry.primary.currencyCode),
-            )
-          );
+          const converted = convertToDefault(entry.combinedValue, entry.primary.currencyCode);
+          // No rate, no slice: a bar sized from the unconverted amount would be
+          // in the wrong currency, and a zero-size one reads as a measured zero.
+          return converted === null ? sum : sum + Math.abs(converted);
         }, 0);
         if (total > 0) {
           data.push({
@@ -184,9 +227,9 @@ export function AccountBalancesReport() {
       const data: Array<{ name: string; value: number; color: string }> = [];
       logicalAccounts.forEach((entry, idx) => {
         if (entry.combinedValue === null) return;
-        const converted = Math.abs(
-          convertToDefault(entry.combinedValue, entry.primary.currencyCode),
-        );
+        const rawConverted = convertToDefault(entry.combinedValue, entry.primary.currencyCode);
+        if (rawConverted === null) return;
+        const converted = Math.abs(rawConverted);
         if (converted > 0) {
           data.push({
             name: entry.displayName,
@@ -242,12 +285,19 @@ export function AccountBalancesReport() {
         ? tAccounts('row.combinedUnknown')
         : formatCurrency(entry.combinedValue, entry.primary.currencyCode),
     ]);
+    // A missing rate excludes an account from these totals, so the PDF marks
+    // them partial too rather than printing a bare figure as the whole.
+    const pdfPartialSuffix =
+      totals.excludedCount > 0 ? ` ${tCommon('partialTotal.srSuffix')}` : '';
     await exportToPdf({
       title: t('accountBalances.pdfTitle'),
       summaryCards: [
-        { label: t('accountBalances.totalAssets'), value: formatCurrency(totals.assets), color: '#16a34a' },
-        { label: t('accountBalances.totalLiabilities'), value: formatCurrency(totals.liabilities), color: '#dc2626' },
-        { label: t('accountBalances.netWorth'), value: formatCurrency(totals.netWorth), color: totals.netWorth >= 0 ? '#2563eb' : '#ea580c' },
+        { label: t('accountBalances.totalAssets'), value: `${formatCurrency(totals.assets)}${pdfPartialSuffix}`, color: '#16a34a' },
+        { label: t('accountBalances.totalLiabilities'), value: `${formatCurrency(totals.liabilities)}${pdfPartialSuffix}`, color: '#dc2626' },
+        // Neutral grey when the net worth is a subtotal: its sign is uncertain,
+        // so the PDF must not assert a blue/orange the on-screen card just
+        // declined to show for the same excluded account.
+        { label: t('accountBalances.netWorth'), value: `${formatCurrency(totals.netWorth)}${pdfPartialSuffix}`, color: totals.excludedCount > 0 ? '#111827' : totals.netWorth >= 0 ? '#2563eb' : '#ea580c' },
       ],
       chartContainer: chartRef.current,
       tableData: { headers, rows },
@@ -276,26 +326,38 @@ export function AccountBalancesReport() {
 
   return (
     <div className="space-y-6">
-      {/* Summary Cards */}
+      {/* Summary Cards. A missing rate excludes an account from these totals, so
+          each is marked as a subtotal rather than presented as the complete
+          figure it no longer is. */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-6" data-testid="summary-assets">
           <div className="text-sm text-gray-500 dark:text-gray-400">{t('accountBalances.totalAssets')}</div>
           <div className="text-2xl font-bold text-green-600 dark:text-green-400">
-            {formatCurrency(totals.assets)}
+            <PartialTotal total={{ value: totals.assets, ...totalsMarker }} displayCurrency={defaultCurrency}>
+              {formatCurrency(totals.assets)}
+            </PartialTotal>
           </div>
         </div>
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-6" data-testid="summary-liabilities">
           <div className="text-sm text-gray-500 dark:text-gray-400">{t('accountBalances.totalLiabilities')}</div>
           <div className="text-2xl font-bold text-red-600 dark:text-red-400">
-            {formatCurrency(totals.liabilities)}
+            <PartialTotal total={{ value: totals.liabilities, ...totalsMarker }} displayCurrency={defaultCurrency}>
+              {formatCurrency(totals.liabilities)}
+            </PartialTotal>
           </div>
         </div>
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-6" data-testid="summary-networth">
           <div className="text-sm text-gray-500 dark:text-gray-400">{t('accountBalances.netWorth')}</div>
           <div className={`text-2xl font-bold ${
-            totals.netWorth >= 0 ? 'text-blue-600 dark:text-blue-400' : 'text-orange-600 dark:text-orange-400'
+            // A partial net worth has an uncertain sign, so it stays neutral
+            // rather than asserting a blue/orange the subtotal cannot vouch for.
+            totals.excludedCount > 0
+              ? 'text-gray-900 dark:text-gray-100'
+              : totals.netWorth >= 0 ? 'text-blue-600 dark:text-blue-400' : 'text-orange-600 dark:text-orange-400'
           }`}>
-            {formatCurrency(totals.netWorth)}
+            <PartialTotal total={{ value: totals.netWorth, ...totalsMarker }} displayCurrency={defaultCurrency}>
+              {formatCurrency(totals.netWorth)}
+            </PartialTotal>
           </div>
         </div>
       </div>
@@ -435,19 +497,34 @@ export function AccountBalancesReport() {
         <>
           {Array.from(groupedAccounts.entries()).map(([type, entries]) => {
             const isLiabilityGroup = LIABILITY_TYPES.includes(type);
-            // Summed over the underlying ledgers, so the arithmetic is what it
-            // was when the pair was two rows. Deliberately not combinedValue,
-            // which goes null on an unpriced holding: a nullable group total
-            // has to be threaded through the summary cards to mean anything.
-            const groupTotal = entries.reduce((sum, entry) => {
-              const members = entry.cash ? [entry.primary, entry.cash] : [entry.primary];
-              return sum + members.reduce((memberSum, acc) => {
-                const rawBalance = acc.accountSubType === 'INVESTMENT_BROKERAGE'
+            // Group subtotal, summed over each entity's underlying ledgers (a
+            // brokerage pair is primary plus its cash sub-account) so the
+            // arithmetic is what it was when the pair was two rows. A brokerage
+            // whose valuation failed or holds an unpriced position is left out by
+            // count -- matching the account row and the summary cards -- and an
+            // account with no rate is left out with its currency named; the
+            // header marks the figure partial either way.
+            const members = entries.flatMap((entry) =>
+              entry.cash ? [entry.primary, entry.cash] : [entry.primary],
+            );
+            const isUnknownBrokerage = (acc: Account) =>
+              acc.accountSubType === 'INVESTMENT_BROKERAGE' &&
+              (portfolioFailed || (unpricedHoldingCounts.get(acc.id) ?? 0) > 0);
+            const knownMembers = members.filter((acc) => !isUnknownBrokerage(acc));
+            const unknownMembers = members.length - knownMembers.length;
+            const knownTotal = sumConverted(
+              knownMembers,
+              (acc) =>
+                acc.accountSubType === 'INVESTMENT_BROKERAGE'
                   ? (brokerageMarketValues.get(acc.id) ?? 0)
-                  : (Number(acc.currentBalance) || 0) + (Number(acc.futureTransactionsSum) || 0);
-                return memberSum + convertToDefault(rawBalance, acc.currencyCode);
-              }, 0);
-            }, 0);
+                  : (Number(acc.currentBalance) || 0) + (Number(acc.futureTransactionsSum) || 0),
+              (acc) => acc.currencyCode,
+              convertToDefault,
+            );
+            const groupTotal = {
+              ...knownTotal,
+              excludedCount: knownTotal.excludedCount + unknownMembers,
+            };
 
             return (
               <div key={type} className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 overflow-hidden">
@@ -458,7 +535,11 @@ export function AccountBalancesReport() {
                   <span className={`font-semibold ${
                     isLiabilityGroup ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'
                   }`}>
-                    {formatCurrency(isLiabilityGroup ? Math.abs(groupTotal) : groupTotal)}
+                    <PartialTotal total={groupTotal} displayCurrency={defaultCurrency}>
+                      {formatCurrency(
+                        isLiabilityGroup ? Math.abs(groupTotal.value) : groupTotal.value,
+                      )}
+                    </PartialTotal>
                   </span>
                 </div>
                 <div className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -521,11 +602,21 @@ export function AccountBalancesReport() {
                               }`}>
                                 {formatCurrency(isLiabilityGroup ? Math.abs(combined) : combined, acc.currencyCode)}
                               </div>
-                              {acc.currencyCode !== defaultCurrency && (
-                                <div className="text-xs text-gray-400 dark:text-gray-500">
-                                  {'\u2248 '}{formatCurrency(convertToDefault(Math.abs(combined), acc.currencyCode), defaultCurrency)}
-                                </div>
-                              )}
+                              {acc.currencyCode !== defaultCurrency &&
+                                (() => {
+                                  // Nothing rather than the unconverted amount under
+                                  // the display currency's symbol.
+                                  const approx = convertToDefault(
+                                    Math.abs(combined),
+                                    acc.currencyCode,
+                                  );
+                                  if (approx === null) return null;
+                                  return (
+                                    <div className="text-xs text-gray-400 dark:text-gray-500">
+                                      {'\u2248 '}{formatCurrency(approx, defaultCurrency)}
+                                    </div>
+                                  );
+                                })()}
                             </>
                           )}
                         </div>

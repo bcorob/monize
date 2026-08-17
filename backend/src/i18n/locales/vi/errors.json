@@ -317,7 +317,9 @@
   "monteCarlo": {
     "scenarioNotFound": "Không tìm thấy kịch bản {{ id }}",
     "scenarioIdsMustBeArray": "scenarioIds phải là một mảng",
-    "atLeastOneAccountRequired": "Cần ít nhất một accountId"
+    "atLeastOneAccountRequired": "Cần ít nhất một accountId",
+    "currentValueUnavailable": "Không thể xác định giá trị hiện tại của các tài khoản đã chọn, nên mô phỏng không thể bắt đầu từ giá trị đó. Hãy nhập giá trị khởi điểm, hoặc thử lại khi đã có giá và tỷ giá.",
+    "historicalReturnsUnavailable": "Không thể tính lợi nhuận lịch sử cho các tài khoản đã chọn, nên mô phỏng không thể sử dụng chúng. Hãy nhập thủ công lợi nhuận kỳ vọng và độ biến động, hoặc thử lại khi giá và tỷ giá hối đoái sẵn sàng."
   },
   "netWorth": {
     "invalidStartDate": "startDate phải có định dạng YYYY-MM-DD",
@@ -361,6 +363,7 @@
     "requiresBrokerageAccount": "Giao tác đầu tư theo lịch yêu cầu tài khoản môi giới",
     "notFound": "Không tìm thấy giao tác theo lịch với ID {{ id }}",
     "occurrenceAlreadyPosted": "Lần này đã được ghi nhận.",
+    "changedConcurrently": "The scheduled transaction changed during the operation. Reload it and retry.",
     "fxPlainOnly": "Chỉ có thể dùng đơn vị tiền tệ khác trên giao tác theo lịch thông thường, không dùng được cho giao tác chia nhỏ, chuyển tiền hoặc đầu tư",
     "fxRateUnavailable": "Không có tỷ giá từ {{ from }} sang {{ to }} vào {{ date }}. Hãy nhập số tiền bằng {{ to }} để đăng.",
     "investmentActionRequired": "Hành động đầu tư là bắt buộc cho giao tác đầu tư theo lịch",
@@ -396,6 +399,7 @@
     "cannotChangeSplitAccount": "Không thể thay đổi tài khoản của phần chia đầu tư; hãy xóa phần chia và thêm lại trên tài khoản mới",
     "splitNoFundingAccount": "Các phần chia đầu tư không sử dụng tài khoản cấp vốn riêng",
     "cannotChangeSplitDate": "Không thể thay đổi ngày của phần chia đầu tư; hãy chỉnh sửa ngày giao tác chia cha thay thế",
+    "embeddedStatusLocked": "Giao dịch đầu tư này là một phần của giao dịch được chia nhỏ. Hãy thay đổi trạng thái của giao dịch được chia nhỏ, để cả hai bên thay đổi cùng nhau.",
     "invalidAccountUuid": "UUID tài khoản không hợp lệ: {{ id }}",
     "startDateFormat": "startDate phải có định dạng YYYY-MM-DD",
     "endDateFormat": "endDate phải có định dạng YYYY-MM-DD",
@@ -435,8 +439,10 @@
     "invalidTagKey": "Cần có khóa thẻ (1-100 ký tự)",
     "assetOptionNameRequired": "Cần có tên loại tài sản.",
     "documentNotFound": "Không tìm thấy tài liệu",
+    "embeddedSplitAmountMismatch": "Phần chia này ghi {{ amount }}, nhưng {{ action }} {{ quantity }} @ {{ price }} quy đổi theo tỷ giá {{ rate }} ra {{ expected }}. Hãy dùng số tiền đó, hoặc cho biết tỷ giá bạn muốn dùng.",
     "selectionNotFound": "Không tìm thấy một hoặc nhiều chứng khoán đã chọn",
-    "comparisonSelectionEmpty": "Chọn ít nhất một chứng khoán hoặc chỉ số thị trường để so sánh"
+    "comparisonSelectionEmpty": "Chọn ít nhất một chứng khoán hoặc chỉ số thị trường để so sánh",
+    "exchangeRateNotPositive": "Tỷ giá phải lớn hơn không"
   },
   "tags": {
     "notFound": "Không tìm thấy thẻ với ID {{ id }}",
@@ -490,15 +496,27 @@
     "transferAmountNegative": "Số tiền chuyển không được âm",
     "notATransfer": "Giao tác không phải là chuyển tiền",
     "splitTransferLegAccountLocked": "Chuyển khoản này là một phần của giao tác chia nhỏ. Hãy thay đổi tài khoản bằng cách chỉnh sửa phần chia trên giao tác nguồn.",
+    "splitTransferLegStatusLocked": "Giao dịch chuyển tiền này là một phần của giao dịch được chia nhỏ. Hãy hủy hoặc phục hồi nó bằng cách chỉnh sửa giao dịch được chia nhỏ mà nó thuộc về, để cả hai bên thay đổi cùng nhau.",
+    "investmentCashLegStatusLocked": "Giao dịch này là phần tiền mặt của một giao dịch đầu tư. Hãy hủy hoặc phục hồi nó bằng cách thay đổi trạng thái của giao dịch đầu tư, để cả hai bên thay đổi cùng nhau.",
     "notFoundById": "Không tìm thấy giao tác với ID {{ id }}",
     "bulkUpdateNoFields": "Phải cung cấp ít nhất một trường cập nhật",
     "bulkSplitNoMatchingLinesOne": "Đã bỏ qua 1 giao dịch chia nhỏ vì không có phần chia nào của nó khớp với cập nhật danh mục",
     "bulkSplitNoMatchingLinesMany": "Đã bỏ qua {{ count }} giao dịch chia nhỏ vì không có phần chia nào của chúng khớp với cập nhật danh mục",
+    "bulkSplitTransferLegSkippedOne": "Đã bỏ qua 1 giao dịch chuyển khoản tách dòng (hãy hủy hoặc khôi phục nó từ giao dịch tách dòng chứa nó, để cả hai bên thay đổi cùng nhau)",
+    "bulkSplitTransferLegSkippedMany": "Đã bỏ qua {{ count }} giao dịch chuyển khoản tách dòng (hãy hủy hoặc khôi phục chúng từ giao dịch tách dòng chứa chúng, để cả hai bên thay đổi cùng nhau)",
+    "bulkInvestmentCashLegSkippedOne": "Đã bỏ qua 1 giao dịch tiền mặt đầu tư (hãy hủy hoặc khôi phục nó bằng cách thay đổi trạng thái của giao dịch đầu tư, để cả hai bên thay đổi cùng nhau)",
+    "bulkInvestmentCashLegSkippedMany": "Đã bỏ qua {{ count }} giao dịch tiền mặt đầu tư (hãy hủy hoặc khôi phục chúng bằng cách thay đổi trạng thái của các giao dịch đầu tư, để cả hai bên thay đổi cùng nhau)",
     "payeeNotFound": "Không tìm thấy người nhận",
     "fxFieldsIncomplete": "originalAmount và originalCurrencyCode phải được cung cấp cùng nhau",
     "fxRateRequired": "Cần một tỷ giá hối đoái dương cho giao dịch bằng ngoại tệ",
     "fxSignMismatch": "originalAmount và amount phải cùng dấu",
-    "jointAccountMoveLocked": "Không thể chuyển giao dịch trong tài khoản được chia sẻ sang tài khoản khác."
+    "jointAccountMoveLocked": "Không thể chuyển giao dịch trong tài khoản được chia sẻ sang tài khoản khác.",
+    "currencyMustMatchAccount": "Tiền tệ giao dịch {{ supplied }} phải khớp với tiền tệ của tài khoản {{ account }}. Hãy dùng originalAmount và originalCurrencyCode cho bút toán ngoại tệ.",
+    "transferSameCurrencyMustConserve": "Giao dịch chuyển khoản giữa hai tài khoản {{ currency }} phải chuyển cùng một số tiền ở cả hai bên",
+    "transferSameCurrencyRateMustBeOne": "Giao dịch chuyển khoản giữa hai tài khoản {{ currency }} không thể có tỷ giá khác 1",
+    "transferRateUnavailable": "Không thể xác định tỷ giá cho {{ from }} -> {{ to }}. Hãy cung cấp exchangeRate hoặc số tiền đích để giao dịch chuyển khoản được ghi nhận chính xác.",
+    "transferAmountsMustAgreeOnZero": "Giao dịch chuyển tiền phải di chuyển một số tiền khác không ở cả hai bên, hoặc bằng không ở cả hai bên",
+    "transferImpliedRateInvalid": "Số tiền đích ngụ ý một tỷ giá không thể sử dụng so với số tiền nguồn"
   },
   "users": {
     "userNotFound": "Không tìm thấy người dùng",

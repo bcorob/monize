@@ -132,6 +132,7 @@ CREATE TABLE accounts (
     exclude_from_net_worth BOOLEAN DEFAULT false,
     -- Loan-specific fields
     payment_amount NUMERIC(20, 4), -- payment amount per period for loans
+    extra_payment_amount NUMERIC(20, 4), -- standing extra-principal instruction inside that payment
     payment_frequency VARCHAR(20), -- 'WEEKLY', 'BIWEEKLY', 'MONTHLY', 'QUARTERLY', 'YEARLY'
     payment_start_date DATE, -- when loan payments start
     source_account_id UUID REFERENCES accounts(id) ON DELETE SET NULL, -- account payments come from
@@ -605,7 +606,8 @@ CREATE TABLE scheduled_transactions (
     exchange_rate NUMERIC(20, 10) NOT NULL DEFAULT 1,
     description TEXT,
     -- 'ONCE', 'DAILY', 'WEEKLY', 'BIWEEKLY', 'EVERY4WEEKS', 'SEMIMONTHLY',
-    -- 'MONTHLY', 'EVERY2MONTHS', 'QUARTERLY', 'SEMIANNUAL', 'YEARLY'
+    -- 'MONTHLY', 'EVERY2MONTHS', 'QUARTERLY', 'EVERY4MONTHS', 'SEMIANNUAL',
+    -- 'YEARLY', 'EVERY2YEARS'
     -- (backend/src/scheduled-transactions/dto: FrequencyType)
     frequency VARCHAR(20) NOT NULL,
     next_due_date DATE NOT NULL,
@@ -842,7 +844,16 @@ CREATE TYPE investment_action AS ENUM (
     'TRANSFER_OUT',
     'REINVEST',
     'ADD_SHARES',
-    'REMOVE_SHARES'
+    'REMOVE_SHARES',
+    -- Money's full distribution vocabulary (issue #1149, migration 158). Each
+    -- is a refinement of a base action: same share/cash behaviour, distinct
+    -- income kind for tax reporting.
+    'REINVEST_INTEREST',
+    'REINVEST_CAPITAL_GAIN_SHORT',
+    'REINVEST_CAPITAL_GAIN_LONG',
+    'CAPITAL_GAIN_SHORT',
+    'CAPITAL_GAIN_LONG',
+    'REDEEM'
 );
 
 CREATE TABLE investment_transactions (
@@ -862,11 +873,13 @@ CREATE TABLE investment_transactions (
     total_amount NUMERIC(20, 4) NOT NULL,
     exchange_rate NUMERIC(20, 10) NOT NULL DEFAULT 1,
     description TEXT,
+    status VARCHAR(20) NOT NULL DEFAULT 'UNRECONCILED', -- 'UNRECONCILED', 'CLEARED', 'RECONCILED', 'VOID'
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX idx_investment_transactions_user ON investment_transactions(user_id);
+CREATE INDEX idx_investment_transactions_status ON investment_transactions(status);
 CREATE INDEX idx_investment_transactions_account ON investment_transactions(account_id);
 CREATE INDEX idx_investment_transactions_security ON investment_transactions(security_id);
 CREATE INDEX idx_investment_transactions_date ON investment_transactions(transaction_date DESC);
@@ -968,6 +981,24 @@ CREATE TABLE refresh_tokens (
 CREATE UNIQUE INDEX idx_refresh_tokens_token_hash ON refresh_tokens(token_hash);
 CREATE INDEX idx_refresh_tokens_family ON refresh_tokens(family_id);
 CREATE INDEX idx_refresh_tokens_expires ON refresh_tokens(expires_at);
+
+-- OIDC destructive step-up claims (migration 155). One row per SPENT step-up
+-- proof, so a proof authorises one destructive action across the whole
+-- deployment rather than once per Node process: `INSERT ... ON CONFLICT DO
+-- NOTHING` on the primary key is atomic, so of two concurrent restores routed to
+-- two replicas exactly one inserts and the other is refused. Transient auth
+-- bookkeeping with a logical five-minute lifetime (each claim opportunistically
+-- sweeps rows past expiry; nothing reaps them on a schedule); excluded from
+-- backups.
+CREATE TABLE oidc_step_up_claims (
+    jti TEXT PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    purpose TEXT NOT NULL,
+    claimed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    expires_at TIMESTAMPTZ NOT NULL
+);
+
+CREATE INDEX idx_oidc_step_up_claims_expires ON oidc_step_up_claims(expires_at);
 
 -- Delegate account access (Phase 1). A user (owner) can grant another user
 -- (delegate) scoped access to their data. Delegates are normal `users` rows;
@@ -2248,6 +2279,13 @@ CREATE POLICY refresh_tokens_isolation ON refresh_tokens
       OR acting_as_user_id = (SELECT app_current_user_id())
       OR (SELECT app_bypass_rls()));
 
+-- oidc_step_up_claims (migration 155): written on the authenticated request
+-- that spends the proof, so the ordinary per-user policy applies.
+DROP POLICY IF EXISTS oidc_step_up_claims_isolation ON oidc_step_up_claims;
+CREATE POLICY oidc_step_up_claims_isolation ON oidc_step_up_claims
+  USING (user_id = (SELECT app_current_user_id()) OR (SELECT app_bypass_rls()))
+  WITH CHECK (user_id = (SELECT app_current_user_id()) OR (SELECT app_bypass_rls()));
+
 -- trusted_devices: uniformly real-user keyed. Every authenticated route that
 -- reads or writes it (list / revoke / revoke-all trusted devices, disable 2FA,
 -- change password) passes req.user.realUserId, and those routes ARE
@@ -2658,13 +2696,14 @@ CREATE POLICY emergency_access_contacts_isolation ON emergency_access_contacts
 -- Verification helper (run manually; not part of the migration's effect):
 --   SELECT tablename, policyname FROM pg_policies
 --    WHERE schemaname = 'public' ORDER BY tablename;
--- Expected: 57 policies -- 26 direct + 4 real-user-keyed (112),
+-- Expected: 58 policies -- 26 direct + 4 real-user-keyed (112),
 --           15 indirect (113), 5 special (114),
 --           2 direct for the .mny import's staging + job tables (117),
 --           1 direct for security_documents (118),
 --           4 direct for the GEM strategy tables (124, 125),
---           2 direct for job_claims and attachment_blob_tombstones, and
---           1 indirect for scheduled_transaction_postings (133).
+--           2 direct for job_claims and attachment_blob_tombstones,
+--           1 indirect for scheduled_transaction_postings (133), and
+--           1 direct for the OIDC step-up claim ledger (155).
 
 -- ---------------------------------------------------------------------------
 -- Enable row-level security (migration 123).

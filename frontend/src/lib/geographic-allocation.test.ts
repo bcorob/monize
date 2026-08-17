@@ -73,6 +73,46 @@ describe('computeGeographicAllocation', () => {
 
   it('returns empty structures and zero total for no holdings', () => {
     const result = computeGeographicAllocation([], new Map(), noConvert);
-    expect(result).toEqual({ exchangeData: [], regionData: [], totalValue: 0 });
+    expect(result).toEqual({
+      exchangeData: [],
+      regionData: [],
+      totalValue: 0,
+      missingCurrencies: [],
+      excludedCount: 0,
+    });
+  });
+
+  it('leaves an unconvertible holding out of the total and names its currency', () => {
+    // A holding whose currency has no rate must not join the total as a zero,
+    // and the caller has to be told the total is now a subtotal.
+    const eur = {
+      securityId: 's-lse',
+      marketValue: 1000,
+      currencyCode: 'EUR',
+    } as HoldingWithMarketValue;
+    const result = computeGeographicAllocation(
+      [holding('s-nyse', 100), eur],
+      exchangeMap,
+      (v, currency) => (currency === 'EUR' ? null : v),
+    );
+    expect(result.totalValue).toBe(100);
+    expect(result.missingCurrencies).toEqual(['EUR']);
+    expect(result.excludedCount).toBe(1);
+  });
+
+  it('counts an unpriced holding as excluded without a currency', () => {
+    const unpriced = {
+      securityId: 's-nyse',
+      marketValue: null,
+      currencyCode: 'USD',
+    } as unknown as HoldingWithMarketValue;
+    const result = computeGeographicAllocation(
+      [holding('s-tsx', 300), unpriced],
+      exchangeMap,
+      noConvert,
+    );
+    expect(result.totalValue).toBe(300);
+    expect(result.excludedCount).toBe(1);
+    expect(result.missingCurrencies).toEqual([]);
   });
 });

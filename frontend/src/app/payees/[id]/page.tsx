@@ -358,18 +358,26 @@ function PayeeDetailContent() {
 
   // Category rows aggregated across currencies into the display currency, with
   // the hierarchy-aware labels the rest of the app uses.
-  const categoryPanelTotals = useMemo<GroupedTotal[]>(() => {
+  const categoryPanelTotals = useMemo<{ rows: GroupedTotal[]; excludedCount: number }>(() => {
     const source =
       categoryRange === 'all'
         ? (analytics?.categoryTotalsAllTime ?? [])
         : (analytics?.categoryTotals ?? []);
-    return aggregateGroupedTotals(source, currencyStrategy).map((row) => ({
-      id: row.id,
-      name: row.id ? (categoryLabelMap.get(row.id) ?? row.name) : row.name,
-      currencyCode: currencyStrategy.displayCurrency,
-      total: row.total,
-      count: row.count,
-    }));
+    // A row whose total could not be converted is dropped rather than drawn: a
+    // bar has no way to say "unknown", and a zero-width one reads as a measured
+    // zero (frontend/CLAUDE.md). Count the dropped rows so the panel marks the
+    // bars as a subtotal.
+    const aggregated = aggregateGroupedTotals(source, currencyStrategy);
+    const rows = aggregated
+      .filter((row): row is typeof row & { total: number } => row.total !== null)
+      .map((row) => ({
+        id: row.id,
+        name: row.id ? (categoryLabelMap.get(row.id) ?? row.name) : row.name,
+        currencyCode: currencyStrategy.displayCurrency,
+        total: row.total,
+        count: row.count,
+      }));
+    return { rows, excludedCount: aggregated.length - rows.length };
   }, [
     analytics?.categoryTotals,
     analytics?.categoryTotalsAllTime,
@@ -379,17 +387,20 @@ function PayeeDetailContent() {
   ]);
 
   // One row per account, converted so the bars stay comparable.
-  const accountPanelTotals = useMemo<GroupedTotal[]>(
-    () =>
-      (detail?.accounts ?? []).map((row) => ({
+  const accountPanelTotals = useMemo<{ rows: GroupedTotal[]; excludedCount: number }>(() => {
+    const accounts = detail?.accounts ?? [];
+    const rows = accounts
+      .map((row) => ({
         id: row.accountId,
         name: row.accountName,
         currencyCode: currencyStrategy.displayCurrency,
         total: currencyStrategy.toDisplay(row.total, row.currencyCode),
         count: row.transactionCount,
-      })),
-    [detail?.accounts, currencyStrategy],
-  );
+      }))
+      // Same reasoning as the category panel: no rate, no bar.
+      .filter((row): row is typeof row & { total: number } => row.total !== null);
+    return { rows, excludedCount: accounts.length - rows.length };
+  }, [detail?.accounts, currencyStrategy]);
 
   const nextBill = useMemo(
     () =>
@@ -646,7 +657,8 @@ function PayeeDetailContent() {
                         : 'topCategories.empty',
                     )}
                     fallbackLabel={t('topCategories.uncategorized')}
-                    totals={categoryPanelTotals}
+                    totals={categoryPanelTotals.rows}
+                    excludedCount={categoryPanelTotals.excludedCount}
                     currencyCode={currencyStrategy.displayCurrency}
                     isLoading={false}
                     onSelect={(categoryId) =>
@@ -683,7 +695,8 @@ function PayeeDetailContent() {
                     subtitle={t('accountsPanel.subtitle')}
                     emptyLabel={t('accountsPanel.empty')}
                     fallbackLabel={t('accountsPanel.title')}
-                    totals={accountPanelTotals}
+                    totals={accountPanelTotals.rows}
+                    excludedCount={accountPanelTotals.excludedCount}
                     currencyCode={currencyStrategy.displayCurrency}
                     isLoading={false}
                     onSelect={(accountId) =>

@@ -41,6 +41,7 @@ import {
   formatSummaryValue,
 } from './MonteCarloPerformanceSummary';
 import { HoldingStatsTable } from './MonteCarloHoldingStatsTable';
+import { CsvSection, exportCsvSections } from '@/lib/csv-export';
 import { ExportDropdown } from '@/components/ui/ExportDropdown';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
 import { NumericInput } from '@/components/ui/NumericInput';
@@ -286,51 +287,40 @@ export function MonteCarloReport() {
         m.flowType === 'RECURRING' ? t('monteCarlo.cashFlowPerYear') : ''
       })`;
     };
-    const escape = (v: string) => `"${v.replace(/"/g, '""')}"`;
-    const lines = [
-      escape(t('monteCarlo.csvTitle')),
-      header.map(escape).join(','),
-      ...tableRows.map((row) =>
-        [
+    const sections: CsvSection[] = [
+      {
+        title: t('monteCarlo.csvTitle'),
+        headers: header,
+        rows: tableRows.map((row) => [
           row.year,
           row.p10.toFixed(2),
           row.p25.toFixed(2),
           row.p50.toFixed(2),
           row.p75.toFixed(2),
           row.p90.toFixed(2),
-          escape(row.events.map(eventLabel).join('; ')),
-        ].join(','),
-      ),
+          row.events.map(eventLabel).join('; '),
+        ]),
+      },
     ];
     if (result.performanceSummary) {
       const summaryRows = buildPerformanceSummaryRows(result.performanceSummary);
-      lines.push('');
-      lines.push(escape(t('monteCarlo.csvPerformanceSummary')));
-      lines.push(PERFORMANCE_SUMMARY_HEADERS.map(escape).join(','));
-      for (const row of summaryRows) {
-        lines.push(
-          [
-            escape(row.label),
-            escape(formatSummaryValue(row.band.p10, row.format, formatCurrency)),
-            escape(formatSummaryValue(row.band.p25, row.format, formatCurrency)),
-            escape(formatSummaryValue(row.band.p50, row.format, formatCurrency)),
-            escape(formatSummaryValue(row.band.p75, row.format, formatCurrency)),
-            escape(formatSummaryValue(row.band.p90, row.format, formatCurrency)),
-          ].join(','),
-        );
-      }
+      sections.push({
+        title: t('monteCarlo.csvPerformanceSummary'),
+        headers: PERFORMANCE_SUMMARY_HEADERS,
+        rows: summaryRows.map((row) => [
+          row.label,
+          formatSummaryValue(row.band.p10, row.format, formatCurrency),
+          formatSummaryValue(row.band.p25, row.format, formatCurrency),
+          formatSummaryValue(row.band.p50, row.format, formatCurrency),
+          formatSummaryValue(row.band.p75, row.format, formatCurrency),
+          formatSummaryValue(row.band.p90, row.format, formatCurrency),
+        ]),
+      });
     }
-    const blob = new Blob(['﻿' + lines.join('\n')], {
-      type: 'text/csv;charset=utf-8;',
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `monte-carlo-${(form.name || 'scenario').toLowerCase().replace(/\s+/g, '-')}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    exportCsvSections(
+      `monte-carlo-${(form.name || 'scenario').toLowerCase().replace(/\s+/g, '-')}`,
+      sections,
+    );
   }, [result, tableRows, form.name, formatCurrency, t]);
 
   const handleExportPdf = useCallback(async () => {

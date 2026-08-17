@@ -23,7 +23,7 @@ export function PortfolioSummaryCard({
 }: PortfolioSummaryCardProps) {
   const t = useTranslations('investments');
   const { formatCurrency, formatSignedPercent } = useNumberFormat();
-  const { convertToDefault, defaultCurrency } = useExchangeRates();
+  const { getRate, defaultCurrency } = useExchangeRates();
 
   // When viewing a single foreign-currency account, show values in that currency
   const foreignCurrency = singleAccountCurrency && singleAccountCurrency !== defaultCurrency
@@ -61,16 +61,65 @@ export function PortfolioSummaryCard({
     return null;
   }, [summary, foreignCurrency]);
 
-  // Compute default-currency total when showing foreign, for the "approx" line
+  // Compute default-currency total when showing foreign, for the "approx" line.
+  //
+  // Through getRate, never convertToDefault: convertToDefault passes the amount
+  // through unchanged when the pair has no rate, so a JPY total with no JPY->USD
+  // rate rendered as "~ $15,000.00 USD" -- an implicit rate of 1, which "Rate 1
+  // means same currency, never no rate found" forbids (review #1133). A missing
+  // rate makes the approximation unknown; null suppresses the line.
   const defaultTotal = useMemo(() => {
     if (!summary || !foreignCurrency) return null;
     let total = 0;
     for (const acct of summary.holdingsByAccount) {
-      total += convertToDefault(acct.cashBalance, acct.currencyCode);
-      total += convertToDefault(acct.totalMarketValue, acct.currencyCode);
+      const rate = getRate(acct.currencyCode, defaultCurrency);
+      if (rate === null) return null;
+      total += (acct.cashBalance + acct.totalMarketValue) * rate;
     }
     return total;
-  }, [summary, convertToDefault, foreignCurrency]);
+  }, [summary, getRate, defaultCurrency, foreignCurrency]);
+
+  // Completeness has to come from the SAME aggregate that supplies the displayed
+  // values. In the default-currency view that is the summary's own top-level
+  // flags; in the single foreign-account view the displayed values are the
+  // account-currency subtotals from `holdingsByAccount`, whose conversion path --
+  // into the account's currency -- can be incomplete even when the top-level
+  // default-currency totals are complete. Reading the top-level flag there let a
+  // JPY account whose EUR->JPY rate was missing render 0 JPY under an ordinary
+  // total with no warning (recheck RR5-001). Absent fields read as complete
+  // (`!== false`), the same rolling-deploy defence as everywhere else here.
+  const completeness = useMemo(() => {
+    if (!summary) {
+      return {
+        valuationComplete: true,
+        pricesComplete: true,
+        fxComplete: true,
+        missingRatePairs: [] as string[],
+        unpricedSecurityIds: [] as string[],
+      };
+    }
+    if (foreignCurrency) {
+      const accounts = summary.holdingsByAccount;
+      return {
+        valuationComplete: accounts.every((a) => a.valuationComplete !== false),
+        pricesComplete: accounts.every((a) => a.pricesComplete !== false),
+        fxComplete: accounts.every((a) => a.fxComplete !== false),
+        missingRatePairs: [
+          ...new Set(accounts.flatMap((a) => a.missingRatePairs ?? [])),
+        ].sort(),
+        unpricedSecurityIds: [
+          ...new Set(accounts.flatMap((a) => a.unpricedSecurityIds ?? [])),
+        ].sort(),
+      };
+    }
+    return {
+      valuationComplete: summary.valuationComplete !== false,
+      pricesComplete: summary.pricesComplete !== false,
+      fxComplete: summary.fxComplete !== false,
+      missingRatePairs: summary.missingRatePairs ?? [],
+      unpricedSecurityIds: summary.unpricedSecurityIds ?? [],
+    };
+  }, [summary, foreignCurrency]);
 
   const fmtVal = (value: number) => {
     if (foreignCurrency) return `${formatCurrency(value, foreignCurrency)} ${foreignCurrency}`;
@@ -115,6 +164,39 @@ export function PortfolioSummaryCard({
     );
   }
 
+  // The server knows when a total is a subtotal; it used to say so and this card
+  // rendered the number under a total's label anyway (recheck RR4-002). A missing
+  // price and a missing rate are different causes, so they get different sentences.
+  //
+  // Read defensively: during a rolling deploy the page can briefly receive a
+  // response from an older backend that has none of these fields. Absent means "no
+  // information", which must not render as "incomplete" -- and must certainly not
+  // crash the page.
+  const unpricedSymbols = completeness.unpricedSecurityIds
+    .map(
+      (id) =>
+        summary.holdings.find((holding) => holding.securityId === id)?.symbol ??
+        id,
+    )
+    .sort();
+  const incompleteReasons: string[] = [];
+  if (!completeness.pricesComplete && unpricedSymbols.length > 0) {
+    incompleteReasons.push(
+      t('portfolioSummary.incompletePrices', {
+        symbols: unpricedSymbols.join(', '),
+      }),
+    );
+  }
+  const missingRatePairs = completeness.missingRatePairs;
+  if (!completeness.fxComplete && missingRatePairs.length > 0) {
+    incompleteReasons.push(
+      t('portfolioSummary.incompleteFx', {
+        pairs: missingRatePairs.join(', '),
+      }),
+    );
+  }
+  const valuationIncomplete = !completeness.valuationComplete;
+
   const gainLossVal = converted?.gainLoss ?? summary.totalGainLoss;
   const gainLossPercentVal = converted?.gainLossPercent ?? summary.totalGainLossPercent;
   const twr = summary.timeWeightedReturn;
@@ -126,16 +208,34 @@ export function PortfolioSummaryCard({
         {t('portfolioSummary.title')}{titleSuffix ? ` (${titleSuffix})` : ''}
       </h3>
 
+      {valuationIncomplete && incompleteReasons.length > 0 && (
+        <div
+          role="status"
+          className="mb-4 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-200"
+        >
+          <div className="font-medium">
+            {t('portfolioSummary.incompleteHeading')}
+          </div>
+          <ul className="mt-1 list-disc pl-5 space-y-0.5">
+            {incompleteReasons.map((reason) => (
+              <li key={reason}>{reason}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <div className="space-y-4">
-        {/* Total Portfolio Value */}
+        {/* Total Portfolio Value -- labelled a partial when it is one. */}
         <div>
           <div className="text-sm text-gray-500 dark:text-gray-400">
-            {t('portfolioSummary.totalPortfolioValue')}
+            {valuationIncomplete
+              ? t('portfolioSummary.knownPortfolioSubtotal')
+              : t('portfolioSummary.totalPortfolioValue')}
           </div>
           <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">
             {fmtVal(converted?.portfolio ?? summary.totalPortfolioValue)}
           </div>
-          {foreignCurrency && defaultTotal !== null && (
+          {foreignCurrency && defaultTotal !== null && !valuationIncomplete && (
             <div className="text-xs text-gray-400 dark:text-gray-500">
               {'\u2248 '}{formatCurrency(defaultTotal, defaultCurrency)} {defaultCurrency}
             </div>

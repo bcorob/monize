@@ -317,7 +317,9 @@
   "monteCarlo": {
     "scenarioNotFound": "シナリオ {{ id }} が見つかりません",
     "scenarioIdsMustBeArray": "scenarioIds は配列でなければなりません",
-    "atLeastOneAccountRequired": "少なくとも1つの accountId が必要です"
+    "atLeastOneAccountRequired": "少なくとも1つの accountId が必要です",
+    "currentValueUnavailable": "選択した口座の現在価値を判定できなかったため、その値からシミュレーションを開始できません。開始額を明示的に入力するか、価格と為替レートが取得できてから再試行してください。",
+    "historicalReturnsUnavailable": "選択した口座の過去のリターンを計算できなかったため、シミュレーションで使用できません。期待リターンとボラティリティを手動で入力するか、価格と為替レートが利用可能になってから再試行してください。"
   },
   "netWorth": {
     "invalidStartDate": "startDate は YYYY-MM-DD 形式でなければなりません",
@@ -361,6 +363,7 @@
     "requiresBrokerageAccount": "スケジュール投資取引には証券口座が必要です",
     "notFound": "ID {{ id }} のスケジュール取引が見つかりません",
     "occurrenceAlreadyPosted": "この回はすでに記帳されています。",
+    "changedConcurrently": "The scheduled transaction changed during the operation. Reload it and retry.",
     "fxPlainOnly": "別の通貨を使用できるのは通常のスケジュール取引のみで、分割、振替、投資では使用できません",
     "fxRateUnavailable": "{{ date }} の {{ from }} から {{ to }} への為替レートが利用できません。投稿するには金額を {{ to }} で入力してください。",
     "investmentActionRequired": "スケジュール投資取引には投資アクションが必要です",
@@ -396,6 +399,7 @@
     "cannotChangeSplitAccount": "投資分割の口座は変更できません。分割を削除して新しい口座に追加してください",
     "splitNoFundingAccount": "投資分割は別の資金口座を使用しません",
     "cannotChangeSplitDate": "投資分割の日付は変更できません。代わりに親の分割取引の日付を編集してください",
+    "embeddedStatusLocked": "この投資取引は分割取引の一部です。両側が一緒に変更されるよう、代わりに分割取引のステータスを変更してください。",
     "invalidAccountUuid": "無効な口座UUID：{{ id }}",
     "startDateFormat": "startDate は YYYY-MM-DD 形式でなければなりません",
     "endDateFormat": "endDate は YYYY-MM-DD 形式でなければなりません",
@@ -435,8 +439,10 @@
     "invalidTagKey": "タグキー（1〜100文字）が必要です",
     "assetOptionNameRequired": "資産クラス名が必要です。",
     "documentNotFound": "ドキュメントが見つかりません",
+    "embeddedSplitAmountMismatch": "この分割は {{ amount }} を記録していますが、{{ action }} {{ quantity }} @ {{ price }} はレート {{ rate }} で {{ expected }} になります。その金額を使うか、意図した為替レートを指定してください。",
     "selectionNotFound": "選択された銘柄のうち1つ以上が見つかりませんでした",
-    "comparisonSelectionEmpty": "比較する銘柄または市場指数を1つ以上選択してください"
+    "comparisonSelectionEmpty": "比較する銘柄または市場指数を1つ以上選択してください",
+    "exchangeRateNotPositive": "為替レートはゼロより大きい値である必要があります"
   },
   "tags": {
     "notFound": "ID {{ id }} のタグが見つかりません",
@@ -490,15 +496,27 @@
     "transferAmountNegative": "振替金額はマイナスにできません",
     "notATransfer": "取引は振替ではありません",
     "splitTransferLegAccountLocked": "この振替は分割取引の一部です。口座を変更するには、元の取引の分割を編集してください。",
+    "splitTransferLegStatusLocked": "この送金は分割取引の一部です。両側が一緒に変更されるよう、所属する分割取引を編集して無効化または復元してください。",
+    "investmentCashLegStatusLocked": "この取引は投資取引の現金側です。両側が一緒に変更されるよう、投資取引のステータスを変更して無効化または復元してください。",
     "notFoundById": "ID {{ id }} の取引が見つかりません",
     "bulkUpdateNoFields": "少なくとも1つの更新フィールドが必要です",
     "bulkSplitNoMatchingLinesOne": "いずれの分割行もカテゴリ更新に一致しなかったため、1件の分割取引がスキップされました",
     "bulkSplitNoMatchingLinesMany": "いずれの分割行もカテゴリ更新に一致しなかったため、{{ count }}件の分割取引がスキップされました",
+    "bulkSplitTransferLegSkippedOne": "1件の分割振替をスキップしました（両側が同時に変わるよう、所属する分割取引から無効化または復元してください）",
+    "bulkSplitTransferLegSkippedMany": "{{ count }}件の分割振替をスキップしました（両側が同時に変わるよう、所属する分割取引から無効化または復元してください）",
+    "bulkInvestmentCashLegSkippedOne": "1件の投資現金取引をスキップしました（両側が同時に変わるよう、投資取引のステータスを変更して無効化または復元してください）",
+    "bulkInvestmentCashLegSkippedMany": "{{ count }}件の投資現金取引をスキップしました（両側が同時に変わるよう、投資取引のステータスを変更して無効化または復元してください）",
     "payeeNotFound": "支払先が見つかりません",
     "fxFieldsIncomplete": "originalAmount と originalCurrencyCode は一緒に指定する必要があります",
     "fxRateRequired": "外貨取引には正の為替レートが必要です",
     "fxSignMismatch": "originalAmount と amount は同じ符号である必要があります",
-    "jointAccountMoveLocked": "共有口座の取引を別の口座に移動することはできません。"
+    "jointAccountMoveLocked": "共有口座の取引を別の口座に移動することはできません。",
+    "currencyMustMatchAccount": "取引通貨 {{ supplied }} は口座通貨 {{ account }} と一致する必要があります。外貨での入力には originalAmount と originalCurrencyCode を使用してください。",
+    "transferSameCurrencyMustConserve": "{{ currency }} 口座間の振替は両側で同じ金額でなければなりません",
+    "transferSameCurrencyRateMustBeOne": "{{ currency }} 口座間の振替に 1 以外の為替レートは指定できません",
+    "transferRateUnavailable": "{{ from }} -> {{ to }} の為替レートを判定できませんでした。振替が正しく記録されるように exchangeRate または送金先金額を指定してください。",
+    "transferAmountsMustAgreeOnZero": "送金は両側でゼロ以外の金額を動かすか、両側ともゼロである必要があります",
+    "transferImpliedRateInvalid": "送金先の金額は、送金元の金額に対して使用できない為替レートを意味します"
   },
   "users": {
     "userNotFound": "ユーザーが見つかりません",

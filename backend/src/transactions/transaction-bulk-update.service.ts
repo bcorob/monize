@@ -15,13 +15,13 @@ import {
 } from "typeorm";
 import { Transaction, TransactionStatus } from "./entities/transaction.entity";
 import { TransactionSplit } from "./entities/transaction-split.entity";
+import { TransactionSplitService } from "./transaction-split.service";
 import { Category } from "../categories/entities/category.entity";
 import { Payee } from "../payees/entities/payee.entity";
 import { UserPreference } from "../users/entities/user-preference.entity";
 import { AccountsService } from "../accounts/accounts.service";
 import { NetWorthService } from "../net-worth/net-worth.service";
 import { TagsService } from "../tags/tags.service";
-import { TransactionSplitService } from "./transaction-split.service";
 import { ActionHistoryService } from "../action-history/action-history.service";
 import {
   BulkUpdateDto,
@@ -97,6 +97,7 @@ export class TransactionBulkUpdateService {
     @Inject(forwardRef(() => NetWorthService))
     private netWorthService: NetWorthService,
     private tagsService: TagsService,
+    @Inject(forwardRef(() => TransactionSplitService))
     private splitService: TransactionSplitService,
     private actionHistoryService: ActionHistoryService,
     private dataSource: DataSource,
@@ -177,81 +178,182 @@ export class TransactionBulkUpdateService {
     // Step 2: Classify targets. Split parents stay in the batch (parent-level
     // fields apply to them); when the run sets a category their lines are
     // recategorized instead of the parent (invariant I1).
-    const { eligibleIds, splitParentIds } = await this.classifyTargets(
+    const {
+      eligibleIds,
+      splitParentIds,
+      skipped: classifySkipped,
+      skippedReasons: classifySkippedReasons,
+    } = await this.classifyTargets(
       userId,
       allIds,
+      isUpdatingStatus ? dto.status : undefined,
     );
 
     if (eligibleIds.length === 0) {
-      return { updated: 0, skipped: 0, skippedReasons: [] };
+      return {
+        updated: 0,
+        skipped: classifySkipped,
+        skippedReasons: classifySkippedReasons,
+      };
     }
 
     const splitParentIdSet = new Set(splitParentIds);
     let changedLines: ChangedSplitLine[] = [];
     let snapshot: BulkUpdateSnapshot = { before: [], after: [] };
+    // Rows whose status is being changed: the selection plus any transfer
+    // counterpart pulled in with it. Declared out here so the post-commit
+    // net-worth recalculation covers the counterpart's account as well.
+    let statusIds: string[] = eligibleIds;
+    // Accounts moved by split-parent counterpart propagation, which only the
+    // propagation helper can name.
+    const counterpartAccountIds = new Set<string>();
 
     // Balance changes and the batch update commit in a single transaction.
     await withScopedDb(this.dataSource, async (m) => {
+      // A transfer's two legs are one movement of money and must share a
+      // status. Selecting one leg and voiding it used to leave the counterpart
+      // active: the source's balance was restored and the destination kept the
+      // money, so the pair created it outright (audit P5-001, scenario B).
+      //
+      // The counterpart is folded into the batch BEFORE the balance pass so
+      // both legs are voided and both balances adjusted in the same
+      // transaction. This is a structural read (which rows are transfer legs,
+      // whose counterparts) -- it does not read the statuses the balance pass
+      // derives from, so it is safe to run before the lock below.
+      statusIds = isUpdatingStatus
+        ? await this.expandTransferCounterparts(
+            m,
+            userId,
+            eligibleIds,
+            dto.status!,
+          )
+        : eligibleIds;
+
+      // The rows split-parent propagation will write, discovered BEFORE any
+      // write so the undo snapshot can capture their pre-values -- an undo that
+      // restores only the selected leg leaves the propagated counterpart VOID,
+      // recreating the divergent pair through the app's own undo.
+      const { crossingParentIds, counterpartIds: propagationTargetIds } =
+        isUpdatingStatus
+          ? await this.findSplitParentCounterpartIds(
+              m,
+              userId,
+              statusIds,
+              dto.status!,
+            )
+          : { crossingParentIds: [], counterpartIds: [] };
+
       // Lock every row this batch will write, ascending by id, before anything
       // reads the statuses the VOID adjustment is derived from. One transaction
       // was not enough: handleStatusBalanceChanges aggregates the *current*
       // statuses and the UPDATE that changes them runs afterwards, so without
       // the lock a concurrent single-transaction edit lands in between and the
-      // batch applies a delta for a transition that no longer happened.
+      // batch applies a delta for a transition that no longer happened. The
+      // lock covers the expanded set and the propagation targets, not just the
+      // selection: every row this batch writes must be frozen or a counterpart
+      // reopens the same race.
       if (isUpdatingStatus) {
-        await lockTransactionRows(m, eligibleIds, userId);
+        await lockTransactionRows(
+          m,
+          [...new Set([...statusIds, ...propagationTargetIds])],
+          userId,
+        );
       }
+
+      // WP1b: read the pre-write values of exactly the fields this run changes,
+      // before ANY update runs -- including the counterpart and propagated rows
+      // a status change writes, or undo cannot restore them. The split-line
+      // half of the snapshot comes from bulkRecategorizeCategorySplits' own
+      // pre-read below.
+      const snapshotIds = isUpdatingStatus
+        ? [...new Set([...eligibleIds, ...statusIds, ...propagationTargetIds])]
+        : eligibleIds;
+      const parentSnapshot = await this.readParentSnapshot(
+        m,
+        userId,
+        snapshotIds,
+        updateFields,
+        isUpdatingTags,
+      );
 
       // Step 3: Handle balance adjustments for VOID status changes
       if (isUpdatingStatus) {
         await this.handleStatusBalanceChanges(
           m,
           userId,
-          eligibleIds,
+          statusIds,
           dto.status!,
         );
-      }
 
-      // WP1b: read the pre-write values of exactly the fields this run changes,
-      // before any UPDATE runs. The split-line half of the snapshot comes from
-      // bulkRecategorizeCategorySplits' own pre-read below.
-      const parentSnapshot = await this.readParentSnapshot(
-        m,
-        userId,
-        eligibleIds,
-        updateFields,
-        isUpdatingTags,
-      );
+        // A selected split PARENT crossing the VOID boundary has to take the
+        // counterparts its transfer children created with it.
+        // `expandTransferCounterparts` cannot do this: a parent is
+        // `isSplit = true, isTransfer = false`, so it finds nothing, and the
+        // batch then voided the parent, restored its source balance and left
+        // every child-created leg active with the money (recheck RR3-001). The
+        // single-update route already goes through this helper, so both now call
+        // the same one rather than growing a second copy of the rule.
+        for (const affected of await this.propagateSplitParentStatus(
+          m,
+          userId,
+          crossingParentIds,
+          dto.status!,
+        )) {
+          counterpartAccountIds.add(affected);
+        }
+      }
 
       // Step 4: Execute batch update for column fields. When the run sets a
       // category, split parents must not receive it (their category_id stays
       // NULL -- invariant I1), so their UPDATE drops categoryId.
       if (Object.keys(updateFields).length > 0) {
-        const fullFieldIds = isUpdatingCategory
-          ? eligibleIds.filter((id) => !splitParentIdSet.has(id))
-          : eligibleIds;
-        if (fullFieldIds.length > 0) {
-          await m
-            .createQueryBuilder()
-            .update(Transaction)
-            .set(updateFields)
-            .where("id IN (:...ids)", { ids: fullFieldIds })
-            .andWhere("userId = :userId", { userId })
-            .execute();
-        }
+        // The status column applies to the expanded set; every other field
+        // stays on the explicitly selected rows (payee/description mirroring is
+        // handled separately by syncLinkedTransfers, and a category or payee
+        // belongs to the leg the user picked).
+        const { status: statusField, ...nonStatusFields } =
+          updateFields as Record<string, unknown>;
 
-        if (isUpdatingCategory && splitParentIds.length > 0) {
-          const splitParentFields = { ...updateFields };
-          delete (splitParentFields as Record<string, unknown>).categoryId;
-          if (Object.keys(splitParentFields).length > 0) {
+        if (Object.keys(nonStatusFields).length > 0) {
+          // When the run sets a category, split parents must not receive it
+          // (their category_id stays NULL -- invariant I1), so their UPDATE
+          // drops categoryId below.
+          const fullFieldIds = isUpdatingCategory
+            ? eligibleIds.filter((id) => !splitParentIdSet.has(id))
+            : eligibleIds;
+          if (fullFieldIds.length > 0) {
             await m
               .createQueryBuilder()
               .update(Transaction)
-              .set(splitParentFields)
-              .where("id IN (:...ids)", { ids: splitParentIds })
+              .set(nonStatusFields as Partial<Transaction>)
+              .where("id IN (:...ids)", { ids: fullFieldIds })
               .andWhere("userId = :userId", { userId })
               .execute();
           }
+
+          if (isUpdatingCategory && splitParentIds.length > 0) {
+            const splitParentFields = { ...nonStatusFields };
+            delete splitParentFields.categoryId;
+            if (Object.keys(splitParentFields).length > 0) {
+              await m
+                .createQueryBuilder()
+                .update(Transaction)
+                .set(splitParentFields as Partial<Transaction>)
+                .where("id IN (:...ids)", { ids: splitParentIds })
+                .andWhere("userId = :userId", { userId })
+                .execute();
+            }
+          }
+        }
+
+        if (statusField !== undefined) {
+          await m
+            .createQueryBuilder()
+            .update(Transaction)
+            .set({ status: statusField } as Partial<Transaction>)
+            .where("id IN (:...ids)", { ids: statusIds })
+            .andWhere("userId = :userId", { userId })
+            .execute();
         }
 
         // Step 4b: Sync payee/description to linked transfer transactions
@@ -300,12 +402,22 @@ export class TransactionBulkUpdateService {
         dto.tagIds,
         changedLines,
         dto.categoryId ?? null,
+        new Set(snapshotIds.filter((id) => !eligibleIds.includes(id))),
       );
     });
 
-    // Step 5: Trigger net worth recalc for affected accounts (after commit)
+    // Step 5: Trigger net worth recalc for affected accounts (after commit).
+    // Uses the expanded set: a counterpart in another account had its status
+    // and balance changed too, so that account's snapshots are stale as well.
     if (isUpdatingStatus) {
-      await this.triggerNetWorthRecalcForTransactions(userId, eligibleIds);
+      await this.triggerNetWorthRecalcForTransactions(
+        userId,
+        statusIds,
+        // Accounts the split-parent propagation moved. They are not in
+        // `statusIds` -- the helper discovered them -- so without this the child's
+        // account kept a stale net-worth snapshot beside its corrected balance.
+        counterpartAccountIds,
+      );
     }
 
     // Result (invariant I5): a parent counts as updated only when it received
@@ -321,7 +433,7 @@ export class TransactionBulkUpdateService {
         : [];
     const updated = eligibleIds.length - skippedSplitParents.length;
 
-    const skippedReasons: string[] = [];
+    const skippedReasons: string[] = [...classifySkippedReasons];
     if (skippedSplitParents.length === 1) {
       skippedReasons.push(
         tr(
@@ -361,7 +473,7 @@ export class TransactionBulkUpdateService {
 
     const result: BulkUpdateResult = {
       updated,
-      skipped: skippedSplitParents.length,
+      skipped: classifySkipped + skippedSplitParents.length,
       skippedReasons,
     };
     if (changedLines.length > 0) {
@@ -404,6 +516,20 @@ export class TransactionBulkUpdateService {
       return { deleted: 0 };
     }
 
+    // Every account whose balance this delete touches, including accounts
+    // reached only through a linked transfer leg or a split counterpart.
+    //
+    // The recalculation set used to be built from `transactions` alone, after
+    // the commit -- so bulk-deleting one leg of a transfer reversed both live
+    // balances correctly but left the counterpart account's monthly net-worth
+    // snapshot carrying the deleted amount (audit P5-012). The single-transfer
+    // delete path already tracked all affected accounts, which is what showed
+    // the intended coverage. Collected inside the transaction, where the linked
+    // rows are loaded, and consumed after it commits.
+    const affectedAccountIds = new Set<string>(
+      transactions.map((t) => t.accountId),
+    );
+
     // Balance adjustments and both delete passes commit atomically.
     let deleted = 0;
     await withScopedDb(this.dataSource, async (m) => {
@@ -443,6 +569,16 @@ export class TransactionBulkUpdateService {
         [...allIds, ...linkedIdsToDelete],
         userId,
       );
+
+      // Every linked leg and split counterpart this delete removes was locked
+      // above and lives in `locked`, so its account joins the net-worth
+      // fan-out beside the primary rows. The recalculation set used to be the
+      // selected rows alone, which left the counterpart account -- reached only
+      // through the linked leg -- carrying the deleted amount in its monthly
+      // net-worth snapshot beside a corrected live balance (audit P5-012).
+      for (const tx of locked.values()) {
+        affectedAccountIds.add(tx.accountId);
+      }
 
       const balanceAdjustments = new Map<string, number>();
       for (const tx of locked.values()) {
@@ -486,8 +622,7 @@ export class TransactionBulkUpdateService {
       deleted = primaryDeleted.affected ?? 0;
     });
 
-    // Trigger net worth recalc for all affected accounts
-    const affectedAccountIds = new Set(transactions.map((t) => t.accountId));
+    // Trigger net worth recalc for every affected account, deduplicated.
     for (const accountId of affectedAccountIds) {
       this.netWorthService.triggerDebouncedRecalc(accountId, userId);
     }
@@ -568,9 +703,23 @@ export class TransactionBulkUpdateService {
   private async classifyTargets(
     userId: string,
     allIds: string[],
+    /**
+     * The status being applied, when this is a status update.
+     *
+     * Needed because a split-transfer leg cannot cross the VOID boundary on its
+     * own: `expandTransferCounterparts` deliberately refuses to drag the split
+     * PARENT along (that would void unrelated category children), so voiding the
+     * leg alone left the parent's split row and total still recording money that
+     * left the source and never arrived -- the same inconsistency the single-edit
+     * path refuses in `updateSplitTransferLeg`, reached through the bulk path
+     * instead. Skipped and reported.
+     */
+    newStatus?: TransactionStatus,
   ): Promise<{
     eligibleIds: string[];
     splitParentIds: string[];
+    skipped: number;
+    skippedReasons: string[];
   }> {
     const transactions = await withScopedDb(this.dataSource, (m) =>
       m
@@ -580,15 +729,114 @@ export class TransactionBulkUpdateService {
           "transaction.id",
           "transaction.isTransfer",
           "transaction.isSplit",
+          "transaction.status",
         ])
         .where("transaction.id IN (:...ids)", { ids: allIds })
         .andWhere("transaction.userId = :userId", { userId })
         .getMany(),
     );
 
+    // Which of the selected rows are a split's transfer counterpart. Only asked
+    // when a status change could cross the VOID boundary.
+    const transferLegIds = transactions
+      .filter((t) => t.isTransfer)
+      .map((t) => t.id);
+    const splitLegIds = new Set<string>();
+    if (newStatus !== undefined && transferLegIds.length > 0) {
+      const owningSplits = await withScopedDb(this.dataSource, (m) =>
+        m.find(TransactionSplit, {
+          where: { linkedTransactionId: In(transferLegIds) },
+          select: ["id", "linkedTransactionId"],
+        }),
+      );
+      for (const split of owningSplits) {
+        if (split.linkedTransactionId) {
+          splitLegIds.add(split.linkedTransactionId);
+        }
+      }
+    }
+
+    // Which of the selected rows are the cash leg of an investment
+    // transaction. Same shape as the split-leg rule: the investment row owns
+    // the pair's VOID boundary, so a cash leg cannot cross it alone -- its
+    // trade's shares would stay counted while its cash claims not to have
+    // moved. Only asked when a status change could cross the boundary.
+    const investmentLegIds = new Set<string>();
+    if (newStatus !== undefined && transactions.length > 0) {
+      const owningRows: { transaction_id: string }[] = await withScopedDb(
+        this.dataSource,
+        (m) =>
+          m.query(
+            // includes VOID rows: records read -- ownership, not effect.
+            `SELECT transaction_id FROM investment_transactions
+              WHERE transaction_id = ANY($1)`,
+            [transactions.map((t) => t.id)],
+          ),
+      );
+      for (const row of owningRows) {
+        investmentLegIds.add(row.transaction_id);
+      }
+    }
+
+    const skippedReasons: string[] = [];
+    let splitLegVoidCount = 0;
+    let investmentLegVoidCount = 0;
+
+    const eligible = transactions.filter((t) => {
+      const crossesVoid =
+        newStatus !== undefined &&
+        (t.status === TransactionStatus.VOID) !==
+          (newStatus === TransactionStatus.VOID);
+      if (crossesVoid && splitLegIds.has(t.id)) {
+        splitLegVoidCount++;
+        return false;
+      }
+      if (crossesVoid && investmentLegIds.has(t.id)) {
+        investmentLegVoidCount++;
+        return false;
+      }
+      return true;
+    });
+
+    if (splitLegVoidCount === 1) {
+      skippedReasons.push(
+        tr(
+          "errors.transactions.bulkSplitTransferLegSkippedOne",
+          "1 split transfer was skipped (void or restore it from the split transaction it belongs to, so both sides change together)",
+        ),
+      );
+    } else if (splitLegVoidCount > 1) {
+      skippedReasons.push(
+        tr(
+          "errors.transactions.bulkSplitTransferLegSkippedMany",
+          `${splitLegVoidCount} split transfers were skipped (void or restore them from the split transaction they belong to, so both sides change together)`,
+          { count: splitLegVoidCount },
+        ),
+      );
+    }
+
+    if (investmentLegVoidCount === 1) {
+      skippedReasons.push(
+        tr(
+          "errors.transactions.bulkInvestmentCashLegSkippedOne",
+          "1 investment cash transaction was skipped (void or restore it by changing the investment transaction's status, so both sides change together)",
+        ),
+      );
+    } else if (investmentLegVoidCount > 1) {
+      skippedReasons.push(
+        tr(
+          "errors.transactions.bulkInvestmentCashLegSkippedMany",
+          `${investmentLegVoidCount} investment cash transactions were skipped (void or restore them by changing the investment transactions' status, so both sides change together)`,
+          { count: investmentLegVoidCount },
+        ),
+      );
+    }
+
     return {
-      eligibleIds: transactions.map((t) => t.id),
-      splitParentIds: transactions.filter((t) => t.isSplit).map((t) => t.id),
+      eligibleIds: eligible.map((t) => t.id),
+      splitParentIds: eligible.filter((t) => t.isSplit).map((t) => t.id),
+      skipped: splitLegVoidCount + investmentLegVoidCount,
+      skippedReasons,
     };
   }
 
@@ -695,6 +943,12 @@ export class TransactionBulkUpdateService {
     newTagIds: string[] | undefined,
     changedLines: ChangedSplitLine[],
     newCategoryId: string | null,
+    /**
+     * Rows the batch wrote only a status to -- transfer counterparts and
+     * propagated split-child legs. Their after-state must not claim the other
+     * updateFields or the tag set, which apply only to the selected rows.
+     */
+    statusOnlyIdSet: Set<string> = new Set(),
   ): BulkUpdateSnapshot {
     const linesByParent = new Map<string, ChangedSplitLine[]>();
     for (const line of changedLines) {
@@ -708,19 +962,22 @@ export class TransactionBulkUpdateService {
     for (const row of parentSnapshot.rows) {
       const id = row.id as string;
       const isSplitParent = splitParentIdSet.has(id);
+      const statusOnly = statusOnlyIdSet.has(id);
 
       const beforeRow: Record<string, unknown> = { ...row };
-      const afterRow: Record<string, unknown> = {
-        id,
-        accountId: row.accountId,
-        ...updateFields,
-      };
+      const afterRow: Record<string, unknown> = statusOnly
+        ? { id, accountId: row.accountId, status: updateFields.status }
+        : {
+            id,
+            accountId: row.accountId,
+            ...updateFields,
+          };
       if (isUpdatingCategory && isSplitParent) {
         delete beforeRow.categoryId;
         delete afterRow.categoryId;
       }
 
-      if (isUpdatingTags) {
+      if (isUpdatingTags && !statusOnly) {
         beforeRow.tagIds = parentSnapshot.tagsByTransaction.get(id) ?? [];
         afterRow.tagIds = newTagIds ?? [];
       }
@@ -888,6 +1145,162 @@ export class TransactionBulkUpdateService {
     };
   }
 
+  /**
+   * The selected ids plus the transfer counterpart of every transfer leg among
+   * them, so a status change applies to both halves of one movement of money.
+   *
+   * A transfer is two rows that must agree: `recalculateCurrentBalance` and
+   * every report exclude a VOID row, so a void source with an active
+   * destination is money in one account that came from nowhere. Selecting only
+   * one leg is the normal case (a filter or a single click in the list), which
+   * is why the expansion belongs here rather than in the caller.
+   *
+   * Split-transfer legs are included too: the leg is a real transaction row in
+   * the target account whose balance contribution has to stop with its
+   * counterpart's. Only same-user rows are returned -- a cross-owner
+   * counterpart is another user's ledger and is not ours to void, and the
+   * UPDATE is user-filtered besides.
+   */
+  private async expandTransferCounterparts(
+    m: EntityManager,
+    userId: string,
+    eligibleIds: string[],
+    newStatus: TransactionStatus,
+  ): Promise<string[]> {
+    const repo = m.getRepository(Transaction);
+    const allLegs = await repo
+      .createQueryBuilder("t")
+      .select(["t.id", "t.linkedTransactionId", "t.status"])
+      .where("t.id IN (:...ids)", { ids: eligibleIds })
+      .andWhere("t.userId = :userId", { userId })
+      .andWhere("t.isTransfer = true")
+      .andWhere("t.linkedTransactionId IS NOT NULL")
+      .getMany();
+
+    // Only a leg CROSSING the VOID boundary takes its counterpart with it: the
+    // two rows are one movement of money, so VOID-membership is shared. The
+    // reconciliation states are genuinely per-ledger (the PR's own spec), so a
+    // bulk CLEARED/RECONCILED/UNRECONCILED must not stamp the counterpart in
+    // an account whose statement was never touched -- ungated, working a
+    // checking statement re-wrote the savings ledger's reconciliation state.
+    const isNewVoid = newStatus === TransactionStatus.VOID;
+    const legs = allLegs.filter(
+      (t) => (t.status === TransactionStatus.VOID) !== isNewVoid,
+    );
+
+    if (legs.length === 0) return eligibleIds;
+
+    const selected = new Set(eligibleIds);
+    const candidates = legs
+      .map((t) => t.linkedTransactionId)
+      .filter((id): id is string => id !== null && !selected.has(id));
+
+    if (candidates.length === 0) return eligibleIds;
+
+    // A split-transfer leg's linkedTransactionId points at the split PARENT,
+    // whose fields aggregate the whole split -- voiding that would void
+    // unrelated category children. Keep the counterpart only when it is a
+    // mirror leg, matching how classifyTransferLegs draws the same distinction
+    // for field and tag syncing.
+    const owningSplits = await m.find(TransactionSplit, {
+      where: { linkedTransactionId: In(legs.map((t) => t.id)) },
+      select: ["id", "linkedTransactionId"],
+    });
+    const splitLegIds = new Set(owningSplits.map((s) => s.linkedTransactionId));
+    const mirrorIds = legs
+      .filter((t) => !splitLegIds.has(t.id))
+      .map((t) => t.linkedTransactionId)
+      .filter((id): id is string => id !== null && !selected.has(id));
+
+    if (mirrorIds.length === 0) return eligibleIds;
+
+    const sameUser = await repo
+      .createQueryBuilder("t")
+      .select(["t.id"])
+      .where("t.id IN (:...ids)", { ids: mirrorIds })
+      .andWhere("t.userId = :userId", { userId })
+      .getMany();
+
+    return [...eligibleIds, ...sameUser.map((t) => t.id)];
+  }
+
+  /**
+   * The counterpart rows split-parent propagation WILL write for this batch,
+   * discovered without writing anything: the ids feed the pre-write undo
+   * snapshot and the row locks, so an undo can restore them and no delta is
+   * derived from an unlocked row.
+   */
+  private async findSplitParentCounterpartIds(
+    m: EntityManager,
+    userId: string,
+    statusIds: string[],
+    newStatus: TransactionStatus,
+  ): Promise<{ crossingParentIds: string[]; counterpartIds: string[] }> {
+    if (statusIds.length === 0) {
+      return { crossingParentIds: [], counterpartIds: [] };
+    }
+    const isNewVoid = newStatus === TransactionStatus.VOID;
+    const parents = await m
+      .getRepository(Transaction)
+      .createQueryBuilder("t")
+      .select(["t.id", "t.status"])
+      .where("t.id IN (:...ids)", { ids: statusIds })
+      .andWhere("t.userId = :userId", { userId })
+      .andWhere("t.isSplit = true")
+      .getMany();
+    const crossingParentIds = parents
+      .filter((t) => (t.status === TransactionStatus.VOID) !== isNewVoid)
+      .map((t) => t.id);
+    if (crossingParentIds.length === 0) {
+      return { crossingParentIds, counterpartIds: [] };
+    }
+    const splits = await m.find(TransactionSplit, {
+      where: { transactionId: In(crossingParentIds) },
+      select: ["id", "linkedTransactionId"],
+    });
+    return {
+      crossingParentIds,
+      counterpartIds: splits
+        .map((split) => split.linkedTransactionId)
+        .filter((id): id is string => id !== null),
+    };
+  }
+
+  /**
+   * For every selected split parent whose status crosses the VOID boundary, apply
+   * that status to the transfer counterparts its children created, moving each
+   * counterpart's balance exactly once.
+   *
+   * Delegates to `TransactionSplitService.applyParentStatusToTransferCounterparts`
+   * -- the same helper the single-transaction update path uses -- inside this
+   * batch's transaction, so a bulk void and a single void cannot diverge.
+   */
+  private async propagateSplitParentStatus(
+    m: EntityManager,
+    userId: string,
+    /** The crossing parents `findSplitParentCounterpartIds` discovered. */
+    crossingParentIds: string[],
+    newStatus: TransactionStatus,
+  ): Promise<Set<string>> {
+    const affectedAccountIds = new Set<string>();
+
+    for (const parentId of crossingParentIds) {
+      // The counterpart accounts are not in `statusIds` -- they are discovered in
+      // here -- so they have to be reported back or the batch's net-worth
+      // invalidation misses them entirely (recheck RR4-003).
+      for (const affected of await this.splitService.applyParentStatusToTransferCounterparts(
+        m,
+        parentId,
+        userId,
+        newStatus,
+      )) {
+        affectedAccountIds.add(affected);
+      }
+    }
+
+    return affectedAccountIds;
+  }
+
   private async handleStatusBalanceChanges(
     m: EntityManager,
     userId: string,
@@ -933,6 +1346,7 @@ export class TransactionBulkUpdateService {
   private async triggerNetWorthRecalcForTransactions(
     userId: string,
     transactionIds: string[],
+    extraAccountIds: Set<string> = new Set(),
   ): Promise<void> {
     const accountIds = await withScopedDb(this.dataSource, (m) =>
       m
@@ -943,8 +1357,11 @@ export class TransactionBulkUpdateService {
         .getRawMany(),
     );
 
-    for (const row of accountIds) {
-      this.netWorthService.triggerDebouncedRecalc(row.accountId, userId);
+    const targets = new Set<string>(extraAccountIds);
+    for (const row of accountIds) targets.add(row.accountId);
+
+    for (const accountId of targets) {
+      this.netWorthService.triggerDebouncedRecalc(accountId, userId);
     }
   }
 

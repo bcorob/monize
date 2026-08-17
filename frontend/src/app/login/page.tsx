@@ -17,6 +17,8 @@ import { useDemoStore } from '@/store/demoStore';
 import { authApi, AuthMethods } from '@/lib/auth';
 import { TwoFactorVerify } from '@/components/auth/TwoFactorVerify';
 import { AuthLanguagePicker } from '@/components/auth/AuthLanguagePicker';
+import { IncompleteLogoutNotice } from '@/components/auth/IncompleteLogoutNotice';
+import { clearLogoutIncomplete } from '@/lib/logout-state';
 import { AppVersion } from '@/components/ui/AppVersion';
 import { User } from '@/types/auth';
 import { createLogger } from '@/lib/logger';
@@ -112,7 +114,10 @@ export default function LoginPage() {
         return;
       }
 
-      // Token is now in httpOnly cookie, not in response body
+      // Token is now in httpOnly cookie, not in response body. A fresh sign-in
+      // supersedes whatever the previous session left behind, including a
+      // logout the server never confirmed.
+      clearLogoutIncomplete();
       login(response.user!, 'httpOnly');
       if (authMethods.demo) {
         toast.success(t('toasts.welcomeDemo'), { duration: 6000 });
@@ -137,6 +142,7 @@ export default function LoginPage() {
   };
 
   const handle2FAVerified = (user: User) => {
+    clearLogoutIncomplete();
     login(user, 'httpOnly');
     if (authMethods.demo) {
       toast.success(t('toasts.welcomeDemo'), { duration: 6000 });
@@ -194,6 +200,7 @@ export default function LoginPage() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-md w-full space-y-8 text-center">
+          <IncompleteLogoutNotice />
           <div>
             <Image src="/icons/monize-logo.svg" alt="Monize" width={96} height={96} className="mx-auto rounded-xl" priority />
             <h2 className="mt-4 text-3xl font-extrabold text-gray-900 dark:text-gray-100">
@@ -311,6 +318,8 @@ export default function LoginPage() {
             </p>
           )}
         </div>
+
+        <IncompleteLogoutNotice />
 
         {authMethods.demo && (
           <div className="bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-lg px-4 py-3 text-center text-sm text-amber-800 dark:text-amber-200">

@@ -26,6 +26,7 @@ import { ExportDropdown } from '@/components/ui/ExportDropdown';
 import { ReportAccountMultiSelect } from '@/components/reports/ReportAccountMultiSelect';
 import { RefreshPricesButton } from '@/components/reports/RefreshPricesButton';
 import { SortableHeader } from '@/components/ui/SortableHeader';
+import { PartialTotal } from '@/components/ui/PartialTotal';
 import { useSortableTable, compareValues } from '@/hooks/useSortableTable';
 import { createLogger } from '@/lib/logger';
 import { chartColors, CHART_SERIES } from '@/lib/chart-colors';
@@ -99,7 +100,12 @@ export function DividendYieldGrowthReport() {
     : undefined;
   const displayCurrency = selectedAccount?.currencyCode || defaultCurrency;
 
-  const getTxAmount = useCallback((tx: InvestmentTransaction): number => {
+  /**
+   * A transaction's amount in the display currency, or `null` when the pair has
+   * no rate. Yield is income over value, so an amount that cannot be converted
+   * has to leave both sides of the ratio rather than being added at face value.
+   */
+  const getTxAmount = useCallback((tx: InvestmentTransaction): number | null => {
     const amount = Math.abs(tx.totalAmount);
     if (isSingleAccount) return amount;
     const txCurrency = accountCurrencyMap.get(tx.accountId) || defaultCurrency;
@@ -188,15 +194,53 @@ export function DividendYieldGrowthReport() {
     const cutoff = subYears(new Date(), 1);
     return transactions
       .filter((tx) => parseLocalDate(tx.transactionDate) >= cutoff)
-      .reduce((sum, tx) => sum + getTxAmount(tx), 0);
+      .reduce((sum, tx) => {
+        const amount = getTxAmount(tx);
+        return amount === null ? sum : sum + amount;
+      }, 0);
   }, [transactions, getTxAmount]);
 
   const totalPortfolioValue = useMemo(
-    () => holdings.reduce((sum, h) => sum + convertToDefault(h.marketValue ?? 0, h.currencyCode), 0),
+    () =>
+      holdings.reduce((sum, h) => {
+        // An unpriced holding and an unconvertible one both leave the
+        // denominator: `?? 0` would shrink it and inflate the yield.
+        if (h.marketValue === null || h.marketValue === undefined) return sum;
+        const converted = convertToDefault(h.marketValue, h.currencyCode);
+        return converted === null ? sum : sum + converted;
+      }, 0),
     [holdings, convertToDefault],
   );
 
   const portfolioYield = totalPortfolioValue > 0 ? (trailing12mTotal / totalPortfolioValue) * 100 : 0;
+
+  // Components the yield's two inputs had to drop (mirrors their exclusion
+  // rules): an unpriced or unconvertible holding out of the value, and an
+  // unconvertible dividend out of the trailing total. Non-empty means the value,
+  // the trailing dividends and the yield derived from them are all subtotals.
+  const valuationGaps = useMemo(() => {
+    const missing = new Set<string>();
+    let excludedCount = 0;
+    for (const h of holdings) {
+      if (h.marketValue === null || h.marketValue === undefined) {
+        excludedCount += 1;
+        continue;
+      }
+      if (convertToDefault(h.marketValue, h.currencyCode) === null) {
+        missing.add(h.currencyCode);
+        excludedCount += 1;
+      }
+    }
+    const cutoff = subYears(new Date(), 1);
+    for (const tx of transactions) {
+      if (parseLocalDate(tx.transactionDate) < cutoff) continue;
+      if (getTxAmount(tx) === null) {
+        missing.add(accountCurrencyMap.get(tx.accountId) || defaultCurrency);
+        excludedCount += 1;
+      }
+    }
+    return { missingCurrencies: [...missing], excludedCount };
+  }, [holdings, transactions, getTxAmount, convertToDefault, accountCurrencyMap, defaultCurrency]);
 
   // Per-security yield
   const securityYields = useMemo((): SecurityYield[] => {
@@ -212,14 +256,18 @@ export function DividendYieldGrowthReport() {
         existing = { total: 0, dates: [] };
         dividendMap.set(tx.securityId, existing);
       }
-      existing.total += getTxAmount(tx);
+      const amount = getTxAmount(tx);
+      if (amount === null) return;
+      existing.total += amount;
       existing.dates.push(parseLocalDate(tx.transactionDate));
     });
 
     // Aggregate market value across all accounts holding each security
     const holdingMap = new Map<string, { symbol: string; name: string; marketValue: number }>();
     holdings.forEach((h) => {
-      const mv = convertToDefault(h.marketValue ?? 0, h.currencyCode);
+      if (h.marketValue === null || h.marketValue === undefined) return;
+      const mv = convertToDefault(h.marketValue, h.currencyCode);
+      if (mv === null) return;
       const existing = holdingMap.get(h.securityId);
       if (existing) {
         existing.marketValue += mv;
@@ -277,7 +325,11 @@ export function DividendYieldGrowthReport() {
     const yearMap = new Map<string, number>();
     transactions.forEach((tx) => {
       const year = tx.transactionDate.substring(0, 4);
-      yearMap.set(year, (yearMap.get(year) || 0) + getTxAmount(tx));
+      const amount = getTxAmount(tx);
+      // An unconvertible amount is not a zero contribution to the year; it is
+      // simply not part of the comparable series.
+      if (amount === null) return;
+      yearMap.set(year, (yearMap.get(year) || 0) + amount);
     });
 
     const years = Array.from(yearMap.keys()).sort();
@@ -428,18 +480,25 @@ export function DividendYieldGrowthReport() {
           <div className="text-sm text-green-600 dark:text-green-400">{t('dividendYieldGrowth.portfolioYield')}</div>
           <div className="text-xl font-bold text-green-700 dark:text-green-300">
             {portfolioYield.toFixed(2)}%
+            {valuationGaps.excludedCount > 0 && (
+              <span className="text-amber-600 dark:text-amber-400" aria-hidden="true"> *</span>
+            )}
           </div>
         </div>
         <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
           <div className="text-sm text-blue-600 dark:text-blue-400">{t('dividendYieldGrowth.trailing12mDividends')}</div>
           <div className="text-xl font-bold text-blue-700 dark:text-blue-300">
-            {fmtValue(trailing12mTotal)}
+            <PartialTotal total={{ value: trailing12mTotal, ...valuationGaps }} displayCurrency={displayCurrency}>
+              {fmtValue(trailing12mTotal)}
+            </PartialTotal>
           </div>
         </div>
         <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-4">
           <div className="text-sm text-purple-600 dark:text-purple-400">{t('dividendYieldGrowth.portfolioValue')}</div>
           <div className="text-xl font-bold text-purple-700 dark:text-purple-300">
-            {fmtValue(totalPortfolioValue)}
+            <PartialTotal total={{ value: totalPortfolioValue, ...valuationGaps }} displayCurrency={displayCurrency}>
+              {fmtValue(totalPortfolioValue)}
+            </PartialTotal>
           </div>
         </div>
         <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">

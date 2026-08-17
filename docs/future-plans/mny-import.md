@@ -89,7 +89,7 @@ as the living format reference (now `docs/ms-money-data-model.md`, with the corr
 | 1 | Loans/mortgages import with zero transactions; the principal split on the payment shows blank (kenlasko) | Two compounding bugs: (a) the phantom filter excluded `grftt & 0x8000` (auto-entered) rows — but Money marks scheduler-posted loan payments auto-entered, so the loan-side rows vanished; (b) splits were imported as category-only rows, so a split leg that is really a transfer to the loan account lost its transfer nature | Narrow the phantom rule to `frq != -1` only (auto-entered rows are real postings). Import a `TRN_SPLIT` child that appears in `TRN_XFER` as a Monize **transfer split** (`transaction_splits.kind = 'transfer'`, `transfer_account_id` = loan account, `linked_transaction_id` = the loan-side transaction, which is imported once, not duplicated). Interest/escrow legs stay category splits. Validate with the loan scenario in M1.4 and against real files in M3.4 |
 | 2 | 1,844 scheduled bills imported when ~20 are real; all then bulk-deactivated (kenlasko) | `BILL` accumulates decades of rows; the PoC imported every row then marked past-due ones inactive | Import only bills detected as active series (`st` status + next-due-date sanity horizon + per-series dedupe — exact semantics pinned by the Phase 0 spike against the known "~20 real" ground truth), and show them as a **checkbox list in the wizard**; unchecked bills are simply not imported. Nothing is created inactive |
 | 3 | Junk payees `#` and `*` with zero transactions; never-used categories such as `alimony` (kenlasko) | Money seeds a default category tree and keeps degenerate payee rows; the PoC imported all of `PAY`/`CAT` | Referenced-only import (default on, wizard toggle): only payees/categories referenced by an imported transaction, split, or selected bill are created. Degenerate payee names (`#`, `*`, empty after trim) always skipped. Skip counts shown in the report |
-| 4 | Investment accounts "a mess": share counts wrong, negative positions, cost basis nonsense (kenlasko; marksimpson confirmed buy/sell subtleties and FX cost-basis storage quirks) | Four distinct causes: act=16 mapped to SELL (it closes lots but is a *transfer-out*, and mapping it to SELL corrupts average cost); act=4 dividends have **no TRN_INV row** so iterating TRN_INV dropped them entirely; `SEC_SPLIT` (stock splits) ignored, so every post-split position is wrong; qty-sign/action inference inconsistencies | Complete act map driven from TRN not TRN_INV (section 8.4): 4 -> DIVIDEND from `TRN.amt`; 16 -> REMOVE_SHARES, or paired with the matching act=15 row (same date+security+qty across accounts) into linked TRANSFER_OUT/TRANSFER_IN; SEC_SPLIT -> SPLIT transactions; quantity always positive, direction only from act. Holdings produced exclusively by the existing `HoldingsService.rebuildAccountsFromTransactions`. Independently, the mapper computes expected holdings from **LOT open lots** (`htrnSell` empty) and flags disagreements in the verification report instead of silently corrupting positions. Foreign-currency cost basis (Money stores base-currency value at the historical rate) is surfaced as report warnings and documented as a v1 limitation |
+| 4 | Investment accounts "a mess": share counts wrong, negative positions, cost basis nonsense (kenlasko; marksimpson confirmed buy/sell subtleties and FX cost-basis storage quirks) | Four distinct causes: act=16 mapped to SELL (it closes lots but is a *transfer-out*, and mapping it to SELL corrupts average cost); act=4 dividends have **no TRN_INV row** so iterating TRN_INV dropped them entirely; `SEC_SPLIT` (stock splits) ignored, so every post-split position is wrong; qty-sign/action inference inconsistencies | Complete act map driven from TRN not TRN_INV (section 8.4): 4 -> DIVIDEND from `TRN.amt` (superseded: issue #1149 named `act` 4 as Money's "Interest" activity, and it now maps to INTEREST -- still cash-only from `TRN.amt`); 16 -> REMOVE_SHARES, or paired with the matching act=15 row (same date+security+qty across accounts) into linked TRANSFER_OUT/TRANSFER_IN; **SEC_SPLIT -> no transaction** (superseded: this row originally read "SEC_SPLIT -> SPLIT transactions", which contradicts what the implementation does and what this document itself says further down -- Money does not apply those ratios to its own share counts, so applying them makes the import disagree with the file. Non-unit ratios surface as verification warnings instead. See the `SEC_SPLIT` paragraph in section 8.4 and `backend/src/import/mny/README.md`); quantity always positive, direction only from act. Holdings produced exclusively by the existing `HoldingsService.rebuildAccountsFromTransactions`. Independently, the mapper computes expected holdings from **LOT open lots** (`htrnSell` empty) and flags disagreements in the verification report instead of silently corrupting positions. Foreign-currency cost basis (Money stores base-currency value at the historical rate) is surfaced as report warnings and documented as a v1 limitation |
 | 5 | Money 2001 file crashed on the missing `BILL` table; needed hand-patched `tableExists` (gerardfarrell11) | Reader assumed the Sunset-era table set | Every table access goes through `getTableOrNull`; every column read has a declared default; a per-version column-presence matrix (built in Phase 0 from the 2001/2002/2008 fixtures) is encoded in the row-reader layer. Missing `BILL`/`SEC_SPLIT`/`LOT` degrade the corresponding feature with a preview notice, never a crash |
 | 6 | Backend crash-looped on migration `056_monte_carlo_scenarios.sql` ("trigger already exists") until the migration was hand-marked applied (gerardfarrell11 — **not** a .mny issue, but raised in the thread) | A partially-applied migration state plus non-idempotent `CREATE TRIGGER`; the runner `process.exit(1)`s with little diagnostic help | `056` in the current tree is already guarded with a `pg_trigger` existence check. **Done in Track B:** the full-corpus audit found no other unguarded DDL, and both gates now exist — a static lint (`npm run migration:lint`) plus a double-apply pass in `verify-schema.sh` (B1) — while `db-migrate.ts` prints the failing filename, SQLSTATE, every pg diagnostic, the offending line and a pointer to `docs/database-migrations.md` before its non-zero exit (B2) |
 | 7 | Setup friction: manual `npm install pg`, missing `libatomic1`, `.env` password with `$T` mangled by shell interpolation (gerardfarrell11, kenlasko) | Inherent to the external-toolchain design | Disappears entirely with the native in-app import. The Money file password is a form field, never a shell variable |
@@ -388,8 +388,17 @@ is BIWEEKLY, weekly × 4 is EVERY4WEEKS (likewise monthly × 2 → EVERY2MONTHS,
 **shorter** period and returns `approximate: true`. Shorter is the safer error while v1 imports
 bills with `auto_post = false`: an extra reminder is noise, a missed one is a missed payment.
 PR #192 erred in both directions (bimonthly → BIWEEKLY, semiannual → YEARLY). Track B task B3
-has since added `EVERY2MONTHS` and `SEMIANNUAL`, so every recurrence *code* is now exact and only
-an unrepresentable interval (weekly × 3, monthly × 5) still approximates.
+has since added `EVERY2MONTHS` and `SEMIANNUAL`, so an unrepresentable interval (weekly × 3,
+monthly × 5, yearly × 2) is all that still approximates.
+
+**But the code table itself was a guess, and issue #1150 caught it.** A Money Plus Sunset file's
+yearly bills imported recurring every two months — `frq` 5 under PR #192's table — while its
+monthly bills were right, so 5 is yearly, 3 is monthly, and 4/6/7 are claims from a source now
+known to be wrong. They map to nothing and are reported with their raw `frq`/`cFrqInst`. The
+durable half of the fix is that `BILL` answers the question itself: it holds one row per
+occurrence, so `inferFrequencyFromDueDates` reads the cadence off the spacing of a series'
+instances and `map-bills.ts` prefers it to the code. A table nobody can check loses to the file
+in front of us.
 
 **Still unanswerable from the fixtures.** `BILL` is empty in all five files and the transactions
 exercise only `act` 0, 1 and 15, so `BILL.st` (question 12.3) and the `act` 5 / 14 semantics
@@ -580,10 +589,10 @@ real mappers and, in the integration spec, the real INSERT path.
 `BILL` + template `TRN` (`lHtrn`) -> `scheduled_transactions` with splits/transfer/investment
 template support. Active-series detection: `st` in the spike-confirmed active set, next-due date
 within a sanity horizon, deduped per series. Wizard selection is authoritative; selected bills
-import with `is_active = true`, `auto_post = false`. Frequency map: 0 ONCE, 1 DAILY, 2 WEEKLY,
-3 MONTHLY, 4 YEARLY, 5 EVERY2MONTHS, 6 QUARTERLY, 7 SEMIANNUAL;
-`cFrqInst` interval honored where representable, else downgrade + warning. (B3 has landed, so
-only intervals with no Monize type downgrade.)
+import with `is_active = true`, `auto_post = false`. Cadence comes from the series' own instance
+dates where they are regular enough to read (`map/bill-cadence.ts`), and from `frq` otherwise:
+0 ONCE, 1 DAILY, 2 WEEKLY, 3 MONTHLY, 5 YEARLY, with 4/6/7 unknown since issue #1150 refuted the
+reference above 3; `cFrqInst` interval honored where representable, else downgrade + warning.
 
 ### 8.4 Investments
 
@@ -634,7 +643,9 @@ contribution. The signal is `TRN_XFER`: `act` 1 has a cash counterpart 2,015 tim
 `act` 3 has one 1,090 times in 1,090, while `act` 12 has one **zero** times in 92, exactly like
 the `act` 9 reinvestments. 82 of the 92 sit in the one RRSP whose `ACCT` row sets `fEmpMatch`.
 Mapped to REINVEST — a value and a position, no cash leg — the sleeve lands on Money's $91.00.
-It stays in `MNY_UNCONFIRMED_ACTIONS`: the effect is measured, the name is not.
+It stays in `MNY_UNCONFIRMED_ACTIONS`: the effect is measured, and issue #1149 later supplied the
+name (Money's "Add Shares" activity), but Monize's REINVEST mapping remains a translation — chosen
+so the stated value survives as cost basis — so the rows stay visible in the verification report.
 
 **`SEC_SPLIT` ratios are not applied to positions, because Money does not apply them either.**
 Seven positions across two files prove it: the maintainer's brokerage bought 200 VTI before a 1:2

@@ -284,7 +284,13 @@
       "TRANSFER_OUT": "Перевод исходящий",
       "REINVEST": "Реинвестирование",
       "ADD_SHARES": "Добавить акции",
-      "REMOVE_SHARES": "Удалить акции"
+      "REMOVE_SHARES": "Удалить акции",
+      "REINVEST_INTEREST": "Реинвестирование процентов",
+      "REINVEST_CAPITAL_GAIN_SHORT": "Реинвестирование краткосрочного прироста капитала",
+      "REINVEST_CAPITAL_GAIN_LONG": "Реинвестирование долгосрочного прироста капитала",
+      "CAPITAL_GAIN_SHORT": "Краткосрочный прирост капитала",
+      "CAPITAL_GAIN_LONG": "Долгосрочный прирост капитала",
+      "REDEEM": "Погашение CD/облигации"
     },
     "toasts": {
       "loadHistoryFailed": "Не удалось загрузить историю",

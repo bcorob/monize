@@ -16,6 +16,7 @@ import {
   FrequencyType,
   calculateNextDueDate,
 } from "../../../common/recurrence";
+import { CADENCE_DAYS, inferFrequencyFromDueDates } from "./bill-cadence";
 import { MnyBill, MnyPayee, MnyTransaction } from "../model/mny-rows";
 import { MnyWarning } from "../model/mny-warnings";
 import { isDegeneratePayeeName } from "./map-reference";
@@ -51,20 +52,10 @@ import { MnyTransactionData } from "../tables/read-transactions";
  */
 export const BILL_PAST_HORIZON_DAYS = 92;
 
-/** One cycle of each frequency, in days, rounded up. */
-const CYCLE_DAYS: Record<FrequencyType, number> = {
-  ONCE: 0,
-  DAILY: 1,
-  WEEKLY: 7,
-  BIWEEKLY: 14,
-  EVERY4WEEKS: 28,
-  SEMIMONTHLY: 15,
-  MONTHLY: 31,
-  EVERY2MONTHS: 62,
-  QUARTERLY: 92,
-  SEMIANNUAL: 184,
-  YEARLY: 366,
-};
+/** One cycle of each frequency, in whole days, rounded up. */
+function cycleDays(frequency: keyof typeof CADENCE_DAYS): number {
+  return Math.ceil(CADENCE_DAYS[frequency]);
+}
 
 /**
  * The date a series' activity is judged against.
@@ -279,7 +270,7 @@ function isActive(
 
   const window = Math.max(
     BILL_FUTURE_HORIZON_DAYS,
-    CYCLE_DAYS[mapping.frequency] + BILL_PAST_HORIZON_DAYS,
+    cycleDays(mapping.frequency) + BILL_PAST_HORIZON_DAYS,
   );
   return nextDue >= shiftIsoDate(anchor, -window);
 }
@@ -409,11 +400,46 @@ function billName(
   return memo || `Bill ${handle}`;
 }
 
+/**
+ * The cadence a series recurs at: what its own instances do, falling back to
+ * what `BILL.frq` says they should do.
+ *
+ * The dates win a disagreement, and they still do now that `MNY_FREQUENCY` is
+ * read off a real file rather than guessed. A series' spacing is the file
+ * stating its own cadence, and it is the only thing that can catch a code
+ * table wrong again -- it is what issue #1150 (yearly bills imported as every
+ * two months) needed and did not have. Where the two agree the code's mapping
+ * is kept as-is, so an approximated cadence still reports itself as
+ * approximate.
+ *
+ * The dates cannot answer for a series Money has scheduled but never posted:
+ * one instance is no gaps, so a brand-new bill rests entirely on the code pair.
+ * That is the case the `(frq, cFrqInst)` decode has to get right on its own.
+ */
+export function resolveSeriesFrequency(
+  representative: MnyBill,
+  instances: readonly MnyBill[],
+): MnyFrequencyMapping | null {
+  const coded = mapFrequency(
+    representative.frequency,
+    representative.occurrencesPerUnit,
+  );
+  const observed = inferFrequencyFromDueDates(
+    instances.map((instance) => instance.nextDue),
+  );
+
+  if (observed === null || coded?.frequency === observed) {
+    return coded;
+  }
+  return { frequency: observed, approximate: false };
+}
+
 /** A series the user's account selection left out, as opposed to a bad row. */
 const EXCLUDED = "excluded";
 
 function mapOne(
   representative: MnyBill,
+  mapping: MnyFrequencyMapping | null,
   context: Context,
 ): MappedBill | typeof EXCLUDED | null {
   const handle = representative.handle as number;
@@ -444,15 +470,15 @@ function mapOne(
     return EXCLUDED;
   }
 
-  const mapping = mapFrequency(
-    representative.frequency,
-    representative.interval,
-  );
   if (mapping === null) {
+    // The raw pair rides along. Money's picker offers five units and all five
+    // are mapped, so an unknown `frq` is a version or a dialog this repository
+    // has not seen -- and the pair is what a real file has to report for it to
+    // be pinned down without guessing.
     context.warnings.push({
       code: "unusableBill",
       subject: `hbill=${handle}`,
-      detail: `frq=${representative.frequency}`,
+      detail: `frq=${representative.frequency} cFrqInst=${representative.occurrencesPerUnit}`,
     });
     return null;
   }
@@ -462,7 +488,7 @@ function mapOne(
     context.warnings.push({
       code: "billFrequencyApproximated",
       subject: name,
-      detail: `frq=${representative.frequency} x${representative.interval}`,
+      detail: `frq=${representative.frequency} cFrqInst=${representative.occurrencesPerUnit}`,
     });
   }
 
@@ -605,17 +631,14 @@ export function mapBills(input: MapBillsInput): MappedBills {
 
   for (const instances of bySeries.values()) {
     const representative = representativeOf(instances, anchor);
-    if (
-      representative === null ||
-      !isActive(
-        representative,
-        anchor,
-        mapFrequency(representative.frequency, representative.interval),
-      )
-    ) {
+    if (representative === null) {
       continue;
     }
-    const bill = mapOne(representative, context);
+    const mapping = resolveSeriesFrequency(representative, instances);
+    if (!isActive(representative, anchor, mapping)) {
+      continue;
+    }
+    const bill = mapOne(representative, mapping, context);
     if (bill === null) {
       skipped += 1;
       continue;

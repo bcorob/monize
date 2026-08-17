@@ -139,3 +139,33 @@ export function createScopedDbMocks(
 
   return { manager, dataSource };
 }
+
+/**
+ * Teach a manager.query mock to answer the `oidc_step_up_claims` statements
+ * `OidcReauthService.consume` issues, delegating everything else to whatever
+ * implementation the spec already installed.
+ *
+ * The ledger is what makes a re-auth artifact single-use across replicas, so a
+ * spec that exercises the real `OidcReauthService` (deliberately -- a mock that
+ * always accepts would make the re-authentication assertions vacuous) needs the
+ * INSERT to answer like the table: one row for the caller that created the
+ * claim, none for a replay.
+ */
+export function withStepUpClaimLedger(query: jest.Mock): {
+  rows: Set<string>;
+} {
+  const rows = new Set<string>();
+  const previous = query.getMockImplementation();
+  query.mockImplementation(async (sql: unknown, params?: unknown[]) => {
+    const text = String(sql);
+    if (text.includes("oidc_step_up_claims")) {
+      if (text.trimStart().startsWith("DELETE")) return [];
+      const jti = String((params as unknown[] | undefined)?.[0]);
+      if (rows.has(jti)) return [];
+      rows.add(jti);
+      return [{ jti }];
+    }
+    return previous ? previous(sql, params) : [];
+  });
+  return { rows };
+}

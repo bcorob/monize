@@ -108,6 +108,22 @@ export function roundToCents(value: number): number {
 export const FX_RATE_DISPLAY_DECIMALS = 6;
 
 /**
+ * Storage precision for an exchange rate: `NUMERIC(20,10)`.
+ *
+ * Deliberately not the money precision. `roundMoney(1 / 1.3652)` stored 0.7325,
+ * which inverts back to 1.3661 -- cents off on a four-figure amount. And
+ * deliberately not `FX_RATE_DISPLAY_DECIMALS` either: six is what a field shows,
+ * so rounding a stored rate to it makes the persisted value disagree with the
+ * quote it came from. Mirrors the backend `roundFxRate`.
+ */
+export const FX_RATE_DECIMALS = 10;
+
+/** Round an exchange rate to its storage precision. Never `roundMoney` a rate. */
+export function roundFxRate(rate: number): number {
+  return roundToDecimals(rate, FX_RATE_DECIMALS);
+}
+
+/**
  * Sum money values without IEEE 754 accumulation drift by accumulating in
  * integer ten-thousandths (matching the backend `roundMoney` / decimal(20,4)
  * precision) and dividing back once at the end. Mirrors the backend `sumMoney`

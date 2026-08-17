@@ -356,19 +356,30 @@ function CategoryDetailContent() {
   const categoryLabelMap = useMemo(() => buildCategoryLabelMap(categories), [categories]);
   const categoryColorMap = useMemo(() => buildCategoryColorMap(categories), [categories]);
 
-  // Payee rows aggregated across currencies into the display currency.
-  const payeePanelTotals = useMemo<GroupedTotal[]>(() => {
+  // Payee rows aggregated across currencies into the display currency. A row
+  // with no rate has an unknown magnitude and cannot be ranked in a bar panel,
+  // so it is left out rather than counted as a zero -- and counted so the panel
+  // can say the bars are a subtotal.
+  const payeePanelTotals = useMemo<{ rows: GroupedTotal[]; excludedCount: number }>(() => {
     const source =
       payeeRange === 'all'
         ? (analytics?.payeeTotalsAllTime ?? [])
         : (analytics?.payeeTotals ?? []);
-    return aggregateGroupedTotals(source, currencyStrategy).map((row) => ({
-      id: row.id,
-      name: row.name,
-      currencyCode: currencyStrategy.displayCurrency,
-      total: row.total,
-      count: row.count,
-    }));
+    const aggregated = aggregateGroupedTotals(source, currencyStrategy);
+    const rows = aggregated.flatMap((row) =>
+      row.total === null
+        ? []
+        : [
+            {
+              id: row.id,
+              name: row.name,
+              currencyCode: currencyStrategy.displayCurrency,
+              total: row.total,
+              count: row.count,
+            },
+          ],
+    );
+    return { rows, excludedCount: aggregated.length - rows.length };
   }, [
     analytics?.payeeTotals,
     analytics?.payeeTotalsAllTime,
@@ -377,17 +388,26 @@ function CategoryDetailContent() {
   ]);
 
   // One row per account, converted so the bars stay comparable.
-  const accountPanelTotals = useMemo<GroupedTotal[]>(
-    () =>
-      (detail?.accounts ?? []).map((row) => ({
-        id: row.accountId,
-        name: row.accountName,
-        currencyCode: currencyStrategy.displayCurrency,
-        total: currencyStrategy.toDisplay(row.total, row.currencyCode),
-        count: row.transactionCount,
-      })),
-    [detail?.accounts, currencyStrategy],
-  );
+  const accountPanelTotals = useMemo<{ rows: GroupedTotal[]; excludedCount: number }>(() => {
+    const accounts = detail?.accounts ?? [];
+    const rows = accounts.flatMap((row) => {
+      // Unconvertible accounts have an unknown magnitude and are left out of
+      // the ranked bars rather than shown as zero.
+      const total = currencyStrategy.toDisplay(row.total, row.currencyCode);
+      return total === null
+        ? []
+        : [
+            {
+              id: row.accountId,
+              name: row.accountName,
+              currencyCode: currencyStrategy.displayCurrency,
+              total,
+              count: row.transactionCount,
+            },
+          ];
+    });
+    return { rows, excludedCount: accounts.length - rows.length };
+  }, [detail?.accounts, currencyStrategy]);
 
   // The subtree rollup both the overview panel and the Subcategories tab show.
   const subcategoryShares = useMemo(
@@ -629,7 +649,8 @@ function CategoryDetailContent() {
                       payeeRange === 'all' ? 'topPayees.emptyAllTime' : 'topPayees.empty',
                     )}
                     fallbackLabel={t('topPayees.noPayee')}
-                    totals={payeePanelTotals}
+                    totals={payeePanelTotals.rows}
+                    excludedCount={payeePanelTotals.excludedCount}
                     currencyCode={currencyStrategy.displayCurrency}
                     isLoading={false}
                     onSelect={(payeeId) =>
@@ -674,7 +695,8 @@ function CategoryDetailContent() {
                     subtitle={t('accountsPanel.subtitle')}
                     emptyLabel={t('accountsPanel.empty')}
                     fallbackLabel={t('accountsPanel.title')}
-                    totals={accountPanelTotals}
+                    totals={accountPanelTotals.rows}
+                    excludedCount={accountPanelTotals.excludedCount}
                     currencyCode={currencyStrategy.displayCurrency}
                     isLoading={false}
                     onSelect={(accountId) =>

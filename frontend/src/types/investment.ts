@@ -1,4 +1,5 @@
 import { Tag } from './tag';
+import { TransactionStatus } from './transaction';
 
 export type InvestmentAction =
   | 'BUY'
@@ -11,7 +12,17 @@ export type InvestmentAction =
   | 'TRANSFER_OUT'
   | 'REINVEST'
   | 'ADD_SHARES'
-  | 'REMOVE_SHARES';
+  | 'REMOVE_SHARES'
+  // Microsoft Money's full distribution vocabulary (issue #1149). Each is a
+  // refinement of a base action -- same share and cash behaviour, distinct
+  // income kind -- normalized through `baseInvestmentAction`
+  // (@/lib/investment-actions) wherever behaviour, not labelling, is decided.
+  | 'REINVEST_INTEREST'
+  | 'REINVEST_CAPITAL_GAIN_SHORT'
+  | 'REINVEST_CAPITAL_GAIN_LONG'
+  | 'CAPITAL_GAIN_SHORT'
+  | 'CAPITAL_GAIN_LONG'
+  | 'REDEEM';
 
 export type QuoteProviderName = 'yahoo' | 'msn';
 
@@ -134,8 +145,13 @@ export interface HoldingWithMarketValue {
   /**
    * Cost basis in the holding account's currency, calculated using the
    * historical exchange rates stored on the original BUY transactions.
+   *
+   * `null` when no exchange rate exists for the pair, so the basis in this
+   * currency is unknown. It must not render as a measured zero, and must not be
+   * subtracted from a market value to produce a gain -- the server used to send
+   * the unconverted figure here, an implicit 1:1 (audit P5-009).
    */
-  costBasisAccountCurrency: number;
+  costBasisAccountCurrency: number | null;
   currentPrice: number | null;
   marketValue: number | null;
   gainLoss: number | null;
@@ -164,6 +180,30 @@ export interface AccountHoldings {
   totalGainLoss: number;
   totalGainLossPercent: number;
   netInvested: number;
+  /**
+   * Whether every component of *this account's* totals is known. The totals above
+   * are in the account's own currency, which is a different conversion from the
+   * summary's, so a portfolio can be complete overall while one account is not.
+   *
+   * The API has always sent these; the type omitted them, so the account list
+   * rendered a known subtotal as the account's value and gain (recheck RR4-002).
+   * Check `valuationComplete` before presenting any of the four totals as final.
+   *
+   * Declared optional deliberately: during a rolling deploy this payload can
+   * come from an older backend without these fields, and absent means "no
+   * information" -- not "incomplete". The optional type makes the compiler
+   * force the defensive read (`=== false`, never `!flag`) that a required
+   * declaration would let a consumer skip (review #1133).
+   */
+  fxComplete?: boolean;
+  /** `"EUR->JPY"` for each pair with no rate into this account's currency. */
+  missingRatePairs?: string[];
+  /** False when a position held here has no current price. */
+  pricesComplete?: boolean;
+  /** Securities held here with no current price. */
+  unpricedSecurityIds?: string[];
+  /** `fxComplete && pricesComplete` -- gate this account's totals on this. */
+  valuationComplete?: boolean;
 }
 
 export interface PortfolioSummary {
@@ -176,6 +216,31 @@ export interface PortfolioSummary {
   totalGainLossPercent: number;
   timeWeightedReturn: number | null;
   cagr: number | null;
+  /**
+   * Whether every currency conversion behind the `total*` fields succeeded.
+   * False makes each of them a subtotal of what could be converted.
+   *
+   * Optional for the same rolling-deploy reason as on `AccountHoldings`: an
+   * older backend's payload has none of these, absent means "no information",
+   * and the optional type is what makes the compiler enforce the `=== false`
+   * defensive read (review #1133).
+   */
+  fxComplete?: boolean;
+  /** `"EUR->USD"` for each pair with no available rate; empty when complete. */
+  missingRatePairs?: string[];
+  /** False when a held position has no current price. */
+  pricesComplete?: boolean;
+  /** Securities held in a non-zero quantity with no current price. */
+  unpricedSecurityIds?: string[];
+  /**
+   * The single flag to gate a `total*` field on: every component of every total is
+   * known. `fxComplete && pricesComplete`.
+   *
+   * Dropping these from the type meant the summary card rendered a subtotal under
+   * a "Total Portfolio Value" label while the server knew it was incomplete
+   * (recheck RR4-002).
+   */
+  valuationComplete?: boolean;
   holdings: HoldingWithMarketValue[];
   holdingsByAccount: AccountHoldings[];
   allocation: AllocationItem[];  // Included to avoid duplicate API call
@@ -209,8 +274,15 @@ export interface InvestmentTransaction {
   totalAmount: number;
   exchangeRate: number;
   description: string | null;
+  // Same enum as regular transactions. A VOID row moves no shares and no
+  // cash; the register strikes it through and excludes it from balances.
+  status: TransactionStatus;
   // Set on security-transfer legs; points at the paired TRANSFER_IN/OUT leg.
   linkedTransactionId: string | null;
+  // Set when this row is embedded inside a split transaction. The parent
+  // split transaction owns the row's status; the form disables the status
+  // field and the backend refuses a direct change.
+  transactionSplitId?: string | null;
   security: Security | null;
   fundingAccount: {
     id: string;
@@ -238,6 +310,8 @@ export interface SecurityHistoryTransaction {
   commission: number;
   totalAmount: number;
   description: string | null;
+  // A VOID row is listed but moved no shares; the running balances skip it.
+  status: TransactionStatus;
   runningQuantityAccount: number;
   runningQuantityAll: number;
 }
@@ -408,6 +482,7 @@ export interface CreateInvestmentTransactionData {
   commission?: number;
   exchangeRate?: number;
   description?: string;
+  status?: TransactionStatus;
 }
 
 export interface TopMover {
@@ -550,13 +625,25 @@ export interface CapitalGainEntry {
   securityCurrencyCode: string | null;
   startQuantity: number;
   endQuantity: number;
-  startValue: number;
-  endValue: number;
+  /**
+   * Period-boundary market values in the account's currency, and the gains
+   * derived from them. `null` when the security's currency could not be
+   * converted into the account's: the value at each boundary is unknown, so a
+   * gain measured between them is too -- never 0, never the native amount
+   * relabelled. `buys`, `sells` and `realizedGain` stay known: they come from
+   * the exchange rate stored on each transaction.
+   */
+  startValue: number | null;
+  endValue: number | null;
   buys: number;
   sells: number;
-  realizedGain: number;
-  unrealizedGain: number;
-  totalCapitalGain: number;
+  /**
+   * `null` when the gain rests on a basis carrying an unpriced acquisition:
+   * unknown, never the proceeds measured against a zero basis.
+   */
+  realizedGain: number | null;
+  unrealizedGain: number | null;
+  totalCapitalGain: number | null;
 }
 
 // --- Performance comparison (Security Performance report) -------------------

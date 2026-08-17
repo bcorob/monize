@@ -164,7 +164,7 @@ export function mnyBill(overrides: Partial<MnyBill> = {}): MnyBill {
     handle: 1,
     status: 0,
     frequency: 3,
-    interval: 1,
+    occurrencesPerUnit: 1,
     nextDue: null,
     templateTransaction: null,
     series: null,

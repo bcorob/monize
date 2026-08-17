@@ -114,6 +114,9 @@ describe("scheduled-transactions module RLS context smoke (real withScopedDb)", 
     };
     const overridesRepo = {
       createQueryBuilder: jest.fn().mockImplementation(overrideQueryBuilder),
+      // post() re-reads/locks the occurrence override inside the transaction
+      // (issue #1154 re-review); default to no override present.
+      findOne: jest.fn().mockResolvedValue(null),
     };
 
     const { service, manager, transactionsService } = await buildModule(
@@ -180,6 +183,9 @@ describe("scheduled-transactions module RLS context smoke (real withScopedDb)", 
     };
     const overridesRepo = {
       createQueryBuilder: jest.fn().mockImplementation(overrideQueryBuilder),
+      // post() re-reads/locks the occurrence override inside the transaction
+      // (issue #1154 re-review); default to no override present.
+      findOne: jest.fn().mockResolvedValue(null),
     };
 
     const { service, manager, exchangeRateService } = await buildModule(

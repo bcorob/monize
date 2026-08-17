@@ -144,9 +144,6 @@
     "defaultMessage": "レポートデータの読み込みに失敗しました。再試行してください。",
     "retry": "再試行"
   },
-  "foreignCurrencyFees": {
-    "noEligibleAccounts": "外貨取引手数料が設定されている口座はありません。口座に手数料の割合を設定すると、その外貨手数料をここで追跡できます。"
-  },
   "accountBalances": {
     "totalAssets": "総資産",
     "totalLiabilities": "総負債",
@@ -333,7 +330,8 @@
     "tooltipUtilization": "使用率",
     "tooltipUsed": "使用額",
     "tooltipAvailable": "利用可能額",
-    "pdfTitle": "クレジット使用率"
+    "pdfTitle": "クレジット使用率",
+    "noRate": "レートなし"
   },
   "currencyExposure": {
     "empty": "投資保有銘柄が見つかりません。通貨エクスポージャーを確認するには有価証券を追加してください。",
@@ -575,20 +573,20 @@
     "topRegion": "上位地域",
     "viewByRegion": "地域別",
     "viewByExchange": "取引所別",
+    "viewByCountry": "国別",
     "regionalAllocation": "地域配分",
     "exchangeAllocation": "取引所配分",
+    "countryAllocation": "国別配分（ルックスルー）",
+    "countryLookThroughNote": "国別エクスポージャーは、各銘柄に設定された手動の国別配分を用いてETFやファンドをルックスルーします。個別株は上場取引所に基づいて分類され、分類されないものは「その他」として表示されます。",
     "colRegion": "地域",
     "colExchange": "取引所",
     "colCountry": "国",
     "colHoldings": "保有銘柄",
     "colMarketValue": "市場価値",
     "colPortfolioPct": "% ポートフォリオ",
+    "other": "その他",
     "total": "合計",
-    "holdingCount": "{count, plural, one {# 件の保有} other {# 件の保有}}",
-    "viewByCountry": "国別",
-    "countryAllocation": "国別配分（ルックスルー）",
-    "countryLookThroughNote": "国別エクスポージャーは、各銘柄に設定された手動の国別配分を用いてETFやファンドをルックスルーします。個別株は上場取引所に基づいて分類され、分類されないものは「その他」として表示されます。",
-    "other": "その他"
+    "holdingCount": "{count, plural, one {# 件の保有} other {# 件の保有}}"
   },
   "healthScoreHistory": {
     "pdfTitle": "健全性スコア履歴",
@@ -761,7 +759,13 @@
     "actionTransferOut": "振替出",
     "actionReinvest": "再投資",
     "actionAddShares": "株数追加",
-    "actionRemoveShares": "株数削除"
+    "actionRemoveShares": "株数削除",
+    "actionReinvestInterest": "利息の再投資",
+    "actionReinvestCapitalGainShort": "短期キャピタルゲインの再投資",
+    "actionReinvestCapitalGainLong": "長期キャピタルゲインの再投資",
+    "actionCapitalGainShort": "短期キャピタルゲイン",
+    "actionCapitalGainLong": "長期キャピタルゲイン",
+    "actionRedeem": "CD・債券の償還"
   },
   "loanAmortization": {
     "empty": "ローンまたは住宅ローン口座が見つかりません。支払い履歴を確認するにはローン口座を追加してください。",
@@ -820,6 +824,7 @@
       "maxCompare": "最大 {max} 件のシナリオを比較できます。",
       "loadFailed": "モンテカルロデータの読み込みに失敗しました。更新してください。",
       "currentValueFailed": "現在のポートフォリオ価値の取得に失敗しました。",
+      "currentValueUnavailable": "選択した口座の現在価値を判定できませんでした。開始額を入力するか、価格と為替レートが取得できてから再試行してください。",
       "holdingStatsFailed": "保有ごとの過去の統計の読み込みに失敗しました。",
       "reorderFailed": "シナリオの並び替えができませんでした。"
     },
@@ -1168,7 +1173,8 @@
     "csvColProceeds": "収益",
     "csvColCostBasis": "取得原価",
     "csvColGainLoss": "損益",
-    "csvColReturn": "リターン率"
+    "csvColReturn": "リターン率",
+    "csvNoRate": "レートなし"
   },
   "recurringExpenses": {
     "recurringExpenses": "定期費用",
@@ -1376,7 +1382,8 @@
     "pdfTotalPortfolio": "ポートフォリオ合計",
     "pdfAssetTypes": "資産タイプ",
     "pdfTotalHoldings": "総保有銘柄数",
-    "pdfLargestType": "最大タイプ"
+    "pdfLargestType": "最大タイプ",
+    "unavailable": "利用不可"
   },
   "spendingAnomalies": {
     "highPriority": "高優先度",
@@ -1700,5 +1707,8 @@
     "labelSelectAccount": "ローン勘定科目を選択",
     "viewTransactions": "取引を表示",
     "empty": "ローン、住宅ローン、与信枠の勘定科目が見つかりません。"
+  },
+  "foreignCurrencyFees": {
+    "noEligibleAccounts": "外貨取引手数料が設定されている口座はありません。口座に手数料の割合を設定すると、その外貨手数料をここで追跡できます。"
   }
 }

@@ -317,7 +317,9 @@
   "monteCarlo": {
     "scenarioNotFound": "未找到情景 {{ id }}",
     "scenarioIdsMustBeArray": "scenarioIds 必须是数组",
-    "atLeastOneAccountRequired": "至少需要一个 accountId"
+    "atLeastOneAccountRequired": "至少需要一个 accountId",
+    "currentValueUnavailable": "无法确定所选账户的当前价值，因此模拟无法以该值为起点。请手动输入起始金额，或在价格与汇率可用后重试。",
+    "historicalReturnsUnavailable": "无法计算所选账户的历史回报，因此模拟无法使用它们。请手动输入预期回报和波动率，或在价格和汇率可用后重试。"
   },
   "netWorth": {
     "invalidStartDate": "startDate 必须为 YYYY-MM-DD 格式",
@@ -361,6 +363,7 @@
     "requiresBrokerageAccount": "计划投资交易需要经纪账户",
     "notFound": "未找到 ID 为 {{ id }} 的计划交易",
     "occurrenceAlreadyPosted": "该次记账已完成。",
+    "changedConcurrently": "The scheduled transaction changed during the operation. Reload it and retry.",
     "fxPlainOnly": "只有普通计划交易才能使用其他货币，拆分、转账和投资均不支持",
     "fxRateUnavailable": "{{ date }} 没有从 {{ from }} 到 {{ to }} 的可用汇率。请以 {{ to }} 输入金额后再过账。",
     "investmentActionRequired": "计划投资交易需要投资操作",
@@ -396,6 +399,7 @@
     "cannotChangeSplitAccount": "无法更改投资拆分项的账户；请移除拆分项并在新账户上添加",
     "splitNoFundingAccount": "投资拆分项不使用单独的资金账户",
     "cannotChangeSplitDate": "无法更改投资拆分项的日期；请编辑父拆分交易的日期",
+    "embeddedStatusLocked": "此投资交易属于拆分交易的一部分。请改为更改拆分交易的状态，使两侧一并变更。",
     "invalidAccountUuid": "无效的账户 UUID：{{ id }}",
     "startDateFormat": "startDate 必须为 YYYY-MM-DD 格式",
     "endDateFormat": "endDate 必须为 YYYY-MM-DD 格式",
@@ -435,8 +439,10 @@
     "invalidTagKey": "需要标签键（1-100 个字符）",
     "assetOptionNameRequired": "需要填写资产类别名称。",
     "documentNotFound": "未找到该文档",
+    "embeddedSplitAmountMismatch": "此拆分记录了 {{ amount }}，但 {{ action }} {{ quantity }} @ {{ price }} 按 {{ rate }} 的汇率换算应为 {{ expected }}。请使用该金额，或说明您想使用的汇率。",
     "selectionNotFound": "未找到所选证券中的一个或多个",
-    "comparisonSelectionEmpty": "请至少选择一只证券或一个市场指数进行比较"
+    "comparisonSelectionEmpty": "请至少选择一只证券或一个市场指数进行比较",
+    "exchangeRateNotPositive": "汇率必须大于零"
   },
   "tags": {
     "notFound": "未找到 ID 为 {{ id }} 的标签",
@@ -490,15 +496,27 @@
     "transferAmountNegative": "转账金额不能为负数",
     "notATransfer": "交易不是转账",
     "splitTransferLegAccountLocked": "此转账属于拆分交易的一部分。请改为在源交易中编辑拆分项以更改其账户。",
+    "splitTransferLegStatusLocked": "此转账属于拆分交易的一部分。请编辑其所属的拆分交易来作废或恢复它，使两侧一并变更。",
+    "investmentCashLegStatusLocked": "此交易是某笔投资交易的现金侧。请通过更改该投资交易的状态来作废或恢复它，使两侧一并变更。",
     "notFoundById": "未找到 ID 为 {{ id }} 的交易",
     "bulkUpdateNoFields": "至少需要提供一个更新字段",
     "bulkSplitNoMatchingLinesOne": "已跳过 1 笔拆分交易，因为它没有任何拆分项与分类更新匹配",
     "bulkSplitNoMatchingLinesMany": "已跳过 {{ count }} 笔拆分交易，因为它们没有任何拆分项与分类更新匹配",
+    "bulkSplitTransferLegSkippedOne": "已跳过 1 笔拆分转账（请从其所属的拆分交易中作废或恢复，使两侧一起变更）",
+    "bulkSplitTransferLegSkippedMany": "已跳过 {{ count }} 笔拆分转账（请从其所属的拆分交易中作废或恢复，使两侧一起变更）",
+    "bulkInvestmentCashLegSkippedOne": "已跳过 1 笔投资现金交易（请通过更改该投资交易的状态来作废或恢复，使两侧一起变更）",
+    "bulkInvestmentCashLegSkippedMany": "已跳过 {{ count }} 笔投资现金交易（请通过更改相应投资交易的状态来作废或恢复，使两侧一起变更）",
     "payeeNotFound": "未找到收款人",
     "fxFieldsIncomplete": "originalAmount 和 originalCurrencyCode 必须同时提供",
     "fxRateRequired": "外币交易需要一个正的汇率",
     "fxSignMismatch": "originalAmount 和 amount 的符号必须相同",
-    "jointAccountMoveLocked": "共享账户中的交易无法移动到其他账户。"
+    "jointAccountMoveLocked": "共享账户中的交易无法移动到其他账户。",
+    "currencyMustMatchAccount": "交易货币 {{ supplied }} 必须与账户货币 {{ account }} 一致。外币记账请使用 originalAmount 和 originalCurrencyCode。",
+    "transferSameCurrencyMustConserve": "两个 {{ currency }} 账户之间的转账，两侧金额必须相同",
+    "transferSameCurrencyRateMustBeOne": "两个 {{ currency }} 账户之间的转账，汇率只能为 1",
+    "transferRateUnavailable": "无法确定 {{ from }} -> {{ to }} 的汇率。请提供 exchangeRate 或目标金额，以便正确记录该转账。",
+    "transferAmountsMustAgreeOnZero": "转账必须在两侧移动非零金额，或两侧均为零",
+    "transferImpliedRateInvalid": "目标金额相对于源金额意味着无法使用的汇率"
   },
   "users": {
     "userNotFound": "未找到用户",

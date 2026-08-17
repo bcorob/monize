@@ -43,7 +43,8 @@
     "summaryEnding": "Ende",
     "summaryLowest": "Niedrigster",
     "summaryMinBalance": "Mindestsaldo",
-    "allAccounts": "Alle Konten"
+    "allAccounts": "Alle Konten",
+    "unavailableMissingRates": "Diese Prognose kann nicht in {displayCurrency} angezeigt werden: Für {currencies} ist kein Wechselkurs verfügbar, und ein prognostizierter Saldo baut auf jedem vorherigen Tag auf. Fügen Sie einen Kurs hinzu, oder wählen Sie ein Konto mit nur einer Währung."
   },
   "calendar": {
     "days": {

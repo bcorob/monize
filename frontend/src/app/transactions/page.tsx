@@ -28,6 +28,7 @@ const ChartLoadingPlaceholder = () => (
 const BalanceHistoryChart = dynamic(() => import('@/components/transactions/BalanceHistoryChart').then(m => m.BalanceHistoryChart), { ssr: false, loading: ChartLoadingPlaceholder });
 const CategoryPayeeBarChart = dynamic(() => import('@/components/transactions/CategoryPayeeBarChart').then(m => m.CategoryPayeeBarChart), { ssr: false, loading: ChartLoadingPlaceholder });
 const AccountBalancesBarChart = dynamic(() => import('@/components/transactions/AccountBalancesBarChart').then(m => m.AccountBalancesBarChart), { ssr: false, loading: ChartLoadingPlaceholder });
+import { transferCsvLabel } from '@/lib/transfer-label';
 import { transactionsApi } from '@/lib/transactions';
 import { accountsApi } from '@/lib/accounts';
 import { institutionsApi } from '@/lib/institutions';
@@ -595,11 +596,20 @@ function TransactionsContent() {
     const isSingleCurrency = currencies.size === 1;
     const displayCurrency = isSingleCurrency ? [...currencies][0] : defaultCurrency;
 
-    const byDate = new Map<string, number>();
+    // A day whose total needs a rate we do not have has an unknown balance, not a
+    // smaller one. `null` marks the gap so the line breaks there rather than
+    // drawing a straight segment through it (`connectNulls={false}`).
+    const byDate = new Map<string, number | null>();
     const latestByAccount = new Map<string, { date: string; balance: number; currencyCode: string }>();
     for (const row of dailyBalances) {
-      const amount = isSingleCurrency ? row.balance : convertToDefault(row.balance, row.currencyCode);
-      byDate.set(row.date, (byDate.get(row.date) ?? 0) + amount);
+      const amount = isSingleCurrency
+        ? row.balance
+        : convertToDefault(row.balance, row.currencyCode);
+      const running = byDate.get(row.date);
+      byDate.set(
+        row.date,
+        amount === null || running === null ? null : (running ?? 0) + amount,
+      );
 
       const existing = latestByAccount.get(row.accountId);
       if (!existing || existing.date < row.date) {
@@ -616,8 +626,13 @@ function TransactionsContent() {
       .map(([accountId, info]) => ({
         accountId,
         accountName: accountNameById.get(accountId) ?? 'Unknown',
-        balance: isSingleCurrency ? info.balance : convertToDefault(info.balance, info.currencyCode),
+        balance: isSingleCurrency
+          ? info.balance
+          : convertToDefault(info.balance, info.currencyCode),
       }))
+      // An unconvertible balance cannot be drawn as a bar, so it is left out
+      // rather than shown at an arbitrary length.
+      .filter((a): a is typeof a & { balance: number } => a.balance !== null)
       // Hide zero-balance accounts -- they add no information to the chart.
       // Compare at 4-decimal precision to match decimal(20,4) storage.
       .filter((a) => Math.round(a.balance * 10000) !== 0)
@@ -854,27 +869,50 @@ function TransactionsContent() {
 
       const headers = ['Date', 'Account', 'Payee', 'Category', 'Description', 'Tags', 'Amount', 'Currency', 'Status'];
       const rows = allTransactions.map(tx => {
+        // `tx.amount` is typed number but arrives as the decimal string the
+        // API serialized ("-67.9900"), so coerce it: the Amount column holds a
+        // number, the way the split branch below already produces one.
+        let amount = Number(tx.amount);
         // Use the filtered split amount when only some splits match the
         // active filter, matching what the UI displays.
-        let amount = tx.amount;
         if (tx.isSplit && tx.splits && tx.splits.length > 0) {
           const splitsSumCents = tx.splits.reduce(
             (sum, s) => sum + Math.round(Number(s.amount) * 10000),
             0,
           );
-          const txAmountCents = Math.round(Number(tx.amount) * 10000);
+          const txAmountCents = Math.round(amount * 10000);
           if (splitsSumCents !== txAmountCents) {
             amount = splitsSumCents / 10000;
           }
         }
 
+        // A transfer's counterpart account is what the Category column has to
+        // say -- the register shows it as an arrow chip, and the export used to
+        // leave the cell empty (or, on a split line, call it "Uncategorized",
+        // which it is not). Each line is labelled from its own amount, so the
+        // two legs of one transfer read "To" and "From" respectively.
+        const transferName = tx.linkedTransaction?.account?.name;
+        const categoryCell = tx.isSplit && tx.splits
+          ? tx.splits
+              .map(s =>
+                s.transferAccount
+                  ? transferCsvLabel(s.transferAccount.name, s.amount)
+                  : s.category?.name || 'Uncategorized',
+              )
+              .join('; ')
+          : tx.isTransfer && transferName
+            // A transfer can also carry a spending category, which the register
+            // shows beside the arrow; keep both rather than dropping one.
+            ? [tx.category?.name, transferCsvLabel(transferName, tx.amount)]
+                .filter(Boolean)
+                .join('; ')
+            : (tx.category?.name ?? '');
+
         return [
           tx.transactionDate,
           tx.account?.name ?? '',
           tx.payee?.name ?? tx.payeeName ?? '',
-          tx.isSplit && tx.splits
-            ? tx.splits.map(s => s.category?.name || 'Uncategorized').join('; ')
-            : (tx.category?.name ?? ''),
+          categoryCell,
           tx.description ?? '',
           tx.tags?.map(t => t.name).join('; ') ?? '',
           amount,

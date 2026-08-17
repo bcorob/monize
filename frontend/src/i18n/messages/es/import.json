@@ -519,6 +519,7 @@
     "billTemplateMissing": "{count, plural, one {# factura programada no tenía} other {# facturas programadas no tenían}} transacción de plantilla en el archivo y se omitieron.",
     "unusableBill": "{count, plural, one {# factura programada no tenía} other {# facturas programadas no tenían}} cuenta, fecha utilizable o periodicidad reconocida, y se omitieron.",
     "billFrequencyApproximated": "{count, plural, one {# factura programada usa} other {# facturas programadas usan}} un intervalo de repetición que Monize no puede expresar con exactitud, así que se usó el más corto más cercano.",
+    "loanInterestCategoryUnclear": "{count, plural, one {# pago de préstamo incluía} other {# pagos de préstamo incluían}} varias categorías distintas del principal, por lo que la categoría de intereses del préstamo quedó sin asignar. Comprueba si el pago incluye una cuenta de garantía (escrow) y asigna la categoría de intereses después de importar.",
     "showTransactions": "{count, plural, one {Mostrar la # transacción} other {Mostrar las # transacciones}}",
     "hideTransactions": "Ocultar transacciones",
     "reviewInMoney": "Ábrelas en Microsoft Money para revisarlas o corregirlas y vuelve a exportar e importar.",

@@ -43,7 +43,8 @@
     "summaryEnding": "終了",
     "summaryLowest": "最低",
     "summaryMinBalance": "最低残高",
-    "allAccounts": "すべての勘定科目"
+    "allAccounts": "すべての勘定科目",
+    "unavailableMissingRates": "この予測は {displayCurrency} では表示できません。{currencies} の為替レートがなく、予測残高はそれ以前のすべての日を土台にするためです。レートを追加するか、単一通貨の口座を選んでください。"
   },
   "calendar": {
     "days": {

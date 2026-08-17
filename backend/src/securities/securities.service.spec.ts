@@ -715,6 +715,37 @@ describe("SecuritiesService", () => {
       expect(saved.isFavourite).toBe(true);
     });
 
+    // Regression for issue #1122: the explicit property-mapping block omitted
+    // both address fields, so an edit normalised them and then dropped them --
+    // the save persisted the unchanged security and the link never stuck.
+    it("persists and normalizes website and irWebsite updates (issue #1122)", async () => {
+      securitiesRepository.findOne.mockResolvedValue({ ...mockSecurity });
+
+      await service.update("user-1", "sec-1", {
+        // A bare domain from the form -- the service normalises it to https.
+        website: "apple.com",
+        irWebsite: "https://investor.apple.com",
+      });
+
+      const saved = queryRunnerManager.save.mock.calls[0][1];
+      expect(saved.website).toBe("https://apple.com");
+      expect(saved.irWebsite).toBe("https://investor.apple.com");
+    });
+
+    it("clears website and irWebsite when the form submits them blank", async () => {
+      securitiesRepository.findOne.mockResolvedValue({
+        ...mockSecurity,
+        website: "https://apple.com",
+        irWebsite: "https://investor.apple.com",
+      });
+
+      await service.update("user-1", "sec-1", { website: "", irWebsite: "" });
+
+      const saved = queryRunnerManager.save.mock.calls[0][1];
+      expect(saved.website).toBeNull();
+      expect(saved.irWebsite).toBeNull();
+    });
+
     it("records action history on update", async () => {
       securitiesRepository.findOne.mockResolvedValue({ ...mockSecurity });
 

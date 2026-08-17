@@ -2,7 +2,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@/test/render';
 import { PortfolioSummaryCard } from './PortfolioSummaryCard';
 
-const mockConvertToDefault = vi.fn((n: number) => n);
+// Like the real hook, getRate returns null for an unresolved pair -- the card
+// must treat that as unknown, never as an implicit 1:1 (review #1133).
+const mockGetRate = vi.fn(
+  (from: string, to?: string): number | null =>
+    from === (to || mockDefaultCurrency) ? 1 : 2,
+);
 let mockDefaultCurrency = 'CAD';
 
 vi.mock('@/hooks/useNumberFormat', () => ({
@@ -15,13 +20,15 @@ vi.mock('@/hooks/useNumberFormat', () => ({
 
 vi.mock('@/hooks/useExchangeRates', () => ({
   useExchangeRates: () => ({
-    convertToDefault: mockConvertToDefault,
+    getRate: mockGetRate,
     defaultCurrency: mockDefaultCurrency,
   }),
 }));
 
 beforeEach(() => {
-  mockConvertToDefault.mockImplementation((n: number) => n);
+  mockGetRate.mockImplementation((from: string, to?: string) =>
+    from === (to || mockDefaultCurrency) ? 1 : 2,
+  );
   mockDefaultCurrency = 'CAD';
 });
 
@@ -35,6 +42,14 @@ const makeSummary = (overrides?: Record<string, any>) => ({
   totalNetInvested: 35000,
   timeWeightedReturn: 15.32,
   cagr: 10.5,
+  // The API always sends these; a fixture without them is a payload the server
+  // cannot produce, and with them the completeness branches are actually exercised.
+  fxComplete: true,
+  missingRatePairs: [],
+  pricesComplete: true,
+  unpricedSecurityIds: [],
+  valuationComplete: true,
+  holdings: [],
   holdingsByAccount: [
     {
       accountId: 'a1',
@@ -46,6 +61,11 @@ const makeSummary = (overrides?: Record<string, any>) => ({
       totalGainLossPercent: 12.5,
       netInvested: 35000,
       holdings: [],
+      fxComplete: true,
+      missingRatePairs: [],
+      pricesComplete: true,
+      unpricedSecurityIds: [],
+      valuationComplete: true,
     },
   ],
   ...overrides,
@@ -187,11 +207,10 @@ describe('PortfolioSummaryCard', () => {
   });
 
   it('uses backend totals (live FX) in the default-currency view, not the stale frontend rate', () => {
-    // Simulate useExchangeRates returning a stale/different rate (x2). The
-    // default-currency view must show the backend's already-converted totals
-    // so it stays in sync with the Portfolio Value Over Time chart, rather
-    // than re-converting per account with this stale rate.
-    mockConvertToDefault.mockImplementation((n: number) => n * 2);
+    // The frontend rate hook holds a stale/different rate (x2 by default in
+    // this file's mock). The default-currency view must show the backend's
+    // already-converted totals so it stays in sync with the Portfolio Value
+    // Over Time chart, rather than re-converting per account with this rate.
     const summary = makeSummary({
       totalHoldingsValue: 45000,
       totalCashValue: 5000,
@@ -214,7 +233,7 @@ describe('PortfolioSummaryCard', () => {
     expect(screen.getByText('$45000.00')).toBeInTheDocument();
     expect(screen.queryByText('$90000.00')).not.toBeInTheDocument();
     // The default-currency view must not re-convert through the rate hook.
-    expect(mockConvertToDefault).not.toHaveBeenCalled();
+    expect(mockGetRate).not.toHaveBeenCalled();
   });
 
   it('renders titleSuffix in populated state', () => {
@@ -262,6 +281,47 @@ describe('PortfolioSummaryCard', () => {
       />,
     );
     // singleAccountCurrency === defaultCurrency, so no approx line
+    expect(screen.queryByText(/≈/)).not.toBeInTheDocument();
+  });
+
+  it('suppresses the approx line when the account->default rate is missing (review #1133)', () => {
+    // convertToDefault used to pass the amount through unchanged for an
+    // unresolved pair, so a JPY total with no JPY->CAD rate rendered as
+    // "~ $15,000.00 CAD" -- an implicit rate of 1. No rate means the
+    // approximation is unknown, and unknown does not render.
+    mockGetRate.mockImplementation((from: string, to?: string) =>
+      from === (to || mockDefaultCurrency) ? 1 : null,
+    );
+    const summary = makeSummary({
+      holdingsByAccount: [
+        {
+          accountId: 'a1',
+          currencyCode: 'USD',
+          totalMarketValue: 45000,
+          totalCostBasis: 40000,
+          cashBalance: 5000,
+          totalGainLoss: 5000,
+          totalGainLossPercent: 12.5,
+          netInvested: 35000,
+          holdings: [],
+          fxComplete: true,
+          missingRatePairs: [],
+          pricesComplete: true,
+          unpricedSecurityIds: [],
+          valuationComplete: true,
+        },
+      ],
+    });
+    render(
+      <PortfolioSummaryCard
+        summary={summary}
+        isLoading={false}
+        singleAccountCurrency="USD"
+      />,
+    );
+    // The account-currency total still renders; only the approximation is
+    // withheld.
+    expect(screen.getAllByText(/USD/).length).toBeGreaterThan(0);
     expect(screen.queryByText(/≈/)).not.toBeInTheDocument();
   });
 
@@ -367,4 +427,152 @@ describe('PortfolioSummaryCard', () => {
     // Total portfolio = 10000+5000 (holdings) + 2000+1000 (cash) = 18000
     expect(screen.getByText('$18000.00 USD')).toBeInTheDocument();
   });
+
+  describe('single foreign account completeness (recheck RR5-001)', () => {
+    it('warns from the account-currency state, not the global flag', () => {
+      // The portfolio is complete at the top (default-currency totals converted
+      // fine) but the selected JPY account could not be valued in JPY. The card
+      // shows account-currency subtotals here, so it must warn from the account's
+      // own state -- reading the global flag rendered 0 JPY as a complete total.
+      const summary = makeSummary({
+        // top-level complete
+        fxComplete: true,
+        pricesComplete: true,
+        valuationComplete: true,
+        holdingsByAccount: [
+          {
+            accountId: 'jpy-1',
+            currencyCode: 'JPY',
+            totalMarketValue: 0,
+            totalCostBasis: 0,
+            cashBalance: 0,
+            totalGainLoss: 0,
+            totalGainLossPercent: 0,
+            netInvested: 0,
+            holdings: [],
+            // ...but incomplete in the account's own currency
+            fxComplete: false,
+            missingRatePairs: ['EUR->JPY'],
+            pricesComplete: true,
+            unpricedSecurityIds: [],
+            valuationComplete: false,
+          },
+        ],
+      });
+
+      render(
+        <PortfolioSummaryCard
+          summary={summary}
+          isLoading={false}
+          singleAccountCurrency="JPY"
+        />,
+      );
+
+      expect(screen.getByText('These figures are incomplete')).toBeInTheDocument();
+      expect(screen.getByText(/EUR->JPY/)).toBeInTheDocument();
+      expect(screen.getByText('Portfolio Value (partial)')).toBeInTheDocument();
+    });
+
+    it('stays quiet when the selected foreign account is complete', () => {
+      const summary = makeSummary({
+        holdingsByAccount: [
+          {
+            accountId: 'jpy-1',
+            currencyCode: 'JPY',
+            totalMarketValue: 1000,
+            totalCostBasis: 800,
+            cashBalance: 0,
+            totalGainLoss: 200,
+            totalGainLossPercent: 25,
+            netInvested: 800,
+            holdings: [],
+            fxComplete: true,
+            missingRatePairs: [],
+            pricesComplete: true,
+            unpricedSecurityIds: [],
+            valuationComplete: true,
+          },
+        ],
+      });
+
+      render(
+        <PortfolioSummaryCard
+          summary={summary}
+          isLoading={false}
+          singleAccountCurrency="JPY"
+        />,
+      );
+
+      expect(
+        screen.queryByText('These figures are incomplete'),
+      ).not.toBeInTheDocument();
+    });
+  });
+
+  describe('valuation completeness (recheck RR4-002)', () => {
+    it('labels the value as partial and names the unpriced security', () => {
+      // The server said the total was a subtotal and this card rendered the number
+      // under "Total Portfolio Value" regardless, because the frontend type had
+      // dropped the fields.
+      const summary = makeSummary({
+        totalPortfolioValue: 100,
+        pricesComplete: false,
+        unpricedSecurityIds: ['sec-u'],
+        valuationComplete: false,
+        holdings: [
+          { securityId: 'sec-u', symbol: 'UNPRICED' },
+          { securityId: 'sec-p', symbol: 'PRICED' },
+        ],
+      });
+
+      render(<PortfolioSummaryCard summary={summary} isLoading={false} />);
+
+      expect(
+        screen.queryByText('Total Portfolio Value'),
+      ).not.toBeInTheDocument();
+      expect(screen.getByText('Portfolio Value (partial)')).toBeInTheDocument();
+      expect(screen.getByText('These figures are incomplete')).toBeInTheDocument();
+      expect(screen.getByText(/UNPRICED/)).toBeInTheDocument();
+    });
+
+    it('names the missing exchange rate pair when FX is what is incomplete', () => {
+      const summary = makeSummary({
+        fxComplete: false,
+        missingRatePairs: ['EUR->USD'],
+        valuationComplete: false,
+      });
+
+      render(<PortfolioSummaryCard summary={summary} isLoading={false} />);
+
+      expect(screen.getByText(/EUR->USD/)).toBeInTheDocument();
+    });
+
+    it('says nothing when the valuation is complete', () => {
+      render(<PortfolioSummaryCard summary={makeSummary()} isLoading={false} />);
+
+      expect(screen.getByText('Total Portfolio Value')).toBeInTheDocument();
+      expect(
+        screen.queryByText('These figures are incomplete'),
+      ).not.toBeInTheDocument();
+    });
+
+    it('does not claim incomplete when an older payload omits the fields', () => {
+      // A rolling deploy can briefly serve a response with none of these fields.
+      // Absent is "no information", not "incomplete", and must not crash the page.
+      const summary = makeSummary();
+      delete summary.fxComplete;
+      delete summary.pricesComplete;
+      delete summary.valuationComplete;
+      delete summary.missingRatePairs;
+      delete summary.unpricedSecurityIds;
+
+      render(<PortfolioSummaryCard summary={summary} isLoading={false} />);
+
+      expect(screen.getByText('Total Portfolio Value')).toBeInTheDocument();
+      expect(
+        screen.queryByText('These figures are incomplete'),
+      ).not.toBeInTheDocument();
+    });
+  });
 });
+

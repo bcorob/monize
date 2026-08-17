@@ -228,5 +228,10 @@
     "nothingToRedo": "Nada que rehacer",
     "cannotRedo": "No se puede rehacer esta acción",
     "redoFailed": "Error al rehacer"
+  },
+  "partialTotal": {
+    "srSuffix": "(total parcial)",
+    "explanation": "Total parcial: {count, plural, one {# importe} other {# importes}} no se pudieron incluir, por lo que la cifra mostrada los excluye. No hay tipo de cambio a {displayCurrency} para {currencies}.",
+    "explanationExcluded": "Total parcial: {count, plural, one {# importe} other {# importes}} no se pudieron calcular, por lo que la cifra mostrada los excluye."
   }
 }

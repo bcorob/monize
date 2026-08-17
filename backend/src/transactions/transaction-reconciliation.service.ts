@@ -7,6 +7,11 @@ import {
 } from "@nestjs/common";
 import { DataSource } from "typeorm";
 import { Transaction, TransactionStatus } from "./entities/transaction.entity";
+import { TransactionSplitService } from "./transaction-split.service";
+import {
+  assertVoidTransitionAllowedOnRow,
+  applyVoidTransitionToMirrorLeg,
+} from "./void-status-transition.util";
 import { AccountsService } from "../accounts/accounts.service";
 import {
   isTransactionInFuture,
@@ -28,6 +33,8 @@ export class TransactionReconciliationService {
   constructor(
     @Inject(forwardRef(() => AccountsService))
     private accountsService: AccountsService,
+    @Inject(forwardRef(() => TransactionSplitService))
+    private splitService: TransactionSplitService,
     private dataSource: DataSource,
   ) {}
 
@@ -54,7 +61,12 @@ export class TransactionReconciliationService {
     userId: string,
     transactionId: string,
     resolve: (current: TransactionStatus) => ResolvedTransition,
-  ): Promise<{ accountId: string; balanceMoved: boolean }> {
+  ): Promise<{
+    accountId: string;
+    balanceMoved: boolean;
+    /** Accounts a counterpart or split propagation moved besides the row's own. */
+    counterpartAccountIds: string[];
+  }> {
     return withScopedDb(this.dataSource, async (m) => {
       const locked = await lockTransactionRow(m, transactionId, userId);
       if (!locked) {
@@ -73,6 +85,18 @@ export class TransactionReconciliationService {
       const wasVoid = oldStatus === TransactionStatus.VOID;
       const isVoid = status === TransactionStatus.VOID;
       const balanceMoved = wasVoid !== isVoid;
+
+      // Crossing the VOID boundary carries the same obligations here as on
+      // every other route: a split-transfer counterpart leg is refused (the
+      // pairing belongs to the parent), a mirror transfer leg takes its
+      // counterpart with it, and a split parent takes its children's
+      // counterparts. Leaving this endpoint without them made
+      // PATCH /transactions/:id/status the one door into the divergent-pair
+      // states the transfer, split and bulk routes refuse.
+      const counterpartAccountIds: string[] = [];
+      if (balanceMoved) {
+        await assertVoidTransitionAllowedOnRow(m, transactionId);
+      }
 
       const fields: Partial<Transaction> = { status };
       if (
@@ -107,7 +131,34 @@ export class TransactionReconciliationService {
         await m.update(Transaction, transactionId, fields);
       }
 
-      return { accountId: locked.accountId, balanceMoved };
+      if (balanceMoved) {
+        if (locked.isSplit) {
+          for (const affected of await this.splitService.applyParentStatusToTransferCounterparts(
+            m,
+            transactionId,
+            userId,
+            status,
+          )) {
+            counterpartAccountIds.push(affected);
+          }
+        } else {
+          counterpartAccountIds.push(
+            ...(await applyVoidTransitionToMirrorLeg(
+              m,
+              this.accountsService,
+              userId,
+              locked,
+              status,
+            )),
+          );
+        }
+      }
+
+      return {
+        accountId: locked.accountId,
+        balanceMoved,
+        counterpartAccountIds,
+      };
     });
   }
 
@@ -118,14 +169,16 @@ export class TransactionReconciliationService {
     triggerNetWorthRecalc: (accountId: string, userId: string) => void,
     findOne: (userId: string, id: string) => Promise<Transaction>,
   ): Promise<Transaction> {
-    const { accountId, balanceMoved } = await this.applyStatusTransition(
-      userId,
-      transactionId,
-      () => ({ status }),
-    );
+    const { accountId, balanceMoved, counterpartAccountIds } =
+      await this.applyStatusTransition(userId, transactionId, () => ({
+        status,
+      }));
 
     if (balanceMoved) {
       triggerNetWorthRecalc(accountId, userId);
+      for (const affected of new Set(counterpartAccountIds)) {
+        if (affected !== accountId) triggerNetWorthRecalc(affected, userId);
+      }
     }
 
     return findOne(userId, transactionId);

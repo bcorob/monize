@@ -38,6 +38,10 @@
     "title": "Resumen de Cartera",
     "noData": "No hay datos de inversión disponibles.",
     "totalPortfolioValue": "Valor Total de la Cartera",
+    "knownPortfolioSubtotal": "Valor de la cartera (parcial)",
+    "incompleteHeading": "Estas cifras están incompletas",
+    "incompletePrices": "No hay precio actual para {symbols}, por lo que esas posiciones no se incluyen en ningún total de abajo.",
+    "incompleteFx": "No hay tipo de cambio para {pairs}, por lo que las posiciones en esas monedas no se incluyen en ningún total de abajo.",
     "values": "Valores",
     "holdingsValue": "Valor de Posiciones",
     "holdingsValueTooltip": "El valor de mercado actual de todos los valores que posees, basado en los precios más recientes disponibles.",
@@ -48,9 +52,9 @@
     "netInvested": "Net Invertido",
     "netInvestedTooltip": "El monto neto de tu propio dinero depositado en tus cuentas de inversión. Son las aportaciones totales menos los retiros, excluyendo ganancias de inversión, dividendos o intereses ganados.",
     "costBasis": "Base de Costo",
-    "costBasisTooltip": "El monto total que pagaste originalmente para adquirir tus inversiones, incluidos precios de compra y comisiones. Se usa para calcular tus ganancias y pérdidas.",
+    "costBasisTooltip": "Lo que costó adquirir tus posiciones actuales, reconstruido desde tu historial de transacciones: precios de compra más la comisión cobrada en cada compra, cada uno convertido al tipo de la operación que lo pagó. Se muestra en tu moneda de visualización. Se usa para calcular ganancias y pérdidas.",
     "gainLoss": "Ganancia/Pérdida",
-    "gainLossTooltip": "Ganancia o pérdida no realizada en tus posiciones actuales: Valor de Mercado menos Base de Costo. No incluye ganancias realizadas de ventas pasadas ni ingresos recibidos.",
+    "gainLossTooltip": "Ganancia o pérdida no realizada de tus posiciones actuales: valor de mercado a precios de hoy menos la base de costo de arriba. No incluye ganancias realizadas de ventas pasadas, ni dividendos e intereses recibidos.",
     "returns": "Rendimientos",
     "simpleReturn": "Rendimiento Simple",
     "simpleReturnTooltip": "Porcentaje total de ganancia o pérdida en tus posiciones, calculado como (Valor de Mercado − Base de Costo) ÷ Base de Costo. No tiene en cuenta el momento de las aportaciones o retiros.",
@@ -59,26 +63,28 @@
     "twrTooltip": "Mide el rendimiento de tus inversiones independientemente de cuándo agregaste o retiraste dinero. Elimina el impacto del flujo de efectivo para mostrar el rendimiento puro de la inversión.",
     "cagr": "CAGR",
     "cagrTooltip": "Tasa de Crecimiento Anual Compuesto. Tu rendimiento anualizado basado en Net Invertido vs. valor actual de la cartera, como si el crecimiento hubiera sido perfectamente constante cada año.",
-    "notAvailable": "N/A"
+    "notAvailable": "N/A",
+    "unpricedHoldings": "Valoración parcial: {count, plural, one {# posición no tiene} other {# posiciones no tienen}} precio actual ({symbols}), así que los valores de abajo {count, plural, one {la excluyen} other {las excluyen}}."
   },
   "assetAllocation": {
     "title": "Asignación de Activos",
     "noData": "No hay datos de asignación disponibles.",
+    "knownValueOnly": "Los porcentajes cubren solo el valor conocido; algunas posiciones no se pudieron valorar.",
     "cash": "Efectivo",
     "untagged": "Sin etiquetas",
     "noTagData": "No hay posiciones etiquetadas para mostrar. Añade etiquetas a tus valores para ver la exposición por etiqueta.",
+    "noKeyData": "Ninguna posición tiene un valor para esta clave de etiqueta. Etiquete los valores como clave:valor (p. ej. country:usa) para ver este desglose.",
     "noCountryData": "No hay datos de asignación por país disponibles.",
+    "keySelectorLabel": "Clave de etiqueta para agregar",
     "otherCountries": "Otros países",
     "otherAssetClasses": "Otras clases de activo",
     "groupBy": {
       "security": "Por valor",
       "tag": "Por etiqueta",
-      "country": "Por país",
       "tagKey": "Por clave",
+      "country": "Por país",
       "assetClass": "Por clase de activo"
-    },
-    "noKeyData": "Ninguna posición tiene un valor para esta clave de etiqueta. Etiquete los valores como clave:valor (p. ej. country:usa) para ver este desglose.",
-    "keySelectorLabel": "Clave de etiqueta para agregar"
+    }
   },
   "holdingsList": {
     "title": "Posiciones",
@@ -93,6 +99,7 @@
   "groupedHoldings": {
     "title": "Posiciones por Cuenta",
     "noHoldings": "No hay posiciones en tu cartera.",
+    "accountIncomplete": "Parcial: los totales de esta cuenta omiten posiciones que no se pudieron valorar en {currency}.",
     "accountSummary": "{accounts} cuenta{accountsPlural} con {positions} posición{positionsPlural}",
     "positionsWithCash": "{count} posición{plural} + Efectivo",
     "positions": "{count} posición{plural}",
@@ -172,6 +179,12 @@
     "actionReinvest": "Reinversión",
     "actionAddShares": "Agregar Acciones",
     "actionRemoveShares": "Quitar Acciones",
+    "actionReinvestInterest": "Reinversión de intereses",
+    "actionReinvestCapitalGainShort": "Reinversión de ganancias a corto plazo",
+    "actionReinvestCapitalGainLong": "Reinversión de ganancias a largo plazo",
+    "actionCapitalGainShort": "Ganancia de capital a corto plazo",
+    "actionCapitalGainLong": "Ganancia de capital a largo plazo",
+    "actionRedeem": "Rescate de CD/bono",
     "allActions": "Todas las Acciones"
   },
   "transactionForm": {
@@ -186,6 +199,12 @@
     "actionReinvest": "Reinvertir Dividendo",
     "actionAddShares": "Agregar Acciones",
     "actionRemoveShares": "Quitar Acciones",
+    "actionReinvestInterest": "Reinversión de intereses",
+    "actionReinvestCapitalGainShort": "Reinversión de ganancias a corto plazo",
+    "actionReinvestCapitalGainLong": "Reinversión de ganancias a largo plazo",
+    "actionCapitalGainShort": "Ganancia de capital a corto plazo",
+    "actionCapitalGainLong": "Ganancia de capital a largo plazo",
+    "actionRedeem": "Rescate de CD/bono",
     "actionTransfer": "Transferencia",
     "brokerageAccount": "Cuenta de Corretaje",
     "fromAccount": "Cuenta de Origen",
@@ -206,6 +225,7 @@
     "pricePerShare": "Precio por Acción ({currency})",
     "commissionFees": "Comisión / Tarifas ({currency})",
     "description": "Descripción (opcional)",
+    "statusLockedToParent": "Esta transacción forma parte de una transacción dividida. Cambia el estado de la transacción dividida en su lugar, para que ambos lados cambien juntos.",
     "descriptionPlaceholder": "Notas opcionales",
     "splitRatio": "Ratio de división",
     "noSplitRatioWarning": "Esta transacción no tiene ratio de división establecido. Ingresa el ratio tal como fue anunciado antes de guardar — Monize no asumirá uno por ti.",
@@ -257,7 +277,10 @@
     "toastAvailableShares": "Solo hay {available} acciones disponibles para transferir",
     "toastSplitRatioRequired": "El ratio de división debe ser mayor que cero",
     "toastPairedLegError": "No se pudo cargar la contraparte de la transferencia; vuelve a abrir e inténtalo de nuevo",
-    "toastSaveFailed": "Error al guardar la transacción"
+    "toastSaveFailed": "Error al guardar la transacción",
+    "exchangeRateUnresolved": "No hay tipo de {from} a {to} disponible. Introduce uno, o el total convertido, antes de guardar.",
+    "toastExchangeRateRequired": "Introduce un tipo de cambio antes de guardar una operación entre monedas.",
+    "notAvailable": "No disponible"
   },
   "newTransactionButton": {
     "label": "+ Nueva Transacción",

@@ -46,13 +46,24 @@ export function clearAllCache(): void {
  * browser reloads. Navigating back to the page does not help: the page
  * refetches on mount and the refetch is served from this cache.
  *
- * Both prefixes go together because an account balance and a portfolio value
- * are two views of the same rows: a trade moves the INVESTMENT_CASH balance,
- * and a split transfer moves an account the parent transaction never named.
+ * The prefixes go together because an account balance, a portfolio value and a
+ * budget's progress are three views of the same rows: a trade moves the
+ * INVESTMENT_CASH balance, a split transfer moves an account the parent
+ * transaction never named, and any categorised amount moves the budget it falls
+ * in. `budgets:dashboard` caches for 30 seconds and `budgets:cat-status:*` for
+ * 60, so leaving them behind means the write succeeds and the progress bar
+ * beside it still shows the pre-write remaining amount -- which is the number a
+ * user makes the next spending decision from.
+ *
+ * Anything derived from transaction rows belongs on this list. Adding a new
+ * cached family that reads them means adding its prefix here in the same
+ * change; `balance-cache.guard.test.ts` holds the call sites, and
+ * `apiCache.test.ts` holds the prefix set.
  */
 export function invalidateBalanceCaches(): void {
   invalidateCache('accounts:');
   invalidateCache('investments:');
+  invalidateCache('budgets:');
 }
 
 // Cache + in-flight deduplication. When several callers request the same key

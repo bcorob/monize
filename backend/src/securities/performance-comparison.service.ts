@@ -510,6 +510,7 @@ export class PerformanceComparisonService {
              SELECT security_id, MIN(transaction_date) AS first_transaction
                FROM investment_transactions
               WHERE security_id = ANY($1::uuid[])
+                AND status != 'VOID'
               GROUP BY security_id
            ) t ON t.security_id = ids.security_id`,
         [securityIds],

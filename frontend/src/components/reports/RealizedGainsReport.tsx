@@ -70,6 +70,7 @@ const ACCOUNTS_STORAGE_KEY = 'monize-reports-realized-gains-accounts';
 
 export function RealizedGainsReport() {
   const t = useTranslations('reports');
+  const tCommon = useTranslations('common');
   const { formatCurrency: formatCurrencyFull, formatCurrencyAxis } = useNumberFormat();
   const { defaultCurrency, convertToDefault } = useExchangeRates();
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -99,7 +100,7 @@ export function RealizedGainsReport() {
   // Backend returns each figure in the holding account's currency. Convert to
   // the default currency when viewing All Accounts or several accounts;
   // otherwise (a single account) pass through in its native currency.
-  const toDisplay = useCallback((amount: number, accountCurrencyCode: string | null): number => {
+  const toDisplay = useCallback((amount: number, accountCurrencyCode: string | null): number | null => {
     if (isSingleAccount) return amount;
     return convertToDefault(amount, accountCurrencyCode || defaultCurrency);
   }, [isSingleAccount, defaultCurrency, convertToDefault]);
@@ -156,14 +157,39 @@ export function RealizedGainsReport() {
         map.set(symbol, bucket);
       }
 
-      bucket.totalProceeds += toDisplay(entry.proceeds, entry.accountCurrencyCode);
-      bucket.totalCostBasis += toDisplay(entry.costBasis, entry.accountCurrencyCode);
-      bucket.realizedGain += toDisplay(entry.realizedGain, entry.accountCurrencyCode);
+      const proceeds = toDisplay(entry.proceeds, entry.accountCurrencyCode);
+      const costBasis = toDisplay(entry.costBasis, entry.accountCurrencyCode);
+      const realizedGain = toDisplay(entry.realizedGain, entry.accountCurrencyCode);
+      // A gain is proceeds minus basis: if either side cannot be converted the
+      // gain is unknown, and adding the half that converted would report a
+      // profit or loss that never happened.
+      if (proceeds === null || costBasis === null || realizedGain === null) return;
+      bucket.totalProceeds += proceeds;
+      bucket.totalCostBasis += costBasis;
+      bucket.realizedGain += realizedGain;
       bucket.transactionCount += 1;
     });
 
     return Array.from(map.values());
   }, [entries, toDisplay]);
+
+  // Lots securityGains had to drop because a side could not be converted
+  // (mirrors its exclusion rule), so the per-symbol and grand totals are
+  // subtotals whenever this is non-empty.
+  const gainsGaps = useMemo(() => {
+    const missing = new Set<string>();
+    let excludedCount = 0;
+    for (const entry of entries) {
+      const proceeds = toDisplay(entry.proceeds, entry.accountCurrencyCode);
+      const costBasis = toDisplay(entry.costBasis, entry.accountCurrencyCode);
+      const realizedGain = toDisplay(entry.realizedGain, entry.accountCurrencyCode);
+      if (proceeds === null || costBasis === null || realizedGain === null) {
+        missing.add(entry.accountCurrencyCode || defaultCurrency);
+        excludedCount += 1;
+      }
+    }
+    return { missingCurrencies: [...missing], excludedCount };
+  }, [entries, toDisplay, defaultCurrency]);
 
   const sortedSecurityGains = useMemo(() => {
     const sorted = [...securityGains];
@@ -248,14 +274,21 @@ export function RealizedGainsReport() {
       const proceeds = toDisplay(entry.proceeds, entry.accountCurrencyCode);
       const costBasis = toDisplay(entry.costBasis, entry.accountCurrencyCode);
       const gain = toDisplay(entry.realizedGain, entry.accountCurrencyCode);
-      const returnPct = costBasis !== 0 ? ((gain / costBasis) * 100).toFixed(2) + '%' : '-';
+      // An export cell that cannot be converted says so; a spreadsheet reading a
+      // blank or a native-currency figure in a display-currency column is worse
+      // than one reading a marker.
+      const unknown = t('realizedGains.csvNoRate');
+      const returnPct =
+        costBasis !== null && gain !== null && costBasis !== 0
+          ? ((gain / costBasis) * 100).toFixed(2) + '%'
+          : '-';
       return [
         entry.symbol || 'N/A',
         format(parseLocalDate(entry.transactionDate), 'yyyy-MM-dd'),
         entry.quantity,
-        proceeds,
-        costBasis,
-        gain,
+        proceeds ?? unknown,
+        costBasis ?? unknown,
+        gain ?? unknown,
         returnPct,
       ];
     });
@@ -334,6 +367,16 @@ export function RealizedGainsReport() {
           </div>
         </div>
       </div>
+
+      {gainsGaps.missingCurrencies.length > 0 && (
+        <p className="text-xs text-amber-600 dark:text-amber-400">
+          {tCommon('partialTotal.explanation', {
+            count: gainsGaps.excludedCount,
+            displayCurrency,
+            currencies: gainsGaps.missingCurrencies.join(', '),
+          })}
+        </p>
+      )}
 
       {/* Controls */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-4">
@@ -607,7 +650,12 @@ export function RealizedGainsReport() {
                       {fmtValue(entry.price)}
                     </td>
                     <td className="px-4 py-3 text-right text-sm font-medium text-gray-900 dark:text-gray-100">
-                      {fmtValue(toDisplay(entry.proceeds, entry.accountCurrencyCode))}
+                      {(() => {
+                        const proceeds = toDisplay(entry.proceeds, entry.accountCurrencyCode);
+                        return proceeds === null
+                          ? t('realizedGains.csvNoRate')
+                          : fmtValue(proceeds);
+                      })()}
                     </td>
                   </tr>
                 ))}

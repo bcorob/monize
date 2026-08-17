@@ -519,6 +519,7 @@
     "billTemplateMissing": "{count, plural, one {# facture planifiée n'avait} other {# factures planifiées n'avaient}} pas de transaction modèle dans le fichier et ont été ignorées.",
     "unusableBill": "{count, plural, one {# facture planifiée n'avait} other {# factures planifiées n'avaient}} pas de compte, pas de date exploitable ou une périodicité inconnue, et ont été ignorées.",
     "billFrequencyApproximated": "{count, plural, one {# facture planifiée utilise} other {# factures planifiées utilisent}} un intervalle de répétition que Monize ne peut pas exprimer exactement ; le plus court le plus proche a été retenu.",
+    "loanInterestCategoryUnclear": "{count, plural, one {# remboursement de prêt comprenait} other {# remboursements de prêt comprenaient}} plusieurs catégories autres que le capital, de sorte que la catégorie d'intérêts du prêt n'a pas été définie. Vérifiez si le paiement inclut un compte séquestre (escrow) et définissez la catégorie d'intérêts après l'import.",
     "showTransactions": "{count, plural, one {Afficher la # transaction} other {Afficher les # transactions}}",
     "hideTransactions": "Masquer les transactions",
     "reviewInMoney": "Ouvrez-les dans Microsoft Money pour les vérifier ou les corriger, puis exportez et importez à nouveau.",

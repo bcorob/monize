@@ -202,7 +202,8 @@
     "title": "[XX-Credit Utilization by Account-XX]",
     "empty": "[XX-No credit accounts with a limit set.-XX]",
     "utilization": "[XX-Utilization-XX]",
-    "used": "[XX-Used-XX]"
+    "used": "[XX-Used-XX]",
+    "noRate": "[XX-unavailable (no {currency} rate)-XX]"
   },
   "creditUtilizationTotal": {
     "title": "[XX-Total Credit Utilization-XX]",

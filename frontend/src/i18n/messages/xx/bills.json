@@ -43,7 +43,8 @@
     "summaryEnding": "[XX-Ending-XX]",
     "summaryLowest": "[XX-Lowest-XX]",
     "summaryMinBalance": "[XX-Min Balance-XX]",
-    "allAccounts": "[XX-All Accounts-XX]"
+    "allAccounts": "[XX-All Accounts-XX]",
+    "unavailableMissingRates": "[XX-This forecast cannot be shown in {displayCurrency}: no exchange rate is available for {currencies}, and a projected balance builds on every day before it. Add a rate, or pick a single-currency account.-XX]"
   },
   "calendar": {
     "days": {

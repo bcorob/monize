@@ -519,6 +519,7 @@
     "billTemplateMissing": "{count, plural, one {# bolletta pianificata non aveva} other {# bollette pianificate non avevano}} una transazione modello nel file e sono state saltate.",
     "unusableBill": "{count, plural, one {# bolletta pianificata non aveva} other {# bollette pianificate non avevano}} un conto, una data utilizzabile o una ricorrenza riconosciuta e sono state saltate.",
     "billFrequencyApproximated": "{count, plural, one {# bolletta pianificata usa} other {# bollette pianificate usano}} un intervallo di ripetizione che Monize non può esprimere esattamente, quindi è stato usato il più breve più vicino.",
+    "loanInterestCategoryUnclear": "{count, plural, one {# pagamento del prestito includeva} other {# pagamenti del prestito includevano}} più categorie diverse dal capitale, quindi la categoria degli interessi del prestito è rimasta non impostata. Verifica se il pagamento include un deposito a garanzia (escrow) e imposta la categoria degli interessi dopo l'importazione.",
     "showTransactions": "{count, plural, one {Mostra la # transazione} other {Mostra le # transazioni}}",
     "hideTransactions": "Nascondi le transazioni",
     "reviewInMoney": "Aprile in Microsoft Money per verificarle o correggerle, poi esporta e importa di nuovo.",

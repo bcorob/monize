@@ -250,10 +250,18 @@ export interface MnyBill {
   readonly handle: number | null;
   /** `st`: series status. Active semantics pinned by task M0.6. */
   readonly status: number;
-  /** `frq`: 0 once, 1 daily, 2 weekly, 3 monthly, 4 yearly, 6 quarterly. */
+  /**
+   * `frq`: the unit the recurrence is counted in -- 0 once, 1 daily, 2 weekly,
+   * 3 monthly, 4 quarterly, 5 yearly (`MNY_FREQUENCY`). The cadence is this
+   * paired with `occurrencesPerUnit`, never `frq` alone.
+   */
   readonly frequency: number;
-  /** `cFrqInst`: interval multiplier for `frequency`. */
-  readonly interval: number;
+  /**
+   * `cFrqInst`: how many times the bill falls due per one `frequency` unit --
+   * a rate, so 2 on a monthly unit is twice a month and 0.5 is every other
+   * month. Fractional in real files; never an interval multiplier.
+   */
+  readonly occurrencesPerUnit: number;
   /** `dt`: next due date. */
   readonly nextDue: string | null;
   /** `lHtrn`: the template `TRN` row this bill posts from. */

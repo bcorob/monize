@@ -20,6 +20,7 @@ import { useNumberFormat } from '@/hooks/useNumberFormat';
 import { useDateFormat } from '@/hooks/useDateFormat';
 import { useExchangeRates } from '@/hooks/useExchangeRates';
 import { InfoTooltip } from '@/components/ui/InfoTooltip';
+import { PartialTotal } from '@/components/ui/PartialTotal';
 import { createLogger } from '@/lib/logger';
 import {
   WidgetFilterParams,
@@ -161,8 +162,18 @@ export function PayeeInfoWidget({
   );
 
   const transactionCount = summary?.transactionCount ?? 0;
+  // Average over the transactions the figures actually sum, not the full count
+  // (which includes transactions excluded for want of a rate).
   const averageAmount =
-    totals && transactionCount > 0 ? (totals.income + totals.expenses) / transactionCount : null;
+    totals && totals.includedTransactionCount > 0
+      ? (totals.income + totals.expenses) / totals.includedTransactionCount
+      : null;
+  // A currency bucket with no rate is excluded from the summary figures, so each
+  // headline is marked partial rather than presented as the complete total.
+  const summaryMarker = {
+    missingCurrencies: totals?.missingCurrencies ?? [],
+    excludedCount: totals?.excludedTransactionCount ?? 0,
+  };
   // The label map wins over the relation's own name: it carries the parent
   // ("Utilities: Hydro"), and the relation only ever holds the leaf, which is
   // ambiguous when several parents own a category of the same name.
@@ -219,7 +230,13 @@ export function PayeeInfoWidget({
       <div className="mb-4">
         <p className="text-sm text-gray-500 dark:text-gray-400">{t('payeeWidget.totalSpent')}</p>
         <p className="text-2xl font-bold text-red-600 dark:text-red-400">
-          {totals ? formatCurrency(totals.expenses, currencyStrategy.displayCurrency) : '—'}
+          {totals ? (
+            <PartialTotal total={{ value: totals.expenses, ...summaryMarker }} displayCurrency={currencyStrategy.displayCurrency}>
+              {formatCurrency(totals.expenses, currencyStrategy.displayCurrency)}
+            </PartialTotal>
+          ) : (
+            '—'
+          )}
         </p>
         {recurring && (
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400 flex items-center">
@@ -266,7 +283,9 @@ export function PayeeInfoWidget({
           <div className="flex items-baseline justify-between gap-3">
             <dt className="text-gray-500 dark:text-gray-400">{t('payeeWidget.income')}</dt>
             <dd className="text-green-600 dark:text-green-400 text-right">
-              {formatCurrency(totals.income, currencyStrategy.displayCurrency)}
+              <PartialTotal total={{ value: totals.income, ...summaryMarker }} displayCurrency={currencyStrategy.displayCurrency}>
+                {formatCurrency(totals.income, currencyStrategy.displayCurrency)}
+              </PartialTotal>
             </dd>
           </div>
         )}
@@ -274,7 +293,9 @@ export function PayeeInfoWidget({
           <div className="flex items-baseline justify-between gap-3">
             <dt className="text-gray-500 dark:text-gray-400">{t('payeeWidget.net')}</dt>
             <dd className="text-gray-900 dark:text-gray-100 text-right">
-              {formatCurrency(totals.net, currencyStrategy.displayCurrency)}
+              <PartialTotal total={{ value: totals.net, ...summaryMarker }} displayCurrency={currencyStrategy.displayCurrency}>
+                {formatCurrency(totals.net, currencyStrategy.displayCurrency)}
+              </PartialTotal>
             </dd>
           </div>
         )}
@@ -286,7 +307,9 @@ export function PayeeInfoWidget({
           <div className="flex items-baseline justify-between gap-3">
             <dt className="text-gray-500 dark:text-gray-400">{t('payeeWidget.averageAmount')}</dt>
             <dd className="text-gray-900 dark:text-gray-100 text-right">
-              {formatCurrency(averageAmount, currencyStrategy.displayCurrency)}
+              <PartialTotal total={{ value: averageAmount, ...summaryMarker }} displayCurrency={currencyStrategy.displayCurrency}>
+                {formatCurrency(averageAmount, currencyStrategy.displayCurrency)}
+              </PartialTotal>
             </dd>
           </div>
         )}
@@ -326,7 +349,10 @@ export function PayeeInfoWidget({
               const label = row.id
                 ? (categoryLabelMap.get(row.id) ?? row.name ?? row.id)
                 : t('payeeWidget.uncategorized');
-              const amount = formatCurrency(Math.abs(row.total), currencyStrategy.displayCurrency);
+              const amount =
+                row.total === null
+                  ? t('payeeWidget.amountUnavailable')
+                  : formatCurrency(Math.abs(row.total), currencyStrategy.displayCurrency);
               return (
                 <li key={row.id ?? 'uncategorized'}>
                   {row.id && onCategoryClick ? (

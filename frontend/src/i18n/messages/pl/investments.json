@@ -38,6 +38,10 @@
     "title": "Podsumowanie portfela",
     "noData": "Brak danych inwestycyjnych.",
     "totalPortfolioValue": "Całkowita wartość portfela",
+    "knownPortfolioSubtotal": "Wartość portfela (częściowa)",
+    "incompleteHeading": "Te kwoty są niekompletne",
+    "incompletePrices": "Brak aktualnej ceny dla {symbols}, więc te pozycje nie są ujęte w żadnej sumie poniżej.",
+    "incompleteFx": "Brak kursu wymiany dla {pairs}, więc pozycje w tych walutach nie są ujęte w żadnej sumie poniżej.",
     "values": "Wartości",
     "holdingsValue": "Wartość pozycji",
     "holdingsValueTooltip": "Aktualna wartość rynkowa wszystkich posiadanych papierów wartościowych, na podstawie najnowszych dostępnych cen.",
@@ -48,9 +52,9 @@
     "netInvested": "Zainwestowane netto",
     "netInvestedTooltip": "Kwota netto Twoich własnych środków wpłaconych na konta inwestycyjne. To suma wpłat minus wypłaty, z wyłączeniem zysków z inwestycji, dywidend i odsetek.",
     "costBasis": "Koszt nabycia",
-    "costBasisTooltip": "Całkowita kwota pierwotnie zapłacona za nabycie inwestycji, w tym ceny zakupu i opłaty transakcyjne. Używana do obliczania zysków i strat.",
+    "costBasisTooltip": "Ile kosztowało nabycie obecnych pozycji, odtworzone z historii transakcji: ceny zakupu plus prowizja naliczona przy każdym zakupie, każda przeliczona po kursie transakcji, która za nią zapłaciła. Wyświetlane w Twojej walucie prezentacji. Służy do obliczania zysków i strat.",
     "gainLoss": "Zysk/Strata",
-    "gainLossTooltip": "Niezrealizowany zysk lub strata na bieżących pozycjach: wartość rynkowa minus koszt nabycia. Nie obejmuje zysków zrealizowanych z przeszłych sprzedaży ani otrzymanych przychodów.",
+    "gainLossTooltip": "Niezrealizowany zysk lub strata na obecnych pozycjach: wartość rynkowa po dzisiejszych cenach minus koszt nabycia powyżej. Nie obejmuje zysków zrealizowanych na wcześniejszych sprzedażach ani otrzymanych dywidend i odsetek.",
     "returns": "Stopy zwrotu",
     "simpleReturn": "Prosta stopa zwrotu",
     "simpleReturnTooltip": "Całkowity procentowy zysk lub strata na pozycjach, obliczony jako (wartość rynkowa − koszt nabycia) ÷ koszt nabycia. Nie uwzględnia momentu wpłat ani wypłat.",
@@ -59,26 +63,28 @@
     "twrTooltip": "Mierzy, jak dobrze radziły sobie Twoje inwestycje niezależnie od tego, kiedy dodawałeś lub wycofywałeś środki. Eliminuje wpływ momentu przepływów pieniężnych, pokazując czystą efektywność inwestycji.",
     "cagr": "CAGR",
     "cagrTooltip": "Skumulowana roczna stopa wzrostu. Twój zannualizowany zwrot oparty na zainwestowanym netto względem bieżącej wartości portfela, jak gdyby wzrost był idealnie równomierny w każdym roku.",
-    "notAvailable": "Brak"
+    "notAvailable": "Brak",
+    "unpricedHoldings": "Wycena częściowa: {count, plural, one {# pozycja nie ma} few {# pozycje nie mają} many {# pozycji nie ma} other {# pozycji nie ma}} bieżącej ceny ({symbols}), więc poniższe wartości ich nie obejmują."
   },
   "assetAllocation": {
     "title": "Alokacja aktywów",
     "noData": "Brak danych o alokacji.",
+    "knownValueOnly": "Wartości procentowe obejmują tylko znaną wartość; niektórych pozycji nie udało się wycenić.",
     "cash": "Gotówka",
     "untagged": "Bez tagów",
     "noTagData": "Brak otagowanych pozycji do pokazania. Dodaj tagi do swoich papierów, aby zobaczyć ekspozycję wg tagów.",
+    "noKeyData": "Żadna pozycja nie ma wartości dla tego klucza tagu. Oznacz papiery jako klucz:wartość (np. country:usa), aby zobaczyć ten podział.",
     "noCountryData": "Brak danych o alokacji krajowej.",
+    "keySelectorLabel": "Klucz tagu do agregacji",
     "otherCountries": "Pozostałe kraje",
     "otherAssetClasses": "Pozostałe klasy aktywów",
     "groupBy": {
       "security": "Wg papieru",
       "tag": "Wg tagu",
-      "country": "Wg kraju",
       "tagKey": "Wg klucza",
+      "country": "Wg kraju",
       "assetClass": "Wg klasy aktywów"
-    },
-    "noKeyData": "Żadna pozycja nie ma wartości dla tego klucza tagu. Oznacz papiery jako klucz:wartość (np. country:usa), aby zobaczyć ten podział.",
-    "keySelectorLabel": "Klucz tagu do agregacji"
+    }
   },
   "holdingsList": {
     "title": "Pozycje",
@@ -93,6 +99,7 @@
   "groupedHoldings": {
     "title": "Pozycje wg konta",
     "noHoldings": "Brak pozycji w Twoim portfelu.",
+    "accountIncomplete": "Częściowo: sumy tego konta pomijają pozycje, których nie dało się wycenić w {currency}.",
     "accountSummary": "{accounts} {accounts, plural, one {konto} few {konta} many {kont} other {konta}} z {positions} {positions, plural, one {pozycją} few {pozycjami} many {pozycjami} other {pozycji}}",
     "positionsWithCash": "{count} {count, plural, one {pozycja} few {pozycje} many {pozycji} other {pozycji}} + gotówka",
     "positions": "{count} {count, plural, one {pozycja} few {pozycje} many {pozycji} other {pozycji}}",
@@ -172,6 +179,12 @@
     "actionReinvest": "Reinwestycja",
     "actionAddShares": "Dodaj udziały",
     "actionRemoveShares": "Usuń udziały",
+    "actionReinvestInterest": "Reinwestycja odsetek",
+    "actionReinvestCapitalGainShort": "Reinwestycja krótkoterminowych zysków kapitałowych",
+    "actionReinvestCapitalGainLong": "Reinwestycja długoterminowych zysków kapitałowych",
+    "actionCapitalGainShort": "Krótkoterminowy zysk kapitałowy",
+    "actionCapitalGainLong": "Długoterminowy zysk kapitałowy",
+    "actionRedeem": "Wykup CD/obligacji",
     "allActions": "Wszystkie akcje"
   },
   "transactionForm": {
@@ -186,6 +199,12 @@
     "actionReinvest": "Reinwestycja dywidendy",
     "actionAddShares": "Dodaj udziały",
     "actionRemoveShares": "Usuń udziały",
+    "actionReinvestInterest": "Reinwestycja odsetek",
+    "actionReinvestCapitalGainShort": "Reinwestycja krótkoterminowych zysków kapitałowych",
+    "actionReinvestCapitalGainLong": "Reinwestycja długoterminowych zysków kapitałowych",
+    "actionCapitalGainShort": "Krótkoterminowy zysk kapitałowy",
+    "actionCapitalGainLong": "Długoterminowy zysk kapitałowy",
+    "actionRedeem": "Wykup CD/obligacji",
     "actionTransfer": "Przelew",
     "brokerageAccount": "Konto maklerskie",
     "fromAccount": "Konto źródłowe",
@@ -206,6 +225,7 @@
     "pricePerShare": "Cena za udział ({currency})",
     "commissionFees": "Prowizja / Opłaty ({currency})",
     "description": "Opis (opcjonalnie)",
+    "statusLockedToParent": "Ta transakcja jest częścią transakcji podzielonej. Zamiast tego zmień status transakcji podzielonej, aby obie strony zmieniły się razem.",
     "descriptionPlaceholder": "Opcjonalne notatki",
     "splitRatio": "Współczynnik splitu",
     "noSplitRatioWarning": "Dla tej transakcji nie ustawiono współczynnika splitu. Wprowadź współczynnik zgodnie z ogłoszeniem przed zapisaniem — Monize nie założy go za Ciebie.",
@@ -257,7 +277,10 @@
     "toastAvailableShares": "Tylko {available} udziałów dostępnych do przeniesienia",
     "toastSplitRatioRequired": "Współczynnik splitu musi być większy od zera",
     "toastPairedLegError": "Nie udało się załadować powiązanej części przeniesienia; otwórz ponownie i spróbuj jeszcze raz",
-    "toastSaveFailed": "Nie udało się zapisać transakcji"
+    "toastSaveFailed": "Nie udało się zapisać transakcji",
+    "exchangeRateUnresolved": "Brak kursu z {from} na {to}. Przed zapisaniem wprowadź kurs lub przeliczoną kwotę łączną.",
+    "toastExchangeRateRequired": "Wprowadź kurs wymiany przed zapisaniem transakcji między walutami.",
+    "notAvailable": "Niedostępne"
   },
   "newTransactionButton": {
     "label": "+ Nowa transakcja",

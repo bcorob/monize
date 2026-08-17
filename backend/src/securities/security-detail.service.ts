@@ -2,6 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { roundMoney, roundToDecimals, sumMoney } from "../common/round.util";
 import { Security } from "./entities/security.entity";
 import { InvestmentAction } from "./entities/investment-transaction.entity";
+import { baseInvestmentAction } from "./investment-replay.util";
 import { SecuritiesService } from "./securities.service";
 import { PortfolioService } from "./portfolio.service";
 import {
@@ -215,7 +216,7 @@ export class SecurityDetailService {
           costBasis:
             holding === undefined ? null : roundMoney(holding.costBasis),
           costBasisAccountCurrency:
-            holding === undefined
+            holding?.costBasisAccountCurrency == null
               ? null
               : roundMoney(holding.costBasisAccountCurrency),
           marketValue:
@@ -374,14 +375,24 @@ export class SecurityDetailService {
       // it would report nothing invested beside a real cost basis.
       totalInvested: sumMoney(
         transactions
-          .filter((tx) => ACQUIRING_ACTIONS.has(tx.action))
+          .filter((tx) =>
+            ACQUIRING_ACTIONS.has(
+              baseInvestmentAction(tx.action) as InvestmentAction,
+            ),
+          )
           .map(
             (tx) =>
               Math.abs(Number(tx.quantity) || 0) * (Number(tx.price) || 0),
           ),
       ),
-      totalSold: amountsFor((tx) => tx.action === InvestmentAction.SELL),
-      dividends: amountsFor((tx) => INCOME_ACTIONS.has(tx.action)),
+      // Base-normalized: a CD/bond redemption is a sale, and the term'd gain
+      // distributions are income; the raw action only refines the kind.
+      totalSold: amountsFor(
+        (tx) => baseInvestmentAction(tx.action) === InvestmentAction.SELL,
+      ),
+      dividends: amountsFor((tx) =>
+        INCOME_ACTIONS.has(baseInvestmentAction(tx.action) as InvestmentAction),
+      ),
       fees: sumMoney(transactions.map((tx) => Number(tx.commission) || 0)),
       // One currency, or nothing: gains realized in a PLN account and in a EUR
       // account are not addable, and their sum would be in no currency at all.

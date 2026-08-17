@@ -181,10 +181,10 @@ export class McpInvestmentsTools {
             .describe("Optional security ticker symbols (case insensitive)."),
           actions: z
             .array(z.nativeEnum(InvestmentAction))
-            .max(11)
+            .max(17)
             .optional()
             .describe(
-              "Optional transaction types (BUY, SELL, DIVIDEND, INTEREST, CAPITAL_GAIN, SPLIT, TRANSFER_IN, TRANSFER_OUT, REINVEST, ADD_SHARES, REMOVE_SHARES).",
+              "Optional transaction types (BUY, SELL, DIVIDEND, INTEREST, CAPITAL_GAIN, SPLIT, TRANSFER_IN, TRANSFER_OUT, REINVEST, ADD_SHARES, REMOVE_SHARES, REINVEST_INTEREST, REINVEST_CAPITAL_GAIN_SHORT, REINVEST_CAPITAL_GAIN_LONG, CAPITAL_GAIN_SHORT, CAPITAL_GAIN_LONG, REDEEM).",
             ),
           groupBy: z
             .enum(["account", "date", "security", "action"])
@@ -526,8 +526,8 @@ export class McpInvestmentsTools {
         title: "Manage investment transactions",
         annotations: WRITE,
         description:
-          "Create, update, or delete the user's brokerage/investment-account transactions (BUY, SELL, DIVIDEND, INTEREST, CAPITAL_GAIN, SPLIT, TRANSFER_IN, TRANSFER_OUT, REINVEST, ADD_SHARES, REMOVE_SHARES). Accepts NAMES for account, funding account, and security -- they are resolved internally, so you do NOT need to call get_accounts/lookup_securities first. operation = 'create' | 'update' | 'delete' with an items array (1-25 rows). " +
-          "create: { accountName, action, date, security?, quantity?, price?, commission?, fundingAccountName?, description? } -- security is required for BUY, SELL, SPLIT, REINVEST, ADD_SHARES, REMOVE_SHARES (matched by ticker or name). Buys debit and sells/dividends/interest/capital gains credit the brokerage's linked cash account automatically -- do not also create a separate cash transaction; fundingAccountName overrides which cash account is used. " +
+          "Create, update, or delete the user's brokerage/investment-account transactions (BUY, SELL, DIVIDEND, INTEREST, CAPITAL_GAIN, SPLIT, TRANSFER_IN, TRANSFER_OUT, REINVEST, ADD_SHARES, REMOVE_SHARES, REINVEST_INTEREST, REINVEST_CAPITAL_GAIN_SHORT, REINVEST_CAPITAL_GAIN_LONG, CAPITAL_GAIN_SHORT, CAPITAL_GAIN_LONG, REDEEM). Accepts NAMES for account, funding account, and security -- they are resolved internally, so you do NOT need to call get_accounts/lookup_securities first. operation = 'create' | 'update' | 'delete' with an items array (1-25 rows). " +
+          "create: { accountName, action, date, security?, quantity?, price?, commission?, fundingAccountName?, description? } -- security is required for BUY, SELL, REDEEM, SPLIT, REINVEST (and the REINVEST_*/CAPITAL_GAIN_* refinements), ADD_SHARES, REMOVE_SHARES (matched by ticker or name). Buys debit and sells/dividends/interest/capital gains credit the brokerage's linked cash account automatically -- do not also create a separate cash transaction; fundingAccountName overrides which cash account is used. " +
           "update: { transactionId, action?, date?, security?, quantity?, price?, commission?, description? } -- provide only the fields to change (>=1); omitted fields keep their current value; the total and cash impact are recomputed. " +
           "delete: { transactionId } -- deleting one leg of a security transfer removes the paired leg too and reverses any linked cash impact. " +
           "approvalMode controls the confirmation: by default 6 or more items show one confirmation for the whole batch and 1-5 items show one confirmation per item; pass 'individual' to force one confirmation per item at any count; ignored for a single item. The user is asked to confirm before anything is saved (web chat card via relay, or an MCP confirmation dialog).",
@@ -558,7 +558,7 @@ export class McpInvestmentsTools {
                   .max(100)
                   .optional()
                   .describe(
-                    "create/update: security ticker symbol or name. Required (create) for BUY, SELL, SPLIT, REINVEST, ADD_SHARES, REMOVE_SHARES. Matched to one of the user's securities.",
+                    "create/update: security ticker symbol or name. Required (create) for BUY, SELL, REDEEM, SPLIT, REINVEST (and the REINVEST_*/CAPITAL_GAIN_* refinements), ADD_SHARES, REMOVE_SHARES. Matched to one of the user's securities.",
                   ),
                 action: z
                   .nativeEnum(InvestmentAction)

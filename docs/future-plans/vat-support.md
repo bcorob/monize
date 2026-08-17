@@ -44,7 +44,7 @@ in `frontend/src/lib/vat.ts`.
 ### New module `backend/src/tax-rates/` (mirror `tags/`)
 - `entities/tax-rate.entity.ts` (decimal `rate` uses `numericTransformer`)
 - `dto/create-tax-rate.dto.ts`, `dto/update-tax-rate.dto.ts` (PartialType) — `@SanitizeHtml` name, `@Min(0)@Max(100)` rate, `@IsEnum` rateKind; whitelist validation like `create-tag.dto.ts`
-- `tax-rates.service.ts` — `userId`-first CRUD; name-conflict check; single-default enforcement inside one `withScopedDb` transaction (clears other defaults) -- **not** a `QueryRunner`, which ESLint rejects in `src/`; see the root `CLAUDE.md`; `remove` relies on `ON DELETE SET NULL` (keep historical `tax_amount`); record `ActionHistoryService`
+- `tax-rates.service.ts` — `userId`-first CRUD; name-conflict check; single-default enforcement inside one **`withScopedDb`** transaction (clears other defaults in the same transaction as the write, so a rejected request has not already cleared them); `remove` relies on `ON DELETE SET NULL` (keep historical `tax_amount`); record `ActionHistoryService`. Inject `DataSource`, never a repository: ESLint bans `@InjectRepository` and `createQueryRunner()` in `src/`, so the pattern this plan originally described would not compile past lint.
 - `tax-rates.controller.ts` — `@Controller("tax-rates")`, class-level `AuthGuard('jwt')`, `ParseUUIDPipe` on `:id`
 - `tax-rates.module.ts` — `forFeature([TaxRate])`, import `ActionHistoryModule`, export service
 - Wire into `backend/src/app.module.ts`

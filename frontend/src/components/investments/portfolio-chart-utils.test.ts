@@ -423,6 +423,33 @@ describe('computeMinMaxFlagIndices', () => {
   it('handles all-negative values', () => {
     expect(computeMinMaxFlagIndices([-2, -8, -1])).toEqual({ maxIndex: 2, minIndex: 1, show: true });
   });
+
+  it('anchors the extremes to real points when the first point is a gap', () => {
+    // A leading NaN (a missing-rate day in a multi-currency series) used to pin
+    // both flags to index 0 with show=true, drawing callouts on a point with no
+    // value. The extremes must come from the finite points instead.
+    expect(computeMinMaxFlagIndices([Number.NaN, 3, 9, 1])).toEqual({
+      maxIndex: 2,
+      minIndex: 3,
+      show: true,
+    });
+  });
+
+  it('ignores gaps between finite points', () => {
+    expect(computeMinMaxFlagIndices([5, Number.NaN, 2, Number.NaN, 8])).toEqual({
+      maxIndex: 4,
+      minIndex: 2,
+      show: true,
+    });
+  });
+
+  it('returns no flags when every point is a gap', () => {
+    expect(computeMinMaxFlagIndices([Number.NaN, Number.NaN])).toEqual({
+      maxIndex: -1,
+      minIndex: -1,
+      show: false,
+    });
+  });
 });
 
 describe('renderMinMaxFlagDots', () => {

@@ -177,6 +177,7 @@ export function InvestmentRegisterPanel({
             onDelete={handleDeleteBrokerage}
             onEdit={brokerageForm.openEdit}
             onNewTransaction={brokerageForm.openCreate}
+            onStatusChanged={reload}
             viewToggle={toggle}
           />
           {brokerageTotal > PAGE_SIZE && (

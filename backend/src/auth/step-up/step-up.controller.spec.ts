@@ -1,7 +1,6 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { StepUpAuthController } from "./step-up.controller";
 import { StepUpAuthService } from "./step-up.service";
-import { OidcReauthService } from "../oidc/oidc-reauth.service";
 
 describe("StepUpAuthController", () => {
   let controller: StepUpAuthController;
@@ -19,10 +18,9 @@ describe("StepUpAuthController", () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [StepUpAuthController],
       providers: [
-        // Real instance: the class exists to verify signatures, and a mock
-        // that always accepts would make the re-authentication assertions
-        // vacuous -- which is how the sentinel survived (P2-005).
-        OidcReauthService,
+        // The controller only forwards to StepUpAuthService; the real
+        // OidcReauthService (and its claim ledger) is exercised in the
+        // service's own spec, which is where verification lives.
         { provide: StepUpAuthService, useValue: service },
       ],
     }).compile();

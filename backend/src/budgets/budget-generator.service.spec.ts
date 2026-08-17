@@ -457,6 +457,74 @@ describe("BudgetGeneratorService", () => {
       }
     });
 
+    it("counts a transfer recorded as one line of a split parent in the transfer analysis", async () => {
+      const now = new Date();
+      const month1 = now.getMonth();
+      const year1 = now.getFullYear();
+      const prevMonth = month1 === 0 ? 12 : month1;
+      const prevYear = month1 === 0 ? year1 - 1 : year1;
+
+      const savingsRow = {
+        accountId: "acct-savings",
+        accountName: "Savings",
+        accountType: "SAVINGS",
+        year: prevYear,
+        month: prevMonth,
+        total: "200.00",
+      };
+
+      transactionsRepository.createQueryBuilder.mockImplementation(() => {
+        const qb = createMockQueryBuilder();
+        let isTransferQuery = false;
+        qb.andWhere = jest.fn().mockImplementation((...args: unknown[]) => {
+          const arg = typeof args[0] === "string" ? (args[0] as string) : "";
+          if (arg.includes("t.is_transfer = true")) isTransferQuery = true;
+          return qb;
+        });
+        qb.getRawMany = jest
+          .fn()
+          .mockImplementation(() =>
+            Promise.resolve(isTransferQuery ? [savingsRow] : []),
+          );
+        return qb;
+      });
+
+      // The same destination also receives 100 through a split line carrying
+      // transfer_account_id -- a savings habit recorded inside a split
+      // paycheque. Keyed off the split query's own marker predicate, so this
+      // fails when the split-transfer read is dropped (review #1131).
+      splitsRepository.createQueryBuilder.mockImplementation(() => {
+        const qb = createMockQueryBuilder();
+        let isSplitTransferQuery = false;
+        qb.andWhere = jest.fn().mockImplementation((...args: unknown[]) => {
+          const arg = typeof args[0] === "string" ? (args[0] as string) : "";
+          if (arg.includes("s.transfer_account_id IS NOT NULL"))
+            isSplitTransferQuery = true;
+          return qb;
+        });
+        qb.getRawMany = jest
+          .fn()
+          .mockImplementation(() =>
+            Promise.resolve(
+              isSplitTransferQuery ? [{ ...savingsRow, total: "100.00" }] : [],
+            ),
+          );
+        return qb;
+      });
+
+      const result = await service.generate("user-1", {
+        analysisMonths: 3,
+        profile: BudgetProfile.ON_TRACK,
+      });
+
+      const savings = result.transfers.find(
+        (t) => t.accountId === "acct-savings",
+      );
+      expect(savings).toBeDefined();
+      // 200 whole-row + 100 split-line in the same month
+      expect(savings!.max).toBe(300);
+    });
+
     it("prefers expense data when a refund causes a category to appear in both queries", async () => {
       const now = new Date();
       const month1 = now.getMonth();

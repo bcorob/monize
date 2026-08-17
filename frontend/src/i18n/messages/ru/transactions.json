@@ -26,7 +26,8 @@
     "editAria": "Редактировать получателя",
     "detailsAria": "Показать сведения о получателе",
     "collapseAria": "Скрыть информацию о получателе",
-    "show": "Показать информацию о получателе"
+    "show": "Показать информацию о получателе",
+    "amountUnavailable": "Нет курса"
   },
   "categoryWidget": {
     "detailsAria": "Показать сведения о категории",
@@ -47,7 +48,8 @@
     "noTransactions": "Нет проводок за этот период",
     "editAria": "Редактировать категорию",
     "collapseAria": "Скрыть информацию о категории",
-    "show": "Показать информацию о категории"
+    "show": "Показать информацию о категории",
+    "amountUnavailable": "Нет курса"
   },
   "accountWidget": {
     "currentBalance": "Текущий остаток",
@@ -110,10 +112,11 @@
       "paidAmount": "Оплаченная сумма",
       "feePaid": "Уплаченная комиссия",
       "balance": "Остаток",
+      "attachments": "Вложения",
       "status": "Статус",
-      "actions": "Действия",
-      "attachments": "Вложения"
+      "actions": "Действия"
     },
+    "attachmentsCount": "{count, plural, one {# вложение} few {# вложения} many {# вложений} other {# вложения}}",
     "today": "Сегодня",
     "export": {
       "button": "Экспорт",
@@ -174,8 +177,7 @@
       "editButton": "Изменить",
       "deleteButton": "Удалить"
     },
-    "itemNamePlural": "проводки",
-    "attachmentsCount": "{count, plural, one {# вложение} few {# вложения} many {# вложений} other {# вложения}}"
+    "itemNamePlural": "проводки"
   },
   "row": {
     "copyOptions": {
@@ -230,6 +232,11 @@
       "currency": "Валюта",
       "hasAttachments": "Вложения"
     },
+    "hasAttachmentsOptions": {
+      "any": "Любые",
+      "yes": "Да",
+      "no": "Нет"
+    },
     "placeholders": {
       "accounts": "Все счета",
       "payees": "Все получатели",
@@ -240,6 +247,13 @@
       "amountMax": "Макс.",
       "search": "Поиск получателя, категории, суммы, тега, описания, реф. номера...",
       "tagKeyValue": "например, usa"
+    },
+    "tagKeyNone": "Любой (без фильтра по ключу)",
+    "tagKeyOps": {
+      "hasValue": "Имеет значение",
+      "noValue": "Нет значения",
+      "contains": "Значение содержит",
+      "notContains": "Значение не содержит"
     },
     "chips": {
       "removeAccount": "Убрать фильтр {name}",
@@ -280,18 +294,6 @@
       "yearToDate": "Текущий год",
       "lastYear": "Прошлый год",
       "custom": "Произвольный"
-    },
-    "tagKeyNone": "Любой (без фильтра по ключу)",
-    "tagKeyOps": {
-      "hasValue": "Имеет значение",
-      "noValue": "Нет значения",
-      "contains": "Значение содержит",
-      "notContains": "Значение не содержит"
-    },
-    "hasAttachmentsOptions": {
-      "any": "Любые",
-      "yes": "Да",
-      "no": "Нет"
     }
   },
   "bulk": {
@@ -399,6 +401,7 @@
       "optionLabel": "{name} ({currency}) — {owner}"
     },
     "crossOwnerLockedNote": "Вторая сторона этого перевода находится на счёте, доступ к которому вам больше не предоставлен. Его сумма, дата и счета заблокированы, но вы по-прежнему можете редактировать детали этой транзакции.",
+    "transferCategoryNote": "Необязательно. Перевод по-прежнему не будет учитываться как доход или расход, но эта категория позволяет ему отображаться в ежемесячной разбивке по категориям (например, ежемесячные инвестиционные взносы).",
     "amountReceivedNote": "Полученная сумма после конвертации валюты",
     "splitTransaction": "Разделить проводку",
     "splitDisabledDuringTour": "Недоступно во время обучающего тура",
@@ -408,6 +411,7 @@
       "transferUpdated": "Перевод обновлён",
       "transactionCreated": "Проводка создана",
       "transactionUpdated": "Проводка обновлена",
+      "attachmentsUploadFailed": "Проводка сохранена, но не удалось загрузить вложений: {count}",
       "saveFailed": "Не удалось сохранить проводку",
       "loadFailed": "Не удалось загрузить данные формы",
       "splitsNotEqual": "Итого по частям ({splitTotal}) должно соответствовать сумме проводки ({txAmount})",
@@ -422,13 +426,11 @@
       "categoryCreateFailed": "Не удалось создать категорию",
       "tagCreated": "Тег \"{name}\" создан",
       "fxRateRequired": "Введите курс обмена или конвертированную сумму перед сохранением операции в иностранной валюте.",
-      "attachmentsUploadFailed": "Проводка сохранена, но не удалось загрузить вложений: {count}",
       "jointPayeeCreateNotGranted": "Владелец счёта не разрешил вам создавать получателей. Выберите одного из существующих получателей."
     },
     "ariaHistory": "Показать последние проводки",
     "ariaHistoryForPayee": "Показать последние проводки для этого получателя",
     "historyTitle": "Быстрое заполнение из последней проводки",
-    "transferCategoryNote": "Необязательно. Перевод по-прежнему не будет учитываться как доход или расход, но эта категория позволяет ему отображаться в ежемесячной разбивке по категориям (например, ежемесячные инвестиционные взносы).",
     "currencyPicker": {
       "label": "Валюта ввода",
       "ariaLabel": "Изменить валюту ввода",
@@ -440,15 +442,15 @@
       "reactivated": "{code} снова активирована"
     },
     "fx": {
+      "totalInCurrency": "Итого в {currency}",
+      "rateCaption": "1 {from} = {rate} {to} ({date})",
       "noRateWarning": "Не найден курс обмена {from} в {to} на {date}. Введите конвертированную сумму вручную.",
       "usingLatestRateHint": "Используется последний доступный курс (не на дату {date}).",
       "displayToggle": {
         "account": "Счёт",
         "original": "Оригинал"
       },
-      "rateCaption": "1 {from} = {rate} {to} ({date})",
-      "feeCaption": "Включает комиссию за зарубежную операцию {percent}% ({fee}).",
-      "totalInCurrency": "Итого в {currency}"
+      "feeCaption": "Включает комиссию за зарубежную операцию {percent}% ({fee})."
     },
     "jointSplitDisabled": "Разделёнными операциями на совместном счёте может управлять только владелец"
   },
@@ -473,6 +475,10 @@
     "remaining": "Остаток: {symbol}{amount}",
     "needAmount": "Требуется {symbol}{amount} (остаток: {symbol}{remaining})",
     "setTotal": "Установить итого {symbol}{amount}",
+    "currencyToggle": {
+      "title": "Переключить валюту, в которой отображаются и редактируются суммы разбивки",
+      "ariaAmountsIn": "Показать и редактировать суммы разбивки в {code}"
+    },
     "splitLabel": "Часть {number}",
     "columns": {
       "type": "Тип",
@@ -491,11 +497,7 @@
     "selectAccount": "Выберите счёт...",
     "memoPlaceholder": "Необязательная памятка",
     "mobileMemoPlaceholder": "Памятка",
-    "tagsPlaceholder": "Теги...",
-    "currencyToggle": {
-      "title": "Переключить валюту, в которой отображаются и редактируются суммы разбивки",
-      "ariaAmountsIn": "Показать и редактировать суммы разбивки в {code}"
-    }
+    "tagsPlaceholder": "Теги..."
   },
   "recentPopover": {
     "recentForPayee": "Последние для {name}",
@@ -513,7 +515,11 @@
     "quantityPlaceholder": "Количество",
     "pricePlaceholder": "Цена",
     "commissionPlaceholder": "Комиссия",
-    "amountPlaceholder": "Сумма ({currency})"
+    "amountPlaceholder": "Сумма ({currency})",
+    "ratePlaceholder": "{to} за 1 {from}",
+    "ariaRate": "Курс обмена ({to} за 1 {from})",
+    "rateHint": "Количество, цена и комиссия указаны в {from}; этот курс переводит денежный результат в {to}.",
+    "rateUnresolved": "Нет курса {from} к {to}. Введите его — без него денежный результат не вычислить, а две валюты не равны."
   },
   "charts": {
     "balanceHistory": {

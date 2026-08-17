@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@/test/render';
+import { render, screen, fireEvent, waitFor, act } from '@/test/render';
 import { OverrideEditorDialog } from './OverrideEditorDialog';
 import toast from 'react-hot-toast';
 
@@ -63,6 +63,8 @@ vi.mock('@/hooks/useNumberFormat', () => ({
   useNumberFormat: () => ({
     formatCurrency: (n: number, _c?: string) => `$${n.toFixed(2)}`,
     formatNumber: (n: number, d: number = 2) => n.toFixed(d),
+    // Mirrors the real formatPrice: up to 6 decimals, trailing zeros trimmed.
+    formatPrice: (n: number) => n.toFixed(6).replace(/0+$/, '').replace(/\.$/, ''),
   }),
 }));
 
@@ -397,7 +399,7 @@ describe('OverrideEditorDialog', () => {
   // --- Description override ---
   it('allows changing description', () => {
     render(<OverrideEditorDialog {...defaultProps} />);
-    const descInput = screen.getByPlaceholderText('Override description...');
+    const descInput = screen.getByPlaceholderText('Override description…');
     expect(descInput).toBeInTheDocument();
 
     fireEvent.change(descInput, { target: { value: 'Special rent this month' } });
@@ -578,18 +580,356 @@ describe('OverrideEditorDialog', () => {
       expect(Number(qtyInput.value)).toBeCloseTo(2.5, 6);
     });
 
-    it('auto-fills Price from latest market price on open', async () => {
-      mockGetSecurityPrices.mockResolvedValue([{ closePrice: '123.45' }]);
+    // The dialog used to write the latest close over whatever price the
+    // occurrence had, so reopening an override to change only its date
+    // re-priced a future purchase at today's market. A stored price is an
+    // instruction; market data is a suggestion offered beside it.
+    it('keeps the scheduled price when a latest close arrives', async () => {
+      mockGetSecurityPrices.mockResolvedValue([
+        { closePrice: '123.45', priceDate: '2025-02-20' },
+      ]);
       render(
         <OverrideEditorDialog
           {...defaultProps}
           scheduledTransaction={investmentTransaction}
         />,
       );
+      await waitFor(() => {
+        expect(screen.getByText('Use latest close')).toBeInTheDocument();
+      });
+      const priceInput = screen.getByLabelText('Price per share') as HTMLInputElement;
+      expect(Number(priceInput.value)).toBe(100);
+      const totalInput = screen.getByLabelText('Total Price') as HTMLInputElement;
+      expect(totalInput.value).toBe('1,000');
+    });
+
+    it('keeps an existing override price when a latest close arrives', async () => {
+      mockGetSecurityPrices.mockResolvedValue([
+        { closePrice: '123.45', priceDate: '2025-02-20' },
+      ]);
+      const existingOverride = {
+        id: 'ov1',
+        scheduledTransactionId: 'inv1',
+        originalDate: '2025-02-15',
+        overrideDate: '2025-02-15',
+        investmentQuantity: 10,
+        investmentPrice: 100,
+        investmentTotalAmount: null,
+      } as any;
+      render(
+        <OverrideEditorDialog
+          {...defaultProps}
+          scheduledTransaction={investmentTransaction}
+          existingOverride={existingOverride}
+        />,
+      );
+      await waitFor(() => {
+        expect(screen.getByText('Use latest close')).toBeInTheDocument();
+      });
+      expect(
+        Number((screen.getByLabelText('Price per share') as HTMLInputElement).value),
+      ).toBe(100);
+    });
+
+    // The reproduction from the audit: a date-only edit must not move money.
+    it('saves the stored price when only the date is changed', async () => {
+      mockGetSecurityPrices.mockResolvedValue([
+        { closePrice: '120', priceDate: '2025-02-20' },
+      ]);
+      const existingOverride = {
+        id: 'ov1',
+        scheduledTransactionId: 'inv1',
+        originalDate: '2025-02-15',
+        overrideDate: '2025-02-15',
+        investmentQuantity: 10,
+        investmentPrice: 100,
+        investmentTotalAmount: null,
+      } as any;
+      render(
+        <OverrideEditorDialog
+          {...defaultProps}
+          scheduledTransaction={investmentTransaction}
+          existingOverride={existingOverride}
+        />,
+      );
+      await waitFor(() => {
+        expect(screen.getByText('Use latest close')).toBeInTheDocument();
+      });
+
+      const dateInput = screen.getByLabelText('Occurrence Date') as HTMLInputElement;
+      fireEvent.change(dateInput, { target: { value: '2025-02-18' } });
+      fireEvent.blur(dateInput);
+      fireEvent.click(screen.getByText('Update Override'));
+
+      await waitFor(() => {
+        expect(mockCreateOverride).toHaveBeenCalled();
+      });
+      expect(mockCreateOverride).toHaveBeenCalledWith(
+        'inv1',
+        expect.objectContaining({ investmentPrice: 100, overrideDate: '2025-02-18' }),
+      );
+    });
+
+    it('applies the latest close only when the user asks for it', async () => {
+      mockGetSecurityPrices.mockResolvedValue([
+        { closePrice: '123.45', priceDate: '2025-02-20' },
+      ]);
+      render(
+        <OverrideEditorDialog
+          {...defaultProps}
+          scheduledTransaction={investmentTransaction}
+        />,
+      );
+      await waitFor(() => {
+        expect(screen.getByText('Use latest close')).toBeInTheDocument();
+      });
+      fireEvent.click(screen.getByText('Use latest close'));
+
+      const priceInput = screen.getByLabelText('Price per share') as HTMLInputElement;
+      expect(Number(priceInput.value)).toBeCloseTo(123.45, 6);
+      // The total follows the applied price, not the old one.
+      const totalInput = screen.getByLabelText('Total Price') as HTMLInputElement;
+      expect(totalInput.value).toBe('1,234.5');
+    });
+
+    it('fills Price from the latest close when the schedule stored none', async () => {
+      mockGetSecurityPrices.mockResolvedValue([
+        { closePrice: '123.45', priceDate: '2025-02-20' },
+      ]);
+      render(
+        <OverrideEditorDialog
+          {...defaultProps}
+          scheduledTransaction={{ ...investmentTransaction, investmentPrice: null }}
+        />,
+      );
       const priceInput = screen.getByLabelText('Price per share') as HTMLInputElement;
       await waitFor(() => {
         expect(Number(priceInput.value)).toBeCloseTo(123.45, 6);
       });
+      // and it says where the number came from
+      expect(screen.getByText(/Filled from the close on/)).toBeInTheDocument();
+    });
+
+    it('names the price provenance truthfully: schedule vs this occurrence', async () => {
+      // The provenance note is the point of the feature, so it must not claim a
+      // price was "saved on this occurrence" when it was inherited from the base
+      // schedule. No market price here (mock empty), so the stored-price note is
+      // the only one in play.
+      mockGetSecurityPrices.mockResolvedValue([]);
+      const { rerender } = render(
+        <OverrideEditorDialog
+          {...defaultProps}
+          scheduledTransaction={investmentTransaction}
+        />,
+      );
+      // A brand-new override inherits the price from the schedule -> "from the
+      // schedule", never "saved on this occurrence".
+      expect(screen.getByText('Using the price from the schedule.')).toBeInTheDocument();
+      expect(
+        screen.queryByText('Using the price saved on this occurrence.'),
+      ).not.toBeInTheDocument();
+
+      // A price actually saved on the override reads as the occurrence's own.
+      const existingOverride = {
+        id: 'ov1',
+        scheduledTransactionId: 'inv1',
+        originalDate: '2025-02-15',
+        overrideDate: '2025-02-15',
+        amount: null,
+        categoryId: null,
+        description: null,
+        isSplit: null,
+        splits: null,
+        investmentQuantity: 5,
+        investmentPrice: 250,
+        investmentTotalAmount: null,
+        createdAt: '',
+        updatedAt: '',
+      } as any;
+      rerender(
+        <OverrideEditorDialog
+          {...defaultProps}
+          scheduledTransaction={investmentTransaction}
+          existingOverride={existingOverride}
+        />,
+      );
+      expect(
+        screen.getByText('Using the price saved on this occurrence.'),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByText('Using the price from the schedule.'),
+      ).not.toBeInTheDocument();
+    });
+
+    it('stops calling the price stored once the user edits it', async () => {
+      // The provenance note recorded the price's origin on open but never
+      // cleared it on a manual edit, so it went on claiming a user-typed value
+      // was the stored one.
+      mockGetSecurityPrices.mockResolvedValue([]);
+      render(
+        <OverrideEditorDialog
+          {...defaultProps}
+          scheduledTransaction={investmentTransaction}
+        />,
+      );
+      expect(screen.getByText('Using the price from the schedule.')).toBeInTheDocument();
+      const priceInput = screen.getByLabelText('Price per share') as HTMLInputElement;
+      fireEvent.change(priceInput, { target: { value: '150' } });
+      expect(
+        screen.queryByText('Using the price from the schedule.'),
+      ).not.toBeInTheDocument();
+    });
+
+    it('derives quantity when "use latest close" is clicked with only a Total entered', async () => {
+      // The inconsistent-triple case: a Total but no Quantity. Clicking the
+      // suggestion used to set the price and leave the quantity empty; it now
+      // derives the quantity from the total, matching what typing the price does.
+      // A stored price (100) differs from the market (125), so the suggestion is
+      // offered rather than auto-applied -- the state the button needs to exist.
+      mockGetSecurityPrices.mockResolvedValue([
+        { closePrice: '125', priceDate: '2025-02-20' },
+      ]);
+      render(
+        <OverrideEditorDialog
+          {...defaultProps}
+          scheduledTransaction={investmentTransaction}
+        />,
+      );
+      await waitFor(() => {
+        expect(screen.getByText('Use latest close')).toBeInTheDocument();
+      });
+      const qtyInput = screen.getByLabelText('Quantity (shares)') as HTMLInputElement;
+      const priceInput = screen.getByLabelText('Price per share') as HTMLInputElement;
+      const totalInput = screen.getByLabelText('Total Price') as HTMLInputElement;
+      // Reduce to a Total only: clear the quantity and the stored price, then
+      // enter a total. With no price the total does not back-derive a quantity,
+      // so the quantity stays empty -- the finding's precondition.
+      fireEvent.change(qtyInput, { target: { value: '' } });
+      fireEvent.change(priceInput, { target: { value: '' } });
+      fireEvent.change(totalInput, { target: { value: '1000' } });
+      fireEvent.blur(totalInput);
+      expect(qtyInput.value).toBe('');
+
+      fireEvent.click(screen.getByText('Use latest close'));
+
+      // 1000 / 125 = 8 shares; the triple is now consistent, not price+total
+      // with an empty quantity.
+      expect(Number(qtyInput.value)).toBeCloseTo(8, 6);
+      expect(Number(priceInput.value)).toBe(125);
+    });
+
+    it('does not overwrite a total typed before the latest close arrives', async () => {
+      // The typed-before-fetch race on the override editor's own auto-fill. On a
+      // slow connection the user enters a quantity and a total while
+      // getSecurityPrices is still pending; the price field is still blank, so
+      // the auto-fill gate's `investmentPrice === ''` holds. Without the
+      // userEditedTotal guard the arriving close fired writePrice, whose
+      // quantity-first branch re-derived the total to 10 * 123.45 = 1,234.5 --
+      // booking ~30% more money than the user entered. A deferred promise
+      // reproduces the timing. (No stored price, so the auto-fill is armed.)
+      let resolvePrices: (v: any) => void = () => {};
+      mockGetSecurityPrices.mockReturnValue(
+        new Promise((resolve) => {
+          resolvePrices = resolve;
+        }),
+      );
+      render(
+        <OverrideEditorDialog
+          {...defaultProps}
+          scheduledTransaction={{
+            ...investmentTransaction,
+            investmentPrice: null,
+            investmentQuantity: null,
+          }}
+        />,
+      );
+      const qtyInput = screen.getByLabelText('Quantity (shares)') as HTMLInputElement;
+      const totalInput = screen.getByLabelText('Total Price') as HTMLInputElement;
+      await act(async () => {
+        fireEvent.change(qtyInput, { target: { value: '10' } });
+        fireEvent.change(totalInput, { target: { value: '950' } });
+        fireEvent.blur(totalInput);
+      });
+      expect(totalInput.value.replace(/,/g, '')).toBe('950');
+
+      // The close lands after the user has already typed.
+      await act(async () => {
+        resolvePrices([{ closePrice: '123.45', priceDate: '2025-02-20' }]);
+      });
+
+      // The typed total stands and the quantity is untouched; the auto-fill did
+      // not fire over the user's own entry.
+      expect(Number(totalInput.value.replace(/,/g, ''))).toBe(950);
+      expect(Number(qtyInput.value)).toBe(10);
+    });
+
+    it('auto-fills the price after a quantity-only edit, keeping the quantity', async () => {
+      // A quantity-only edit is safe to auto-fill: the fill is quantity-first, so
+      // the shares are preserved and the total simply follows. Blocking it (as an
+      // any-edit guard did) left the price empty and forced a manual click,
+      // diverging from ScheduledTransactionForm on identical input.
+      let resolvePrices: (v: any) => void = () => {};
+      mockGetSecurityPrices.mockReturnValue(
+        new Promise((resolve) => {
+          resolvePrices = resolve;
+        }),
+      );
+      render(
+        <OverrideEditorDialog
+          {...defaultProps}
+          scheduledTransaction={{
+            ...investmentTransaction,
+            investmentPrice: null,
+            investmentQuantity: null,
+          }}
+        />,
+      );
+      const qtyInput = screen.getByLabelText('Quantity (shares)') as HTMLInputElement;
+      const priceInput = screen.getByLabelText('Price per share') as HTMLInputElement;
+      const totalInput = screen.getByLabelText('Total Price') as HTMLInputElement;
+      // Type only a quantity while the price fetch is still pending.
+      await act(async () => {
+        fireEvent.change(qtyInput, { target: { value: '10' } });
+      });
+
+      await act(async () => {
+        resolvePrices([{ closePrice: '123.45', priceDate: '2025-02-20' }]);
+      });
+
+      // The close fills the price, the typed quantity stands, and the total
+      // follows (10 * 123.45 = 1,234.5).
+      expect(Number(priceInput.value)).toBe(123.45);
+      expect(Number(qtyInput.value)).toBe(10);
+      expect(Number(totalInput.value.replace(/,/g, ''))).toBeCloseTo(1234.5, 4);
+    });
+
+    it('does not tell the user to enter a price that is already stored', async () => {
+      // With a stored price and no market history, the provenance note and the
+      // "enter the price manually" hint used to render together -- contradictory
+      // instructions. The hint belongs only where the field is genuinely empty.
+      mockGetSecurityPrices.mockResolvedValue([]);
+      const existingOverride = {
+        id: 'ov1',
+        scheduledTransactionId: 'inv1',
+        originalDate: '2025-02-15',
+        overrideDate: '2025-02-15',
+        investmentQuantity: 5,
+        investmentPrice: 250,
+        investmentTotalAmount: null,
+      } as any;
+      render(
+        <OverrideEditorDialog
+          {...defaultProps}
+          scheduledTransaction={investmentTransaction}
+          existingOverride={existingOverride}
+        />,
+      );
+      await waitFor(() => {
+        expect(
+          screen.getByText('Using the price saved on this occurrence.'),
+        ).toBeInTheDocument();
+      });
+      expect(screen.queryByText(/No price history yet/)).not.toBeInTheDocument();
     });
 
     it('sends investment fields when saving a new override', async () => {
@@ -790,12 +1130,16 @@ describe('OverrideEditorDialog', () => {
       expect(qtyInput.value).toBe('');
     });
 
-    it('shows manual-price hint when security has no price history', async () => {
+    it('shows manual-price hint when there is no price history and no stored price', async () => {
       mockGetSecurityPrices.mockResolvedValue([]);
       render(
         <OverrideEditorDialog
           {...defaultProps}
-          scheduledTransaction={investmentTransaction}
+          scheduledTransaction={{
+            ...investmentTransaction,
+            investmentPrice: null,
+            investmentQuantity: null,
+          }}
         />,
       );
       await waitFor(() => {
@@ -816,6 +1160,27 @@ describe('OverrideEditorDialog', () => {
       await waitFor(() => {
         expect(screen.getByLabelText('Price per share')).toBeInTheDocument();
       });
+    });
+
+    it('does not show the no-price-history hint when the lookup fails', async () => {
+      // A failed lookup is not an empty dataset -- the hint must stay off, not
+      // falsely tell the user the security has no price history.
+      mockGetSecurityPrices.mockRejectedValueOnce(new Error('network'));
+      render(
+        <OverrideEditorDialog
+          {...defaultProps}
+          scheduledTransaction={{
+            ...investmentTransaction,
+            investmentPrice: null,
+            investmentQuantity: null,
+          }}
+        />,
+      );
+      await waitFor(() => {
+        expect(screen.getByLabelText('Price per share')).toBeInTheDocument();
+      });
+      await act(async () => {});
+      expect(screen.queryByText(/No price history yet/)).not.toBeInTheDocument();
     });
   });
 

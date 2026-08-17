@@ -72,17 +72,42 @@ export const COUNTRY_COLOURS = CHART_SERIES;
 export function computeGeographicAllocation(
   holdings: HoldingWithMarketValue[],
   securityExchangeMap: Map<string, string>,
-  convertToDefault: (value: number, currency: string) => number,
-): { exchangeData: ExchangeAllocation[]; regionData: RegionAllocation[]; totalValue: number } {
+  convertToDefault: (value: number, currency: string) => number | null,
+): {
+  exchangeData: ExchangeAllocation[];
+  regionData: RegionAllocation[];
+  totalValue: number;
+  /** Currencies with no rate into the display currency, so their holdings could not be placed. */
+  missingCurrencies: string[];
+  /** Holdings left out of `totalValue` because they could not be priced or converted. */
+  excludedCount: number;
+} {
   const exchangeMap = new Map<
     string,
     { country: string; region: string; count: number; value: number }
   >();
+  // A missing price or rate leaves a holding out of every figure below, so
+  // `totalValue` is a subtotal whenever either happens -- tracked here so the
+  // report can mark it instead of presenting the smaller number as the whole.
+  const missing = new Set<string>();
+  let excludedCount = 0;
 
   holdings.forEach((h) => {
     const exchange = securityExchangeMap.get(h.securityId) || 'Unknown';
     const info = EXCHANGE_TO_REGION[exchange] || { country: 'Other', region: 'Other' };
-    const marketValue = convertToDefault(h.marketValue ?? 0, h.currencyCode);
+    // Two ways this holding cannot be placed: the server could not price it
+    // (`marketValue` null) or there is no rate into the display currency. `?? 0`
+    // used to include it as a zero, which re-weighted every other region.
+    if (h.marketValue === null || h.marketValue === undefined) {
+      excludedCount += 1;
+      return;
+    }
+    const marketValue = convertToDefault(h.marketValue, h.currencyCode);
+    if (marketValue === null) {
+      missing.add(h.currencyCode);
+      excludedCount += 1;
+      return;
+    }
 
     const existing =
       exchangeMap.get(exchange) || {
@@ -130,5 +155,11 @@ export function computeGeographicAllocation(
     }))
     .sort((a, b) => b.marketValue - a.marketValue);
 
-  return { exchangeData, regionData, totalValue: total };
+  return {
+    exchangeData,
+    regionData,
+    totalValue: total,
+    missingCurrencies: [...missing],
+    excludedCount,
+  };
 }

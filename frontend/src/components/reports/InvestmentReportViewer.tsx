@@ -149,6 +149,9 @@ export function InvestmentReportViewer({ reportId }: InvestmentReportViewerProps
         const num = Number(value);
         // Native values are in the holding's currency; convert to base when toggled.
         if (currencyMode === 'base' && result) {
+          // No rate for this row's pair: the base-currency value is unknown.
+          // `num * null` would render it as 0.00 -- a confident wrong number.
+          if (row.baseExchangeRate === null) return '—';
           return formatCurrency(num * row.baseExchangeRate, result.baseCurrency);
         }
         const formatted = formatCurrency(num, row.currency);
@@ -199,12 +202,15 @@ export function InvestmentReportViewer({ reportId }: InvestmentReportViewerProps
         ...cols.map((key) => {
           const v = row.values[key];
           if (v === null || v === undefined) return '';
-          // Mirror the on-screen currency mode in the exported numbers.
+          // Mirror the on-screen currency mode in the exported numbers,
+          // including the unknown marker for a row with no rate to base.
           if (
             currencyMode === 'base' &&
             INVESTMENT_COLUMN_MAP[key]?.type === 'currency'
           ) {
-            return Number(v) * row.baseExchangeRate;
+            return row.baseExchangeRate === null
+              ? ''
+              : Number(v) * row.baseExchangeRate;
           }
           return v;
         }),

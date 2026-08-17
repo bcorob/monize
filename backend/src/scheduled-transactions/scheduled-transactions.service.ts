@@ -29,7 +29,8 @@ import { AccountsService } from "../accounts/accounts.service";
 import { TransactionsService } from "../transactions/transactions.service";
 import { InvestmentTransactionsService } from "../securities/investment-transactions.service";
 import { InvestmentAction } from "../securities/entities/investment-transaction.entity";
-import { AccountSubType } from "../accounts/entities/account.entity";
+import { FUNDING_ACCOUNT_ACTIONS } from "../securities/investment-replay.util";
+import { Account, AccountSubType } from "../accounts/entities/account.entity";
 import { ScheduledTransactionOverrideService } from "./scheduled-transaction-override.service";
 import { ScheduledTransactionLoanService } from "./scheduled-transaction-loan.service";
 import { todayInTimezone, todayYMD } from "../common/date-utils";
@@ -105,13 +106,21 @@ const INVESTMENT_RELATIONS = [
   "splits.investmentSecurity",
 ];
 
+// Each Money-vocabulary refinement (REDEEM, CAPITAL_GAIN_SHORT/LONG,
+// REINVEST_*) validates exactly as its base action does.
 const SECURITY_REQUIRED_ACTIONS = new Set<InvestmentAction>([
   InvestmentAction.BUY,
   InvestmentAction.SELL,
+  InvestmentAction.REDEEM,
   InvestmentAction.DIVIDEND,
   InvestmentAction.CAPITAL_GAIN,
+  InvestmentAction.CAPITAL_GAIN_SHORT,
+  InvestmentAction.CAPITAL_GAIN_LONG,
   InvestmentAction.SPLIT,
   InvestmentAction.REINVEST,
+  InvestmentAction.REINVEST_INTEREST,
+  InvestmentAction.REINVEST_CAPITAL_GAIN_SHORT,
+  InvestmentAction.REINVEST_CAPITAL_GAIN_LONG,
   InvestmentAction.ADD_SHARES,
   InvestmentAction.REMOVE_SHARES,
 ]);
@@ -119,7 +128,11 @@ const SECURITY_REQUIRED_ACTIONS = new Set<InvestmentAction>([
 const QUANTITY_PRICE_ACTIONS = new Set<InvestmentAction>([
   InvestmentAction.BUY,
   InvestmentAction.SELL,
+  InvestmentAction.REDEEM,
   InvestmentAction.REINVEST,
+  InvestmentAction.REINVEST_INTEREST,
+  InvestmentAction.REINVEST_CAPITAL_GAIN_SHORT,
+  InvestmentAction.REINVEST_CAPITAL_GAIN_LONG,
 ]);
 
 const QUANTITY_ONLY_ACTIONS = new Set<InvestmentAction>([
@@ -132,7 +145,154 @@ const AMOUNT_ONLY_ACTIONS = new Set<InvestmentAction>([
   InvestmentAction.DIVIDEND,
   InvestmentAction.INTEREST,
   InvestmentAction.CAPITAL_GAIN,
+  InvestmentAction.CAPITAL_GAIN_SHORT,
+  InvestmentAction.CAPITAL_GAIN_LONG,
 ]);
+
+/**
+ * On an update, an omitted key means "leave the stored value"; an explicit null
+ * means "clear it". `??` collapses the two, which let a `{ field: null }` PATCH
+ * pass validation against the stored value and then persist the null anyway
+ * (issue #1154 review). Use this so validation sees the value that will be
+ * written.
+ */
+function suppliedOrStored<T>(supplied: T | undefined, stored: T): T {
+  return supplied === undefined ? stored : supplied;
+}
+
+function sameNullableNumber(
+  left: number | null | undefined,
+  right: number | null | undefined,
+): boolean {
+  if (left == null || right == null) return left == null && right == null;
+  return Number(left) === Number(right);
+}
+
+/**
+ * The fields that decide what a post/edit will actually write -- the kind, the
+ * accounts money moves between, the amount and currency, and every investment
+ * scalar. `post()` and `update()` prepare their writes from a row read before
+ * the row lock; if any of these changed by the time the lock is held, the
+ * prepared write no longer describes the row and must be refused rather than
+ * committing a stale operation (issue #1154 review). Presentation-only content
+ * (name/payee, description, memo, tags) is deliberately excluded: it does not
+ * change where money moves or how much, so a concurrent cosmetic edit does not
+ * force a needless retry. The accepted trade-off is that a post racing such an
+ * edit carries the pre-lock text -- the posted transaction may show the older
+ * name/description while the schedule already shows the newer one. That is a
+ * content-consistency gap, not a financial one, and is chosen over rejecting a
+ * post because someone renamed the payee at the same instant.
+ */
+function sameScheduleMutationBasis(
+  a: ScheduledTransaction,
+  b: ScheduledTransaction,
+): boolean {
+  return (
+    a.isInvestment === b.isInvestment &&
+    a.isTransfer === b.isTransfer &&
+    a.isSplit === b.isSplit &&
+    a.accountId === b.accountId &&
+    a.transferAccountId === b.transferAccountId &&
+    a.categoryId === b.categoryId &&
+    a.currencyCode === b.currencyCode &&
+    sameNullableNumber(
+      a.amount as unknown as number,
+      b.amount as unknown as number,
+    ) &&
+    // The foreign-currency tuple is mutable independently of `amount`
+    // (`update()` merges it partially, and normalizeFxEntry does not touch the
+    // account-currency amount), so a concurrent originalAmount edit would post a
+    // stale converted total otherwise (issue #1154 re-review).
+    sameNullableNumber(a.originalAmount, b.originalAmount) &&
+    a.originalCurrencyCode === b.originalCurrencyCode &&
+    sameNullableNumber(a.exchangeRate, b.exchangeRate) &&
+    a.investmentAction === b.investmentAction &&
+    a.investmentSecurityId === b.investmentSecurityId &&
+    a.investmentFundingAccountId === b.investmentFundingAccountId &&
+    sameNullableNumber(a.investmentQuantity, b.investmentQuantity) &&
+    sameNullableNumber(a.investmentPrice, b.investmentPrice) &&
+    sameNullableNumber(a.investmentCommission, b.investmentCommission) &&
+    sameNullableNumber(a.investmentTotalAmount, b.investmentTotalAmount) &&
+    sameNullableNumber(a.investmentExchangeRate, b.investmentExchangeRate)
+  );
+}
+
+/**
+ * The money-shaping fields of one scheduled split. A split is not presentation
+ * metadata: a transfer split creates a counterpart transaction and moves the
+ * target account, and an investment split creates an embedded investment. So a
+ * post that builds its lines from the base scheduled splits must verify the set
+ * did not change under the parent lock (issue #1154 re-review).
+ */
+function scheduledSplitBasis(split: ScheduledTransactionSplit): string {
+  return JSON.stringify({
+    id: split.id,
+    kind: split.kind,
+    categoryId: split.categoryId ?? null,
+    transferAccountId: split.transferAccountId ?? null,
+    amount: Number(split.amount),
+    memo: split.memo ?? null,
+    investmentAction: split.investmentAction ?? null,
+    investmentSecurityId: split.investmentSecurityId ?? null,
+    investmentQuantity:
+      split.investmentQuantity == null
+        ? null
+        : Number(split.investmentQuantity),
+    investmentPrice:
+      split.investmentPrice == null ? null : Number(split.investmentPrice),
+    investmentCommission:
+      split.investmentCommission == null
+        ? null
+        : Number(split.investmentCommission),
+    investmentExchangeRate:
+      split.investmentExchangeRate == null
+        ? null
+        : Number(split.investmentExchangeRate),
+    tagIds: (split.tags ?? []).map((t) => t.id).sort(),
+  });
+}
+
+function sameScheduledSplitBasis(
+  before: ScheduledTransactionSplit[],
+  current: ScheduledTransactionSplit[],
+): boolean {
+  if (before.length !== current.length) return false;
+  const norm = (rows: ScheduledTransactionSplit[]) =>
+    rows.map(scheduledSplitBasis).sort();
+  const a = norm(before);
+  const b = norm(current);
+  return a.every((row, i) => row === b[i]);
+}
+
+/**
+ * Whether two occurrence-override snapshots describe the same effective posting
+ * state. Compared alongside `updatedAt` so a same-millisecond timestamp
+ * collision is harmless when the values actually differ (issue #1154 re-review).
+ */
+function sameOverrideMutationBasis(
+  before: ScheduledTransactionOverride | null,
+  current: ScheduledTransactionOverride | null,
+): boolean {
+  // null and undefined both mean "no override"; treat them as equal so an
+  // override-less post is not falsely flagged as changed.
+  if (!before || !current) return !before && !current;
+  return (
+    before.id === current.id &&
+    String(before.overrideDate) === String(current.overrideDate) &&
+    sameNullableNumber(before.amount, current.amount) &&
+    (before.categoryId ?? null) === (current.categoryId ?? null) &&
+    (before.description ?? null) === (current.description ?? null) &&
+    (before.isSplit ?? null) === (current.isSplit ?? null) &&
+    sameNullableNumber(before.investmentQuantity, current.investmentQuantity) &&
+    sameNullableNumber(before.investmentPrice, current.investmentPrice) &&
+    sameNullableNumber(
+      before.investmentTotalAmount,
+      current.investmentTotalAmount,
+    ) &&
+    JSON.stringify(before.splits ?? null) ===
+      JSON.stringify(current.splits ?? null)
+  );
+}
 
 @Injectable()
 export class ScheduledTransactionsService {
@@ -239,7 +399,13 @@ export class ScheduledTransactionsService {
         for (const scheduled of dueTransactions) {
           try {
             await withUserContext(scheduled.userId, () =>
-              this.post(scheduled.userId, scheduled.id),
+              // Auto-post: refuse under the lock if the user turned the schedule
+              // inactive or off auto-post after cron selected it (issue #1154
+              // re-review). The ConflictException is treated as "claimed
+              // elsewhere" and skipped below.
+              this.post(scheduled.userId, scheduled.id, undefined, {
+                requireActiveAutoPost: true,
+              }),
             );
             totalSuccess++;
           } catch (error) {
@@ -431,7 +597,14 @@ export class ScheduledTransactionsService {
         );
       }
       this.validateInvestmentFields(createDto);
-      if (createDto.investmentFundingAccountId) {
+      // Only validate a funding account the action will actually use; a value
+      // supplied for a non-BUY/SELL action is dropped at persist time, so
+      // rejecting it here would refuse a request the write would have cleaned.
+      if (
+        createDto.investmentAction &&
+        FUNDING_ACCOUNT_ACTIONS.has(createDto.investmentAction) &&
+        createDto.investmentFundingAccountId
+      ) {
         await this.accountsService.findOne(
           userId,
           createDto.investmentFundingAccountId,
@@ -484,9 +657,15 @@ export class ScheduledTransactionsService {
         investmentSecurityId: isInvestment
           ? transactionData.investmentSecurityId || null
           : null,
-        investmentFundingAccountId: isInvestment
-          ? transactionData.investmentFundingAccountId || null
-          : null,
+        // A funding account only belongs on a BUY/SELL; storing one on any other
+        // action is what later misroutes the posted cash (issue #1154).
+        investmentFundingAccountId:
+          isInvestment &&
+          FUNDING_ACCOUNT_ACTIONS.has(
+            transactionData.investmentAction as InvestmentAction,
+          )
+            ? transactionData.investmentFundingAccountId || null
+            : null,
         investmentQuantity:
           isInvestment && transactionData.investmentQuantity !== undefined
             ? transactionData.investmentQuantity
@@ -589,11 +768,12 @@ export class ScheduledTransactionsService {
   }
 
   private validateInvestmentFields(dto: {
-    investmentAction?: InvestmentAction;
+    investmentAction?: InvestmentAction | null;
     investmentSecurityId?: string | null;
     investmentQuantity?: number | null;
     investmentPrice?: number | null;
     investmentTotalAmount?: number | null;
+    investmentExchangeRate?: number | null;
   }): void {
     const action = dto.investmentAction;
     if (!action) {
@@ -657,7 +837,8 @@ export class ScheduledTransactionsService {
     } else if (AMOUNT_ONLY_ACTIONS.has(action)) {
       if (
         dto.investmentTotalAmount === undefined ||
-        dto.investmentTotalAmount === null
+        dto.investmentTotalAmount === null ||
+        Number(dto.investmentTotalAmount) <= 0
       ) {
         throw new BadRequestException(
           tr(
@@ -667,6 +848,24 @@ export class ScheduledTransactionsService {
           ),
         );
       }
+    }
+
+    // An exchange rate, when present, must be a real rate on every action --
+    // zero or negative can never settle (issue #1154 review). A missing rate is
+    // fine here: it is resolved for the posting date at post time. Reuses the
+    // securities catalog key rather than adding a new one.
+    if (
+      dto.investmentExchangeRate !== undefined &&
+      dto.investmentExchangeRate !== null &&
+      (!Number.isFinite(Number(dto.investmentExchangeRate)) ||
+        Number(dto.investmentExchangeRate) <= 0)
+    ) {
+      throw new BadRequestException(
+        tr(
+          "errors.securities.exchangeRateNotPositive",
+          "Exchange rate must be greater than zero",
+        ),
+      );
     }
   }
 
@@ -1078,24 +1277,50 @@ export class ScheduledTransactionsService {
           ),
         );
       }
+      // Validate the values that will actually be written. `suppliedOrStored`
+      // keeps an explicit null distinct from an omitted key, so a
+      // `{ investmentTotalAmount: null }` PATCH is validated as null (and
+      // rejected for an amount-only action) rather than passing against the
+      // stored value and then persisting the null (issue #1154 review).
       const merged = {
-        investmentAction:
-          updateDto.investmentAction ??
-          (scheduled.investmentAction as InvestmentAction | undefined),
-        investmentSecurityId:
-          updateDto.investmentSecurityId ?? scheduled.investmentSecurityId,
-        investmentQuantity:
-          updateDto.investmentQuantity ?? scheduled.investmentQuantity,
-        investmentPrice: updateDto.investmentPrice ?? scheduled.investmentPrice,
-        investmentTotalAmount:
-          updateDto.investmentTotalAmount ?? scheduled.investmentTotalAmount,
+        investmentAction: suppliedOrStored(
+          updateDto.investmentAction as InvestmentAction | null | undefined,
+          scheduled.investmentAction as InvestmentAction | null,
+        ),
+        investmentSecurityId: suppliedOrStored(
+          updateDto.investmentSecurityId as string | null | undefined,
+          scheduled.investmentSecurityId,
+        ),
+        investmentQuantity: suppliedOrStored(
+          updateDto.investmentQuantity as number | null | undefined,
+          scheduled.investmentQuantity,
+        ),
+        investmentPrice: suppliedOrStored(
+          updateDto.investmentPrice as number | null | undefined,
+          scheduled.investmentPrice,
+        ),
+        investmentTotalAmount: suppliedOrStored(
+          updateDto.investmentTotalAmount as number | null | undefined,
+          scheduled.investmentTotalAmount,
+        ),
+        investmentExchangeRate: suppliedOrStored(
+          updateDto.investmentExchangeRate as number | null | undefined,
+          scheduled.investmentExchangeRate,
+        ),
       };
       this.validateInvestmentFields(merged);
-      if (updateDto.investmentFundingAccountId) {
-        await this.accountsService.findOne(
-          userId,
-          updateDto.investmentFundingAccountId,
-        );
+      // Only validate a funding account that will actually be used: a stale one
+      // on a non-BUY/SELL action is cleared below, so it need not resolve.
+      const effectiveFundingAccountId = suppliedOrStored(
+        updateDto.investmentFundingAccountId as string | null | undefined,
+        scheduled.investmentFundingAccountId,
+      );
+      if (
+        merged.investmentAction &&
+        FUNDING_ACCOUNT_ACTIONS.has(merged.investmentAction) &&
+        effectiveFundingAccountId
+      ) {
+        await this.accountsService.findOne(userId, effectiveFundingAccountId);
       }
     }
 
@@ -1267,12 +1492,144 @@ export class ScheduledTransactionsService {
       if (updateData.investmentExchangeRate !== undefined)
         fieldsToUpdate.investmentExchangeRate =
           updateData.investmentExchangeRate ?? null;
+
+      // Editing an investment away from BUY/SELL must drop any funding account
+      // the row was carrying, even when the client omits the key rather than
+      // sending an explicit null (issue #1154). The effective action is the one
+      // being written, or the stored one when the edit leaves it untouched.
+      const effectiveInvestmentAction = (updateData.investmentAction ??
+        scheduled.investmentAction) as InvestmentAction | null;
+      if (
+        !effectiveInvestmentAction ||
+        !FUNDING_ACCOUNT_ACTIONS.has(effectiveInvestmentAction)
+      ) {
+        fieldsToUpdate.investmentFundingAccountId = null;
+      }
+
+      // The same omit-doesn't-clear defect applies to the numeric fields the
+      // issue calls out (issue #1154): switching action leaves quantity/price/
+      // commission/total from the old action on the row. This is not a money
+      // bug -- postInvestment reads only the fields its effective action uses --
+      // but it leaves the row internally inconsistent, so clear each field the
+      // effective action does not use. The clear is safe: validateInvestmentFields
+      // (run above) guarantees the action's required field is present, and the
+      // fields dropped here are exactly the ones postInvestment ignores for that
+      // action, so no posted amount changes. Unlike investmentExchangeRate (see
+      // postInvestment), none of these carries a value that is legitimate under
+      // more than one action, so an action-keyed clear cannot over-clear.
+      const usesQuantity =
+        !!effectiveInvestmentAction &&
+        (QUANTITY_PRICE_ACTIONS.has(effectiveInvestmentAction) ||
+          QUANTITY_ONLY_ACTIONS.has(effectiveInvestmentAction));
+      const usesPrice =
+        !!effectiveInvestmentAction &&
+        QUANTITY_PRICE_ACTIONS.has(effectiveInvestmentAction);
+      const usesTotalAmount =
+        !!effectiveInvestmentAction &&
+        AMOUNT_ONLY_ACTIONS.has(effectiveInvestmentAction);
+      if (!usesQuantity) fieldsToUpdate.investmentQuantity = null;
+      if (!usesPrice) {
+        fieldsToUpdate.investmentPrice = null;
+        fieldsToUpdate.investmentCommission = null;
+      }
+      if (!usesTotalAmount) fieldsToUpdate.investmentTotalAmount = null;
+
+      const actionChanged =
+        updateData.investmentAction !== undefined &&
+        updateData.investmentAction !== scheduled.investmentAction;
+
+      // The scheduled UI has no security field for INTEREST, so switching to it
+      // must not keep the previous action's security -- the cash-settlement
+      // currency is derived from the security, so a stale one converts the
+      // interest in the wrong currency (issue #1154 review). Clear it only on
+      // the transition and only when the caller did not explicitly supply one,
+      // leaving a deliberate API value for a future product decision.
+      if (
+        actionChanged &&
+        effectiveInvestmentAction === InvestmentAction.INTEREST &&
+        updateData.investmentSecurityId === undefined
+      ) {
+        fieldsToUpdate.investmentSecurityId = null;
+      }
+
+      // A stored exchange rate describes a settlement tuple (account + security
+      // + cash destination), not just an action, and the column does not record
+      // the currency pair it was resolved for. If any part of that tuple changes
+      // and no replacement rate is supplied, force post-time re-resolution
+      // rather than applying a rate for the old pair (issue #1154 review). This
+      // is the value-difference guard the earlier deferral asked for -- a
+      // presentation-only edit (e.g. the name) does not touch the tuple, so a
+      // legitimate cross-currency dividend rate is preserved.
+      const effectiveSecurityIdForFx =
+        fieldsToUpdate.investmentSecurityId !== undefined
+          ? (fieldsToUpdate.investmentSecurityId as string | null)
+          : suppliedOrStored(
+              updateData.investmentSecurityId as string | null | undefined,
+              scheduled.investmentSecurityId,
+            );
+      const effectiveFundingForFx =
+        effectiveInvestmentAction &&
+        FUNDING_ACCOUNT_ACTIONS.has(effectiveInvestmentAction)
+          ? suppliedOrStored(
+              updateData.investmentFundingAccountId as
+                | string
+                | null
+                | undefined,
+              scheduled.investmentFundingAccountId,
+            )
+          : null;
+      const storedFundingForFx =
+        scheduled.investmentAction &&
+        FUNDING_ACCOUNT_ACTIONS.has(
+          scheduled.investmentAction as InvestmentAction,
+        )
+          ? scheduled.investmentFundingAccountId
+          : null;
+      const settlementBasisChanged =
+        (updateData.accountId !== undefined &&
+          updateData.accountId !== scheduled.accountId) ||
+        effectiveSecurityIdForFx !== scheduled.investmentSecurityId ||
+        effectiveFundingForFx !== storedFundingForFx;
+      if (
+        settlementBasisChanged &&
+        updateData.investmentExchangeRate === undefined
+      ) {
+        fieldsToUpdate.investmentExchangeRate = null;
+      }
     }
 
     // Apply the split rewrite, any mode-switch split clearing, and the main
     // row update atomically so a partial failure cannot leave the row and its
     // splits in an inconsistent state.
     await withScopedDb(this.dataSource, async (m) => {
+      // The effective action, validation and the action-dependent clears above
+      // were derived from `scheduled`, read before this transaction. Re-read the
+      // row under the lock and refuse if the mutation basis changed in between:
+      // otherwise a concurrent action switch that committed first would be
+      // overwritten by this request's stale derived clears (e.g. nulling the
+      // quantity/price a concurrent BUY just set) (issue #1154 review).
+      const current = await m.findOne(ScheduledTransaction, {
+        where: { id, userId },
+        lock: { mode: "pessimistic_write" },
+      });
+      if (!current) {
+        throw new NotFoundException(
+          tr(
+            "errors.scheduled.notFound",
+            `Scheduled transaction with ID ${id} not found`,
+            { id },
+          ),
+        );
+      }
+      if (!sameScheduleMutationBasis(scheduled, current)) {
+        throw new ConflictException(
+          tr(
+            "errors.scheduled.changedConcurrently",
+            "The scheduled transaction changed during the operation. Reload it and retry.",
+          ),
+        );
+      }
+
       if (splits !== undefined) {
         if (Array.isArray(splits) && splits.length > 0) {
           await m.delete(ScheduledTransactionSplit, {
@@ -1301,6 +1658,46 @@ export class ScheduledTransactionsService {
 
       if (Object.keys(fieldsToUpdate).length > 0) {
         await m.update(ScheduledTransaction, id, fieldsToUpdate);
+      }
+
+      // A user edit of a loan payment schedule is a reconfiguration, so it has
+      // to reach the durable copy on the account: the per-posting
+      // recalculation grows the template back toward
+      // payment_amount / extra_payment_amount, because the template itself
+      // also carries transient clamps a previous pass wrote (a final payment,
+      // an interest spike) and cannot say which of the two it holds (review
+      // #1131).
+      if (
+        updateData.amount !== undefined ||
+        splits !== undefined ||
+        clearSplitsForModeSwitch
+      ) {
+        const loanAccount = await m.getRepository(Account).findOne({
+          where: { scheduledTransactionId: id, userId },
+        });
+        if (loanAccount) {
+          const accountUpdate: Partial<Account> = {};
+          if (updateData.amount !== undefined) {
+            accountUpdate.paymentAmount = Math.abs(Number(updateData.amount));
+          }
+          if (Array.isArray(splits)) {
+            const extraSplit = splits.find(
+              (s) =>
+                s.transferAccountId === loanAccount.id &&
+                s.memo?.toLowerCase().includes("extra"),
+            );
+            accountUpdate.extraPaymentAmount = extraSplit
+              ? Math.abs(Number(extraSplit.amount))
+              : 0;
+          } else if (clearSplitsForModeSwitch) {
+            accountUpdate.extraPaymentAmount = 0;
+          }
+          if (Object.keys(accountUpdate).length > 0) {
+            await m
+              .getRepository(Account)
+              .update(loanAccount.id, accountUpdate);
+          }
+        }
       }
     });
 
@@ -1477,6 +1874,7 @@ export class ScheduledTransactionsService {
     userId: string,
     id: string,
     postDto?: PostScheduledTransactionDto,
+    options: { requireActiveAutoPost?: boolean } = {},
   ): Promise<ScheduledTransaction | null> {
     const scheduled = await this.findOne(userId, id);
 
@@ -1657,7 +2055,13 @@ export class ScheduledTransactionsService {
             toAccountId: scheduled.transferAccountId,
             amount: Math.abs(finalAmount),
             transactionDate: postDate,
-            fromCurrencyCode: scheduled.currencyCode,
+            // Currency codes are deliberately not sent: the transfer service
+            // derives both from the accounts. A schedule stores only its source
+            // currency, so supplying that and nothing else is what made a
+            // cross-currency scheduled transfer post at 1:1 with the
+            // destination row mislabelled (audit P5-002). Sending a stored code
+            // that has since gone stale would now fail the posting instead,
+            // which is no better.
             description: finalDescription || undefined,
             referenceNumber: postDto?.referenceNumber || undefined,
             payeeId: scheduled.payeeId || undefined,
@@ -1686,8 +2090,14 @@ export class ScheduledTransactionsService {
     // 0.00 instead of 50.00 (audit P4-004).
     //
     // Nested service calls join this transaction, so a refusal below rolls the
-    // money back with it. Everything that reaches outside PostgreSQL -- the FX
-    // rate lookup in particular -- has already run above.
+    // money back with it. The schedule's own account-currency FX lookup
+    // (resolveFxForPosting) has already run above. One external call is NOT
+    // hoisted: an investment's cash-settlement FX is resolved inside
+    // postInvestment -> InvestmentTransactionsService.create, which can fetch a
+    // cross-currency rate from the quote provider while this lock is held. That
+    // is a pre-existing cost (a network round-trip inside the transaction), not
+    // a correctness bug -- rollback still unwinds cleanly -- and is tracked as a
+    // follow-up rather than reshaped here.
     let writtenTransfer: { savedFromId: string; savedToId: string } | undefined;
     const removedAfterOnce = await withScopedDb(this.dataSource, async (m) => {
       // Lock the schedule and confirm this occurrence is still the due one. A
@@ -1714,6 +2124,96 @@ export class ScheduledTransactionsService {
         );
       }
 
+      // Cron selected this row when it was active and auto-posting; if the user
+      // turned either off after selection but before the lock, the automatic
+      // post must not fire (issue #1154 re-review). Manual posts do not pass this
+      // option, so an explicit user post of an inactive schedule still works.
+      if (
+        options.requireActiveAutoPost &&
+        (!current.isActive || !current.autoPost)
+      ) {
+        throw new ConflictException(
+          tr(
+            "errors.scheduled.changedConcurrently",
+            "The scheduled transaction changed during the operation. Reload it and retry.",
+          ),
+        );
+      }
+
+      // The transfer/plain payloads (preparedTransfer, transactionPayload) and
+      // the FX amount were prepared from the pre-lock `scheduled` snapshot. If a
+      // concurrent edit changed what the schedule *is* -- kind, accounts, amount,
+      // currency, or any investment scalar -- committing the prepared write would
+      // post a different operation than the row now describes (e.g. a plain
+      // expense edited to a transfer, so money leaves but nothing arrives). Refuse
+      // and let the caller reload (issue #1154 review). The occurrence-claim and
+      // the row lock guarantee no double-post; this guards against a stale-shape
+      // post. Cron treats the ConflictException as "claimed elsewhere" and skips.
+      if (!sameScheduleMutationBasis(scheduled, current)) {
+        throw new ConflictException(
+          tr(
+            "errors.scheduled.changedConcurrently",
+            "The scheduled transaction changed during the operation. Reload it and retry.",
+          ),
+        );
+      }
+
+      // The occurrence override is a mutable row of its own, read before this
+      // lock. Re-read it under the lock and refuse if it changed, so a
+      // concurrently-edited override is neither posted stale nor deleted
+      // unread (issue #1154 review).
+      const lockedOverride = await m
+        .getRepository(ScheduledTransactionOverride)
+        .findOne({
+          where: { scheduledTransactionId: id, originalDate: nextDueDateStr },
+          lock: { mode: "pessimistic_write" },
+        });
+      if (
+        !sameOverrideMutationBasis(storedOverride, lockedOverride) ||
+        (storedOverride?.updatedAt?.getTime() ?? null) !==
+          (lockedOverride?.updatedAt?.getTime() ?? null)
+      ) {
+        throw new ConflictException(
+          tr(
+            "errors.scheduled.changedConcurrently",
+            "The scheduled transaction changed during the operation. Reload it and retry.",
+          ),
+        );
+      }
+
+      // Split lines are money-shaping, not metadata (a transfer split moves the
+      // target account; an investment split creates an embedded trade), and the
+      // payload built them from the pre-lock `scheduled.splits`. When the post
+      // actually uses the base scheduled splits -- no inline splits and no
+      // override splits -- re-read the set under the parent lock and refuse if it
+      // changed, so a concurrently-retargeted split cannot post money to the old
+      // account (issue #1154 re-review). This is a point-in-time comparison, so
+      // what it protects against depends on when the other writer commits.
+      // Writers that serialize on the parent lock (the loan recalculator) cannot
+      // mutate the split set after this read at all -- the lock is held until the
+      // post commits. A writer that does NOT take the parent lock can still
+      // commit a change *after* this comparison and before the post commits; the
+      // only such known path is bulk category reassignment, whose residual
+      // effect is categorization-only (no amount or account routing changes), so
+      // it is accepted here rather than made to lock every affected parent.
+      const usesScheduledSplits =
+        useSplits &&
+        !hasInlineSplits &&
+        !(lockedOverride?.splits && lockedOverride.splits.length > 0);
+      if (usesScheduledSplits) {
+        const currentSplits = await m
+          .getRepository(ScheduledTransactionSplit)
+          .find({ where: { scheduledTransactionId: id }, relations: ["tags"] });
+        if (!sameScheduledSplitBasis(scheduled.splits ?? [], currentSplits)) {
+          throw new ConflictException(
+            tr(
+              "errors.scheduled.changedConcurrently",
+              "The scheduled transaction changed during the operation. Reload it and retry.",
+            ),
+          );
+        }
+      }
+
       // Claim the occurrence. The unique key on
       // (scheduled_transaction_id, original_due_date) is what makes the claim
       // the serialization point rather than the lock alone: it survives a
@@ -1735,13 +2235,19 @@ export class ScheduledTransactionsService {
         );
       }
 
-      if (scheduled.isInvestment) {
+      if (current.isInvestment) {
+        // Post from the locked row, not the pre-lock `scheduled` snapshot: a
+        // concurrent edit that switched the action/funding/security between the
+        // snapshot read and this lock would otherwise post the stale action to
+        // the stale account (issue #1154 review). `current` carries the
+        // authoritative scalar investment fields; postInvestment reads only
+        // those, and the nested create resolves its own settlement account.
         await this.postInvestment(
           userId,
-          scheduled,
+          current,
           postDto,
           postDate,
-          storedOverride,
+          lockedOverride,
         );
       } else if (preparedTransfer) {
         // Already validated and authorized above; only the writes join this
@@ -1755,8 +2261,8 @@ export class ScheduledTransactionsService {
         await this.transactionsService.create(userId, transactionPayload);
       }
 
-      if (storedOverride) {
-        await m.remove(storedOverride);
+      if (lockedOverride) {
+        await m.remove(lockedOverride);
       }
 
       if (current.frequency === "ONCE") {
@@ -1830,12 +2336,11 @@ export class ScheduledTransactionsService {
     }
 
     if (scheduled.splits && scheduled.splits.length > 0) {
-      const loanAccountId = await this.loanService.findLoanAccountFromSplits(
-        scheduled.splits,
-      );
-      if (loanAccountId) {
-        await this.loanService.recalculateLoanPaymentSplits(id, loanAccountId);
-      }
+      // Do not pass a loan id captured off the pre-lock snapshot: the
+      // recalculation locks the parent and derives the loan from the current
+      // split set itself, so a concurrent retarget (Loan A -> Loan B) cannot
+      // recalculate the wrong loan (issue #1154 re-review).
+      await this.loanService.recalculateLoanPaymentSplits(id);
     }
 
     return this.findOne(userId, id);
@@ -1907,12 +2412,40 @@ export class ScheduledTransactionsService {
         ? postDto.description || undefined
         : scheduled.description || undefined;
 
+    // Post-time overrides (inline > occurrence override > schedule) are another
+    // write boundary that create/update validation does not cover, and internal
+    // callers (cron, MCP) bypass the controller DTO. Revalidate the resolved
+    // values before creating money, so an override cannot post a zero BUY
+    // quantity or a negative dividend total (issue #1154 review). Amount-only
+    // actions may express the total as quantity*price, so mirror that here.
+    const effectiveAmountOnlyTotal =
+      totalAmount !== undefined
+        ? totalAmount
+        : quantity !== undefined && price !== undefined
+          ? quantity * price
+          : undefined;
+    this.validateInvestmentFields({
+      investmentAction: action,
+      investmentSecurityId: scheduled.investmentSecurityId,
+      investmentQuantity: quantity,
+      investmentPrice: price,
+      investmentTotalAmount: effectiveAmountOnlyTotal,
+      investmentExchangeRate: exchangeRate,
+    });
+
     const dto: any = {
       accountId: scheduled.accountId,
       action,
       transactionDate: postDate,
       securityId: scheduled.investmentSecurityId || undefined,
-      fundingAccountId: scheduled.investmentFundingAccountId || undefined,
+      // Only a BUY/SELL settles through the funding account; for any other
+      // action the cash belongs in the brokerage's linked cash account, so a
+      // stale funding account left on the row is ignored rather than allowed to
+      // misroute the money (issue #1154). This also repairs rows that were
+      // already stored with a stale funding account before the write-path fix.
+      fundingAccountId: FUNDING_ACCOUNT_ACTIONS.has(action)
+        ? scheduled.investmentFundingAccountId || undefined
+        : undefined,
       description,
     };
 
@@ -1939,6 +2472,20 @@ export class ScheduledTransactionsService {
       }
     }
 
+    // Unlike the funding account above, the stored exchange rate is forwarded
+    // for every action rather than gated on FUNDING_ACCOUNT_ACTIONS. That is
+    // deliberate and asymmetric: a cross-currency DIVIDEND/INTEREST/CAPITAL_GAIN
+    // legitimately settles at a rate, so it cannot simply be dropped for
+    // non-BUY/SELL actions the way the funding account can. A known, separate
+    // gap remains -- a rate stored (only reachable via the direct API; no UI or
+    // MNY-import path ever sets investmentExchangeRate) for one settlement basis
+    // and then applied after the action switches settlement account -- because
+    // the column carries no record of the currency pair it was resolved for.
+    // Closing it needs the "account, currency, rate and amount are one tuple"
+    // spec (a value-difference clear on a settlement-basis change, not a
+    // presence check), tracked as a follow-up to issue #1154 rather than
+    // fixed by a naive mirror of the funding-account gate that would wipe a
+    // legitimate dividend rate on every unrelated edit.
     if (exchangeRate !== undefined) dto.exchangeRate = exchangeRate;
 
     await this.investmentTransactionsService.create(userId, dto);
@@ -2043,11 +2590,9 @@ export class ScheduledTransactionsService {
 
   async recalculateLoanPaymentSplits(
     scheduledTransactionId: string,
-    loanAccountId: string,
   ): Promise<void> {
     return this.loanService.recalculateLoanPaymentSplits(
       scheduledTransactionId,
-      loanAccountId,
     );
   }
 }

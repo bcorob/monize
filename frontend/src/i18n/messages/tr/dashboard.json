@@ -202,7 +202,8 @@
     "title": "Hesaba Göre Kredi Kullanımı",
     "empty": "Limit belirlenmiş kredi hesabı yok.",
     "utilization": "Kullanım",
-    "used": "Kullanılan"
+    "used": "Kullanılan",
+    "noRate": "mevcut değil ({currency} kuru yok)"
   },
   "creditUtilizationTotal": {
     "title": "Toplam Kredi Kullanımı",

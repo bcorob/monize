@@ -1,7 +1,7 @@
 import { EntityManager } from "typeorm";
-import { Transaction, TransactionStatus } from "./entities/transaction.entity";
+import { deletionBalanceEffect } from "../common/deletion-balance.util";
+import { Transaction } from "./entities/transaction.entity";
 import { LockedTransactionRow } from "../common/db/locks";
-import { isTransactionInFuture } from "../common/date-utils";
 
 /**
  * Removing a ledger row and reversing what it contributed to a balance, in one
@@ -54,10 +54,14 @@ export async function removeLockedTransactionLeg(
     return false;
   }
 
-  if (isTransactionInFuture(leg.transactionDate)) {
+  // The one deletion-reversal rule, from the shared helper, rather than a
+  // third hand-written copy of it beside the two the helper replaced.
+  const effect = deletionBalanceEffect(leg);
+  if (effect.delta !== 0) {
+    await balances.updateBalance(leg.accountId, effect.delta);
+  }
+  if (effect.needsRecalc) {
     await balances.recalculateCurrentBalance(userId, leg.accountId);
-  } else if (leg.status !== TransactionStatus.VOID) {
-    await balances.updateBalance(leg.accountId, -leg.amount);
   }
   return true;
 }

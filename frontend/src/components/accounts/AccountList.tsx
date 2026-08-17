@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { sumConverted, type ConvertedTotal } from '@/lib/currency-total';
+import { PartialTotal } from '@/components/ui/PartialTotal';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Account, AccountType } from '@/types/account';
@@ -101,13 +103,27 @@ interface AccountListProps {
    * than showing the cash it does know.
    */
   unpricedHoldingCounts?: Map<string, number>;
+  /**
+   * True when the portfolio-summary request failed, so every brokerage market
+   * value is unknown rather than a real zero. Group totals exclude and mark
+   * those accounts instead of folding a fabricated 0 in.
+   */
+  portfolioFailed?: boolean;
   defaultCurrency: string;
-  convertToDefault: (value: number, fromCurrency: string) => number;
+  /** Returns `null` when no rate for the pair is known. */
+  convertToDefault: (value: number, fromCurrency: string) => number | null;
   onEdit: (account: Account) => void;
   onRefresh: () => void;
 }
 
-export function AccountList({ accounts, institutions, brokerageMarketValues, unpricedHoldingCounts, defaultCurrency, convertToDefault, onEdit, onRefresh }: AccountListProps) {
+/** A group with nothing in it: complete, and zero. */
+const EMPTY_CONVERTED_TOTAL: ConvertedTotal = {
+  value: 0,
+  missingCurrencies: [],
+  excludedCount: 0,
+};
+
+export function AccountList({ accounts, institutions, brokerageMarketValues, unpricedHoldingCounts, portfolioFailed, defaultCurrency, convertToDefault, onEdit, onRefresh }: AccountListProps) {
   const t = useTranslations('accounts');
   const tc = useTranslations('common');
   const stripAccountName = useMainAccountName();
@@ -406,34 +422,54 @@ export function AccountList({ accounts, institutions, brokerageMarketValues, unp
   // threaded through the summary cards above the list to mean anything -- a
   // known gap recorded in the plan, not something this row total invents.
   const groupTotals = useMemo(() => {
-    const totals = new Map<AccountType, number>();
+    // A group total is partial when one of its accounts has no rate to the
+    // display currency; `sumConverted` keeps the subtotal and the missing pairs
+    // together so the header can mark it instead of quietly under-reporting.
+    const totals = new Map<AccountType, ConvertedTotal>();
     for (const { type, accounts: groupAccounts } of groupedAccounts) {
-      let totalUnits = 0;
-      for (const logical of groupAccounts) {
-        const members = logical.cash
-          ? [logical.primary, logical.cash]
-          : [logical.primary];
-        for (const account of members) {
-          const rawBalance =
-            account.accountSubType === 'INVESTMENT_BROKERAGE'
-              ? brokerageMarketValues?.get(account.id) ?? 0
-              : (Number(account.currentBalance) || 0) +
-                (Number(account.futureTransactionsSum) || 0);
-          const converted = convertToDefault(rawBalance, account.currencyCode);
-          // Accumulate in 1/10000 units to avoid floating-point drift.
-          totalUnits += Math.round(converted * 10000);
-        }
-      }
-      totals.set(type, totalUnits / 10000);
+      // Sum over each entity's underlying ledgers (a brokerage pair is primary
+      // plus its cash sub-account) so the arithmetic is exactly what it was
+      // when the pair was two rows. An unpriced holding is already excluded
+      // from the brokerage market value -- that gap is surfaced by the row's
+      // unpriced count, not by nulling the group total. A missing exchange
+      // rate, by contrast, makes the total a subtotal, which `sumConverted`
+      // records so the header can mark it.
+      const members = groupAccounts.flatMap((logical) =>
+        logical.cash ? [logical.primary, logical.cash] : [logical.primary],
+      );
+      // A brokerage market value is unknown when the valuation failed, and a
+      // subtotal when some holdings could not be priced. Either way it is not a
+      // measured number and has no currency to name, so the member is left out
+      // by count -- matching the account row's unknown marker -- rather than
+      // folded in as a fabricated 0.
+      const isUnknownBrokerage = (account: Account) =>
+        account.accountSubType === 'INVESTMENT_BROKERAGE' &&
+        (portfolioFailed === true || (unpricedHoldingCounts?.get(account.id) ?? 0) > 0);
+      const known = members.filter((account) => !isUnknownBrokerage(account));
+      const unknownCount = members.length - known.length;
+      const converted = sumConverted(
+        known,
+        (account) =>
+          account.accountSubType === 'INVESTMENT_BROKERAGE'
+            ? brokerageMarketValues?.get(account.id) ?? 0
+            : (Number(account.currentBalance) || 0) +
+              (Number(account.futureTransactionsSum) || 0),
+        (account) => account.currencyCode,
+        convertToDefault,
+      );
+      totals.set(type, {
+        ...converted,
+        excludedCount: converted.excludedCount + unknownCount,
+      });
     }
     return totals;
-  }, [groupedAccounts, brokerageMarketValues, convertToDefault]);
+  }, [groupedAccounts, brokerageMarketValues, unpricedHoldingCounts, portfolioFailed, convertToDefault]);
 
   // Flatten groups into a sequence of header / row entries with stable striping
   // indices so AccountRow alternation continues to look right across groups.
   const renderItems = useMemo(() => {
     type Item =
-      | { kind: 'header'; type: AccountType; count: number; total: number; isCollapsed: boolean }
+      | { kind: 'header'; type: AccountType; count: number; total: ConvertedTotal; isCollapsed: boolean }
       | { kind: 'row'; logical: LogicalAccount; index: number };
     const items: Item[] = [];
     let rowIndex = 0;
@@ -445,7 +481,7 @@ export function AccountList({ accounts, institutions, brokerageMarketValues, unp
         // One entry per account the user has -- a pair counts once, which is
         // what `countLogicalAccounts` counted when these were two rows.
         count: groupAccounts.length,
-        total: groupTotals.get(type) ?? 0,
+        total: groupTotals.get(type) ?? EMPTY_CONVERTED_TOTAL,
         isCollapsed,
       });
       if (!isCollapsed) {
@@ -872,12 +908,14 @@ export function AccountList({ accounts, institutions, brokerageMarketValues, unp
                   <td className={`${cellPadding} text-right whitespace-nowrap`}>
                     <span
                       className={`text-sm font-medium ${
-                        item.total >= 0
+                        item.total.value >= 0
                           ? 'text-gray-700 dark:text-gray-200'
                           : 'text-red-600 dark:text-red-400'
                       }`}
                     >
-                      {formatCurrencyBase(item.total, defaultCurrency)}
+                      <PartialTotal total={item.total} displayCurrency={defaultCurrency}>
+                        {formatCurrencyBase(item.total.value, defaultCurrency)}
+                      </PartialTotal>
                     </span>
                   </td>
                   <td

@@ -66,12 +66,31 @@ describe('aggregateHoldingsBySecurity', () => {
     expect(result[0].gainLossPercent).toBeNull();
   });
 
-  it('treats null market value as 0 when the other holding has a market value', () => {
+  it('an unpriced account makes the aggregate market value unknown, not a subtotal', () => {
+    // This assertion previously read `expect(result[0].marketValue).toBe(550)`
+    // under the name "treats null market value as 0 when the other holding has
+    // a market value" -- it documented the defect as intended behaviour. A sum
+    // with an unknown component is unknown; 550 is the priced half's subtotal
+    // and must not ship under the aggregate's marketValue.
     const h1 = holding({ id: 'h1', securityId: 'AAPL', accountId: 'acc-1', quantity: 10, costBasis: 1000, costBasisAccountCurrency: 1000, marketValue: null, gainLoss: null, gainLossPercent: null });
     const h2 = holding({ id: 'h2', securityId: 'AAPL', accountId: 'acc-2', quantity: 5, costBasis: 500, costBasisAccountCurrency: 500, marketValue: 550, gainLoss: 50, gainLossPercent: 10 });
     const result = aggregateHoldingsBySecurity([h1, h2]);
-    expect(result[0].marketValue).toBe(550);
-    expect(result[0].gainLoss).toBe(550 - 1500);
+    expect(result[0].marketValue).toBeNull();
+    expect(result[0].gainLoss).toBeNull();
+    expect(result[0].gainLossPercent).toBeNull();
+  });
+
+  it('an unconvertible basis in one account makes the aggregate basis unknown', () => {
+    // Number(null) is 0, so the old `Number(a) + Number(b)` silently dropped a
+    // whole account's cost basis from the rollup and overstated the gain
+    // computed against it.
+    const h1 = holding({ id: 'h1', securityId: 'AAPL', accountId: 'acc-1', quantity: 10, costBasis: 1000, costBasisAccountCurrency: null, marketValue: 1100, gainLoss: 100, gainLossPercent: 10 });
+    const h2 = holding({ id: 'h2', securityId: 'AAPL', accountId: 'acc-2', quantity: 5, costBasis: 500, costBasisAccountCurrency: 500, marketValue: 550, gainLoss: 50, gainLossPercent: 10 });
+    const result = aggregateHoldingsBySecurity([h1, h2]);
+    expect(result[0].costBasisAccountCurrency).toBeNull();
+    // The native-currency basis is still known, so the aggregate gain (which is
+    // derived from costBasis, not the account-currency basis) survives.
+    expect(result[0].costBasis).toBe(1500);
   });
 
   it('returns null gainLossPercent when costBasis is 0', () => {

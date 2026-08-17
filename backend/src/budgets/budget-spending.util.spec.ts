@@ -218,6 +218,83 @@ describe("queryCategorySpending", () => {
     expect(result.transferSpendingMap.get("acc-1")).toBe(300);
   });
 
+  it("includes a transfer that is a child of a split (P5-007)", async () => {
+    // A monthly transfer budget to Savings of 100, spent as one mixed line:
+    // a -100 parent with a -60 Groceries child and a -40 transfer child.
+    //
+    // The transfer query keys off `is_transfer` on the PARENT, and a split
+    // parent is not a transfer row -- so this progress was invisible and the
+    // budget read 0 of 100 spent. Savings, debt-payment and
+    // investment-contribution budgets all under-reported whenever the user
+    // recorded the transfer alongside a category on one transaction.
+    const txRepo: any = {
+      createQueryBuilder: jest
+        .fn()
+        // No plain transfer rows in the period.
+        .mockImplementation(() => makeQbReturning([])),
+    };
+    const splitRepo: any = {
+      createQueryBuilder: jest
+        .fn()
+        .mockImplementation(() =>
+          makeQbReturning([{ destinationAccountId: "acc-1", total: "40" }]),
+        ),
+    };
+
+    const result = await queryCategorySpending(
+      txRepo,
+      splitRepo,
+      "user-1",
+      [
+        makeBudgetCategory({
+          categoryId: null,
+          isTransfer: true,
+          transferAccountId: "acc-1",
+        } as any),
+      ],
+      "2026-01-01",
+      "2026-01-31",
+    );
+
+    expect(result.transferSpendingMap.get("acc-1")).toBe(40);
+  });
+
+  it("sums a plain transfer and a split transfer to the same account", async () => {
+    // Counted once each, not once in total and not twice: the split query reads
+    // the split row's own target, and a counterpart row is not itself a split.
+    const txRepo: any = {
+      createQueryBuilder: jest
+        .fn()
+        .mockImplementation(() =>
+          makeQbReturning([{ destinationAccountId: "acc-1", total: "300" }]),
+        ),
+    };
+    const splitRepo: any = {
+      createQueryBuilder: jest
+        .fn()
+        .mockImplementation(() =>
+          makeQbReturning([{ destinationAccountId: "acc-1", total: "40" }]),
+        ),
+    };
+
+    const result = await queryCategorySpending(
+      txRepo,
+      splitRepo,
+      "user-1",
+      [
+        makeBudgetCategory({
+          categoryId: null,
+          isTransfer: true,
+          transferAccountId: "acc-1",
+        } as any),
+      ],
+      "2026-01-01",
+      "2026-01-31",
+    );
+
+    expect(result.transferSpendingMap.get("acc-1")).toBe(340);
+  });
+
   it("treats null totals as 0", async () => {
     const txRepo: any = {
       createQueryBuilder: jest

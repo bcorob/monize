@@ -4,6 +4,7 @@ import { useState, useMemo, useRef } from 'react';
 import { useTranslations } from 'next-intl';
 import { useMainAccountName } from '@/hooks/useMainAccountName';
 import { gainLossColor } from '@/lib/format';
+import { baseInvestmentAction } from '@/lib/investment-actions';
 import { Skeleton } from '@/components/ui/LoadingSkeleton';
 import { useReportData } from '@/hooks/useReportData';
 import { ReportError } from '@/components/reports/ReportError';
@@ -287,7 +288,7 @@ export function SecurityPerformanceReport() {
 
     // Find first buy date for annualized return
     const buyTx = transactions
-      .filter((tx) => tx.action === 'BUY' || tx.action === 'ADD_SHARES' || tx.action === 'TRANSFER_IN')
+      .filter((tx) => baseInvestmentAction(tx.action) === 'BUY' || tx.action === 'ADD_SHARES' || tx.action === 'TRANSFER_IN')
       .sort((a, b) => a.transactionDate.localeCompare(b.transactionDate));
 
     let annualizedReturn: number | null = null;
@@ -321,10 +322,10 @@ export function SecurityPerformanceReport() {
     transactions.forEach((tx) => {
       const date = tx.transactionDate;
       const existing = txByDate.get(date) || { buys: false, sells: false };
-      if (tx.action === 'BUY' || tx.action === 'ADD_SHARES' || tx.action === 'REINVEST') {
+      if (baseInvestmentAction(tx.action) === 'BUY' || tx.action === 'ADD_SHARES' || baseInvestmentAction(tx.action) === 'REINVEST') {
         existing.buys = true;
       }
-      if (tx.action === 'SELL' || tx.action === 'REMOVE_SHARES') {
+      if (baseInvestmentAction(tx.action) === 'SELL' || tx.action === 'REMOVE_SHARES') {
         existing.sells = true;
       }
       txByDate.set(date, existing);
@@ -371,7 +372,7 @@ export function SecurityPerformanceReport() {
   // Dividend history
   const dividendTx = useMemo(() => {
     const list = transactions.filter(
-      (tx) => tx.action === 'DIVIDEND' || tx.action === 'REINVEST',
+      (tx) => baseInvestmentAction(tx.action) === 'DIVIDEND' || baseInvestmentAction(tx.action) === 'REINVEST',
     );
     list.sort((a, b) => {
       let comparison = 0;
@@ -400,7 +401,7 @@ export function SecurityPerformanceReport() {
   // Transaction history (non-dividend)
   const tradeTx = useMemo(() => {
     const list = transactions.filter(
-      (tx) => tx.action !== 'DIVIDEND' && tx.action !== 'INTEREST' && tx.action !== 'CAPITAL_GAIN',
+      (tx) => !['DIVIDEND', 'INTEREST', 'CAPITAL_GAIN'].includes(baseInvestmentAction(tx.action)),
     );
     list.sort((a, b) => {
       let comparison = 0;
@@ -919,9 +920,9 @@ export function SecurityPerformanceReport() {
                           </td>
                           <td className="px-4 py-3 text-sm">
                             <span className={`px-2 py-0.5 text-xs font-medium rounded ${
-                              tx.action === 'BUY' || tx.action === 'ADD_SHARES' || tx.action === 'TRANSFER_IN' || tx.action === 'REINVEST'
+                              ['BUY', 'ADD_SHARES', 'TRANSFER_IN', 'REINVEST'].includes(baseInvestmentAction(tx.action))
                                 ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                                : tx.action === 'SELL' || tx.action === 'REMOVE_SHARES' || tx.action === 'TRANSFER_OUT'
+                                : ['SELL', 'REMOVE_SHARES', 'TRANSFER_OUT'].includes(baseInvestmentAction(tx.action))
                                   ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
                                   : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
                             }`}>

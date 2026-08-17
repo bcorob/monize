@@ -1,4 +1,5 @@
 import { InvestmentAction } from "./entities/investment-transaction.entity";
+import { baseInvestmentAction } from "./investment-replay.util";
 
 export const EMBEDDED_INVESTMENT_SPLIT_ACTIONS: ReadonlySet<InvestmentAction> =
   new Set([
@@ -8,6 +9,13 @@ export const EMBEDDED_INVESTMENT_SPLIT_ACTIONS: ReadonlySet<InvestmentAction> =
     InvestmentAction.INTEREST,
     InvestmentAction.CAPITAL_GAIN,
     InvestmentAction.REINVEST,
+    // Money-vocabulary refinements: allowed wherever their base is.
+    InvestmentAction.REDEEM,
+    InvestmentAction.CAPITAL_GAIN_SHORT,
+    InvestmentAction.CAPITAL_GAIN_LONG,
+    InvestmentAction.REINVEST_INTEREST,
+    InvestmentAction.REINVEST_CAPITAL_GAIN_SHORT,
+    InvestmentAction.REINVEST_CAPITAL_GAIN_LONG,
   ]);
 
 export function isInvestmentActionAllowedInSplit(
@@ -35,7 +43,7 @@ export function computeInvestmentCashImpact(
   const p = Number(price) || 0;
   const c = Number(commission) || 0;
 
-  switch (action) {
+  switch (baseInvestmentAction(action)) {
     case InvestmentAction.BUY:
       return -(q * p + c);
     case InvestmentAction.SELL:

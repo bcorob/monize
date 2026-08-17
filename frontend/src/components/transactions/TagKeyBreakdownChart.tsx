@@ -96,7 +96,8 @@ export function TagKeyBreakdownChart({ tagKey, params }: TagKeyBreakdownChartPro
     };
   }, [paramsKey]);
 
-  const { chartData, displayCurrency } = useMemo(() => {
+  const tCommon = useTranslations('common');
+  const { chartData, displayCurrency, excludedCount } = useMemo(() => {
     const currencies = new Set(rows.map((r) => r.currencyCode));
     const strategy: DisplayCurrencyStrategy =
       currencies.size <= 1
@@ -109,10 +110,22 @@ export function TagKeyBreakdownChart({ tagKey, params }: TagKeyBreakdownChartPro
             toDisplay: (amount, from) => convertToDefault(amount, from),
           };
 
-    const aggregated = aggregateGroupedTotals(rows, strategy).map((r) => ({
-      name: r.name ?? '',
-      value: Math.abs(r.total),
-    }));
+    // No rate, no slice: a bar cannot represent unknown. Count the tags left out
+    // so the chart can say it is a subtotal rather than presenting a breakdown
+    // that sums to 100% of only the tags that converted.
+    let excludedCount = 0;
+    const aggregated = aggregateGroupedTotals(rows, strategy)
+      .filter((r): r is typeof r & { total: number } => {
+        if (r.total === null) {
+          excludedCount += 1;
+          return false;
+        }
+        return true;
+      })
+      .map((r) => ({
+        name: r.name ?? '',
+        value: Math.abs(r.total),
+      }));
 
     const top = aggregated.slice(0, TOP_N);
     const rest = aggregated.slice(TOP_N);
@@ -134,7 +147,7 @@ export function TagKeyBreakdownChart({ tagKey, params }: TagKeyBreakdownChartPro
           : CHART_SERIES[index % CHART_SERIES.length],
     }));
 
-    return { chartData: data, displayCurrency: strategy.displayCurrency };
+    return { chartData: data, displayCurrency: strategy.displayCurrency, excludedCount };
   }, [rows, convertToDefault, defaultCurrency, t]);
 
   const fmt = (v: number) => formatCurrency(v, displayCurrency);
@@ -206,6 +219,11 @@ export function TagKeyBreakdownChart({ tagKey, params }: TagKeyBreakdownChartPro
           </div>
         ))}
       </div>
+      {excludedCount > 0 && (
+        <p className="mt-2 text-xs text-amber-600 dark:text-amber-400" data-testid="partial-note">
+          {tCommon('partialTotal.explanationExcluded', { count: excludedCount })}
+        </p>
+      )}
     </div>
   );
 }

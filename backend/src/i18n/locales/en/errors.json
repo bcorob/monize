@@ -326,7 +326,9 @@
   "monteCarlo": {
     "scenarioNotFound": "Scenario {{ id }} not found",
     "scenarioIdsMustBeArray": "scenarioIds must be an array",
-    "atLeastOneAccountRequired": "At least one accountId is required"
+    "atLeastOneAccountRequired": "At least one accountId is required",
+    "currentValueUnavailable": "The current value of the selected accounts could not be determined, so a simulation cannot start from it. Enter a starting value explicitly, or retry once prices and exchange rates are available.",
+    "historicalReturnsUnavailable": "Historical returns for the selected accounts could not be computed, so a simulation cannot use them. Enter an expected return and volatility manually, or retry once prices and exchange rates are available."
   },
   "netWorth": {
     "invalidStartDate": "startDate must be YYYY-MM-DD",
@@ -370,6 +372,7 @@
     "requiresBrokerageAccount": "Scheduled investment transactions require a brokerage account",
     "notFound": "Scheduled transaction with ID {{ id }} not found",
     "occurrenceAlreadyPosted": "This occurrence has already been posted.",
+    "changedConcurrently": "The scheduled transaction changed during the operation. Reload it and retry.",
     "fxPlainOnly": "A different currency can only be used on a plain scheduled transaction, not a split, transfer or investment",
     "fxRateUnavailable": "No exchange rate is available for {{ from }} to {{ to }} on {{ date }}. Enter the amount in {{ to }} to post it.",
     "investmentActionRequired": "Investment action is required for scheduled investment transactions",
@@ -410,6 +413,7 @@
     "cannotChangeSplitAccount": "Cannot change the account of an investment split; remove the split and add it on the new account instead",
     "splitNoFundingAccount": "Investment splits do not use a separate funding account",
     "cannotChangeSplitDate": "Cannot change the date of an investment split; edit the parent split transaction date instead",
+    "embeddedStatusLocked": "This investment transaction is part of a split transaction. Change the split transaction's status instead, so both sides change together.",
     "invalidAccountUuid": "Invalid account UUID: {{ id }}",
     "startDateFormat": "startDate must be in YYYY-MM-DD format",
     "endDateFormat": "endDate must be in YYYY-MM-DD format",
@@ -445,7 +449,9 @@
     "noUpdateFields": "Provide at least one field to change.",
     "documentNotFound": "Document not found",
     "selectionNotFound": "One or more of the selected securities could not be found",
-    "comparisonSelectionEmpty": "Select at least one security or market index to compare"
+    "comparisonSelectionEmpty": "Select at least one security or market index to compare",
+    "exchangeRateNotPositive": "Exchange rate must be greater than zero",
+    "embeddedSplitAmountMismatch": "This split records {{ amount }}, but {{ action }} {{ quantity }} @ {{ price }} converts to {{ expected }} at a rate of {{ rate }}. Use that amount, or state the exchange rate you meant."
   },
   "tags": {
     "notFound": "Tag with ID {{ id }} not found",
@@ -499,15 +505,27 @@
     "transferAmountNegative": "Transfer amount must not be negative",
     "notATransfer": "Transaction is not a transfer",
     "splitTransferLegAccountLocked": "This transfer is part of a split transaction. Change its accounts by editing the split on the source transaction instead.",
+    "splitTransferLegStatusLocked": "This transfer is part of a split transaction. Void or restore it by editing the split transaction it belongs to, so both sides change together.",
+    "investmentCashLegStatusLocked": "This transaction is the cash side of an investment transaction. Void or restore it by changing the investment transaction's status, so both sides change together.",
     "notFoundById": "Transaction with ID {{ id }} not found",
     "bulkUpdateNoFields": "At least one update field must be provided",
     "bulkSplitNoMatchingLinesOne": "1 split transaction was skipped because none of its split lines matched the category update",
     "bulkSplitNoMatchingLinesMany": "{{ count }} split transactions were skipped because none of their split lines matched the category update",
+    "bulkSplitTransferLegSkippedOne": "1 split transfer was skipped (void or restore it from the split transaction it belongs to, so both sides change together)",
+    "bulkSplitTransferLegSkippedMany": "{{ count }} split transfers were skipped (void or restore them from the split transaction they belong to, so both sides change together)",
+    "bulkInvestmentCashLegSkippedOne": "1 investment cash transaction was skipped (void or restore it by changing the investment transaction's status, so both sides change together)",
+    "bulkInvestmentCashLegSkippedMany": "{{ count }} investment cash transactions were skipped (void or restore them by changing the investment transactions' status, so both sides change together)",
     "payeeNotFound": "Payee not found",
     "fxFieldsIncomplete": "originalAmount and originalCurrencyCode must be provided together",
     "fxRateRequired": "A positive exchange rate is required for a foreign-currency transaction",
     "fxSignMismatch": "originalAmount and amount must have the same sign",
-    "jointAccountMoveLocked": "Transactions in a shared account cannot be moved to another account."
+    "jointAccountMoveLocked": "Transactions in a shared account cannot be moved to another account.",
+    "currencyMustMatchAccount": "Transaction currency {{ supplied }} must match the account currency {{ account }}. Use originalAmount and originalCurrencyCode for a foreign-currency entry.",
+    "transferSameCurrencyMustConserve": "A transfer between two {{ currency }} accounts must move the same amount on both sides",
+    "transferSameCurrencyRateMustBeOne": "A transfer between two {{ currency }} accounts cannot have an exchange rate other than 1",
+    "transferRateUnavailable": "Could not determine an exchange rate for {{ from }} -> {{ to }}. Supply an exchangeRate or a destination amount so the transfer posts correctly.",
+    "transferAmountsMustAgreeOnZero": "A transfer must move a non-zero amount on both sides, or zero on both",
+    "transferImpliedRateInvalid": "The destination amount implies an unusable exchange rate against the source amount"
   },
   "users": {
     "userNotFound": "User not found",

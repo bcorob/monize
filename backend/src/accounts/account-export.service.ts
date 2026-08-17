@@ -35,6 +35,47 @@ interface ExportSplit {
   transferAccountName: string;
 }
 
+/**
+ * Category label on the parent row of a split.
+ *
+ * It must not open with a character a spreadsheet evaluates. The old
+ * `-- Split --` did, so `escapeCsv` neutralized the exporter's own label and
+ * every split row in every account export carried a stray apostrophe in front
+ * of it. Dropping the guard is not the alternative -- Excel evaluates a leading
+ * dash, and an unguarded `-- Split --` reads as `#NAME?`. The fix is a label
+ * that needs no guard, which is why the delimiters are parentheses.
+ */
+export const CSV_SPLIT_CATEGORY_LABEL = "(Split)";
+
+/**
+ * Category label for a transfer: `Transfer To Savings`.
+ *
+ * The direction is a fact about the row being written -- money leaving this
+ * account went *to* the counterpart, money arriving came *from* it -- so the
+ * two legs of one transfer are labelled differently, and a split line is asked
+ * with its own amount rather than the parent's. `Transfer: Savings` named the
+ * counterpart without saying which way the money went, which is the half that
+ * matters when reading an export away from the register's arrows. Twin of
+ * `transferCsvLabel` in `frontend/src/lib/transfer-label.ts`; an amount of
+ * exactly zero has no direction and takes the same branch there as here.
+ */
+export function csvTransferLabel(accountName: string, amount: number): string {
+  return `Transfer ${Number(amount) < 0 ? "To" : "From"} ${accountName}`;
+}
+
+/**
+ * Values a spreadsheet reads as a number rather than as a formula, so the guard
+ * in `escapeCsv` leaves them alone: a leading sign followed only by digits,
+ * separators, whitespace and currency symbols names no function and no cell,
+ * and reaches no DDE server. Twin of the rule in
+ * `frontend/src/lib/csv-export.ts`, which is where issue #1134 was reported --
+ * a guarded `-67.99` stops a spreadsheet totalling the column it sits in.
+ * Amounts here bypass `escapeCsv` entirely, so this is about the text columns
+ * that can still hold a number: a cheque number written `-123`, say.
+ */
+const NUMERIC_CSV_VALUE =
+  /^[+-]?[\p{Nd}\p{Sc}\s.,'’]*\p{Nd}[\p{Nd}\p{Sc}\s.,'’]*%?$/u;
+
 interface CsvExportOptions {
   expandSplits?: boolean;
   dateFormat?: string;
@@ -85,7 +126,7 @@ export class AccountExportService {
             this.formatExportDate(tx.date, dateFormat),
             tx.referenceNumber,
             tx.payeeName,
-            "-- Split --",
+            CSV_SPLIT_CATEGORY_LABEL,
             tx.description,
             tx.amount,
             tx.status,
@@ -94,7 +135,7 @@ export class AccountExportService {
         );
         for (const split of tx.splits) {
           const categoryLabel = split.isTransfer
-            ? `Transfer: ${split.transferAccountName}`
+            ? csvTransferLabel(split.transferAccountName, split.amount)
             : split.categoryPath;
           rows.push(
             this.csvRow(
@@ -111,9 +152,9 @@ export class AccountExportService {
         }
       } else {
         const categoryLabel = tx.isTransfer
-          ? `Transfer: ${tx.transferAccountName}`
+          ? csvTransferLabel(tx.transferAccountName, tx.amount)
           : tx.isSplit
-            ? "-- Split --"
+            ? CSV_SPLIT_CATEGORY_LABEL
             : tx.categoryPath;
         rows.push(
           this.csvRow(
@@ -330,7 +371,7 @@ export class AccountExportService {
     // (CWE-843); String() normalizes any non-string into a safe scalar before
     // applying string-only sanitization.
     let safe = typeof value === "string" ? value : String(value);
-    if (/^[=+\-@\t\r]/.test(safe)) {
+    if (/^[=+\-@\t\r]/.test(safe) && !NUMERIC_CSV_VALUE.test(safe)) {
       safe = `'${safe}`;
     }
 

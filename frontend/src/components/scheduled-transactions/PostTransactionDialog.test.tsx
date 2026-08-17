@@ -70,6 +70,8 @@ vi.mock('@/hooks/useNumberFormat', () => ({
   useNumberFormat: () => ({
     formatCurrency: (n: number, _c?: string) => `$${n.toFixed(2)}`,
     formatNumber: (n: number, d: number = 2) => n.toFixed(d),
+    // Mirrors the real formatPrice: up to 6 decimals, trailing zeros trimmed.
+    formatPrice: (n: number) => n.toFixed(6).replace(/0+$/, '').replace(/\.$/, ''),
   }),
 }));
 
@@ -1269,6 +1271,136 @@ describe('PostTransactionDialog', () => {
       });
     });
 
+    it('keeps a per-occurrence override price when the market price arrives', async () => {
+      // The finding: a price the user saved on this occurrence (via the override
+      // editor, which preserves it on reopen) was silently overwritten with
+      // today's close the moment the fetch resolved on the posting side too.
+      // Now an override price stands; the market figure only refreshes a base
+      // schedule's creation-time snapshot.
+      mockGetSecurityPrices.mockResolvedValue([{ closePrice: '123.45' }]);
+      const txWithOverride = {
+        ...investmentTransaction,
+        nextOverride: {
+          id: 'ov1',
+          scheduledTransactionId: 'inv1',
+          originalDate: '2025-02-15',
+          overrideDate: '2025-02-15',
+          amount: null,
+          categoryId: null,
+          description: null,
+          isSplit: null,
+          splits: null,
+          investmentQuantity: 4,
+          investmentPrice: 250,
+          investmentTotalAmount: null,
+          createdAt: '',
+          updatedAt: '',
+        },
+      };
+      render(
+        <PostTransactionDialog
+          {...defaultProps}
+          scheduledTransaction={txWithOverride}
+        />,
+      );
+      // Let the price fetch resolve; the overwrite would fire here if it ran.
+      await waitFor(() => {
+        expect(mockGetSecurityPrices).toHaveBeenCalledWith('sec1', { limit: 1 });
+      });
+      const priceInput = screen.getByLabelText('Price per share') as HTMLInputElement;
+      const qtyInput = screen.getByLabelText('Quantity (shares)') as HTMLInputElement;
+      // Stored override wins: price stays 250 and quantity stays 4, not
+      // 123.45 with the quantity rescaled to hold a 1,000 total.
+      expect(Number(priceInput.value)).toBe(250);
+      expect(Number(qtyInput.value)).toBe(4);
+    });
+
+    it('still refreshes a base schedule price from the market (no override)', async () => {
+      // The other half of the rule: with no per-occurrence override, the
+      // schedule's saved price is a creation-time snapshot the post brings up to
+      // date, preserving the scheduled total and rescaling the quantity.
+      mockGetSecurityPrices.mockResolvedValue([{ closePrice: '123.45' }]);
+      render(
+        <PostTransactionDialog
+          {...defaultProps}
+          scheduledTransaction={investmentTransaction}
+        />,
+      );
+      const priceInput = screen.getByLabelText('Price per share') as HTMLInputElement;
+      await waitFor(() => {
+        expect(Number(priceInput.value)).toBeCloseTo(123.45, 6);
+      });
+    });
+
+    it('keeps a per-occurrence override quantity when the market price arrives', async () => {
+      // The finding-1 defect one axis over: an override storing only a quantity
+      // (the code's own "one-off DRIP at a different quantity" case) had its 4
+      // shares rescaled to 400/123.45 = 3.24 because the exemption keyed off a
+      // stored price alone. A saved quantity is an instruction too.
+      mockGetSecurityPrices.mockResolvedValue([{ closePrice: '123.45' }]);
+      const txWithQtyOverride = {
+        ...investmentTransaction,
+        nextOverride: {
+          id: 'ov1',
+          scheduledTransactionId: 'inv1',
+          originalDate: '2025-02-15',
+          overrideDate: '2025-02-15',
+          amount: null,
+          categoryId: null,
+          description: null,
+          isSplit: null,
+          splits: null,
+          investmentQuantity: 4,
+          investmentPrice: null,
+          investmentTotalAmount: null,
+          createdAt: '',
+          updatedAt: '',
+        },
+      };
+      render(
+        <PostTransactionDialog
+          {...defaultProps}
+          scheduledTransaction={txWithQtyOverride}
+        />,
+      );
+      await waitFor(() => {
+        expect(mockGetSecurityPrices).toHaveBeenCalledWith('sec1', { limit: 1 });
+      });
+      const qtyInput = screen.getByLabelText('Quantity (shares)') as HTMLInputElement;
+      // The saved 4 shares stand, not rescaled by the market refresh.
+      expect(Number(qtyInput.value)).toBe(4);
+    });
+
+    it('does not overwrite a price the user typed before the fetch resolved', async () => {
+      // The finding-2 race: on a slow connection the user types a price while
+      // getSecurityPrices is still in flight; the refresh must not clobber it
+      // when the close finally lands. A deferred promise reproduces the timing.
+      let resolvePrices: (v: any) => void = () => {};
+      mockGetSecurityPrices.mockReturnValue(
+        new Promise((resolve) => {
+          resolvePrices = resolve;
+        }),
+      );
+      render(
+        <PostTransactionDialog
+          {...defaultProps}
+          scheduledTransaction={investmentTransaction}
+        />,
+      );
+      const priceInput = screen.getByLabelText('Price per share') as HTMLInputElement;
+      // Type a price while the fetch is still pending.
+      await act(async () => {
+        fireEvent.change(priceInput, { target: { value: '99' } });
+      });
+      expect(Number(priceInput.value)).toBe(99);
+      // Now the close lands.
+      await act(async () => {
+        resolvePrices([{ closePrice: '123.45' }]);
+      });
+      // The typed 99 stands; it was not overwritten by the arriving close.
+      expect(Number(priceInput.value)).toBe(99);
+    });
+
     it('sends qty and price (not totalValue) in the POST payload', async () => {
       render(
         <PostTransactionDialog
@@ -1663,7 +1795,29 @@ describe('PostTransactionDialog', () => {
       expect(qtyInput.value).toBe('');
     });
 
-    it('shows manual-price hint when security has no price history', async () => {
+    it('shows manual-price hint when there is no price history and no stored price', async () => {
+      mockGetSecurityPrices.mockResolvedValue([]);
+      render(
+        <PostTransactionDialog
+          {...defaultProps}
+          scheduledTransaction={{
+            ...investmentTransaction,
+            investmentPrice: null,
+            investmentQuantity: null,
+          }}
+        />,
+      );
+      await waitFor(() => {
+        expect(
+          screen.getByText(/No price history yet for this security/),
+        ).toBeInTheDocument();
+      });
+    });
+
+    it('hides the manual-price hint when a stored price is present', async () => {
+      // A scheduled price of 100 is in the field, so "enter the price manually"
+      // would be misleading; the hint is suppressed even when the market fetch
+      // returns nothing.
       mockGetSecurityPrices.mockResolvedValue([]);
       render(
         <PostTransactionDialog
@@ -1673,9 +1827,12 @@ describe('PostTransactionDialog', () => {
       );
       await waitFor(() => {
         expect(
-          screen.getByText(/No price history yet for this security/),
-        ).toBeInTheDocument();
+          Number((screen.getByLabelText('Price per share') as HTMLInputElement).value),
+        ).toBe(100);
       });
+      expect(
+        screen.queryByText(/No price history yet for this security/),
+      ).not.toBeInTheDocument();
     });
 
     it('handles a getSecurityPrices rejection without crashing', async () => {
@@ -1690,6 +1847,29 @@ describe('PostTransactionDialog', () => {
       await waitFor(() => {
         expect(screen.getByLabelText('Price per share')).toBeInTheDocument();
       });
+    });
+
+    it('does not show the no-price-history hint when the lookup fails', async () => {
+      // A failed lookup is not an empty dataset -- the hint must stay off, not
+      // falsely tell the user the security has no price history.
+      mockGetSecurityPrices.mockRejectedValueOnce(new Error('network'));
+      render(
+        <PostTransactionDialog
+          {...defaultProps}
+          scheduledTransaction={{
+            ...investmentTransaction,
+            investmentPrice: null,
+            investmentQuantity: null,
+          }}
+        />,
+      );
+      await act(async () => {});
+      await waitFor(() => {
+        expect(screen.getByLabelText('Price per share')).toBeInTheDocument();
+      });
+      expect(
+        screen.queryByText(/No price history yet for this security/),
+      ).not.toBeInTheDocument();
     });
 
     it('posts an amount-only DIVIDEND with the total amount', async () => {

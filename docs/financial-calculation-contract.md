@@ -42,6 +42,55 @@ component required for that calculation is known.
   affected ids, or an `incomplete: true` flag) -- silence is what turns a
   subtotal into a lie.
 
+### 1.1 A missing exchange rate is not a rate of 1
+
+Rate `1` is reachable only when the source and destination currency codes are
+equal. There is no other branch that may produce it, and in particular a failed
+lookup may not: 1,000 USD reported into a EUR total as 1,000 EUR is an 11%
+overstatement that is *numerically plausible*, which is what makes it dangerous.
+A consumer given a bare number cannot tell a real 1:1 pair from an absent one.
+
+A conversion has three outcomes and they stay distinguishable -- converted,
+same-currency (no conversion needed), and unknown. Aggregate through `FxAggregate`
+(`backend/src/common/fx-aggregate.ts`), which cannot silently absorb a missing
+component: it records each unresolvable pair, and `total` is `null` while
+`knownSubtotal` carries what did convert. Note that an aggregate nothing was added
+to is `0`, not `null` -- an empty account holds zero.
+
+Zero and negative are not rates either, and are treated as absent rather than
+applied: multiplying by 0 reports a real holding as worthless.
+
+`docs/specs/fx-conversion-completeness.md` has the invariants, the numerical
+example table, the staged rollout of nullable response totals, and the recorded
+decision on look-ahead before the rate history begins.
+`backend/src/common/fx-fallback.guard.spec.ts` scans for a new silent fallback.
+
+### 1.2 A currency code is a fact about an account, not a request field
+
+A transaction's `amount` and `currencyCode` are the account-currency pair; a
+foreign entry lives in `originalAmount` / `originalCurrencyCode` /
+`exchangeRate`, which is what shows a mismatched primary code is not an
+alternative supported shape. Derive the code from the account and reject a
+request that names a different one -- `assertTransactionCurrencyMatchesAccount`
+(`backend/src/common/fx-entry.util.ts`) is the single check.
+
+The same holds for both sides of a transfer, and for a transfer's destination
+amount:
+
+- Same currency on both sides: the destination amount equals the source amount.
+  No rate and no fee can make a same-currency transfer unequal, so an explicit
+  destination amount that disagrees is a rejection, not an override.
+- Different currencies: an explicit destination amount is honoured (a bank's real
+  settlement figure legitimately differs from spot by fees) and its implied rate
+  is stored; otherwise the rate is resolved server-side and a pair with no
+  determinable rate is refused rather than posted at par.
+- A preview resolves the rate the same way the commit does. A preview showing a
+  figure the commit will not post is the same defect as a wrong figure.
+
+A caller that stores only one side's currency -- a scheduled transaction -- sends
+neither code and lets the service derive both. Sending a stored code risks it
+having gone stale, which now fails the posting rather than corrupting it.
+
 ## 2. Cost basis and tax
 
 Realized result is market value minus cost basis; tax applies only to gains.
@@ -70,6 +119,44 @@ A `0` and a `null` mean different things and must never be conflated: `0` is
 a known result of zero (cash-only operation, break-even sale); `null` means
 the result cannot be computed. Never default an unknown cost basis, price, or
 tax input to `0` to keep a formula running.
+
+### 2.1 The acquisition commission is part of the basis
+
+What a position cost to acquire includes what it cost to acquire it. The linked
+cash debit for a BUY is `quantity * price + commission`, and the basis a later
+disposal is measured against is that same figure -- so 10 shares at 100 with 10
+of commission is a basis of 1,010 and an average cost of 101.00, not 100.00.
+
+Leaving the commission out understates the basis and therefore overstates every
+gain and every tax derived from one: 10 of commission is 10 of phantom gain, and
+1.90 of phantom tax at 19%. It propagates -- a partial sale relieves the
+understated average, so every later disposal inherits it.
+
+`acquisitionCost` (`backend/src/securities/investment-replay.util.ts`) is the one
+place this is computed. It returns `null` when the row cannot say what the
+acquisition cost: `price` is nullable, and folding that to `0` made an unpriced
+import look like a free purchase -- the units joined the position, nothing joined
+the basis, and the quantity reconciliation downstream then *passed* because the
+units did add up. A row genuinely worth zero still says so, with an explicit `0`.
+
+Commission on a disposal is different and already handled: `totalAmount` on a
+SELL is net of it, so proceeds need no further adjustment.
+
+### 2.2 A share-count replay is written once
+
+`applyActionToQuantity` (same file) is the only place an investment action is
+folded into a share count, and `SHARE_MOVING_ACTIONS` the only place the set of
+share-moving actions is named. `quantity` means shares for most actions and a
+**ratio** for `SPLIT`, which is the distinction the duplication kept losing:
+seven separate replays existed, three added a split's ratio to the share count
+instead of multiplying by it, and the same three omitted `ADD_SHARES` and
+`REMOVE_SHARES` entirely. Each copy was internally consistent, which is why
+nothing failed -- a post-split position read 40% light on every history chart
+while the holdings page was right.
+
+`backend/src/securities/investment-replay.guard.spec.ts` scans for a new
+hand-rolled fold, in both the `case` and the `if` form, and for a quantity
+derived from a multiplication outside the reducer.
 
 ## 3. Cash
 

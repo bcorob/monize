@@ -202,7 +202,8 @@
     "title": "खाते के अनुसार उपयोग",
     "empty": "सीमा सेट वाला कोई क्रेडिट खाता नहीं।",
     "utilization": "उपयोग",
-    "used": "उपयोग"
+    "used": "उपयोग",
+    "noRate": "अनुपलब्ध (कोई {currency} दर नहीं)"
   },
   "creditUtilizationTotal": {
     "title": "कुल उपयोग",

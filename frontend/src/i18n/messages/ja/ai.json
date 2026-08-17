@@ -126,7 +126,13 @@
       "TRANSFER_OUT": "振替出庫",
       "REINVEST": "再投資",
       "ADD_SHARES": "株数追加",
-      "REMOVE_SHARES": "株数削除"
+      "REMOVE_SHARES": "株数削除",
+      "REINVEST_INTEREST": "利息の再投資",
+      "REINVEST_CAPITAL_GAIN_SHORT": "短期キャピタルゲインの再投資",
+      "REINVEST_CAPITAL_GAIN_LONG": "長期キャピタルゲインの再投資",
+      "CAPITAL_GAIN_SHORT": "短期キャピタルゲイン",
+      "CAPITAL_GAIN_LONG": "長期キャピタルゲイン",
+      "REDEEM": "CD・債券の償還"
     },
     "createSecurityTitle": "この証券を作成しますか？",
     "createdSecurity": "証券を作成しました",

@@ -330,7 +330,8 @@
     "tooltipUtilization": "[XX-Utilization-XX]",
     "tooltipUsed": "[XX-Used-XX]",
     "tooltipAvailable": "[XX-Available-XX]",
-    "pdfTitle": "[XX-Credit Utilization-XX]"
+    "pdfTitle": "[XX-Credit Utilization-XX]",
+    "noRate": "[XX-No rate-XX]"
   },
   "currencyExposure": {
     "empty": "[XX-No investment holdings found. Add securities to see currency exposure.-XX]",
@@ -758,7 +759,13 @@
     "actionTransferOut": "[XX-Transfer Out-XX]",
     "actionReinvest": "[XX-Reinvest-XX]",
     "actionAddShares": "[XX-Add Shares-XX]",
-    "actionRemoveShares": "[XX-Remove Shares-XX]"
+    "actionRemoveShares": "[XX-Remove Shares-XX]",
+    "actionReinvestInterest": "[XX-Reinvest Interest-XX]",
+    "actionReinvestCapitalGainShort": "[XX-Reinvest Short-Term Cap Gain-XX]",
+    "actionReinvestCapitalGainLong": "[XX-Reinvest Long-Term Cap Gain-XX]",
+    "actionCapitalGainShort": "[XX-Short-Term Capital Gain-XX]",
+    "actionCapitalGainLong": "[XX-Long-Term Capital Gain-XX]",
+    "actionRedeem": "[XX-Redeem CD/Bond-XX]"
   },
   "loanAmortization": {
     "empty": "[XX-No loan or mortgage accounts found. Add a loan account to see the payment history.-XX]",
@@ -817,6 +824,7 @@
       "maxCompare": "[XX-You can compare up to {max} scenarios.-XX]",
       "loadFailed": "[XX-Failed to load Monte Carlo data. Please refresh.-XX]",
       "currentValueFailed": "[XX-Failed to fetch the current portfolio value.-XX]",
+      "currentValueUnavailable": "[XX-The current value of the selected accounts could not be determined. Enter a starting value, or try again once prices and exchange rates are available.-XX]",
       "holdingStatsFailed": "[XX-Failed to load per-holding historical stats.-XX]",
       "reorderFailed": "[XX-Could not reorder scenarios.-XX]"
     },
@@ -1165,7 +1173,8 @@
     "csvColProceeds": "[XX-Proceeds-XX]",
     "csvColCostBasis": "[XX-Cost Basis-XX]",
     "csvColGainLoss": "[XX-Gain/Loss-XX]",
-    "csvColReturn": "[XX-Return %-XX]"
+    "csvColReturn": "[XX-Return %-XX]",
+    "csvNoRate": "[XX-No rate-XX]"
   },
   "recurringExpenses": {
     "recurringExpenses": "[XX-Recurring Expenses-XX]",
@@ -1373,7 +1382,8 @@
     "pdfTotalPortfolio": "[XX-Total Portfolio-XX]",
     "pdfAssetTypes": "[XX-Asset Types-XX]",
     "pdfTotalHoldings": "[XX-Total Holdings-XX]",
-    "pdfLargestType": "[XX-Largest Type-XX]"
+    "pdfLargestType": "[XX-Largest Type-XX]",
+    "unavailable": "[XX-Unavailable-XX]"
   },
   "spendingAnomalies": {
     "highPriority": "[XX-High Priority-XX]",

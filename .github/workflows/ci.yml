@@ -337,6 +337,107 @@ jobs:
       - name: Verify migration prefixes are unique and sort last
         run: node scripts/check-migration-prefixes.mjs
 
+  helm-chart:
+    name: Helm Chart Lint & Render
+    runs-on: ubuntu-latest
+    # The chart is a released deployment artifact, and nothing verified it: a
+    # template/value mismatch can ship alongside signed images while every other
+    # check stays green. Lint plus a render of each documented value variant is
+    # the cheap half of P7-010; a kind/k3d install with backup-volume
+    # persistence remains open.
+    steps:
+      - uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+        with:
+          persist-credentials: false
+      # Installed from the official release rather than via a third-party
+      # action, so there is no extra action SHA to pin and keep fresh. The
+      # tarball is checked against the checksum file published beside it: that
+      # protects against a truncated or corrupted download, not against a
+      # compromised release, which is the same trust boundary every
+      # `setup-*` action sits behind.
+      - name: Install Helm
+        env:
+          HELM_VERSION: v3.16.4
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          TARBALL="helm-${HELM_VERSION}-linux-amd64.tar.gz"
+          curl -fsSLO "https://get.helm.sh/${TARBALL}"
+          curl -fsSLO "https://get.helm.sh/${TARBALL}.sha256sum"
+          sha256sum -c "${TARBALL}.sha256sum"
+          tar -xzf "$TARBALL"
+          install -m 0755 linux-amd64/helm /usr/local/bin/helm
+          helm version --short
+      - name: helm lint
+        run: helm lint ./helm
+      - name: Render default values
+        # Keep the rendered output: the YAML-parse step below parses it (and the
+        # variant renders below) rather than rendering the defaults a second time.
+        # Assert the route the defaults turn on is actually present: parsing only
+        # proves each rendered doc is valid, not that the value flag produced the
+        # resource it exists to produce -- a template that silently rendered
+        # nothing would leave the valid statefulsets/services and pass the parse.
+        run: |
+          helm template monize ./helm > "$RUNNER_TEMP/rendered.yaml"
+          grep -q '^kind: HTTPRoute$' "$RUNNER_TEMP/rendered.yaml" \
+            || { echo "default values rendered no HTTPRoute (httpRoute.enabled defaults true)"; exit 1; }
+      # Each variant the README documents. Rendering only the defaults would
+      # leave the Ingress and HTTPRoute paths -- which are mutually exclusive in
+      # practice -- unexercised. Keep each variant's output too: the Ingress
+      # resource never appears in the default render, so discarding it to
+      # /dev/null would mean the one manifest a value flag turns on is the one
+      # the parse step below never kind/apiVersion-checks. Assert its presence
+      # here as well, since parsing a doc that never rendered cannot fail.
+      - name: Render with Ingress enabled
+        run: |
+          helm template monize ./helm \
+            --set ingress.enabled=true \
+            --set httpRoute.enabled=false \
+            --set ingress.className=nginx > "$RUNNER_TEMP/rendered-ingress.yaml"
+          grep -q '^kind: Ingress$' "$RUNNER_TEMP/rendered-ingress.yaml" \
+            || { echo "ingress.enabled=true rendered no Ingress -- the value flag is not turning the resource on"; exit 1; }
+      - name: Render with HTTPRoute disabled
+        run: helm template monize ./helm --set httpRoute.enabled=false > "$RUNNER_TEMP/rendered-minimal.yaml"
+      # PyYAML happens to be present on the current ubuntu-latest image, which
+      # is not the same as this job declaring it. An undeclared dependency that
+      # disappears in a runner-image bump turns the check below into an
+      # ImportError somebody has to diagnose, so install it explicitly and pin
+      # the version.
+      - name: Install PyYAML
+        # --break-system-packages: ubuntu-latest ships an externally-managed
+        # Python (PEP 668), which refuses a system-level `pip install` outright.
+        # The flag exists in pip 23.0.1+, which every current GitHub-hosted
+        # image ships; it keeps the install from being the thing that breaks on
+        # a runner-image bump to a managed Python.
+        run: python3 -m pip install --disable-pip-version-check --break-system-packages --quiet 'PyYAML==6.0.2'
+      # A rendered manifest that helm accepts can still be invalid Kubernetes.
+      # Parse every document -- across every rendered variant -- so a malformed
+      # template fails here rather than at `kubectl apply` time on someone's
+      # cluster. Globbing the variant files means the Ingress manifest, absent
+      # from the default render, is checked too.
+      - name: Parse rendered manifests as YAML
+        run: |
+          python3 - <<'PY'
+          import os, sys, glob, yaml
+          # Same base directory the render steps wrote to, so a self-hosted
+          # runner with a persistent /tmp cannot feed a stale file into the glob.
+          tmp = os.environ["RUNNER_TEMP"]
+          files = sorted(glob.glob(os.path.join(tmp, "rendered*.yaml")))
+          if not files:
+              sys.exit("no rendered manifests found to parse")
+          for path in files:
+              with open(path) as fh:
+                  docs = [d for d in yaml.safe_load_all(fh) if d]
+              if not docs:
+                  sys.exit(f"{path}: rendered chart produced no manifests")
+              for d in docs:
+                  if not isinstance(d, dict):
+                      sys.exit(f"{path}: top-level document is not a mapping: {d!r}")
+                  if "kind" not in d or "apiVersion" not in d:
+                      sys.exit(f"{path}: manifest without kind/apiVersion: {d!r}")
+              print(f"{path}: {len(docs)} manifest(s) parsed")
+          PY
+
   zizmor-scan:
     name: Workflow Security Scan (zizmor)
     runs-on: ubuntu-latest
@@ -498,6 +599,7 @@ jobs:
         zizmor-scan,
         env-doc-check,
         e2e-tests,
+        helm-chart,
       ]
     permissions:
       contents: read
@@ -870,6 +972,7 @@ jobs:
         zizmor-scan,
         env-doc-check,
         e2e-tests,
+        helm-chart,
       ]
     permissions:
       contents: read

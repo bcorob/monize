@@ -44,7 +44,7 @@ describe("readBillData", () => {
         handle: 12,
         status: 1,
         frequency: 3,
-        interval: 1,
+        occurrencesPerUnit: 1,
         nextDue: "2011-07-01",
         templateTransaction: 940,
         series: 12,
@@ -65,7 +65,7 @@ describe("readBillData", () => {
       // -1 rather than 0: 0 is a real Money status and a real frequency (once).
       status: -1,
       frequency: -1,
-      interval: 1,
+      occurrencesPerUnit: 1,
       nextDue: null,
       templateTransaction: null,
       series: null,

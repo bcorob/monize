@@ -25,6 +25,7 @@
   "closeMenu": "Zamknij menu",
   "mainMenu": "Menu główne",
   "loggedOut": "Wylogowano pomyślnie",
+  "logoutNotConfirmed": "Wylogowano tylko na tym urządzeniu — serwer tego nie potwierdził. Zobacz komunikat na ekranie logowania.",
   "search": {
     "placeholder": "Szukaj transakcji...",
     "label": "Szukaj transakcji",

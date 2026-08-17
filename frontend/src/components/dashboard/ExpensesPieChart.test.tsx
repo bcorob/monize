@@ -46,7 +46,10 @@ vi.mock('@/hooks/useNumberFormat', () => ({
 
 vi.mock('@/hooks/useExchangeRates', () => ({
   useExchangeRates: () => ({
-    convertToDefault: (n: number) => n,
+    // 1:1 for every currency except the sentinel ZZZ, which has no rate.
+    convertToDefault: (n: number, currency?: string) =>
+      currency === 'ZZZ' ? null : n,
+    defaultCurrency: 'CAD',
   }),
 }));
 
@@ -127,6 +130,28 @@ describe('ExpensesPieChart', () => {
     await renderChart(transactions, [{ id: 'cat1', name: 'Food', color: '#ef4444' }]);
     await waitFor(() => expect(screen.getByText('Total')).toBeInTheDocument());
     expect(screen.getByText('$100.00')).toBeInTheDocument();
+  });
+
+  it('marks the total partial and excludes an unconvertible transaction', async () => {
+    // Two CAD expenses convert; one ZZZ expense has no rate and must not size a
+    // slice. The total is the CAD sum, marked as a subtotal.
+    const transactions = [
+      {
+        id: '1', amount: -100, categoryId: 'cat1',
+        category: { id: 'cat1', name: 'Food', color: '#ef4444' },
+        currencyCode: 'CAD', isTransfer: false, isSplit: false, transactionDate: '2024-01-15',
+      },
+      {
+        id: '2', amount: -40, categoryId: 'cat1',
+        category: { id: 'cat1', name: 'Food', color: '#ef4444' },
+        currencyCode: 'ZZZ', isTransfer: false, isSplit: false, transactionDate: '2024-01-16',
+      },
+    ];
+    await renderChart(transactions, [{ id: 'cat1', name: 'Food', color: '#ef4444' }]);
+    await waitFor(() => expect(screen.getByText('Total')).toBeInTheDocument());
+    // The ZZZ amount is excluded, so the total is the CAD 100 only, marked partial.
+    expect(screen.getByText('$100.00')).toBeInTheDocument();
+    expect(screen.getByText('(partial total)')).toBeInTheDocument();
   });
 
   it('skips transfer transactions', async () => {

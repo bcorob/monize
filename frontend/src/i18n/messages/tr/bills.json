@@ -43,7 +43,8 @@
     "summaryEnding": "Bitiş",
     "summaryLowest": "En Düşük",
     "summaryMinBalance": "Min Bakiye",
-    "allAccounts": "Tüm Hesaplar"
+    "allAccounts": "Tüm Hesaplar",
+    "unavailableMissingRates": "Bu tahmin {displayCurrency} cinsinden gösterilemiyor: {currencies} için döviz kuru yok ve öngörülen bakiye önceki her güne dayanır. Bir kur ekleyin veya tek para birimli bir hesap seçin."
   },
   "calendar": {
     "days": {

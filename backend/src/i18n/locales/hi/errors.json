@@ -317,7 +317,9 @@
   "monteCarlo": {
     "scenarioNotFound": "परिदृश्य {{ id }} नहीं मिला",
     "scenarioIdsMustBeArray": "scenarioIds एक सरणी होनी चाहिए",
-    "atLeastOneAccountRequired": "कम से कम एक accountId आवश्यक है"
+    "atLeastOneAccountRequired": "कम से कम एक accountId आवश्यक है",
+    "currentValueUnavailable": "चयनित खातों का वर्तमान मूल्य निर्धारित नहीं किया जा सका, इसलिए सिमुलेशन उससे शुरू नहीं हो सकता। कोई प्रारंभिक मूल्य स्वयं दर्ज करें, या कीमतें और विनिमय दरें उपलब्ध होने पर पुनः प्रयास करें।",
+    "historicalReturnsUnavailable": "चयनित खातों के ऐतिहासिक रिटर्न की गणना नहीं की जा सकी, इसलिए सिमुलेशन उनका उपयोग नहीं कर सकता। अपेक्षित रिटर्न और अस्थिरता मैन्युअल रूप से दर्ज करें, या कीमतें और विनिमय दरें उपलब्ध होने पर पुनः प्रयास करें।"
   },
   "netWorth": {
     "invalidStartDate": "startDate YYYY-MM-DD प्रारूप में होनी चाहिए",
@@ -361,6 +363,7 @@
     "requiresBrokerageAccount": "अनुसूचित निवेश लेनदेन के लिए ब्रोकरेज खाता आवश्यक है",
     "notFound": "ID {{ id }} वाला अनुसूचित लेनदेन नहीं मिला",
     "occurrenceAlreadyPosted": "यह घटना पहले ही दर्ज की जा चुकी है।",
+    "changedConcurrently": "The scheduled transaction changed during the operation. Reload it and retry.",
     "fxPlainOnly": "अलग मुद्रा केवल सामान्य अनुसूचित लेनदेन पर उपयोग की जा सकती है, विभाजन, स्थानांतरण या निवेश पर नहीं",
     "fxRateUnavailable": "{{ date }} को {{ from }} से {{ to }} के लिए कोई विनिमय दर उपलब्ध नहीं है। इसे पोस्ट करने के लिए राशि {{ to }} में दर्ज करें।",
     "investmentActionRequired": "अनुसूचित निवेश लेनदेन के लिए निवेश क्रिया आवश्यक है",
@@ -396,6 +399,7 @@
     "cannotChangeSplitAccount": "निवेश विभाजन का खाता नहीं बदला जा सकता; विभाजन हटाएँ और नए खाते में जोड़ें",
     "splitNoFundingAccount": "निवेश विभाजन अलग फ़ंडिंग खाते का उपयोग नहीं करते",
     "cannotChangeSplitDate": "निवेश विभाजन की तिथि नहीं बदली जा सकती; इसके बजाय मूल विभाजित लेनदेन की तिथि संपादित करें",
+    "embeddedStatusLocked": "यह निवेश लेनदेन एक विभाजित लेनदेन का हिस्सा है। इसके बजाय विभाजित लेनदेन की स्थिति बदलें, ताकि दोनों पक्ष एक साथ बदलें।",
     "invalidAccountUuid": "अमान्य खाता UUID: {{ id }}",
     "startDateFormat": "startDate YYYY-MM-DD प्रारूप में होनी चाहिए",
     "endDateFormat": "endDate YYYY-MM-DD प्रारूप में होनी चाहिए",
@@ -435,8 +439,10 @@
     "invalidTagKey": "एक टैग कुंजी (1-100 अक्षर) आवश्यक है",
     "assetOptionNameRequired": "एसेट क्लास का नाम आवश्यक है।",
     "documentNotFound": "दस्तावेज़ नहीं मिला",
+    "embeddedSplitAmountMismatch": "यह विभाजन {{ amount }} दर्ज करता है, लेकिन {{ action }} {{ quantity }} @ {{ price }} {{ rate }} की दर से {{ expected }} बनता है। वह राशि उपयोग करें, या वह विनिमय दर बताएँ जो आपका इरादा थी।",
     "selectionNotFound": "चयनित प्रतिभूतियों में से एक या अधिक नहीं मिलीं",
-    "comparisonSelectionEmpty": "तुलना के लिए कम से कम एक प्रतिभूति या बाज़ार सूचकांक चुनें"
+    "comparisonSelectionEmpty": "तुलना के लिए कम से कम एक प्रतिभूति या बाज़ार सूचकांक चुनें",
+    "exchangeRateNotPositive": "विनिमय दर शून्य से अधिक होनी चाहिए"
   },
   "tags": {
     "notFound": "ID {{ id }} वाला टैग नहीं मिला",
@@ -490,15 +496,27 @@
     "transferAmountNegative": "स्थानांतरण राशि नकारात्मक नहीं होनी चाहिए",
     "notATransfer": "लेनदेन स्थानांतरण नहीं है",
     "splitTransferLegAccountLocked": "यह ट्रांसफ़र एक विभाजित लेनदेन का हिस्सा है। इसके खाते बदलने के लिए स्रोत लेनदेन पर विभाजन को संपादित करें।",
+    "splitTransferLegStatusLocked": "यह स्थानांतरण एक विभाजित लेनदेन का हिस्सा है। इसे रद्द या पुनर्स्थापित करने के लिए उस विभाजित लेनदेन को संपादित करें जिससे यह संबंधित है, ताकि दोनों पक्ष एक साथ बदलें।",
+    "investmentCashLegStatusLocked": "यह लेनदेन एक निवेश लेनदेन का नकद पक्ष है। इसे रद्द या पुनर्स्थापित करने के लिए निवेश लेनदेन की स्थिति बदलें, ताकि दोनों पक्ष एक साथ बदलें।",
     "notFoundById": "ID {{ id }} वाला लेनदेन नहीं मिला",
     "bulkUpdateNoFields": "कम से कम एक अपडेट फ़ील्ड प्रदान की जानी चाहिए",
     "bulkSplitNoMatchingLinesOne": "1 विभाजित लेनदेन छोड़ दिया गया क्योंकि इसका कोई भी विभाजन श्रेणी अपडेट से मेल नहीं खाता था",
     "bulkSplitNoMatchingLinesMany": "{{ count }} विभाजित लेनदेन छोड़ दिए गए क्योंकि उनका कोई भी विभाजन श्रेणी अपडेट से मेल नहीं खाता था",
+    "bulkSplitTransferLegSkippedOne": "1 विभाजित स्थानांतरण छोड़ दिया गया (इसे उस विभाजित लेनदेन से रद्द या पुनर्स्थापित करें जिससे यह संबंधित है, ताकि दोनों पक्ष एक साथ बदलें)",
+    "bulkSplitTransferLegSkippedMany": "{{ count }} विभाजित स्थानांतरण छोड़ दिए गए (उन्हें उस विभाजित लेनदेन से रद्द या पुनर्स्थापित करें जिससे वे संबंधित हैं, ताकि दोनों पक्ष एक साथ बदलें)",
+    "bulkInvestmentCashLegSkippedOne": "1 निवेश नकद लेनदेन छोड़ दिया गया (इसे रद्द या पुनर्स्थापित करने के लिए निवेश लेनदेन की स्थिति बदलें, ताकि दोनों पक्ष एक साथ बदलें)",
+    "bulkInvestmentCashLegSkippedMany": "{{ count }} निवेश नकद लेनदेन छोड़ दिए गए (उन्हें रद्द या पुनर्स्थापित करने के लिए निवेश लेनदेन की स्थिति बदलें, ताकि दोनों पक्ष एक साथ बदलें)",
     "payeeNotFound": "भुगतानकर्ता नहीं मिला",
     "fxFieldsIncomplete": "originalAmount और originalCurrencyCode एक साथ दिए जाने चाहिए",
     "fxRateRequired": "विदेशी मुद्रा लेनदेन के लिए एक धनात्मक विनिमय दर आवश्यक है",
     "fxSignMismatch": "originalAmount और amount का चिह्न समान होना चाहिए",
-    "jointAccountMoveLocked": "साझा खाते के लेनदेन किसी अन्य खाते में नहीं ले जाए जा सकते।"
+    "jointAccountMoveLocked": "साझा खाते के लेनदेन किसी अन्य खाते में नहीं ले जाए जा सकते।",
+    "currencyMustMatchAccount": "लेन-देन मुद्रा {{ supplied }} खाते की मुद्रा {{ account }} से मेल खानी चाहिए। विदेशी मुद्रा प्रविष्टि के लिए originalAmount और originalCurrencyCode का उपयोग करें।",
+    "transferSameCurrencyMustConserve": "दो {{ currency }} खातों के बीच स्थानांतरण में दोनों ओर समान राशि होनी चाहिए",
+    "transferSameCurrencyRateMustBeOne": "दो {{ currency }} खातों के बीच स्थानांतरण में 1 के अलावा कोई विनिमय दर नहीं हो सकती",
+    "transferRateUnavailable": "{{ from }} -> {{ to }} के लिए विनिमय दर निर्धारित नहीं की जा सकी। स्थानांतरण सही तरीके से दर्ज करने के लिए exchangeRate या गंतव्य राशि दें।",
+    "transferAmountsMustAgreeOnZero": "स्थानांतरण को दोनों ओर शून्य से भिन्न राशि ले जानी चाहिए, या दोनों ओर शून्य",
+    "transferImpliedRateInvalid": "गंतव्य राशि स्रोत राशि की तुलना में अनुपयोगी विनिमय दर दर्शाती है"
   },
   "users": {
     "userNotFound": "उपयोगकर्ता नहीं मिला",

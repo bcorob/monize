@@ -4,6 +4,7 @@ import React, { useState, useMemo, useCallback, useRef } from 'react';
 import { useTranslations } from 'next-intl';
 import toast from 'react-hot-toast';
 import { Transaction, TransactionStatus } from '@/types/transaction';
+import { nextCycleStatus } from '@/lib/transaction-status-cycle';
 import { CategoryBudgetStatus } from '@/types/budget';
 import { transactionsApi } from '@/lib/transactions';
 import { getErrorMessage } from '@/lib/errors';
@@ -261,18 +262,11 @@ export function TransactionList({
   }, []);
 
   const handleCycleStatus = useCallback(async (transaction: Transaction) => {
-    if (transaction.status === TransactionStatus.VOID) {
+    const nextStatus = nextCycleStatus(transaction.status);
+    if (nextStatus === null) {
       toast.error(t('list.status.voidError'));
       return;
     }
-
-    const statusOrder = [
-      TransactionStatus.UNRECONCILED,
-      TransactionStatus.CLEARED,
-      TransactionStatus.RECONCILED,
-    ];
-    const currentIndex = statusOrder.indexOf(transaction.status);
-    const nextStatus = statusOrder[(currentIndex + 1) % statusOrder.length];
 
     try {
       const updatedTransaction = await transactionsApi.updateStatus(transaction.id, nextStatus);

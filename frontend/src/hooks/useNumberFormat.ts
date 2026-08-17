@@ -210,6 +210,26 @@ export function useNumberFormat() {
     [numberFormat, language]
   );
 
+  /**
+   * Locale-aware share/unit price: up to 6 decimal places with trailing zeros
+   * trimmed (minimumFractionDigits 0), via Intl rather than a hand-rolled
+   * trailing-zero regex. A price is not money -- it carries up to six decimals,
+   * and a whole-cent price should read "123" not "123.000000". Sibling of
+   * `formatQuantity`; use it for the "latest close" copy in the schedule
+   * post/override dialogs so a comma-decimal locale never leaves a dangling
+   * separator (`123,`).
+   */
+  const formatPrice = useCallback(
+    (value: number): string => {
+      const locale = getEffectiveLocale(numberFormat, language);
+      return getNumberFormat(locale, {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 6,
+      }).format(value);
+    },
+    [numberFormat, language]
+  );
+
   /** Compact currency for chart labels: K with 1dp, M/B/T with 2dp (e.g., "$123.5K", "$1.23M"). */
   const formatCurrencyLabel = useCallback(
     (value: number): string => {
@@ -256,5 +276,5 @@ export function useNumberFormat() {
     [numberFormat, defaultCurrency, language]
   );
 
-  return { formatCurrency, formatCurrencyPrecise, formatCurrencyCompact, formatCurrencyAxis, formatCurrencyFlag, formatCurrencyLabel, formatNumber, formatPercent, formatSignedPercent, formatQuantity, defaultCurrency, numberFormat };
+  return { formatCurrency, formatCurrencyPrecise, formatCurrencyCompact, formatCurrencyAxis, formatCurrencyFlag, formatCurrencyLabel, formatNumber, formatPercent, formatSignedPercent, formatQuantity, formatPrice, defaultCurrency, numberFormat };
 }

@@ -330,7 +330,8 @@
     "tooltipUtilization": "Utilization",
     "tooltipUsed": "Used",
     "tooltipAvailable": "Available",
-    "pdfTitle": "Credit Utilization"
+    "pdfTitle": "Credit Utilization",
+    "noRate": "No rate"
   },
   "currencyExposure": {
     "empty": "No investment holdings found. Add securities to see currency exposure.",
@@ -758,7 +759,13 @@
     "actionTransferOut": "Transfer Out",
     "actionReinvest": "Reinvest",
     "actionAddShares": "Add Shares",
-    "actionRemoveShares": "Remove Shares"
+    "actionRemoveShares": "Remove Shares",
+    "actionReinvestInterest": "Reinvest Interest",
+    "actionReinvestCapitalGainShort": "Reinvest Short-Term Cap Gain",
+    "actionReinvestCapitalGainLong": "Reinvest Long-Term Cap Gain",
+    "actionCapitalGainShort": "Short-Term Capital Gain",
+    "actionCapitalGainLong": "Long-Term Capital Gain",
+    "actionRedeem": "Redeem CD/Bond"
   },
   "loanAmortization": {
     "empty": "No loan or mortgage accounts found. Add a loan account to see the payment history.",
@@ -817,6 +824,7 @@
       "maxCompare": "You can compare up to {max} scenarios.",
       "loadFailed": "Failed to load Monte Carlo data. Please refresh.",
       "currentValueFailed": "Failed to fetch the current portfolio value.",
+      "currentValueUnavailable": "The current value of the selected accounts could not be determined. Enter a starting value, or try again once prices and exchange rates are available.",
       "holdingStatsFailed": "Failed to load per-holding historical stats.",
       "reorderFailed": "Could not reorder scenarios."
     },
@@ -1165,7 +1173,8 @@
     "csvColProceeds": "Proceeds",
     "csvColCostBasis": "Cost Basis",
     "csvColGainLoss": "Gain/Loss",
-    "csvColReturn": "Return %"
+    "csvColReturn": "Return %",
+    "csvNoRate": "No rate"
   },
   "recurringExpenses": {
     "recurringExpenses": "Recurring Expenses",
@@ -1373,7 +1382,8 @@
     "pdfTotalPortfolio": "Total Portfolio",
     "pdfAssetTypes": "Asset Types",
     "pdfTotalHoldings": "Total Holdings",
-    "pdfLargestType": "Largest Type"
+    "pdfLargestType": "Largest Type",
+    "unavailable": "Unavailable"
   },
   "spendingAnomalies": {
     "highPriority": "High Priority",

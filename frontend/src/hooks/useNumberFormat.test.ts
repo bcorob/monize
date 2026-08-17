@@ -231,6 +231,45 @@ describe('useNumberFormat', () => {
     const { result } = renderHook(() => useNumberFormat());
     expect(result.current.formatQuantity(1234.5)).toBe('1,234.5');
   });
+
+  it('formatPrice trims trailing zeros up to 6dp', () => {
+    const { result } = renderHook(() => useNumberFormat());
+    // A whole-cent price reads as an integer, not "123.000000", and Intl does
+    // the trimming so a comma-decimal locale never leaves a dangling separator.
+    expect(result.current.formatPrice(123)).toBe('123');
+    expect(result.current.formatPrice(123.45)).toBe('123.45');
+    // Six decimals survive; a seventh rounds into the sixth.
+    expect(result.current.formatPrice(1.234567)).toBe('1.234567');
+    expect(result.current.formatPrice(1.2345678)).toBe('1.234568');
+  });
+
+  it('formatPrice adds thousands separators', () => {
+    const { result } = renderHook(() => useNumberFormat());
+    expect(result.current.formatPrice(1234.5)).toBe('1,234.5');
+  });
+});
+
+describe('formatPrice in a comma-decimal locale', () => {
+  afterEach(() => {
+    vi.mocked(usePreferencesStore).mockImplementation((selector: any) =>
+      selector({ preferences: { numberFormat: 'en-US', defaultCurrency: 'USD' } }),
+    );
+  });
+
+  it('leaves no dangling separator when the decimal mark is a comma', () => {
+    // formatPrice exists specifically so a comma-decimal locale never trails a
+    // separator. The old `formatNumber(...).replace(/0+$/,'').replace(/\.$/,'')`
+    // produced "1.000," in German: stripping trailing zeros left "1.000," and
+    // the `/\.$/` strip never matched the comma. Intl does the trimming, so a
+    // whole number renders clean and a fractional one keeps its comma mark.
+    vi.mocked(usePreferencesStore).mockImplementation((selector: any) =>
+      selector({ preferences: { numberFormat: 'de-DE', defaultCurrency: 'EUR' } }),
+    );
+    const { result } = renderHook(() => useNumberFormat());
+    expect(result.current.formatPrice(1000)).toBe('1.000');
+    expect(result.current.formatPrice(123.45)).toBe('123,45');
+    expect(result.current.formatPrice(1234.5)).toBe('1.234,5');
+  });
 });
 
 describe('useNumberFormat with browser locale', () => {

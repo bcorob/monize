@@ -1,0 +1,21 @@
+-- Add EVERY4MONTHS and EVERY2YEARS as supported frequencies for scheduled
+-- transactions. These are the last two cadences in Microsoft Money's bill
+-- frequency picker that Monize had no type for -- "Every four months" and
+-- "Every other year" -- so a `.mny` import had to downgrade both.
+--
+-- Money records a bill's cadence as the pair (`BILL.frq`, `BILL.cFrqInst`):
+-- a period unit and the number of occurrences per unit. Every four months is
+-- the monthly unit at 0.25 occurrences, every other year the yearly unit at
+-- 0.5. (116_every2months_semiannual_frequency.sql's comment named `BILL.frq`
+-- 5 and 7 for EVERY2MONTHS and SEMIANNUAL, which the file evidence has since
+-- refuted: 5 is the yearly unit, and both of those cadences are a rate on an
+-- existing unit, not a code of their own. Left as shipped -- a migration is a
+-- record of what ran.)
+--
+-- The frequency column is VARCHAR(20) and carries no CHECK constraint, so no
+-- DDL change is needed; the values are validated by the backend enum
+-- (FrequencyType). This migration exists to keep schema.sql and migrations in
+-- sync, mirroring 041_every4weeks_frequency.sql and
+-- 116_every2months_semiannual_frequency.sql.
+-- No-op: the column already accepts any string value up to 20 characters.
+SELECT 1;

@@ -519,6 +519,7 @@
     "billTemplateMissing": "{count, plural, one {# conta agendada não tinha} other {# contas agendadas não tinham}} transação de modelo no arquivo e foram ignoradas.",
     "unusableBill": "{count, plural, one {# conta agendada não tinha} other {# contas agendadas não tinham}} conta, data utilizável nem periodicidade reconhecida e foram ignoradas.",
     "billFrequencyApproximated": "{count, plural, one {# conta agendada usa} other {# contas agendadas usam}} um intervalo de repetição que o Monize não consegue expressar exatamente, então foi usado o mais curto mais próximo.",
+    "loanInterestCategoryUnclear": "{count, plural, one {# pagamento de empréstimo incluía} other {# pagamentos de empréstimo incluíam}} várias categorias além do principal, então a categoria de juros do empréstimo ficou sem definição. Verifique se o pagamento inclui uma conta de garantia (escrow) e defina a categoria de juros após a importação.",
     "showTransactions": "{count, plural, one {Mostrar a # transação} other {Mostrar as # transações}}",
     "hideTransactions": "Ocultar transações",
     "reviewInMoney": "Abra-as no Microsoft Money para conferir ou corrigir e depois exporte e importe novamente.",

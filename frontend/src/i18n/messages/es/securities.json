@@ -284,7 +284,13 @@
       "TRANSFER_OUT": "Transferencia saliente",
       "REINVEST": "Reinvertir",
       "ADD_SHARES": "Agregar acciones",
-      "REMOVE_SHARES": "Quitar acciones"
+      "REMOVE_SHARES": "Quitar acciones",
+      "REINVEST_INTEREST": "Reinversión de intereses",
+      "REINVEST_CAPITAL_GAIN_SHORT": "Reinversión de ganancias a corto plazo",
+      "REINVEST_CAPITAL_GAIN_LONG": "Reinversión de ganancias a largo plazo",
+      "CAPITAL_GAIN_SHORT": "Ganancia de capital a corto plazo",
+      "CAPITAL_GAIN_LONG": "Ganancia de capital a largo plazo",
+      "REDEEM": "Rescate de CD/bono"
     },
     "toasts": {
       "loadHistoryFailed": "Error al cargar el historial",

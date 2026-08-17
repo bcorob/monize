@@ -106,6 +106,21 @@ describe("replayPositions", () => {
     expect(positions.get("acct-10|1")).toBe(30);
   });
 
+  it("excludes a VOID BUY from the projection", () => {
+    // Adversarial: a voided trade moved no shares, and Money's own open lots
+    // never contain its quantity. Including it would inflate the projected
+    // position to 15 and report a share discrepancy the import itself created.
+    const positions = replayPositions([
+      tx(InvestmentAction.BUY, 10),
+      tx(InvestmentAction.BUY, 5, {
+        transactionDate: "2026-02-01",
+        status: TransactionStatus.VOID,
+      }),
+    ]);
+
+    expect(positions.get("acct-10|1")).toBe(10);
+  });
+
   it("ignores actions that move no shares", () => {
     const positions = replayPositions([
       tx(InvestmentAction.BUY, 10),

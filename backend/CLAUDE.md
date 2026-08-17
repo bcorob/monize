@@ -299,6 +299,39 @@ chose. The bounds live in the same spec table as the defaults, so the DTO
 one place; the form's copy of the numbers is checked against it by
 `frontend/src/lib/ai-query-budgets.contract.test.ts`.
 
+## A label the exporter writes itself must need no escaping
+
+The CSV formula-injection guard in `account-export.service.ts` exists for
+user-controlled text -- a payee named `=cmd|...`, a description opening with
+`+`. When one of the *exporter's own* strings trips it, the guard is neutralizing
+a threat the exporter invented: `-- Split --` was prefixed with an apostrophe on
+the parent row of every split in every account export, and no test saw it,
+because `toContain("-- Split --")` is satisfied by `'-- Split --`.
+
+Do not fix that by exempting the literal -- Excel evaluates a leading dash, so an
+unguarded `-- Split --` reads as `#NAME?`, which is worse. Rename the label so it
+opens with a character no spreadsheet evaluates (`CSV_SPLIT_CATEGORY_LABEL` is
+now `(Split)`), and assert the *field* rather than the line, so a neutralized
+cell cannot satisfy the assertion again. The document-level check is the durable
+half: export a fixture whose every user-supplied field is ordinary text, and
+assert no cell carries the guard's prefix. Any future literal that needs
+escaping fails it, wherever it is added.
+
+A transfer's label is `csvTransferLabel` in the same file, and it names the
+direction as well as the counterpart (`Transfer To Savings`): money leaving this
+account went *to* the other one, money arriving came *from* it, and a split line
+is asked with its own amount rather than the parent's. `Transfer: Savings` named
+the counterpart without saying which way the money moved -- the half a reader
+cannot recover from the sign of a column they are looking at in a spreadsheet.
+Its twin is `transferCsvLabel` in `frontend/src/lib/transfer-label.ts`; the QIF
+export keeps Quicken's `L[Account]` form and is deliberately untouched.
+
+The guard also asks what a value *is* rather than what it starts with, matching
+its twin in `frontend/src/lib/csv-export.ts`: a value a spreadsheet reads as a
+number is data, and prefixing one stops the column adding up (issue #1134).
+Amounts here bypass `escapeCsv`, so the rule covers the text columns that can
+still hold a number, such as a cheque number written `-123`.
+
 ## Rejection happens before the write
 
 A check capable of refusing a command belongs inside the transaction that performs it, and under the same lock when concurrency is in play. A service that mutates, commits, and returns a success-shaped value for a caller to reject afterwards has already done the thing the `409` says it did not do.

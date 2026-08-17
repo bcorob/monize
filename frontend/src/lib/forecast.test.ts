@@ -66,6 +66,16 @@ describe('FORECAST_PERIOD_LABELS', () => {
   });
 });
 
+/**
+ * `buildForecast` now returns `{ points, missingCurrencies }`: a projected
+ * balance is cumulative, so one unconvertible leg invalidates every day after
+ * it and the whole series is withheld rather than drifting. These tests are
+ * about the series, so they unwrap it; the envelope has its own describe below.
+ */
+const forecastPoints = (
+  ...args: Parameters<typeof buildForecast>
+): ReturnType<typeof buildForecast>['points'] => buildForecast(...args).points;
+
 describe('buildForecast', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -77,13 +87,13 @@ describe('buildForecast', () => {
   });
 
   it('returns empty array when no matching accounts', () => {
-    const result = buildForecast([], [], 'month', 'all');
+    const result = forecastPoints([], [], 'month', 'all');
     expect(result).toEqual([]);
   });
 
   it('returns data points for an account with no transactions', () => {
     const accounts = [makeAccount()];
-    const result = buildForecast(accounts, [], 'week', 'all');
+    const result = forecastPoints(accounts, [], 'week', 'all');
     expect(result.length).toBeGreaterThan(0);
     expect(result[0].balance).toBe(1000);
   });
@@ -95,7 +105,7 @@ describe('buildForecast', () => {
       amount: -500,
       frequency: 'ONCE',
     })];
-    const result = buildForecast(accounts, transactions, 'month', 'all');
+    const result = forecastPoints(accounts, transactions, 'month', 'all');
     const afterTx = result.find(dp => dp.date === '2025-01-20');
     expect(afterTx?.balance).toBe(4500);
   });
@@ -103,20 +113,20 @@ describe('buildForecast', () => {
   it('skips inactive transactions', () => {
     const accounts = [makeAccount({ currentBalance: 1000 })];
     const transactions = [makeScheduled({ isActive: false, nextDueDate: '2025-01-20', frequency: 'ONCE' })];
-    const result = buildForecast(accounts, transactions, 'month', 'all');
+    const result = forecastPoints(accounts, transactions, 'month', 'all');
     const allBalances = result.map(dp => dp.balance);
     expect(allBalances.every(b => b === 1000)).toBe(true);
   });
 
   it('filters by specific account', () => {
     const accounts = [makeAccount({ id: 'acc-1' }), makeAccount({ id: 'acc-2', currentBalance: 2000 })];
-    const result = buildForecast(accounts, [], 'week', 'acc-2');
+    const result = forecastPoints(accounts, [], 'week', 'acc-2');
     expect(result[0].balance).toBe(2000);
   });
 
   it('excludes closed accounts in all mode', () => {
     const accounts = [makeAccount({ isClosed: true })];
-    const result = buildForecast(accounts, [], 'week', 'all');
+    const result = forecastPoints(accounts, [], 'week', 'all');
     expect(result).toEqual([]);
   });
 
@@ -128,7 +138,7 @@ describe('buildForecast', () => {
       nextDueDate: '2025-01-20',
       frequency: 'ONCE',
     })];
-    const result = buildForecast(accounts, transactions, 'month', 'all');
+    const result = forecastPoints(accounts, transactions, 'month', 'all');
     const allBalances = result.map(dp => dp.balance);
     expect(allBalances.every(b => b === 5000)).toBe(true);
   });
@@ -141,7 +151,7 @@ describe('buildForecast', () => {
       frequency: 'ONCE',
       nextOverride: { amount: -700 } as any,
     })];
-    const result = buildForecast(accounts, transactions, 'month', 'all');
+    const result = forecastPoints(accounts, transactions, 'month', 'all');
     const afterTx = result.find(dp => dp.date === '2025-01-20');
     expect(afterTx?.balance).toBe(4300);
   });
@@ -155,7 +165,7 @@ describe('buildForecast', () => {
         amount: -100,
         frequency: 'DAILY',
       })];
-      const result = buildForecast(accounts, transactions, 'week', 'all');
+      const result = forecastPoints(accounts, transactions, 'week', 'all');
       // Day 0: Jan 15 => -100, balance 900
       // Day 1: Jan 16 => -100, balance 800
       // ...through Jan 22 (7 days)
@@ -174,7 +184,7 @@ describe('buildForecast', () => {
         amount: -10,
         frequency: 'DAILY',
       })];
-      const result = buildForecast(accounts, transactions, 'week', 'all');
+      const result = forecastPoints(accounts, transactions, 'week', 'all');
       // 8 days of transactions (day 0 through day 7 inclusive)
       const txPoints = result.filter(dp => dp.transactions.length > 0);
       expect(txPoints.length).toBe(8);
@@ -190,7 +200,7 @@ describe('buildForecast', () => {
         amount: -200,
         frequency: 'WEEKLY',
       })];
-      const result = buildForecast(accounts, transactions, 'month', 'all');
+      const result = forecastPoints(accounts, transactions, 'month', 'all');
       const jan15 = result.find(dp => dp.date === '2025-01-15');
       const jan22 = result.find(dp => dp.date === '2025-01-22');
       const jan29 = result.find(dp => dp.date === '2025-01-29');
@@ -211,7 +221,7 @@ describe('buildForecast', () => {
         amount: -500,
         frequency: 'BIWEEKLY',
       })];
-      const result = buildForecast(accounts, transactions, 'month', 'all');
+      const result = forecastPoints(accounts, transactions, 'month', 'all');
       const jan15 = result.find(dp => dp.date === '2025-01-15');
       const jan29 = result.find(dp => dp.date === '2025-01-29');
       expect(jan15?.balance).toBe(2500);
@@ -231,7 +241,7 @@ describe('buildForecast', () => {
         amount: -500,
         frequency: 'EVERY4WEEKS',
       })];
-      const result = buildForecast(accounts, transactions, '90days', 'all');
+      const result = forecastPoints(accounts, transactions, '90days', 'all');
       const jan15 = result.find(dp => dp.date === '2025-01-15');
       const feb12 = result.find(dp => dp.date === '2025-02-12');
       const mar12 = result.find(dp => dp.date === '2025-03-12');
@@ -257,7 +267,7 @@ describe('buildForecast', () => {
         frequency: 'SEMIMONTHLY',
       })];
       // 90 days period to see multiple occurrences
-      const result = buildForecast(accounts, transactions, '90days', 'all');
+      const result = forecastPoints(accounts, transactions, '90days', 'all');
       // Jan 15 -> end of Jan (Jan 31) -> Feb 15 -> end of Feb (Feb 28) -> Mar 15 -> end of Mar (Mar 31)
       const jan15 = result.find(dp => dp.date === '2025-01-15');
       const jan31 = result.find(dp => dp.date === '2025-01-31');
@@ -280,7 +290,7 @@ describe('buildForecast', () => {
         amount: -500,
         frequency: 'SEMIMONTHLY',
       })];
-      const result = buildForecast(accounts, transactions, '90days', 'all');
+      const result = forecastPoints(accounts, transactions, '90days', 'all');
       // Jan 20 (<=15 is false, so next goes to 15th of next month)
       // Actually: Jan 20 > 15, so next = Feb 15 -> end of Feb (Feb 28) -> Mar 15 -> end of Mar
       const jan20 = result.find(dp => dp.date === '2025-01-20');
@@ -301,7 +311,7 @@ describe('buildForecast', () => {
         amount: -2000,
         frequency: 'QUARTERLY',
       })];
-      const result = buildForecast(accounts, transactions, 'year', 'all');
+      const result = forecastPoints(accounts, transactions, 'year', 'all');
       // Jan 15, Apr 15, Jul 15, Oct 15
       const jan15 = result.find(dp => dp.date === '2025-01-15');
       const apr15 = result.find(dp => dp.date === '2025-04-15');
@@ -324,7 +334,7 @@ describe('buildForecast', () => {
         amount: -1000,
         frequency: 'YEARLY',
       })];
-      const result = buildForecast(accounts, transactions, 'year', 'all');
+      const result = forecastPoints(accounts, transactions, 'year', 'all');
       // Jan 15, 2025 is day 0, Jan 15, 2026 is exactly 365 days later (included as endDate is <=)
       const txPoints = result.filter(dp => dp.transactions.length > 0);
       expect(txPoints.length).toBe(2);
@@ -341,7 +351,7 @@ describe('buildForecast', () => {
         amount: -1000,
         frequency: 'YEARLY',
       })];
-      const result = buildForecast(accounts, transactions, 'year', 'all');
+      const result = forecastPoints(accounts, transactions, 'year', 'all');
       const txPoints = result.filter(dp => dp.transactions.length > 0);
       expect(txPoints.length).toBe(1);
       expect(txPoints[0].date).toBe('2025-01-16');
@@ -359,7 +369,7 @@ describe('buildForecast', () => {
         amount: -500,
         frequency: 'MONTHLY',
       })];
-      const result = buildForecast(accounts, transactions, '90days', 'all');
+      const result = forecastPoints(accounts, transactions, '90days', 'all');
       const dec01 = result.find(dp => dp.date === '2025-12-01');
       const jan01 = result.find(dp => dp.date === '2026-01-01');
       const feb01 = result.find(dp => dp.date === '2026-02-01');
@@ -376,7 +386,7 @@ describe('buildForecast', () => {
         amount: -100,
         frequency: 'WEEKLY',
       })];
-      const result = buildForecast(accounts, transactions, 'month', 'all');
+      const result = forecastPoints(accounts, transactions, 'month', 'all');
       const dec25 = result.find(dp => dp.date === '2025-12-25');
       const jan01 = result.find(dp => dp.date === '2026-01-01');
       const jan08 = result.find(dp => dp.date === '2026-01-08');
@@ -396,7 +406,7 @@ describe('buildForecast', () => {
         amount: -100,
         frequency: 'MONTHLY',
       })];
-      const result = buildForecast(accounts, transactions, '90days', 'all');
+      const result = forecastPoints(accounts, transactions, '90days', 'all');
       const jan31 = result.find(dp => dp.date === '2025-01-31');
       expect(jan31?.transactions.length).toBe(1);
       // Clamped to the last day of the shorter month, matching the backend's
@@ -416,7 +426,7 @@ describe('buildForecast', () => {
         amount: -100,
         frequency: 'SEMIMONTHLY',
       })];
-      const result = buildForecast(accounts, transactions, '90days', 'all');
+      const result = forecastPoints(accounts, transactions, '90days', 'all');
       // SEMIMONTHLY: Jan 15 -> Jan 31 (end of Jan) -> Feb 15 -> Feb 28 (end of Feb)
       const jan31 = result.find(dp => dp.date === '2025-01-31');
       const feb28 = result.find(dp => dp.date === '2025-02-28');
@@ -435,7 +445,7 @@ describe('buildForecast', () => {
         amount: -100,
         frequency: 'SEMIMONTHLY',
       })];
-      const result = buildForecast(accounts, transactions, '90days', 'all');
+      const result = forecastPoints(accounts, transactions, '90days', 'all');
       // SEMIMONTHLY: Jan 15 -> Jan 31 -> Feb 15 -> Feb 29 (leap year!)
       const feb29 = result.find(dp => dp.date === '2024-02-29');
       expect(feb29?.transactions.length).toBe(1);
@@ -449,7 +459,7 @@ describe('buildForecast', () => {
         amount: -100,
         frequency: 'MONTHLY',
       })];
-      const result = buildForecast(accounts, transactions, '90days', 'all');
+      const result = forecastPoints(accounts, transactions, '90days', 'all');
       const jan29 = result.find(dp => dp.date === '2024-01-29');
       const feb29 = result.find(dp => dp.date === '2024-02-29');
       expect(jan29?.transactions.length).toBe(1);
@@ -461,21 +471,21 @@ describe('buildForecast', () => {
   describe('granularity-based data point filtering', () => {
     it('week period uses daily granularity (every data point)', () => {
       const accounts = [makeAccount()];
-      const result = buildForecast(accounts, [], 'week', 'all');
+      const result = forecastPoints(accounts, [], 'week', 'all');
       // 7 days + day 0 = 8 data points
       expect(result.length).toBe(8);
     });
 
     it('month period uses daily granularity', () => {
       const accounts = [makeAccount()];
-      const result = buildForecast(accounts, [], 'month', 'all');
+      const result = forecastPoints(accounts, [], 'month', 'all');
       // 30 days + day 0 = 31 data points
       expect(result.length).toBe(31);
     });
 
     it('90days period uses every-3-day granularity (fewer data points)', () => {
       const accounts = [makeAccount()];
-      const result = buildForecast(accounts, [], '90days', 'all');
+      const result = forecastPoints(accounts, [], '90days', 'all');
       // Granularity 3: data points at day 0, 3, 6, 9, ... plus last day
       // Expected: about 31 data points (90/3 + 1)
       expect(result.length).toBeLessThan(91);
@@ -484,7 +494,7 @@ describe('buildForecast', () => {
 
     it('6months period uses weekly granularity', () => {
       const accounts = [makeAccount()];
-      const result = buildForecast(accounts, [], '6months', 'all');
+      const result = forecastPoints(accounts, [], '6months', 'all');
       // Granularity 7: data points at day 0, 7, 14, ... plus last day
       // Expected: about 26-27 data points (180/7 + 1)
       expect(result.length).toBeLessThan(181);
@@ -493,7 +503,7 @@ describe('buildForecast', () => {
 
     it('year period uses weekly granularity', () => {
       const accounts = [makeAccount()];
-      const result = buildForecast(accounts, [], 'year', 'all');
+      const result = forecastPoints(accounts, [], 'year', 'all');
       // Granularity 7: data points at day 0, 7, 14, ... plus last day
       // Expected: about 53 data points (365/7 + 1)
       expect(result.length).toBeLessThan(366);
@@ -510,7 +520,7 @@ describe('buildForecast', () => {
         amount: -500,
         frequency: 'ONCE',
       })];
-      const result = buildForecast(accounts, transactions, '90days', 'all');
+      const result = forecastPoints(accounts, transactions, '90days', 'all');
       const txPoint = result.find(dp => dp.date === dateStr);
       expect(txPoint).toBeDefined();
       expect(txPoint?.transactions.length).toBe(1);
@@ -521,7 +531,7 @@ describe('buildForecast', () => {
   describe('empty scheduled transactions input', () => {
     it('returns flat balance line with empty transactions array', () => {
       const accounts = [makeAccount({ currentBalance: 2500 })];
-      const result = buildForecast(accounts, [], 'month', 'all');
+      const result = forecastPoints(accounts, [], 'month', 'all');
       expect(result.length).toBeGreaterThan(0);
       const allBalances = result.map(dp => dp.balance);
       expect(allBalances.every(b => b === 2500)).toBe(true);
@@ -529,7 +539,7 @@ describe('buildForecast', () => {
 
     it('all data points have empty transaction arrays', () => {
       const accounts = [makeAccount()];
-      const result = buildForecast(accounts, [], 'week', 'all');
+      const result = forecastPoints(accounts, [], 'week', 'all');
       for (const dp of result) {
         expect(dp.transactions).toEqual([]);
       }
@@ -546,7 +556,7 @@ describe('buildForecast', () => {
         frequency: 'WEEKLY',
         endDate: '2025-01-29',
       })];
-      const result = buildForecast(accounts, transactions, 'month', 'all');
+      const result = forecastPoints(accounts, transactions, 'month', 'all');
       // Should have occurrences on Jan 15, Jan 22, Jan 29
       // Jan 29 is on the endDate, so it should be included
       // Feb 5 should NOT have an occurrence
@@ -568,7 +578,7 @@ describe('buildForecast', () => {
         frequency: 'DAILY',
       })];
       // Week period = 7 days from Jan 15 = Jan 22
-      const result = buildForecast(accounts, transactions, 'week', 'all');
+      const result = forecastPoints(accounts, transactions, 'week', 'all');
       const lastPoint = result[result.length - 1];
       const lastDate = new Date(2025, 0, 22); // Jan 22
       const expectedDateKey = `${lastDate.getFullYear()}-${String(lastDate.getMonth() + 1).padStart(2, '0')}-${String(lastDate.getDate()).padStart(2, '0')}`;
@@ -583,7 +593,7 @@ describe('buildForecast', () => {
         frequency: 'WEEKLY',
         occurrencesRemaining: 2,
       })];
-      const result = buildForecast(accounts, transactions, 'month', 'all');
+      const result = forecastPoints(accounts, transactions, 'month', 'all');
       // Only 2 occurrences: Jan 15 and Jan 22
       const txPoints = result.filter(dp => dp.transactions.length > 0);
       expect(txPoints.length).toBe(2);
@@ -604,7 +614,7 @@ describe('buildForecast', () => {
         isSplit: true,
         splits: [{ transferAccountId: 'acc-2' } as any],
       })];
-      const result = buildForecast(accounts, transactions, 'month', 'all');
+      const result = forecastPoints(accounts, transactions, 'month', 'all');
       const allBalances = result.map(dp => dp.balance);
       expect(allBalances.every(b => b === 5000)).toBe(true);
     });
@@ -619,7 +629,7 @@ describe('buildForecast', () => {
         transferAccountId: 'acc-2',
         accountId: 'acc-1',
       })];
-      const result = buildForecast(accounts, transactions, 'month', 'acc-1');
+      const result = forecastPoints(accounts, transactions, 'month', 'acc-1');
       const afterTx = result.find(dp => dp.date === '2025-01-20');
       expect(afterTx?.balance).toBe(4500);
     });
@@ -635,7 +645,7 @@ describe('buildForecast', () => {
         accountId: 'acc-1',
       })];
       // Viewing VISA (acc-2): the $500 transfer should show as +500
-      const result = buildForecast(accounts, transactions, 'month', 'acc-2');
+      const result = forecastPoints(accounts, transactions, 'month', 'acc-2');
       const afterTx = result.find(dp => dp.date === '2025-01-20');
       expect(afterTx?.balance).toBe(1500); // 1000 + 500
     });
@@ -650,7 +660,7 @@ describe('buildForecast', () => {
         transferAccountId: 'acc-2',
         accountId: 'acc-1',
       })];
-      const result = buildForecast(accounts, transactions, 'month', 'acc-2');
+      const result = forecastPoints(accounts, transactions, 'month', 'acc-2');
       // Each weekly occurrence should add 200 to the destination account
       const jan15 = result.find(dp => dp.date === '2025-01-15');
       expect(jan15?.balance).toBe(1200); // 1000 + 200
@@ -669,7 +679,7 @@ describe('buildForecast', () => {
         transferAccountId: 'acc-1',
         accountId: 'acc-1',
       })];
-      const result = buildForecast(accounts, transactions, 'month', 'acc-1');
+      const result = forecastPoints(accounts, transactions, 'month', 'acc-1');
       const afterTx = result.find(dp => dp.date === '2025-01-20');
       // Should only count once (as source), not also negate as inbound
       expect(afterTx?.balance).toBe(4500);
@@ -691,7 +701,7 @@ describe('buildForecast', () => {
         investmentFundingAccountId: 'cash-1',
         investmentExchangeRate: 1,
       } as any)];
-      const result = buildForecast([cashAccount], transactions, 'month', 'cash-1');
+      const result = forecastPoints([cashAccount], transactions, 'month', 'cash-1');
       const jan20 = result.find(dp => dp.date === '2025-01-20');
       expect(jan20?.transactions.length).toBe(1);
       expect(jan20?.transactions[0].amount).toBe(-2500);
@@ -711,7 +721,7 @@ describe('buildForecast', () => {
         investmentFundingAccountId: 'cash-1',
         investmentExchangeRate: 1,
       } as any)];
-      const result = buildForecast([cashAccount], transactions, 'month', 'cash-1');
+      const result = forecastPoints([cashAccount], transactions, 'month', 'cash-1');
       const jan20 = result.find(dp => dp.date === '2025-01-20');
       expect(jan20?.balance).toBe(11500);
     });
@@ -729,7 +739,7 @@ describe('buildForecast', () => {
         investmentFundingAccountId: 'cash-1',
         investmentExchangeRate: 1.35,
       } as any)];
-      const result = buildForecast([cashAccount], transactions, 'month', 'cash-1');
+      const result = forecastPoints([cashAccount], transactions, 'month', 'cash-1');
       const jan20 = result.find(dp => dp.date === '2025-01-20');
       // -1000 * 1.35 = -1350
       expect(jan20?.balance).toBe(8650);
@@ -747,7 +757,7 @@ describe('buildForecast', () => {
         investmentFundingAccountId: 'cash-1',
         investmentExchangeRate: 1,
       } as any)];
-      const result = buildForecast([otherCash], transactions, 'month', 'cash-other');
+      const result = forecastPoints([otherCash], transactions, 'month', 'cash-other');
       const allBalances = result.map(dp => dp.balance);
       expect(allBalances.every(b => b === 4000)).toBe(true);
     });
@@ -771,7 +781,7 @@ describe('buildForecast', () => {
         investmentFundingAccountId: null,
         investmentExchangeRate: 1,
       } as any)];
-      const result = buildForecast([cashAccount, brokerage], transactions, 'month', 'cash-1');
+      const result = forecastPoints([cashAccount, brokerage], transactions, 'month', 'cash-1');
       const jan20 = result.find(dp => dp.date === '2025-01-20');
       expect(jan20?.balance).toBe(7500);
     });
@@ -788,7 +798,7 @@ describe('buildForecast', () => {
         investmentFundingAccountId: 'cash-1',
         investmentExchangeRate: 1,
       } as any)];
-      const result = buildForecast([cashAccount], transactions, '90days', 'cash-1');
+      const result = forecastPoints([cashAccount], transactions, '90days', 'cash-1');
       const jan20 = result.find(dp => dp.date === '2025-01-20');
       const feb20 = result.find(dp => dp.date === '2025-02-20');
       const mar20 = result.find(dp => dp.date === '2025-03-20');
@@ -804,7 +814,7 @@ describe('buildForecast', () => {
         makeAccount({ id: 'acc-1', currentBalance: 1000 }),
         makeAccount({ id: 'acc-2', currentBalance: 2000 }),
       ];
-      const result = buildForecast(accounts, [], 'week', 'all');
+      const result = forecastPoints(accounts, [], 'week', 'all');
       expect(result[0].balance).toBe(3000);
     });
 
@@ -826,7 +836,7 @@ describe('buildForecast', () => {
           frequency: 'ONCE',
         }),
       ];
-      const result = buildForecast(accounts, transactions, 'month', 'all');
+      const result = forecastPoints(accounts, transactions, 'month', 'all');
       const jan20 = result.find(dp => dp.date === '2025-01-20');
       expect(jan20?.balance).toBe(7000); // 5000 - 1000 + 3000
       expect(jan20?.transactions.length).toBe(2);
@@ -843,7 +853,7 @@ describe('buildForecast', () => {
         frequency: 'WEEKLY',
         nextOverride: { amount: -300 } as any,
       })];
-      const result = buildForecast(accounts, transactions, 'month', 'all');
+      const result = forecastPoints(accounts, transactions, 'month', 'all');
       // Jan 15 uses override: -300, balance = 4700
       const jan15 = result.find(dp => dp.date === '2025-01-15');
       expect(jan15?.balance).toBe(4700);
@@ -867,7 +877,7 @@ describe('buildForecast', () => {
           amount: null,
         }] as any,
       })];
-      const result = buildForecast(accounts, transactions, 'month', 'all');
+      const result = forecastPoints(accounts, transactions, 'month', 'all');
       // Should NOT appear on Jan 15
       const jan15 = result.find(dp => dp.date === '2025-01-15');
       expect(jan15?.transactions.length ?? 0).toBe(0);
@@ -889,7 +899,7 @@ describe('buildForecast', () => {
           amount: null,
         }] as any,
       })];
-      const result = buildForecast(accounts, transactions, 'month', 'all');
+      const result = forecastPoints(accounts, transactions, 'month', 'all');
       const jan15 = result.find(dp => dp.date === '2025-01-15');
       expect(jan15?.transactions.length ?? 0).toBe(0);
       const jan25 = result.find(dp => dp.date === '2025-01-25');
@@ -909,7 +919,7 @@ describe('buildForecast', () => {
           amount: -800,
         }] as any,
       })];
-      const result = buildForecast(accounts, transactions, 'month', 'all');
+      const result = forecastPoints(accounts, transactions, 'month', 'all');
       const jan20 = result.find(dp => dp.date === '2025-01-20');
       expect(jan20?.transactions.length).toBe(1);
       expect(jan20?.balance).toBe(4200); // 5000 - 800
@@ -927,7 +937,7 @@ describe('buildForecast', () => {
           amount: null,
         }] as any,
       })];
-      const result = buildForecast(accounts, transactions, '90days', 'all');
+      const result = forecastPoints(accounts, transactions, '90days', 'all');
       // Feb 15 should still appear at its normal date
       const feb15 = result.find(dp => dp.date === '2025-02-15');
       expect(feb15?.transactions.length).toBe(1);
@@ -948,7 +958,7 @@ describe('buildForecast', () => {
           { originalDate: '2025-03-15', overrideDate: '2025-03-20', amount: -100 },
         ] as any,
       })];
-      const result = buildForecast(accounts, transactions, '90days', 'all');
+      const result = forecastPoints(accounts, transactions, '90days', 'all');
       // Jan 15: override amount -300, balance = 9700
       const jan15 = result.find(dp => dp.date === '2025-01-15');
       expect(jan15?.balance).toBe(9700);
@@ -974,7 +984,7 @@ describe('buildForecast', () => {
           { originalDate: '2025-01-15', overrideDate: '2025-01-15', amount: -200 },
         ] as any,
       })];
-      const result = buildForecast(accounts, transactions, '90days', 'all');
+      const result = forecastPoints(accounts, transactions, '90days', 'all');
       // Jan 15: override amount -200
       const jan15 = result.find(dp => dp.date === '2025-01-15');
       expect(jan15?.balance).toBe(4800);
@@ -996,7 +1006,7 @@ describe('buildForecast', () => {
           amount: -300,
         } as any,
       })];
-      const result = buildForecast(accounts, transactions, 'month', 'all');
+      const result = forecastPoints(accounts, transactions, 'month', 'all');
       const jan20 = result.find(dp => dp.date === '2025-01-20');
       expect(jan20?.transactions.length).toBe(1);
       expect(jan20?.balance).toBe(4700);
@@ -1012,7 +1022,7 @@ describe('buildForecast', () => {
         amount: -500,
         frequency: 'ONCE',
       })];
-      const result = buildForecast(accounts, transactions, 'month', 'all');
+      const result = forecastPoints(accounts, transactions, 'month', 'all');
       const allBalances = result.map(dp => dp.balance);
       expect(allBalances.every(b => b === 5000)).toBe(true);
     });
@@ -1025,7 +1035,7 @@ describe('buildForecast', () => {
         frequency: 'ONCE',
         endDate: '2025-01-18',
       })];
-      const result = buildForecast(accounts, transactions, 'month', 'all');
+      const result = forecastPoints(accounts, transactions, 'month', 'all');
       const jan20 = result.find(dp => dp.date === '2025-01-20');
       expect(jan20?.transactions.length ?? 0).toBe(0);
     });
@@ -1038,7 +1048,7 @@ describe('buildForecast', () => {
       const futureTransactions: FutureTransaction[] = [
         { id: 'ft-1', accountId: 'acc-1', name: 'Future Bill', amount: -1000, date: '2025-01-20' },
       ];
-      const result = buildForecast(accounts, [], 'week', 'all', futureTransactions);
+      const result = forecastPoints(accounts, [], 'week', 'all', futureTransactions);
       // currentBalance excludes future transactions, so starting balance is 5000
       expect(result[0].balance).toBe(5000);
     });
@@ -1048,7 +1058,7 @@ describe('buildForecast', () => {
       const futureTransactions: FutureTransaction[] = [
         { id: 'ft-1', accountId: 'acc-1', name: 'Future Bill', amount: -1000, date: '2025-01-20' },
       ];
-      const result = buildForecast(accounts, [], 'month', 'all', futureTransactions);
+      const result = forecastPoints(accounts, [], 'month', 'all', futureTransactions);
       // Starting balance is 5000, then -1000 applied on Jan 20
       const jan20 = result.find(dp => dp.date === '2025-01-20');
       expect(jan20).toBeDefined();
@@ -1067,7 +1077,7 @@ describe('buildForecast', () => {
         { id: 'ft-2', accountId: 'acc-2', name: 'Acc2 Future', amount: -300, date: '2025-01-20' },
       ];
       // Filter to acc-1 only
-      const result = buildForecast(accounts, [], 'month', 'acc-1', futureTransactions);
+      const result = forecastPoints(accounts, [], 'month', 'acc-1', futureTransactions);
       // Starting: 3000 (currentBalance), then -500 on Jan 20 = 2500
       expect(result[0].balance).toBe(3000);
       const jan20 = result.find(dp => dp.date === '2025-01-20');
@@ -1084,7 +1094,7 @@ describe('buildForecast', () => {
         { id: 'ft-2', accountId: 'acc-1', name: 'Past Tx', amount: -300, date: '2025-01-10' }, // past
       ];
       // Neither should be subtracted (filter is ft.date > todayKey)
-      const result = buildForecast(accounts, [], 'week', 'all', futureTransactions);
+      const result = forecastPoints(accounts, [], 'week', 'all', futureTransactions);
       expect(result[0].balance).toBe(5000);
     });
 
@@ -1098,7 +1108,7 @@ describe('buildForecast', () => {
       const futureTransactions: FutureTransaction[] = [
         { id: 'ft-1', accountId: 'acc-1', name: 'Future Bill', amount: -1000, date: '2025-01-20' },
       ];
-      const result = buildForecast(accounts, scheduled, 'month', 'all', futureTransactions);
+      const result = forecastPoints(accounts, scheduled, 'month', 'all', futureTransactions);
       // Starting: 5000
       // Jan 20: 5000 + (-1000) + (-200) = 3800
       const jan20 = result.find(dp => dp.date === '2025-01-20');
@@ -1108,7 +1118,7 @@ describe('buildForecast', () => {
 
     it('defaults to empty when futureTransactions not provided', () => {
       const accounts = [makeAccount({ currentBalance: 1000 })];
-      const result = buildForecast(accounts, [], 'week', 'all');
+      const result = forecastPoints(accounts, [], 'week', 'all');
       expect(result[0].balance).toBe(1000);
     });
   });
@@ -1126,7 +1136,7 @@ describe('buildForecast', () => {
         if (currency === 'EUR') return amount * 1.50;
         return amount;
       };
-      const result = buildForecast(accounts, [], 'week', 'all', [], convertAmount);
+      const result = forecastPoints(accounts, [], 'week', 'all', [], convertAmount);
       expect(result[0].balance).toBe(2100);
     });
 
@@ -1145,7 +1155,7 @@ describe('buildForecast', () => {
         if (currency === 'USD') return amount * 2;
         return amount;
       };
-      const result = buildForecast(accounts, transactions, 'month', 'all', [], convertAmount);
+      const result = forecastPoints(accounts, transactions, 'month', 'all', [], convertAmount);
       const jan20 = result.find(dp => dp.date === '2025-01-20');
       expect(jan20?.balance).toBe(1000);
     });
@@ -1155,7 +1165,7 @@ describe('buildForecast', () => {
         makeAccount({ id: 'acc-1', currentBalance: 1000, currencyCode: 'USD' }),
         makeAccount({ id: 'acc-2', currentBalance: 500, currencyCode: 'EUR' }),
       ];
-      const result = buildForecast(accounts, [], 'week', 'all', [], undefined);
+      const result = forecastPoints(accounts, [], 'week', 'all', [], undefined);
       // Raw sum without conversion
       expect(result[0].balance).toBe(1500);
     });
@@ -1172,7 +1182,7 @@ describe('buildForecast', () => {
         if (currency === 'USD') return amount * 1.5;
         return amount;
       };
-      const result = buildForecast(accounts, [], 'month', 'all', futureTransactions, convertAmount);
+      const result = forecastPoints(accounts, [], 'month', 'all', futureTransactions, convertAmount);
       const jan20 = result.find(dp => dp.date === '2025-01-20');
       expect(jan20?.balance).toBe(1200);
     });
@@ -1194,7 +1204,7 @@ describe('buildForecast', () => {
         if (currency === 'EUR') return amount * 2;
         return amount;
       };
-      const result = buildForecast(accounts, transactions, 'month', 'acc-2', [], convertAmount);
+      const result = forecastPoints(accounts, transactions, 'month', 'acc-2', [], convertAmount);
       const jan20 = result.find(dp => dp.date === '2025-01-20');
       expect(jan20?.balance).toBe(1200);
     });
@@ -1356,5 +1366,69 @@ describe('getProjectedBalanceAtDate', () => {
     } as any)];
     const result = getProjectedBalanceAtDate(cashAccount, '2025-01-25', scheduled, []);
     expect(result).toBe(8500);
+  });
+});
+
+describe('buildForecast — a missing rate withholds the series', () => {
+  const cadAccount = {
+    id: 'acc-cad',
+    name: 'Chequing',
+    currencyCode: 'CAD',
+    currentBalance: 1000,
+    isClosed: false,
+    accountType: 'CHECKING',
+  } as never;
+  const eurAccount = {
+    id: 'acc-eur',
+    name: 'Euro savings',
+    currencyCode: 'EUR',
+    currentBalance: 500,
+    isClosed: false,
+    accountType: 'SAVINGS',
+  } as never;
+
+  /** Knows CAD only, so a EUR account cannot be converted. */
+  const convertCadOnly = (amount: number, currency: string) =>
+    currency === 'CAD' ? amount : null;
+
+  it('projects normally when every account converts', () => {
+    const result = buildForecast(
+      [cadAccount],
+      [],
+      'week',
+      'all',
+      [],
+      convertCadOnly,
+    );
+    expect(result.missingCurrencies).toEqual([]);
+    expect(result.points.length).toBeGreaterThan(0);
+    expect(result.points[0].balance).toBe(1000);
+  });
+
+  // The alternative was a line starting at 1,000 instead of 1,000 + converted
+  // 500, drawn as an ordinary projection. Every day after the first is wrong,
+  // and nothing on the chart said so.
+  it('withholds the series and names the currency when one account cannot convert', () => {
+    const result = buildForecast(
+      [cadAccount, eurAccount],
+      [],
+      'week',
+      'all',
+      [],
+      convertCadOnly,
+    );
+    expect(result.missingCurrencies).toEqual(['EUR']);
+    expect(result.points).toEqual([]);
+  });
+
+  it('needs no rates at all when no conversion was asked for', () => {
+    const result = buildForecast([cadAccount, eurAccount], [], 'week', 'all');
+    expect(result.missingCurrencies).toEqual([]);
+    expect(result.points.length).toBeGreaterThan(0);
+  });
+
+  it('reports no series and no missing currencies for no accounts', () => {
+    const result = buildForecast([], [], 'week', 'all', [], convertCadOnly);
+    expect(result).toEqual({ points: [], missingCurrencies: [] });
   });
 });

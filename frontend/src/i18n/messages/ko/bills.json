@@ -43,7 +43,8 @@
     "summaryEnding": "종료",
     "summaryLowest": "최저",
     "summaryMinBalance": "최소 잔액",
-    "allAccounts": "모든 계정"
+    "allAccounts": "모든 계정",
+    "unavailableMissingRates": "이 예측은 {displayCurrency}(으)로 표시할 수 없습니다. {currencies}의 환율이 없고, 예상 잔액은 이전의 모든 날을 기반으로 하기 때문입니다. 환율을 추가하거나 단일 통화 계좌를 선택하세요."
   },
   "calendar": {
     "days": {

@@ -43,7 +43,8 @@
     "summaryEnding": "Eindstand",
     "summaryLowest": "Laagste",
     "summaryMinBalance": "Minimumsaldo",
-    "allAccounts": "Alle rekeningen"
+    "allAccounts": "Alle rekeningen",
+    "unavailableMissingRates": "Deze prognose kan niet worden getoond in {displayCurrency}: er is geen wisselkoers beschikbaar voor {currencies}, en een geprojecteerd saldo bouwt voort op elke eerdere dag. Voeg een koers toe, of kies een rekening met één valuta."
   },
   "calendar": {
     "days": {

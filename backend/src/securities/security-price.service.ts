@@ -24,6 +24,7 @@ import { getTradingDateFromQuote } from "./providers/trading-date.util";
 import { getMarketSessionFromQuote } from "./providers/market-session.util";
 import { isSessionSettled } from "./providers/settled-bar.util";
 import { assertDailySeries } from "./providers/daily-spacing.util";
+import { MARKET_PRICED_TRADE_ACTIONS } from "./investment-replay.util";
 import { BackfillRange } from "./dto/backfill-prices-query.dto";
 import { CreateSecurityPriceDto } from "./dto/create-security-price.dto";
 import { UpdateSecurityPriceDto } from "./dto/update-security-price.dto";
@@ -36,10 +37,12 @@ import { mapWithConcurrency } from "../common/concurrency.util";
 
 export { SecurityLookupResult } from "./providers/quote-provider.interface";
 
+// Lowercased action names a transaction-derived price row is stored under.
+// Derived from the shared trade list so a new Money-vocabulary action cannot
+// write a source this guard list does not recognize (an unlisted source would
+// never be overwritten or cleaned up again).
 const TRANSACTION_SOURCES = [
-  "buy",
-  "sell",
-  "reinvest",
+  ...MARKET_PRICED_TRADE_ACTIONS.map((action) => action.toLowerCase()),
   "transfer_in",
   "transfer_out",
 ];
@@ -1038,6 +1041,7 @@ export class SecurityPriceService {
           `SELECT security_id, MIN(transaction_date)::TEXT as earliest
          FROM investment_transactions
          WHERE security_id IS NOT NULL
+           AND status != 'VOID'
          GROUP BY security_id`,
         ),
       );
@@ -1587,7 +1591,8 @@ export class SecurityPriceService {
         m.query(
           `SELECT MIN(transaction_date)::TEXT as earliest
          FROM investment_transactions
-         WHERE security_id = $1`,
+         WHERE security_id = $1
+           AND status != 'VOID'`,
           [securityId],
         ),
     );
@@ -1706,15 +1711,17 @@ export class SecurityPriceService {
         `SELECT AVG(price::numeric) as avg_price,
               (SELECT action FROM investment_transactions
                WHERE security_id = $1 AND transaction_date = $2
-                 AND action IN ('BUY', 'SELL', 'REINVEST')
+                 AND action = ANY($3)
                  AND price IS NOT NULL
+                 AND status != 'VOID'
                ORDER BY created_at DESC LIMIT 1) as latest_action
        FROM investment_transactions
        WHERE security_id = $1
          AND transaction_date = $2
-         AND action IN ('BUY', 'SELL', 'REINVEST')
-         AND price IS NOT NULL`,
-        [securityId, transactionDate],
+         AND action = ANY($3)
+         AND price IS NOT NULL
+         AND status != 'VOID'`,
+        [securityId, transactionDate, MARKET_PRICED_TRADE_ACTIONS],
       ),
     );
 
@@ -1768,14 +1775,17 @@ export class SecurityPriceService {
               (SELECT it2.action FROM investment_transactions it2
                WHERE it2.security_id = it.security_id
                  AND it2.transaction_date = it.transaction_date
-                 AND it2.action IN ('BUY', 'SELL', 'REINVEST')
+                 AND it2.action = ANY($1)
                  AND it2.price IS NOT NULL
+                 AND it2.status != 'VOID'
                ORDER BY it2.created_at DESC LIMIT 1) as latest_action
        FROM investment_transactions it
        WHERE it.security_id IS NOT NULL
          AND it.price IS NOT NULL
-         AND it.action IN ('BUY', 'SELL', 'REINVEST')
+         AND it.action = ANY($1)
+         AND it.status != 'VOID'
        GROUP BY it.security_id, it.transaction_date`,
+        [MARKET_PRICED_TRADE_ACTIONS],
       ),
     );
 

@@ -23,6 +23,7 @@ import { ExportDropdown } from '@/components/ui/ExportDropdown';
 import { ReportAccountMultiSelect } from '@/components/reports/ReportAccountMultiSelect';
 import { RefreshPricesButton } from '@/components/reports/RefreshPricesButton';
 import { SortableHeader } from '@/components/ui/SortableHeader';
+import { PartialTotal } from '@/components/ui/PartialTotal';
 import { useSortableTable, compareValues } from '@/hooks/useSortableTable';
 import { useReportData } from '@/hooks/useReportData';
 import { usePersistedAccountFilter } from '@/hooks/usePersistedAccountFilter';
@@ -77,6 +78,7 @@ const ACCOUNTS_STORAGE_KEY = 'monize-reports-geographic-allocation-accounts';
 
 export function GeographicAllocationReport() {
   const t = useTranslations('reports');
+  const tCommon = useTranslations('common');
   const { formatCurrencyCompact: formatCurrency, formatCurrency: formatCurrencyFull, formatCurrencyAxis } = useNumberFormat();
   const { defaultCurrency, convertToDefault } = useExchangeRates();
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -149,7 +151,7 @@ export function GeographicAllocationReport() {
     return map;
   }, [securities]);
 
-  const { exchangeData, regionData, totalValue } = useMemo(
+  const { exchangeData, regionData, totalValue, missingCurrencies, excludedCount } = useMemo(
     () => computeGeographicAllocation(holdings, securityExchangeMap, convertToDefault),
     [holdings, convertToDefault, securityExchangeMap],
   );
@@ -308,7 +310,13 @@ export function GeographicAllocationReport() {
       title: t('page.names.geographic-allocation' as Parameters<typeof t>[0]),
       subtitle: viewType === 'region' ? t('geographicAllocation.viewByRegion') : t('geographicAllocation.viewByExchange'),
       summaryCards: [
-        { label: t('geographicAllocation.totalPortfolio'), value: formatCurrency(totalValue, defaultCurrency), color: '#111827' },
+        {
+          label: t('geographicAllocation.totalPortfolio'),
+          value: `${formatCurrency(totalValue, defaultCurrency)}${
+            excludedCount > 0 ? ` ${tCommon('partialTotal.srSuffix')}` : ''
+          }`,
+          color: '#111827',
+        },
         { label: t('geographicAllocation.regions'), value: String(regionData.length), color: '#111827' },
         { label: t('geographicAllocation.exchanges'), value: String(exchangeData.length), color: '#111827' },
         { label: t('geographicAllocation.topRegion'), value: regionData[0]?.region || '-', color: '#111827' },
@@ -407,7 +415,15 @@ export function GeographicAllocationReport() {
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-3 sm:p-4">
           <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">{t('geographicAllocation.totalPortfolio')}</p>
           <p className="text-lg sm:text-xl font-bold text-gray-900 dark:text-gray-100">
-            {formatCurrency(totalValue, defaultCurrency)}
+            {/* An unpriced or unconvertible holding is left out of this total, so
+                mark it a subtotal rather than presenting the smaller figure as
+                the whole portfolio. */}
+            <PartialTotal
+              total={{ value: totalValue, missingCurrencies, excludedCount }}
+              displayCurrency={defaultCurrency}
+            >
+              {formatCurrency(totalValue, defaultCurrency)}
+            </PartialTotal>
           </p>
         </div>
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-3 sm:p-4">
