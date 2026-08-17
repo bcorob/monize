@@ -114,7 +114,10 @@ services:
     environment:
       NODE_ENV: ${NODE_ENV:-development}
       INTERNAL_API_URL: http://backend:3000
-      PUBLIC_APP_URL: http://localhost:3001
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL:-http://localhost:3001}
+      # Hostnames allowed to load dev-only resources (HMR) when browsing the
+      # dev server from another machine. Dev stack only.
+      DEV_ALLOWED_ORIGINS: ${DEV_ALLOWED_ORIGINS:-}
       DISABLE_HTTPS_HEADERS: ${DISABLE_HTTPS_HEADERS:-true}
     volumes:
       - ./frontend:/app

@@ -17,9 +17,22 @@ const IMPORT_LIMIT_MB = Number(process.env.MNY_IMPORT_LIMIT_MB) || 300;
 // Multipart framing (boundaries, part headers) rides along with the file.
 const PROXY_BODY_LIMIT_MB = IMPORT_LIMIT_MB + 8;
 
+// Hostnames (not URLs) allowed to reach dev-only resources such as
+// /_next/webpack-hmr when the dev server is browsed from another machine.
+// Empty in production, where the setting has no effect and must not be a
+// standing hole.
+const allowedDevOrigins =
+  process.env.NODE_ENV === 'production'
+    ? []
+    : (process.env.DEV_ALLOWED_ORIGINS || '')
+        .split(',')
+        .map((host) => host.trim())
+        .filter(Boolean);
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  allowedDevOrigins,
   experimental: {
     proxyClientMaxBodySize: `${PROXY_BODY_LIMIT_MB}mb`,
   },
