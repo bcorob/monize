@@ -41,6 +41,7 @@ logs/
 
 # Docker
 docker-compose.override.yml
+docker-compose.beta.yml
 
 # Container data mounted from the host (BACKUP_HOST_DIR, ATTACHMENT_HOST_DIR)
 /monize/
