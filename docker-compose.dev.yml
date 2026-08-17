@@ -121,7 +121,7 @@ services:
       - /app/node_modules
       - /app/.next
     ports:
-      - "127.0.0.1:${FRONTEND_PORT:-3001}:3000"
+      - "${FRONTEND_PORT:-3001}:3000"
     networks:
       - finance-network
     command: npm run dev
