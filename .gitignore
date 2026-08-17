@@ -28,6 +28,7 @@ out/
 *.swo
 *~
 .DS_Store
+.gitignore
 
 # Logs
 logs/
