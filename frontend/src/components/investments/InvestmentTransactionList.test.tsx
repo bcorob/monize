@@ -13,7 +13,7 @@ vi.mock('@/lib/investments', () => ({
 }));
 
 vi.mock('@/hooks/useDateFormat', () => ({
-  useDateFormat: () => ({ formatDate: (d: string) => d, dateFormat: 'browser' }),
+  useDateFormat: () => ({ formatDate: (d: string) => d, dateFormat: 'browser', datePattern: 'YYYY-MM-DD' }),
 }));
 
 vi.mock('@/hooks/useNumberFormat', () => ({

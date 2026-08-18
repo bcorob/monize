@@ -4097,7 +4097,7 @@ describe("InvestmentTransactionsService", () => {
     });
   });
 
-  describe("formatCashTransactionPayeeName (via create)", () => {
+  describe("formatInvestmentCashPayeeName (via create)", () => {
     beforeEach(() => {
       accountsService.findOne.mockImplementation((uid: string, aid: string) => {
         if (aid === accountId) return Promise.resolve(mockInvestmentAccount);
@@ -4132,7 +4132,10 @@ describe("InvestmentTransactionsService", () => {
 
       expect(transactionRepository.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          payeeName: expect.stringContaining("Buy:"),
+          // Exact, because the shared formatter is what the .mny and QIF
+          // importers now write too, and a `toContain` cannot see a format
+          // drift between the three (issue #1204).
+          payeeName: "Buy: AAPL 10 @ $150.25",
         }),
       );
       expect(transactionRepository.create).toHaveBeenCalledWith(

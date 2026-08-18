@@ -3,7 +3,7 @@ import { render, screen, fireEvent } from '@/test/render';
 import { SecurityPriceForm } from './SecurityPriceForm';
 
 vi.mock('@/hooks/useDateFormat', () => ({
-  useDateFormat: () => ({ formatDate: (d: string) => d, dateFormat: 'browser' }),
+  useDateFormat: () => ({ formatDate: (d: string) => d, dateFormat: 'browser', datePattern: 'YYYY-MM-DD' }),
 }));
 
 describe('SecurityPriceForm', () => {

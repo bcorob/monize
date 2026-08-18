@@ -929,10 +929,45 @@ describe("ImportInvestmentProcessorService", () => {
       const cashTx = saveCalls.find(
         (call: any) => call[0]?.payeeName && call[0]?.payeeName.includes("Buy"),
       );
+      // Exact, not `toContain`: the assertions here were loose enough that
+      // swapping the label's hard-coded `$` for the security's real currency
+      // broke nothing (issue #1204).
       expect(cashTx).toBeDefined();
-      expect(cashTx[0].payeeName).toContain("TST");
-      expect(cashTx[0].payeeName).toContain("10");
-      expect(cashTx[0].payeeName).toContain("$100.00");
+      expect(cashTx[0].payeeName).toBe("Buy: TST 10 @ $100.00");
+    });
+
+    it("quotes the label in the security's currency, not a hard-coded dollar", async () => {
+      // The amount beside it is converted out of that currency two lines
+      // later; labelling a EUR-priced trade with `$` contradicts the row.
+      const securityMap = new Map<string, string | null>();
+      securityMap.set("Test Stock", "sec-1");
+      const ctx = makeContext({ securityMap });
+      exchangeRateService.getRateForDate.mockResolvedValue(1.1);
+
+      managerOf(ctx).findOne.mockImplementation((entity: any, opts: any) => {
+        if (entity === Security && opts?.where?.id === "sec-1") {
+          return Promise.resolve({
+            id: "sec-1",
+            symbol: "TST",
+            currencyCode: "EUR",
+          });
+        }
+        return Promise.resolve(null);
+      });
+
+      await service.processTransaction(ctx, {
+        action: "Buy",
+        security: "Test Stock",
+        quantity: 10,
+        price: 100,
+        commission: 0,
+        date: "2025-01-15",
+      });
+
+      const cashTx = managerOf(ctx).save.mock.calls.find(
+        (call: any) => call[0]?.payeeName,
+      );
+      expect(cashTx[0].payeeName).toBe("Buy: TST 10 @ €100.00");
     });
   });
 

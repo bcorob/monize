@@ -304,3 +304,43 @@ export interface SetupLoanPaymentsResponse {
   paymentFrequency: string;
   nextDueDate: string;
 }
+
+/**
+ * One account's worth at the end of a single day, from
+ * `GET /accounts/balances-as-of`. `docs/specs/account-balances-as-of.md` is
+ * canonical; the short version is that `balance` is a ledger sum the server
+ * always knows, and `marketValue` is a *total* -- null unless every position was
+ * both priced and converted.
+ */
+export interface AccountBalanceAsOf {
+  accountId: string;
+  currencyCode: string;
+  balance: number;
+  /** Holdings valued at the as-of date, account currency. Null unless complete. */
+  marketValue: number | null;
+  /** The part of marketValue that is known. 0 for a non-holdings account. */
+  knownMarketValueSubtotal: number;
+  unpricedHoldingsCount: number;
+  /** "USD->CAD" for each pair with no rate at or before the as-of date. */
+  missingRatePairs: string[];
+  pricesComplete: boolean;
+  fxComplete: boolean;
+  /** Read as `=== false`: an older backend sends no field, which is not "incomplete". */
+  valuationComplete: boolean;
+}
+
+export interface AccountBalancesAsOfResponse {
+  /** The date the figures were measured at -- the payload's own request key. */
+  asOfDate: string;
+  /** The currency every total is presented in (the user's reporting currency). */
+  displayCurrency: string;
+  /**
+   * Multiplier from each account currency present to `displayCurrency`, as the
+   * rate stood on `asOfDate`. A currency **absent** from this map had no rate
+   * for that date: its accounts are unconvertible, and a consumer must say so
+   * rather than reaching for a live rate or for 1. See
+   * `components/reports/account-balances/as-of-rates.ts`.
+   */
+  displayRates: Record<string, number>;
+  accounts: AccountBalanceAsOf[];
+}

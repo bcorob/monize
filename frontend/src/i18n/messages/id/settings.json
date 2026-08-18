@@ -128,6 +128,8 @@
     "showCreatedAtTooltip": "Menampilkan tanggal dan waktu transaksi pertama kali dibuat pada formulir transaksi. Ini terpisah dari tanggal transaksi dan dapat membantu Anda mengetahui kapan entri sebenarnya ditambahkan ke Monize.",
     "showWhatsNewLabel": "Tampilkan Yang Baru setelah pembaruan",
     "showWhatsNewTooltip": "Menampilkan ringkasan catatan rilis saat pertama kali Anda masuk setelah Monize diperbarui ke versi baru. Anda selalu dapat membukanya kembali dengan mengeklik nomor versi di bagian bawah halaman ini atau di layar masuk.",
+    "lockReconciledLabel": "Kunci transaksi yang direkonsiliasi",
+    "lockReconciledTooltip": "Saat ini nonaktif, Monize memperingatkan Anda sebelum perubahan yang akan menggeser tanggal atau jumlah transaksi yang direkonsiliasi, lalu mengizinkannya. Saat aktif, transaksi yang direkonsiliasi sama sekali tidak dapat diedit, dihapus, atau dibatalkan rekonsiliasinya. Nonaktifkan lagi untuk melakukan koreksi.",
     "timeFormatLabel": "Format Waktu",
     "recentTransactionsLabel": "Transaksi terbaru dalam isi-cepat",
     "recentTransactionsHelp": "Jumlah entri yang ditampilkan di popover tombol riwayat di samping kolom Penerima pada formulir transaksi.",

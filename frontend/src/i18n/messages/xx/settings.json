@@ -128,6 +128,8 @@
     "showCreatedAtTooltip": "[XX-Displays the date and time a transaction was originally created on transaction forms. This is separate from the transaction date and can help you tell when an entry was actually added to Monize.-XX]",
     "showWhatsNewLabel": "[XX-Show What's New after an upgrade-XX]",
     "showWhatsNewTooltip": "[XX-Shows a summary of the release notes the first time you sign in after Monize updates to a new version. You can always reopen it by clicking the version number at the bottom of this page or on the login screen.-XX]",
+    "lockReconciledLabel": "[XX-Lock reconciled transactions-XX]",
+    "lockReconciledTooltip": "[XX-While this is off, Monize warns you before an edit that would change a reconciled transaction's date or amount and then lets it through. While it is on, reconciled transactions cannot be edited, deleted or unreconciled at all. Turn it off again to make a correction.-XX]",
     "timeFormatLabel": "[XX-Time Format-XX]",
     "recentTransactionsLabel": "[XX-Recent transactions in quick-fill-XX]",
     "recentTransactionsHelp": "[XX-Number of entries shown in the history button popover next to the Payee field on transaction forms.-XX]",

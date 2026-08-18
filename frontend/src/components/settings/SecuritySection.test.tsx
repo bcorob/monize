@@ -90,6 +90,7 @@ const mockPreferences: UserPreferences = {
     recentTransactionsLimit: 5,
   aiBubbleEnabled: false,
   showWhatsNew: true,
+  lockReconciledTransactions: false,
   language: 'en',
   createdAt: '2024-01-01T00:00:00Z',
   updatedAt: '2024-01-01T00:00:00Z',

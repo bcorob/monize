@@ -2,10 +2,13 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, fireEvent } from '@/test/render';
 import { DateInput } from './DateInput';
 
-// Default to browser format (native date input mode)
+// Default to the browser preference, resolved to the pattern jsdom's en-US
+// locale produces. `browser` is no longer a mode of its own -- every desktop
+// field is the same text input reading a concrete pattern (issue #1201).
 const mockUseDateFormat = vi.fn(() => ({
   formatDate: (d: string) => d,
   dateFormat: 'browser',
+  datePattern: 'MM/DD/YYYY',
 }));
 
 vi.mock('@/hooks/useDateFormat', () => ({
@@ -19,7 +22,11 @@ describe('DateInput', () => {
     vi.clearAllMocks();
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2026, 3, 1)); // 2026-04-01
-    mockUseDateFormat.mockReturnValue({ formatDate: (d: string) => d, dateFormat: 'browser' });
+    mockUseDateFormat.mockReturnValue({
+      formatDate: (d: string) => d,
+      dateFormat: 'browser',
+      datePattern: 'MM/DD/YYYY',
+    });
   });
 
   afterEach(() => {
@@ -201,9 +208,12 @@ describe('DateInput', () => {
       expect(getByLabelText('Date')).toBeInTheDocument();
     });
 
-    it('renders as type="date" in browser format mode on desktop', () => {
+    it('renders as a text input on desktop even when the format is the browser default', () => {
+      // The native date input is what made this field behave unlike every
+      // other one: it jumps between its own segments after two keystrokes and
+      // will not take a partial date at all (issue #1201).
       const { getByLabelText } = renderDateInput();
-      expect(getByLabelText('Date')).toHaveAttribute('type', 'date');
+      expect(getByLabelText('Date')).toHaveAttribute('type', 'text');
     });
 
     it('displays error message', () => {
@@ -262,6 +272,7 @@ describe('DateInput', () => {
       mockUseDateFormat.mockReturnValue({
         formatDate: (d: string) => d,
         dateFormat: 'DD/MM/YYYY',
+        datePattern: 'DD/MM/YYYY',
       });
     });
 
@@ -292,6 +303,7 @@ describe('DateInput', () => {
       mockUseDateFormat.mockReturnValue({
         formatDate: (d: string) => d,
         dateFormat: 'MM/DD/YYYY',
+        datePattern: 'MM/DD/YYYY',
       });
       const { getByLabelText } = renderDateInput('2026-09-11');
       const input = getByLabelText('Date') as HTMLInputElement;
@@ -307,6 +319,7 @@ describe('DateInput', () => {
       mockUseDateFormat.mockReturnValue({
         formatDate: (d: string) => d,
         dateFormat: 'MM/DD/YYYY',
+        datePattern: 'MM/DD/YYYY',
       });
       const { getByLabelText } = renderDateInput('2026-09-11');
       const input = getByLabelText('Date') as HTMLInputElement;
@@ -319,6 +332,7 @@ describe('DateInput', () => {
       mockUseDateFormat.mockReturnValue({
         formatDate: (d: string) => d,
         dateFormat: 'MM/DD/YYYY',
+        datePattern: 'MM/DD/YYYY',
       });
       const { getByLabelText } = renderDateInput('2026-09-11');
       const input = getByLabelText('Date') as HTMLInputElement;
@@ -335,6 +349,7 @@ describe('DateInput', () => {
       mockUseDateFormat.mockReturnValue({
         formatDate: (d: string) => d,
         dateFormat: 'MM/DD/YYYY',
+        datePattern: 'MM/DD/YYYY',
       });
       const { getByLabelText } = renderDateInput('2026-12-03');
       const input = getByLabelText('Date') as HTMLInputElement;
@@ -352,6 +367,7 @@ describe('DateInput', () => {
       mockUseDateFormat.mockReturnValue({
         formatDate: (d: string) => d,
         dateFormat: 'MM/DD/YYYY',
+        datePattern: 'MM/DD/YYYY',
       });
       const { getByLabelText } = renderDateInput('2026-12-03');
       const input = getByLabelText('Date') as HTMLInputElement;
@@ -371,6 +387,7 @@ describe('DateInput', () => {
       mockUseDateFormat.mockReturnValue({
         formatDate: (d: string) => d,
         dateFormat: 'MM/DD/YYYY',
+        datePattern: 'MM/DD/YYYY',
       });
       const { getByLabelText } = renderDateInput('');
       const input = getByLabelText('Date') as HTMLInputElement;
@@ -385,48 +402,53 @@ describe('DateInput', () => {
       expect(getByLabelText('Date')).toHaveAttribute('placeholder', 'DD/MM/YYYY');
     });
 
-    it('caps input length to the format length', () => {
+    it('leaves room for a date typed the long way round', () => {
       const { getByLabelText } = renderDateInput('');
-      // DD/MM/YYYY is 10 characters
-      expect(getByLabelText('Date')).toHaveAttribute('maxLength', '10');
+      // The pattern's own length (10) would cut "September 14, 2026" off
+      // mid-word. A bound is still worth having; it is just not that one.
+      expect(getByLabelText('Date')).toHaveAttribute('maxLength', '24');
     });
 
-    it('strips letters typed into a numeric-only format', () => {
+    it('keeps a month name typed into a numeric format', () => {
       const { getByLabelText } = renderDateInput('');
       const input = getByLabelText('Date') as HTMLInputElement;
-      fireEvent.change(input, { target: { value: '15abc' } });
-      expect(input.value).toBe('15');
+      fireEvent.change(input, { target: { value: '15 Jun 2025' } });
+      expect(input.value).toBe('15 Jun 2025');
+      fireEvent.blur(input);
+      expect(onDateChange).toHaveBeenLastCalledWith('2025-06-15');
     });
 
-    it('strips characters that are not separators in the format', () => {
+    it('strips a character that could not be part of any date', () => {
       const { getByLabelText } = renderDateInput('');
       const input = getByLabelText('Date') as HTMLInputElement;
-      // '.' is not a separator in DD/MM/YYYY
-      fireEvent.change(input, { target: { value: '15.06.2025' } });
+      fireEvent.change(input, { target: { value: '15#06#2025' } });
       expect(input.value).toBe('15062025');
     });
 
-    it('allows letters in DD-MMM-YYYY but not slashes', () => {
+    it('accepts a separator the pattern does not itself use', () => {
+      const { getByLabelText } = renderDateInput('');
+      const input = getByLabelText('Date') as HTMLInputElement;
+      // '.' is not the separator in DD/MM/YYYY, but it is what a person may
+      // type; stripping it turned "15.06.2025" into "15062025".
+      fireEvent.change(input, { target: { value: '15.06.2025' } });
+      expect(input.value).toBe('15.06.2025');
+      fireEvent.blur(input);
+      expect(onDateChange).toHaveBeenLastCalledWith('2025-06-15');
+    });
+
+    it('reads a slash-separated date in DD-MMM-YYYY', () => {
       mockUseDateFormat.mockReturnValue({
         formatDate: (d: string) => d,
         dateFormat: 'DD-MMM-YYYY',
+        datePattern: 'DD-MMM-YYYY',
       });
       const { getByLabelText } = renderDateInput('');
       const input = getByLabelText('Date') as HTMLInputElement;
       fireEvent.change(input, { target: { value: '15/Jun/2025' } });
-      expect(input.value).toBe('15Jun2025');
-      fireEvent.change(input, { target: { value: '15-Jun-2025' } });
-      expect(input.value).toBe('15-Jun-2025');
+      expect(input.value).toBe('15/Jun/2025');
+      fireEvent.blur(input);
       expect(onDateChange).toHaveBeenLastCalledWith('2025-06-15');
-    });
-
-    it('caps DD-MMM-YYYY format length to 11 characters', () => {
-      mockUseDateFormat.mockReturnValue({
-        formatDate: (d: string) => d,
-        dateFormat: 'DD-MMM-YYYY',
-      });
-      const { getByLabelText } = renderDateInput('');
-      expect(getByLabelText('Date')).toHaveAttribute('maxLength', '11');
+      expect(input.value).toBe('15-Jun-2025');
     });
 
     describe('segment navigation', () => {
@@ -496,6 +518,7 @@ describe('DateInput', () => {
         mockUseDateFormat.mockReturnValue({
           formatDate: (d: string) => d,
           dateFormat: 'DD-MMM-YYYY',
+          datePattern: 'DD-MMM-YYYY',
         });
         const { getByLabelText } = renderDateInput('2025-06-15');
         const input = getByLabelText('Date') as HTMLInputElement;
@@ -686,6 +709,7 @@ describe('DateInput', () => {
         mockUseDateFormat.mockReturnValue({
           formatDate: (d: string) => d,
           dateFormat: 'YYYY-MM-DD',
+          datePattern: 'YYYY-MM-DD',
         });
       });
 
@@ -738,6 +762,140 @@ describe('DateInput', () => {
         fireEvent.keyDown(getByLabelText('Date'), { key: 't' });
         expect(onDateChange).toHaveBeenCalledWith('2026-04-01');
       });
+    });
+  });
+
+  describe('partial dates (issue #1201)', () => {
+    function withPattern(pattern: string) {
+      mockUseDateFormat.mockReturnValue({
+        formatDate: (d: string) => d,
+        dateFormat: pattern,
+        datePattern: pattern,
+      });
+    }
+
+    it('completes a month and day with the current year on blur', () => {
+      withPattern('MM/DD/YYYY');
+      const { getByLabelText } = renderDateInput('');
+      const input = getByLabelText('Date') as HTMLInputElement;
+      fireEvent.change(input, { target: { value: '9-14' } });
+      fireEvent.blur(input);
+      expect(onDateChange).toHaveBeenLastCalledWith('2026-09-14');
+      expect(input.value).toBe('09/14/2026');
+    });
+
+    it('lets the pattern decide what 7/8 means', () => {
+      withPattern('MM/DD/YYYY');
+      const { getByLabelText, unmount } = renderDateInput('');
+      const monthFirst = getByLabelText('Date') as HTMLInputElement;
+      fireEvent.change(monthFirst, { target: { value: '7/8' } });
+      fireEvent.blur(monthFirst);
+      expect(onDateChange).toHaveBeenLastCalledWith('2026-07-08');
+      unmount();
+
+      withPattern('DD/MM/YYYY');
+      const { getByLabelText: get2 } = renderDateInput('');
+      const dayFirst = get2('Date') as HTMLInputElement;
+      fireEvent.change(dayFirst, { target: { value: '7/8' } });
+      fireEvent.blur(dayFirst);
+      expect(onDateChange).toHaveBeenLastCalledWith('2026-08-07');
+    });
+
+    it('completes a lone day from the date the field is showing, not today', () => {
+      withPattern('MM/DD/YYYY');
+      const { getByLabelText } = renderDateInput('2025-03-02');
+      const input = getByLabelText('Date') as HTMLInputElement;
+      fireEvent.change(input, { target: { value: '14' } });
+      fireEvent.blur(input);
+      expect(onDateChange).toHaveBeenLastCalledWith('2025-03-14');
+    });
+
+    it('accepts a short year', () => {
+      withPattern('MM/DD/YYYY');
+      const { getByLabelText } = renderDateInput('');
+      const input = getByLabelText('Date') as HTMLInputElement;
+      fireEvent.change(input, { target: { value: '4/1/26' } });
+      fireEvent.blur(input);
+      expect(onDateChange).toHaveBeenLastCalledWith('2026-04-01');
+    });
+
+    it('commits the partial date on Enter, so a form submit carries it', () => {
+      withPattern('MM/DD/YYYY');
+      const { getByLabelText } = renderDateInput('');
+      const input = getByLabelText('Date') as HTMLInputElement;
+      fireEvent.change(input, { target: { value: '9-14' } });
+      fireEvent.keyDown(input, { key: 'Enter' });
+      expect(onDateChange).toHaveBeenLastCalledWith('2026-09-14');
+    });
+
+    it('does not report a partial date while it is still being typed', () => {
+      // "9" is a valid day on its own. Announcing it on the keystroke would
+      // send a report off fetching a date nobody asked for, mid-word.
+      withPattern('MM/DD/YYYY');
+      const { getByLabelText } = renderDateInput('2026-01-05');
+      const input = getByLabelText('Date') as HTMLInputElement;
+      fireEvent.change(input, { target: { value: '9' } });
+      fireEvent.change(input, { target: { value: '9-' } });
+      fireEvent.change(input, { target: { value: '9-1' } });
+      expect(onDateChange).not.toHaveBeenCalled();
+      fireEvent.change(input, { target: { value: '9-14' } });
+      fireEvent.blur(input);
+      expect(onDateChange).toHaveBeenCalledTimes(1);
+      expect(onDateChange).toHaveBeenCalledWith('2026-09-14');
+    });
+
+    it('keeps the date it holds when the text cannot be read at all', () => {
+      withPattern('MM/DD/YYYY');
+      const { getByLabelText } = renderDateInput('2026-01-05');
+      const input = getByLabelText('Date') as HTMLInputElement;
+      fireEvent.change(input, { target: { value: '13/45' } });
+      fireEvent.blur(input);
+      expect(input.value).toBe('01/05/2026');
+      expect(onDateChange).not.toHaveBeenCalled();
+    });
+
+    it('clears the value when the field is emptied', () => {
+      // An empty box is the one way to mean "no date"; unreadable text is not.
+      withPattern('MM/DD/YYYY');
+      const { getByLabelText } = renderDateInput('2026-01-05');
+      const input = getByLabelText('Date') as HTMLInputElement;
+      fireEvent.change(input, { target: { value: '' } });
+      fireEvent.blur(input);
+      expect(onDateChange).toHaveBeenLastCalledWith('');
+    });
+
+    it('reports nothing when a field nobody edited is blurred', () => {
+      // Blur runs on every tab-through, and `onDateChange` is not always a
+      // plain setter: the transactions filter flips its time period to Custom
+      // from it. Re-emitting the value already held is a change the user did
+      // not make.
+      withPattern('MM/DD/YYYY');
+      const { getByLabelText } = renderDateInput('2026-01-05');
+      const input = getByLabelText('Date') as HTMLInputElement;
+      fireEvent.focus(input);
+      fireEvent.blur(input);
+      expect(onDateChange).not.toHaveBeenCalled();
+      expect(input.value).toBe('01/05/2026');
+    });
+
+    it('still canonicalizes an unpadded date on blur without reporting a change', () => {
+      withPattern('MM/DD/YYYY');
+      const { getByLabelText } = renderDateInput('2026-01-05');
+      const input = getByLabelText('Date') as HTMLInputElement;
+      fireEvent.change(input, { target: { value: '1/5/2026' } });
+      onDateChange.mockClear();
+      fireEvent.blur(input);
+      expect(input.value).toBe('01/05/2026');
+      expect(onDateChange).not.toHaveBeenCalled();
+    });
+
+    it('reads a date typed with a month name', () => {
+      withPattern('MM/DD/YYYY');
+      const { getByLabelText } = renderDateInput('');
+      const input = getByLabelText('Date') as HTMLInputElement;
+      fireEvent.change(input, { target: { value: '14 sep 2026' } });
+      fireEvent.blur(input);
+      expect(onDateChange).toHaveBeenLastCalledWith('2026-09-14');
     });
   });
 });

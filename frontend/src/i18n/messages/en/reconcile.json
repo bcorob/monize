@@ -28,7 +28,15 @@
     "colCategory": "Category",
     "colAmount": "Amount",
     "colStatus": "Status",
-    "finish": "Finish Reconciliation"
+    "finish": "Finish Reconciliation",
+    "colActions": "Actions",
+    "selectRow": "Select the transaction for {payee}",
+    "groupByFlow": "Group by money in and out",
+    "groupCredits": "Money in ({count})",
+    "groupDebits": "Money out ({count})",
+    "groupSubtotal": "Group subtotal {amount}",
+    "addTransaction": "Add Transaction",
+    "lockedRow": "Locked"
   },
   "status": {
     "cleared": "Cleared",
@@ -53,6 +61,35 @@
     "differenceRequired": "The difference must be {amount} to finish reconciliation",
     "noneSelected": "No transactions selected for reconciliation",
     "success": "{count, plural, one {Successfully reconciled # transaction} other {Successfully reconciled # transactions}}",
-    "reconcileFailed": "Failed to reconcile transactions"
+    "reconcileFailed": "Failed to reconcile transactions",
+    "deleted": "Transaction deleted",
+    "transferDeleted": "Transfer deleted",
+    "deleteFailed": "Failed to delete the transaction",
+    "voidStatus": "A void transaction can only be changed from the transaction form",
+    "statusFailed": "Failed to change the status"
+  },
+  "form": {
+    "newTitle": "New Transaction",
+    "editTitle": "Edit Transaction"
+  },
+  "delete": {
+    "title": "Delete Transaction",
+    "message": "Delete this transaction? It will be removed from the account and from this reconciliation.",
+    "transferTitle": "Delete Transfer",
+    "transferMessage": "Delete this transfer? Both sides of it are removed, in this account and in the other one."
+  },
+  "stale": {
+    "missedChip": "Missed",
+    "missedTooltip": "This transaction is dated on or before the last statement you reconciled, so that statement was reconciled without it.",
+    "overdueChip": "Overdue",
+    "overdueTooltip": "This transaction has been waiting to be reconciled for longer than a statement cycle."
+  },
+  "reminder": {
+    "title": "Reconciliation",
+    "badgeLabel": "{count, plural, one {# transaction waiting to be reconciled} other {# transactions waiting to be reconciled}}",
+    "accountLine": "{count, plural, one {# transaction} other {# transactions}}, oldest {date}",
+    "missedLine": "{count, plural, one {# left out of a reconciled statement} other {# left out of reconciled statements}}",
+    "overdueLine": "{count, plural, one {# older than {days} days} other {# older than {days} days}}",
+    "reconcileAction": "Reconcile"
   }
 }

@@ -32,6 +32,7 @@ import { stripHtml } from "../common/sanitization.util";
 import { tr } from "../i18n/translate";
 import { withScopedDb } from "../common/db/scoped-db";
 import { lockTransactionRow, lockTransactionRows } from "../common/db/locks";
+import { assertReconciledRowsMutable } from "./reconciled-lock.util";
 import { removeLockedTransactionLeg } from "./remove-transaction-leg";
 import { withSystemContext } from "../common/db/with-context";
 
@@ -1318,6 +1319,16 @@ export class TransactionTransferService {
           ? locked.get(transaction.linkedTransactionId)
           : undefined;
 
+        // Strict reconciled lock. Both legs are one movement of money, so a
+        // reconciled leg refuses the deletion of the pair -- deleting only the
+        // unreconciled half is the divergent state the transfer routes exist
+        // to prevent.
+        await assertReconciledRowsMutable(
+          m,
+          userId,
+          [linkedLeg, ownLeg].filter((leg) => leg !== undefined),
+        );
+
         for (const leg of [linkedLeg, ownLeg]) {
           if (!leg) continue;
           affectedAccountIds.add(leg.accountId);
@@ -1646,6 +1657,10 @@ export class TransactionTransferService {
           ),
         );
       }
+      // Strict reconciled lock, before the concurrency check and before any
+      // write: either leg being reconciled refuses the edit of the pair.
+      await assertReconciledRowsMutable(m, userId, [lockedFrom, lockedTo]);
+
       const unchanged =
         Math.abs(lockedFrom.amount) === oldFromAmount &&
         lockedTo.amount === oldToAmount &&

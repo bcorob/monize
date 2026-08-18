@@ -38,6 +38,7 @@ export const DENSITY_STORAGE_KEY = 'monize-density';
  */
 export type DensityView =
   | 'transactions'
+  | 'bills'
   | 'accounts'
   | 'investments'
   | 'securities'
@@ -55,6 +56,7 @@ export type DensityView =
 
 export const DENSITY_VIEWS: readonly DensityView[] = [
   'transactions',
+  'bills',
   'accounts',
   'investments',
   'securities',

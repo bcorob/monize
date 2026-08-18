@@ -40,6 +40,7 @@ import { LoanPaymentDetectorService } from "./loan-payment-detector.service";
 import { LoanPaymentSetupService } from "./loan-payment-setup.service";
 import { StatementCycleService } from "./statement-cycle.service";
 import { BalanceForecastService } from "./balance-forecast.service";
+import { AccountBalancesReportService } from "./account-balances-report.service";
 import { CreateAccountDto } from "./dto/create-account.dto";
 import { UpdateAccountDto } from "./dto/update-account.dto";
 import { ReorderFavouriteAccountsDto } from "./dto/reorder-favourite-accounts.dto";
@@ -61,7 +62,7 @@ import {
 } from "./dto/setup-loan-payments.dto";
 import { PaymentFrequency } from "./loan-amortization.util";
 import { MortgagePaymentFrequency } from "./mortgage-amortization.util";
-import { formatDateYMD } from "../common/date-utils";
+import { formatDateYMD, todayYMD } from "../common/date-utils";
 import { assertStringParam } from "../common/query-param-utils";
 import { tr } from "../i18n/translate";
 
@@ -119,6 +120,7 @@ export class AccountsController {
     private readonly loanPaymentSetupService: LoanPaymentSetupService,
     private readonly statementCycleService: StatementCycleService,
     private readonly balanceForecastService: BalanceForecastService,
+    private readonly accountBalancesReport: AccountBalancesReportService,
     private readonly delegationService: DelegationService,
     private readonly crossOwnerAccess: CrossOwnerAccessService,
     private readonly jointAccounts: JointAccountsService,
@@ -376,6 +378,62 @@ export class AccountsController {
       ed,
       ids,
       allTimeFlag,
+      jointIds,
+    );
+  }
+
+  @Get("balances-as-of")
+  @ApiOperation({
+    summary: "Get every account's balance measured at a single date",
+    description:
+      "A balance is measured at one instant. Returns the ledger balance and, " +
+      "for accounts holding securities, the market value at the end of the " +
+      "requested date -- any date, past or future. See " +
+      "docs/specs/account-balances-as-of.md.",
+  })
+  @ApiQuery({
+    name: "asOfDate",
+    required: false,
+    example: "2026-08-18",
+    description: "YYYY-MM-DD; defaults to today.",
+  })
+  @ApiResponse({ status: 200, description: "Balances retrieved successfully" })
+  @ApiResponse({ status: 400, description: "asOfDate is not YYYY-MM-DD" })
+  @ApiResponse({ status: 401, description: "Unauthorized" })
+  @AllowDelegate()
+  async getBalancesAsOf(@Request() req, @Query("asOfDate") asOfDate?: string) {
+    const requested = assertStringParam(asOfDate, "asOfDate");
+    if (requested && !/^\d{4}-\d{2}-\d{2}$/.test(requested)) {
+      throw new BadRequestException(
+        tr("errors.accounts.asOfDateFormat", "asOfDate must be YYYY-MM-DD"),
+      );
+    }
+    const date = requested || todayYMD();
+
+    if (req.user.isActing) {
+      // A delegate sees the accounts their grant names and nothing else. The
+      // set restricts the query rather than filtering its result, so the
+      // owner's other balances are never read in the first place.
+      const readable = await this.delegationService.readableAccountIds(
+        req.user.delegationId,
+      );
+      return this.accountBalancesReport.getBalancesAsOf(
+        req.user.id,
+        date,
+        [],
+        readable,
+      );
+    }
+
+    // Own context: a joint account participates exactly like an own account.
+    const jointIds = [
+      ...(await this.jointAccounts.jointAccountIdSetFor(
+        req.user.realUserId ?? req.user.id,
+      )),
+    ];
+    return this.accountBalancesReport.getBalancesAsOf(
+      req.user.id,
+      date,
       jointIds,
     );
   }

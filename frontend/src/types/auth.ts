@@ -160,6 +160,14 @@ export interface UserPreferences {
   recentTransactionsLimit: number;
   aiBubbleEnabled: boolean;
   showWhatsNew: boolean;
+  /**
+   * Strict reconciled lock. False (the default) keeps Money's behaviour: the
+   * transaction form warns before an edit that would move a reconciled row's
+   * date or amount and then lets it through. True makes the server refuse the
+   * write outright -- an edit, a delete, or a status change away from
+   * RECONCILED -- so the way to make one is to turn this off in Settings.
+   */
+  lockReconciledTransactions: boolean;
   language: string;
   createdAt: string;
   updatedAt: string;
@@ -243,6 +251,7 @@ export interface UpdatePreferencesData {
   recentTransactionsLimit?: number;
   aiBubbleEnabled?: boolean;
   showWhatsNew?: boolean;
+  lockReconciledTransactions?: boolean;
   language?: string;
 }
 

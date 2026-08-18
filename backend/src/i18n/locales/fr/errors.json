@@ -20,6 +20,7 @@
     "useFavouriteUpdateEndpoint": "Utilisez le point de terminaison de mise à jour du compte pour modifier les favoris",
     "startDateFormat": "startDate doit être au format YYYY-MM-DD",
     "endDateFormat": "endDate doit être au format YYYY-MM-DD",
+    "asOfDateFormat": "asOfDate doit être au format YYYY-MM-DD",
     "invalidExportFormat": "Le format doit être csv ou qif",
     "loanRequiredFields": "Les comptes de prêt nécessitent paymentAmount, paymentFrequency, paymentStartDate et sourceAccountId",
     "loanRequiresInterestRate": "Les comptes de prêt nécessitent un taux d'intérêt",
@@ -452,6 +453,7 @@
   },
   "transactions": {
     "invalidStatus": "Statut de transaction invalide : {{ status }}",
+    "reconciledLocked": "Cette transaction est rapprochée et verrouillée. Désactivez « Verrouiller les transactions rapprochées » dans les Paramètres pour la modifier.",
     "pagePositiveInteger": "page doit être un entier positif",
     "limitPositiveInteger": "limit doit être un entier positif",
     "limitMax200": "limit ne doit pas dépasser 200",

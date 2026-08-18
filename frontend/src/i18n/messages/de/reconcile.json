@@ -28,7 +28,15 @@
     "colCategory": "Kategorie",
     "colAmount": "Betrag",
     "colStatus": "Status",
-    "finish": "Abgleich abschließen"
+    "finish": "Abgleich abschließen",
+    "colActions": "Aktionen",
+    "selectRow": "Buchung für {payee} auswählen",
+    "groupByFlow": "Nach Ein- und Ausgängen gruppieren",
+    "groupCredits": "Eingänge ({count})",
+    "groupDebits": "Ausgänge ({count})",
+    "groupSubtotal": "Zwischensumme der Gruppe {amount}",
+    "addTransaction": "Buchung hinzufügen",
+    "lockedRow": "Gesperrt"
   },
   "status": {
     "cleared": "Bestätigt",
@@ -53,6 +61,35 @@
     "differenceRequired": "Die Differenz muss {amount} betragen, um den Abgleich abzuschließen",
     "noneSelected": "Keine Buchungen für den Abgleich ausgewählt",
     "success": "{count, plural, one {# Buchung erfolgreich abgeglichen} other {# Buchungen erfolgreich abgeglichen}}",
-    "reconcileFailed": "Buchungen konnten nicht abgeglichen werden"
+    "reconcileFailed": "Buchungen konnten nicht abgeglichen werden",
+    "deleted": "Buchung gelöscht",
+    "transferDeleted": "Überweisung gelöscht",
+    "deleteFailed": "Buchung konnte nicht gelöscht werden",
+    "voidStatus": "Eine ungültige Buchung kann nur im Buchungsformular geändert werden",
+    "statusFailed": "Status konnte nicht geändert werden"
+  },
+  "form": {
+    "newTitle": "Neue Buchung",
+    "editTitle": "Buchung bearbeiten"
+  },
+  "delete": {
+    "title": "Buchung löschen",
+    "message": "Diese Buchung löschen? Sie wird aus dem Konto und aus diesem Abgleich entfernt.",
+    "transferTitle": "Überweisung löschen",
+    "transferMessage": "Diese Überweisung löschen? Beide Seiten werden entfernt, in diesem Konto und im anderen."
+  },
+  "stale": {
+    "missedChip": "Übersehen",
+    "missedTooltip": "Diese Buchung ist auf oder vor den zuletzt abgeglichenen Kontoauszug datiert, dieser Auszug wurde also ohne sie abgeglichen.",
+    "overdueChip": "Überfällig",
+    "overdueTooltip": "Diese Buchung wartet länger als einen Kontoauszugszeitraum auf den Abgleich."
+  },
+  "reminder": {
+    "title": "Abgleich",
+    "badgeLabel": "{count, plural, one {# Buchung wartet auf den Abgleich} other {# Buchungen warten auf den Abgleich}}",
+    "accountLine": "{count, plural, one {# Buchung} other {# Buchungen}}, älteste {date}",
+    "missedLine": "{count, plural, one {# aus einem abgeglichenen Kontoauszug ausgelassen} other {# aus abgeglichenen Kontoauszügen ausgelassen}}",
+    "overdueLine": "{count, plural, one {# älter als {days} Tage} other {# älter als {days} Tage}}",
+    "reconcileAction": "Abgleichen"
   }
 }

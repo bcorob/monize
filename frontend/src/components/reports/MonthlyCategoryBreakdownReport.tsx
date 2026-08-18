@@ -735,21 +735,6 @@ export function MonthlyCategoryBreakdownReport() {
     return `${sign} ${formatCurrency(Math.abs(normalized), currency)}`;
   };
 
-  if (error) {
-    return <ReportError onRetry={reload} />;
-  }
-
-  if (isLoading) {
-    return (
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-6">
-        <div className="space-y-4">
-          <Skeleton className="h-8 w-1/3" />
-          <Skeleton className="h-64 w-full" />
-        </div>
-      </div>
-    );
-  }
-
   const months = model?.months ?? [];
   const hasData =
     model != null &&
@@ -1103,7 +1088,7 @@ export function MonthlyCategoryBreakdownReport() {
 
   return (
     <div className="space-y-6">
-      {/* Controls */}
+      {/* Controls -- always rendered so focus inside DateInput survives reloads */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-4">
         <div className="flex flex-wrap gap-4 items-center justify-between">
           <DateRangeSelector
@@ -1161,7 +1146,14 @@ export function MonthlyCategoryBreakdownReport() {
 
       {/* Table */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 px-2 py-4 sm:p-6">
-        {!hasData ? (
+        {error ? (
+          <ReportError onRetry={reload} />
+        ) : isLoading ? (
+          <div className="space-y-4">
+            <Skeleton className="h-8 w-1/3" />
+            <Skeleton className="h-64 w-full" />
+          </div>
+        ) : !hasData ? (
           <p className="text-gray-500 dark:text-gray-400 text-center py-8">
             {t('monthlyCategoryBreakdown.noData')}
           </p>

@@ -39,6 +39,7 @@ import { Transaction, PaginationInfo, BulkUpdateData, BulkUpdateFilters, Monthly
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useTransactionSelection } from '@/hooks/useTransactionSelection';
 import { useTransactionFilters } from '@/hooks/useTransactionFilters';
+import { useStaleReconciliation } from '@/hooks/useStaleReconciliation';
 import { BulkSelectionBanner } from '@/components/transactions/BulkSelectionBanner';
 import { Account, isLiabilityAccountType } from '@/types/account';
 import { Institution } from '@/types/institution';
@@ -146,6 +147,9 @@ function TransactionsContent() {
   modalOpenRef.current = showForm || showScheduleForm || showPayeeForm || showBulkUpdate || showBulkDeleteConfirm;
 
   const filters = useTransactionFilters({ accounts, categories, payees, tags, weekStartsOn });
+  // Which register rows are overdue for reconciliation. Undefined until known,
+  // and left undefined on failure, so a lookup that did not answer marks no row.
+  const staleReconciliation = useStaleReconciliation();
 
   // Accounts every query should cover: an explicit account filter wins;
   // otherwise narrow to filteredAccounts (which strips brokerage and honours
@@ -1316,6 +1320,7 @@ function TransactionsContent() {
             <TransactionList
               transactions={transactions}
               jointPermissionsByAccount={jointPermissionsByAccount}
+              staleContext={staleReconciliation}
               onEdit={handleEdit}
               onDuplicate={handleDuplicate}
               onScheduleRecurring={handleScheduleRecurring}

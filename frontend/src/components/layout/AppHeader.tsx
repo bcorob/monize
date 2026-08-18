@@ -11,6 +11,7 @@ import { markLogoutIncomplete, clearLogoutIncomplete } from '@/lib/logout-state'
 import Image from 'next/image';
 import { Button } from '@/components/ui/Button';
 import { BudgetAlertBadge } from '@/components/budgets/BudgetAlertBadge';
+import { ReconciliationReminderBadge } from '@/components/reconcile/ReconciliationReminderBadge';
 import { ActionHistoryPanel } from '@/components/layout/ActionHistoryPanel';
 import { MobileNavDrawer } from '@/components/layout/MobileNavDrawer';
 import { TOUR_ANCHORS, tourAnchor } from '@/lib/tours/anchors';
@@ -474,6 +475,7 @@ export function AppHeader() {
             </div>
             <ActionHistoryPanel />
             <BudgetAlertBadge />
+            <ReconciliationReminderBadge />
             <button
               {...tourAnchor(TOUR_ANCHORS.navSettings)}
               onClick={() => router.push('/settings')}

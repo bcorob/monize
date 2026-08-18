@@ -77,6 +77,7 @@ import {
 import { deletionBalanceEffect } from "../common/deletion-balance.util";
 import { withScopedDb } from "../common/db/scoped-db";
 import { lockTransactionRow, lockTransactionRows } from "../common/db/locks";
+import { assertReconciledRowsMutable } from "./reconciled-lock.util";
 import { roundMoney } from "../common/round.util";
 import {
   assertTransactionCurrencyMatchesAccount,
@@ -2133,6 +2134,10 @@ export class TransactionsService {
           ),
         );
       }
+      // Strict reconciled lock, against the LOCKED row and before any write:
+      // an edit refused here must not already have happened.
+      await assertReconciledRowsMutable(m, userId, [locked]);
+
       const oldAmount = locked.amount;
       const oldLockedAccountId = locked.accountId;
       const oldTransactionDate = locked.transactionDate;
@@ -2495,6 +2500,9 @@ export class TransactionsService {
           ),
         );
       }
+      // Strict reconciled lock, before the delete and any split cleanup.
+      await assertReconciledRowsMutable(m, userId, [locked]);
+
       // The locked row's account joins the fan-out set: a concurrent edit could
       // have moved the row, and the balance reversal below uses locked.accountId.
       affectedAccountIds.add(locked.accountId);
@@ -2701,6 +2709,10 @@ export class TransactionsService {
       id,
       this.findOne.bind(this),
     );
+  }
+
+  async getStaleUnreconciled(userId: string) {
+    return this.reconciliationService.getStaleUnreconciled(userId);
   }
 
   async getReconciliationData(

@@ -4,6 +4,7 @@ import { Security } from "../../../securities/entities/security.entity";
 import { InvestmentTransaction } from "../../../securities/entities/investment-transaction.entity";
 import { Transaction } from "../../../transactions/entities/transaction.entity";
 import { roundMoney } from "../../../common/round.util";
+import { formatInvestmentCashPayeeName } from "../../../securities/investment-cash-payee.util";
 import {
   MappedInvestmentTransaction,
   MappedSecurity,
@@ -107,7 +108,8 @@ export interface WriteInvestmentsInput {
   readonly categoryIdByHandle: ReadonlyMap<number, string>;
   readonly payeeIdByHandle: ReadonlyMap<number, string>;
   readonly payeeNameByHandle: ReadonlyMap<number, string>;
-  /** `SEC.hsec` -> symbol, used as the cash leg's description of last resort. */
+  /** `SEC.hsec` -> symbol, for the cash leg's payee label and its
+   * description of last resort. */
   readonly symbolByHandle: ReadonlyMap<number, string>;
   readonly onProgress?: (processed: number, total: number) => Promise<void>;
 }
@@ -131,8 +133,14 @@ export interface WrittenInvestments {
  * so mirroring the leg there would invent a balance the Money file never had and
  * make the verification report disagree with itself.
  *
- * The cash leg's payee and category are Money's own. Nothing is synthesized --
- * a generated payee name would be untranslatable English written into user data.
+ * The cash leg's category is Money's own, and so is its payee when the file
+ * recorded one. When it did not -- which is the ordinary case for a trade --
+ * the payee falls back to the activity label every other producer writes
+ * (`formatInvestmentCashPayeeName`), because the alternative is the register
+ * rendering a bare "-" against a row whose whole purpose is to say a trade
+ * settled (issue #1204). It is the same English string a natively entered or
+ * QIF-imported trade already stores, so this is consistency with the existing
+ * surfaces rather than a new class of generated user data.
  */
 export async function writeInvestments(
   manager: EntityManager,
@@ -173,13 +181,37 @@ export async function writeInvestments(
           ? randomUUID()
           : null;
 
-      const description =
-        transaction.description ??
-        input.symbolByHandle.get(transaction.securityHandle) ??
-        null;
+      const symbol =
+        input.symbolByHandle.get(transaction.securityHandle) ?? null;
+      const description = transaction.description ?? symbol ?? null;
+
+      // Money's payee, id and name together -- a name with no id, or an id
+      // with no name, is half a payee and the register would show whichever
+      // half survived.
+      const moneyPayeeId =
+        transaction.payeeHandle === null
+          ? null
+          : (input.payeeIdByHandle.get(transaction.payeeHandle) ?? null);
+      const moneyPayeeName =
+        transaction.payeeHandle === null
+          ? null
+          : (input.payeeNameByHandle.get(transaction.payeeHandle) ?? null);
+      const hasMoneyPayee = moneyPayeeId !== null && moneyPayeeName !== null;
 
       if (cashTransactionId !== null) {
         affectedAccountIds.add(cashAccountId as string);
+        // Rendered in the row's own currency: this writer denominates the
+        // cash amount, the total and the price in `transaction.currencyCode`
+        // with `exchangeRate: 1`, so quoting the label in any other currency
+        // would disagree with the amount stored beside it.
+        const activityPayeeName = formatInvestmentCashPayeeName({
+          action: transaction.action,
+          symbol,
+          quantity: transaction.quantity,
+          price: transaction.price,
+          totalAmount: transaction.totalAmount,
+          currencyCode: transaction.currencyCode,
+        });
         cashRows.push({
           id: cashTransactionId,
           userId,
@@ -189,14 +221,12 @@ export async function writeInvestments(
           currencyCode: transaction.currencyCode,
           exchangeRate: 1,
           status: transaction.status,
-          payeeId:
-            transaction.payeeHandle === null
-              ? null
-              : (input.payeeIdByHandle.get(transaction.payeeHandle) ?? null),
-          payeeName:
-            transaction.payeeHandle === null
-              ? null
-              : (input.payeeNameByHandle.get(transaction.payeeHandle) ?? null),
+          // Money's payee wins when there is one -- it is what the user
+          // recorded. The synthesized label is the fallback, not an override,
+          // so nothing the file carried is replaced by generated text; and it
+          // is an unlinked name, exactly as the native and QIF paths write it.
+          payeeId: hasMoneyPayee ? moneyPayeeId : null,
+          payeeName: hasMoneyPayee ? moneyPayeeName : activityPayeeName,
           categoryId:
             transaction.categoryHandle === null
               ? null

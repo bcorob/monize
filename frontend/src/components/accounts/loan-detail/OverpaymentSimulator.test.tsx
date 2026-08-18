@@ -45,6 +45,17 @@ beforeEach(() => {
   mockDetectLoanPayments.mockResolvedValue(null);
 });
 
+// Pin the date pattern so the field's displayed value is the canonical one.
+// Without it the pattern comes from the runtime locale, and the assertions
+// below would depend on where CI happens to be.
+vi.mock('@/hooks/useDateFormat', () => ({
+  useDateFormat: () => ({
+    formatDate: (d: string) => d,
+    dateFormat: 'YYYY-MM-DD',
+    datePattern: 'YYYY-MM-DD',
+  }),
+}));
+
 describe('OverpaymentSimulator', () => {
   it('emits a monthly recurring extra plan when an amount is entered', async () => {
     const { onPlanChange } = await renderSimulator();

@@ -20,6 +20,7 @@ vi.mock('@/hooks/useDateFormat', () => ({
     formatDate: (d: string) => d,
     formatMonth: (m: string) => m,
     dateFormat: 'browser',
+    datePattern: 'YYYY-MM-DD',
   }),
 }));
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { render, screen } from '@/test/render';
+import { act, fireEvent, render, screen } from '@/test/render';
 import { PartialTotal } from './PartialTotal';
 
 describe('PartialTotal', () => {
@@ -47,5 +47,33 @@ describe('PartialTotal', () => {
     const explanation = screen.getByRole('button').getAttribute('aria-label') ?? '';
     expect(explanation).toContain('could not be worked out');
     expect(explanation).not.toContain('No rate');
+  });
+
+  // A money figure sits inside cards that clip their overflow -- the report's
+  // group headers carry `overflow-hidden` -- and at the right edge of narrow
+  // columns. The CSS popover is absolutely positioned and a fixed 16rem wide,
+  // so in both it is cut off, and an explanation the reader cannot finish is
+  // the one thing the marker exists to give them.
+  it('shows its explanation through the portal, so no card can clip it', async () => {
+    render(
+      <PartialTotal
+        total={{ value: 100, missingCurrencies: ['GBP'], excludedCount: 1 }}
+        displayCurrency="USD"
+      >
+        $100.00
+      </PartialTotal>,
+    );
+
+    const trigger = screen.getByRole('button');
+    await act(async () => {
+      fireEvent.mouseEnter(trigger);
+    });
+
+    const popover = screen.getByRole('tooltip');
+    expect(popover).toBeInTheDocument();
+    // Rendered on document.body, outside the figure's own subtree -- which is
+    // what the CSS variant cannot do.
+    expect(trigger.contains(popover)).toBe(false);
+    expect(popover.textContent).toContain('GBP');
   });
 });

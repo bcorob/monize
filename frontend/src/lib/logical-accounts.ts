@@ -70,8 +70,22 @@ export interface LogicalAccountPortfolio {
   unpricedCounts: Map<string, number>;
 }
 
-/** An account's own ledger balance, including transactions dated ahead. */
-function ownBalance(account: Account): number {
+/**
+ * An account's own ledger balance.
+ *
+ * `ledgerBalances` is the point-in-time answer when the caller has one: the
+ * Account Balances report measures every account at a date the user chose, and
+ * the stored `currentBalance` is a different figure (today's) that no amount of
+ * arithmetic here could turn into it. Without the map the entity falls back to
+ * today's balance plus everything dated ahead of it, which is what every other
+ * surface shows.
+ */
+function ownBalance(
+  account: Account,
+  ledgerBalances?: ReadonlyMap<string, number>,
+): number {
+  const measured = ledgerBalances?.get(account.id);
+  if (measured !== undefined) return measured;
   return (
     (Number(account.currentBalance) || 0) +
     (Number(account.futureTransactionsSum) || 0)
@@ -90,33 +104,38 @@ function combinedValueFor(
   cash: Account | null,
   holdingsAccountId: string | null,
   portfolio?: LogicalAccountPortfolio,
+  ledgerBalances?: ReadonlyMap<string, number>,
 ): number | null {
-  const cashComponent = cash ? ownBalance(cash) : ownBalance(primary);
+  const cashComponent = cash
+    ? ownBalance(cash, ledgerBalances)
+    : ownBalance(primary, ledgerBalances);
 
   if (holdingsAccountId === null) return cashComponent;
 
-  // A closed account is one the app required to be emptied first, and the
-  // portfolio deliberately does not report it. That is "no holdings to value",
-  // a settled answer -- not "could not value them" -- so it must not render as
-  // unknown. (Until task B1 lands, closing is only gated on the cash balance,
-  // so a brokerage closed with positions still reads as its cash alone.)
+  const marketValue = portfolio?.marketValues.get(holdingsAccountId);
+  if (marketValue !== undefined) {
+    // A priced subtotal standing in for a total is the mistake this guards.
+    if ((portfolio!.unpricedCounts.get(holdingsAccountId) ?? 0) > 0) return null;
+
+    // A brokerage's own `currentBalance` is deliberately kept at 0, so the cash
+    // component of a pair comes from the cash half and of a standalone account
+    // from itself -- `cashComponent` already resolved which.
+    return marketValue + cashComponent;
+  }
+
+  // Nothing reported a value for these holdings. A closed account is one the
+  // app required to be emptied first, and the live portfolio deliberately does
+  // not report it: that is "no holdings to value", a settled answer -- not
+  // "could not value them" -- so it must not render as unknown. (Until task B1
+  // lands, closing is only gated on the cash balance, so a brokerage closed
+  // with positions still reads as its cash alone.)
+  //
+  // A source that *does* report closed accounts -- the point-in-time report,
+  // which can be asked about a date before the account was emptied -- lands in
+  // the branch above instead, so this fallback never overrides a real figure.
   if (primary.isClosed) return cashComponent;
 
-  // Holdings exist but nothing says what they are worth.
-  if (!portfolio) return null;
-
-  const marketValue = portfolio.marketValues.get(holdingsAccountId);
-  // The portfolio loaded and did not report this open account, so its market
-  // value is unknown -- not zero.
-  if (marketValue === undefined) return null;
-
-  // A priced subtotal standing in for a total is the mistake this guards.
-  if ((portfolio.unpricedCounts.get(holdingsAccountId) ?? 0) > 0) return null;
-
-  // A brokerage's own `currentBalance` is deliberately kept at 0, so the cash
-  // component of a pair comes from the cash half and of a standalone account
-  // from itself -- `cashComponent` already resolved which.
-  return marketValue + cashComponent;
+  return null;
 }
 
 /**
@@ -131,11 +150,14 @@ function combinedValueFor(
  *
  * @param stripName strips the localized pair-name suffix; pass
  *   `useMainAccountName()`'s function (or `getMainAccountName` directly).
+ * @param ledgerBalances measured balance per account id, when the caller has
+ *   asked the server for a specific date. Omit for the live view.
  */
 export function buildLogicalAccounts(
   accounts: Account[],
   stripName: (name: string) => string,
   portfolio?: LogicalAccountPortfolio,
+  ledgerBalances?: ReadonlyMap<string, number>,
 ): LogicalAccount[] {
   const byId = new Map(accounts.map((a) => [a.id, a]));
 
@@ -189,6 +211,7 @@ export function buildLogicalAccounts(
           cash,
           holdingsAccountId,
           portfolio,
+          ledgerBalances,
         ),
       };
     });

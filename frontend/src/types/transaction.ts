@@ -236,6 +236,36 @@ export interface ReconciliationData {
   reconciledBalance: number;
   clearedBalance: number;
   difference: number;
+  /**
+   * The account's most recent reconciled date, or null when it has never been
+   * reconciled. Read defensively (`?? null`): during a rolling deploy this can
+   * arrive from a backend that predates the field, and absent means "no
+   * information", which classifies nothing rather than everything.
+   */
+  lastReconciledDate: string | null;
+  /** The window `overdueBefore` was derived from, for the copy that names it. */
+  staleAfterDays: number;
+  /** Server-chosen date a row must fall before to count as overdue. */
+  overdueBefore: string;
+}
+
+/** One account with rows left outstanding, from GET /transactions/reconcile/stale. */
+export interface StaleUnreconciledAccount {
+  accountId: string;
+  accountName: string;
+  currencyCode: string;
+  count: number;
+  oldestDate: string;
+  lastReconciledDate: string;
+  missedCount: number;
+  overdueCount: number;
+}
+
+export interface StaleUnreconciledSummary {
+  staleAfterDays: number;
+  overdueBefore: string;
+  accounts: StaleUnreconciledAccount[];
+  totalCount: number;
 }
 
 export interface BulkReconcileResult {

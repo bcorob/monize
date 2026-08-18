@@ -1,5 +1,6 @@
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { usePreferencesStore } from '@/store/preferencesStore';
+import { resolveDateFormatPattern } from '@/lib/date-parse';
 import {
   formatDate as formatDateUtil,
   formatMonth as formatMonthUtil,
@@ -21,6 +22,19 @@ export function useDateFormat() {
   const language = usePreferencesStore((state) => state.preferences?.language);
   const timeFormat = usePreferencesStore((state) => state.preferences?.timeFormat) || '24h';
   const timezone = usePreferencesStore((state) => state.preferences?.timezone);
+
+  /**
+   * The user's format as a concrete pattern, with `browser` already resolved
+   * against their UI language. Anything that has to *read* what someone typed
+   * needs the arrangement of day, month and year spelled out -- `browser` says
+   * only that the locale decides, and a parser cannot ask a sentinel whether
+   * `7/8` is July or August.
+   */
+  const datePattern = useMemo(() => {
+    const locale =
+      language && language !== 'xx' && language !== 'browser' ? language : undefined;
+    return resolveDateFormatPattern(dateFormat, locale);
+  }, [dateFormat, language]);
 
   const formatDate = useCallback(
     (date: Date | string): string => {
@@ -87,6 +101,7 @@ export function useDateFormat() {
     formatDateTime,
     formatTimeZoneAbbrev,
     dateFormat,
+    datePattern,
     timeFormat,
     timezone,
   };

@@ -20,6 +20,7 @@
     "useFavouriteUpdateEndpoint": "Используйте конечную точку обновления счёта для изменения избранного",
     "startDateFormat": "startDate должна быть в формате ГГГГ-ММ-ДД",
     "endDateFormat": "endDate должна быть в формате ГГГГ-ММ-ДД",
+    "asOfDateFormat": "asOfDate должна быть в формате ГГГГ-ММ-ДД",
     "invalidExportFormat": "Формат должен быть csv или qif",
     "loanRequiredFields": "Для кредитных счетов требуются: paymentAmount, paymentFrequency, paymentStartDate и sourceAccountId",
     "loanRequiresInterestRate": "Кредитные счета требуют процентную ставку",
@@ -452,6 +453,7 @@
   },
   "transactions": {
     "invalidStatus": "Недопустимый статус проводки: {{ status }}",
+    "reconciledLocked": "Эта проводка согласована и заблокирована. Чтобы изменить её, выключите «Блокировать согласованные проводки» в настройках.",
     "pagePositiveInteger": "page должен быть положительным целым числом",
     "limitPositiveInteger": "limit должен быть положительным целым числом",
     "limitMax200": "limit не должен превышать 200",

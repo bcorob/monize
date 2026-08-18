@@ -63,7 +63,7 @@ vi.mock('@/lib/errors', () => ({
 }));
 
 vi.mock('@/hooks/useDateFormat', () => ({
-  useDateFormat: () => ({ formatDate: (d: string) => d, dateFormat: 'browser' }),
+  useDateFormat: () => ({ formatDate: (d: string) => d, dateFormat: 'browser', datePattern: 'YYYY-MM-DD' }),
 }));
 
 vi.mock('@/hooks/useNumberFormat', () => ({
@@ -263,13 +263,13 @@ describe('PostTransactionDialog', () => {
   // --- Transaction date ---
   it('initializes transaction date to next due date', () => {
     render(<PostTransactionDialog {...defaultProps} />);
-    const dateInput = screen.getByDisplayValue('2025-02-15');
+    const dateInput = screen.getByLabelText('Transaction Date');
     expect(dateInput).toBeInTheDocument();
   });
 
   it('allows changing transaction date', () => {
     render(<PostTransactionDialog {...defaultProps} />);
-    const dateInput = screen.getByDisplayValue('2025-02-15');
+    const dateInput = screen.getByLabelText('Transaction Date');
     fireEvent.change(dateInput, { target: { value: '2025-02-20' } });
     expect((dateInput as HTMLInputElement).value).toBe('2025-02-20');
   });
@@ -470,14 +470,14 @@ describe('PostTransactionDialog', () => {
     render(<PostTransactionDialog {...defaultProps} scheduledTransaction={transactionWithOverride} />);
 
     // Should use overrideDate (2025-02-20), not nextDueDate (2025-02-15)
-    const dateInput = document.querySelector('input[type="date"]') as HTMLInputElement;
+    const dateInput = screen.getByLabelText('Transaction Date') as HTMLInputElement;
     expect(dateInput.value).toBe('2025-02-20');
   });
 
   it('initializes transaction date to nextDueDate when no override exists', () => {
     render(<PostTransactionDialog {...defaultProps} />);
 
-    const dateInput = document.querySelector('input[type="date"]') as HTMLInputElement;
+    const dateInput = screen.getByLabelText('Transaction Date') as HTMLInputElement;
     expect(dateInput.value).toBe('2025-02-15');
   });
 
@@ -487,7 +487,7 @@ describe('PostTransactionDialog', () => {
     render(<PostTransactionDialog {...defaultProps} onPosted={onPosted} />);
 
     // Change date
-    const dateInput = screen.getByDisplayValue('2025-02-15');
+    const dateInput = screen.getByLabelText('Transaction Date');
     fireEvent.change(dateInput, { target: { value: '2025-02-20' } });
 
     // Post
@@ -654,7 +654,7 @@ describe('PostTransactionDialog', () => {
     fireEvent.click(screen.getByText('Today'));
     const today = new Date();
     const expectedDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-    const dateInput = document.querySelector('input[type="date"]') as HTMLInputElement;
+    const dateInput = screen.getByLabelText('Transaction Date') as HTMLInputElement;
     expect(dateInput.value).toBe(expectedDate);
   });
 
@@ -1034,7 +1034,7 @@ describe('PostTransactionDialog', () => {
 
     render(<PostTransactionDialog {...defaultProps} />);
     // Set date to today
-    const dateInput = document.querySelector('input[type="date"]') as HTMLInputElement;
+    const dateInput = screen.getByLabelText('Transaction Date') as HTMLInputElement;
     fireEvent.change(dateInput, { target: { value: todayStr } });
 
     // Today button should no longer be visible

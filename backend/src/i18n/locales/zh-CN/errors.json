@@ -20,6 +20,7 @@
     "useFavouriteUpdateEndpoint": "请使用账户更新端点更改收藏",
     "startDateFormat": "startDate 必须为 YYYY-MM-DD 格式",
     "endDateFormat": "endDate 必须为 YYYY-MM-DD 格式",
+    "asOfDateFormat": "asOfDate 必须为 YYYY-MM-DD 格式",
     "invalidExportFormat": "格式必须为 csv 或 qif",
     "loanRequiredFields": "贷款账户需要 paymentAmount、paymentFrequency、paymentStartDate 和 sourceAccountId",
     "loanRequiresInterestRate": "贷款账户需要利率",
@@ -452,6 +453,7 @@
   },
   "transactions": {
     "invalidStatus": "无效的交易状态：{{ status }}",
+    "reconciledLocked": "该交易已对账并被锁定。要修改它，请在设置中关闭“锁定已对账交易”。",
     "pagePositiveInteger": "page 必须是正整数",
     "limitPositiveInteger": "limit 必须是正整数",
     "limitMax200": "limit 不得超过 200",

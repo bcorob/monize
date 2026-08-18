@@ -128,6 +128,8 @@
     "showCreatedAtTooltip": "거래 양식에 거래가 최초 생성된 날짜와 시간을 표시합니다. 거래 날짜와는 별개이며 항목이 Monize에 실제로 추가된 시점을 확인하는 데 도움이 됩니다.",
     "showWhatsNewLabel": "업그레이드 후 새로운 기능 표시",
     "showWhatsNewTooltip": "Monize가 새 버전으로 업데이트된 후 처음 로그인할 때 릴리스 노트 요약을 표시합니다. 이 페이지 하단이나 로그인 화면의 버전 번호를 클릭하여 언제든지 다시 열 수 있습니다.",
+    "lockReconciledLabel": "조정된 거래 잠금",
+    "lockReconciledTooltip": "꺼져 있는 동안에는 조정된 거래의 날짜나 금액이 바뀌는 편집 전에 Monize가 경고한 뒤 진행을 허용합니다. 켜져 있는 동안에는 조정된 거래를 편집, 삭제, 조정 해제할 수 없습니다. 수정하려면 다시 꺼 주세요.",
     "timeFormatLabel": "시간 형식",
     "recentTransactionsLabel": "빠른 채우기의 최근 거래 수",
     "recentTransactionsHelp": "거래 양식의 수취인 필드 옆 기록 버튼 팝오버에 표시되는 항목 수입니다.",

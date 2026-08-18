@@ -128,6 +128,8 @@
     "showCreatedAtTooltip": "在交易表单中显示交易最初创建的日期和时间。这与交易日期不同，可帮助您了解条目实际添加到 Monize 的时间。",
     "showWhatsNewLabel": "升级后显示更新内容",
     "showWhatsNewTooltip": "在 Monize 更新到新版本后，您首次登录时显示版本说明摘要。您随时可以通过点击本页面底部或登录界面上的版本号重新打开它。",
+    "lockReconciledLabel": "锁定已对账交易",
+    "lockReconciledTooltip": "关闭时，如果某项修改会改变已对账交易的日期或金额，Monize 会先提醒你，然后仍允许修改。开启时，已对账交易完全不能编辑、删除或取消对账。要更正请再次关闭。",
     "timeFormatLabel": "时间格式",
     "recentTransactionsLabel": "快速填充中的近期交易数量",
     "recentTransactionsHelp": "交易表单中收款人字段旁历史按钮弹出框中显示的条目数量。",

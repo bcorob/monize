@@ -18,6 +18,7 @@ import {
 } from "../common/db/locks";
 import { applyVoidTransitionToMirrorLeg } from "../transactions/void-status-transition.util";
 import { investmentRowHasEffect } from "./investment-row-effects.util";
+import { formatInvestmentCashPayeeName } from "./investment-cash-payee.util";
 import {
   InvestmentTransaction,
   InvestmentAction,
@@ -535,57 +536,6 @@ export class InvestmentTransactionsService {
     return Number(rate);
   }
 
-  private formatCashTransactionPayeeName(
-    action: InvestmentAction,
-    symbol: string | null,
-    quantity: number | null,
-    price: number | null,
-    totalAmount: number,
-    currencyCode: string = "USD",
-  ): string {
-    const formatPrice = (value: number) => {
-      return value.toLocaleString("en-US", {
-        style: "currency",
-        currency: currencyCode,
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 4,
-      });
-    };
-
-    const formatQuantity = (value: number) => {
-      return Number(value.toFixed(4)).toString();
-    };
-
-    const formatAction = (act: string) => {
-      return act
-        .split("_")
-        .map(
-          (word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase(),
-        )
-        .join(" ");
-    };
-
-    const actionLabel = formatAction(action);
-
-    // The label keeps the raw action's name (a redemption reads "Redeem", not
-    // "Sell"); only the shape of the line follows the base action.
-    switch (baseInvestmentAction(action)) {
-      case InvestmentAction.BUY:
-      case InvestmentAction.SELL:
-        return `${actionLabel}: ${symbol || "Unknown"} ${formatQuantity(quantity || 0)} @ ${formatPrice(price || 0)}`;
-
-      case InvestmentAction.DIVIDEND:
-      case InvestmentAction.CAPITAL_GAIN:
-        return `${actionLabel}: ${symbol || "Unknown"} ${formatPrice(totalAmount)}`;
-
-      case InvestmentAction.INTEREST:
-        return `${actionLabel}: ${formatPrice(totalAmount)}`;
-
-      default:
-        return `${actionLabel}: ${symbol || ""} ${formatPrice(totalAmount)}`;
-    }
-  }
-
   private async createCashTransactionInTransaction(
     manager: EntityManager,
     userId: string,
@@ -606,14 +556,14 @@ export class InvestmentTransactionsService {
 
     // Payee name is rendered in the security's currency because the values
     // being displayed (price per share, totalAmount) are denominated there.
-    const payeeName = this.formatCashTransactionPayeeName(
-      investmentTransaction.action,
+    const payeeName = formatInvestmentCashPayeeName({
+      action: investmentTransaction.action,
       symbol,
-      investmentTransaction.quantity,
-      investmentTransaction.price,
-      Math.abs(investmentTransaction.totalAmount),
-      sourceCurrency,
-    );
+      quantity: investmentTransaction.quantity,
+      price: investmentTransaction.price,
+      totalAmount: investmentTransaction.totalAmount,
+      currencyCode: sourceCurrency,
+    });
 
     // A stored rate is validated positive on the way in, and is absent only for
     // a same-currency posting -- so `??` rather than `||`, which would also have

@@ -128,6 +128,8 @@
     "showCreatedAtTooltip": "Toont de datum en tijd waarop een transactie oorspronkelijk is aangemaakt op transactieformulieren. Dit staat los van de transactiedatum en kan helpen bij te houden wanneer een invoer werkelijk aan Monize is toegevoegd.",
     "showWhatsNewLabel": "'Wat is er nieuw' tonen na een update",
     "showWhatsNewTooltip": "Toont een samenvatting van de release-opmerkingen de eerste keer dat je je aanmeldt nadat Monize is bijgewerkt naar een nieuwe versie. Je kunt het altijd opnieuw openen door op het versienummer onder aan deze pagina of op het aanmeldscherm te klikken.",
+    "lockReconciledLabel": "Afgestemde transacties vergrendelen",
+    "lockReconciledTooltip": "Zolang dit uit staat, waarschuwt Monize vóór een bewerking die de datum of het bedrag van een afgestemde transactie zou verschuiven, en staat die daarna toe. Zolang het aan staat, kunnen afgestemde transacties helemaal niet worden bewerkt, verwijderd of ongedaan gemaakt. Zet het weer uit om een correctie te maken.",
     "timeFormatLabel": "Tijdnotatie",
     "recentTransactionsLabel": "Recente transacties in snel invullen",
     "recentTransactionsHelp": "Aantal vermeldingen dat wordt weergegeven in de popover van de geschiedenis-knop naast het veld Begunstigde op transactieformulieren.",

@@ -169,6 +169,15 @@ export class UserPreference {
   @Column({ name: "ai_bubble_enabled", default: false })
   aiBubbleEnabled: boolean;
 
+  // Strict reconciled lock. The transaction form already prompts before an edit
+  // that would move a reconciled row's date or amount, which is what Money
+  // does; with this on the server refuses the write outright -- an edit, a
+  // delete, or a status change away from RECONCILED -- on every path. Turning
+  // the flag off in Settings is the only way through, deliberately: an escape
+  // hatch reachable from the same screen as the edit is not a lock.
+  @Column({ name: "lock_reconciled_transactions", default: false })
+  lockReconciledTransactions: boolean;
+
   @Column({ length: 10, default: "en" })
   language: string;
 

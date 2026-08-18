@@ -28,7 +28,15 @@
     "colCategory": "Catégorie",
     "colAmount": "Montant",
     "colStatus": "Statut",
-    "finish": "Terminer le rapprochement"
+    "finish": "Terminer le rapprochement",
+    "colActions": "Actions",
+    "selectRow": "Sélectionner la transaction pour {payee}",
+    "groupByFlow": "Grouper par entrées et sorties",
+    "groupCredits": "Entrées ({count})",
+    "groupDebits": "Sorties ({count})",
+    "groupSubtotal": "Sous-total du groupe {amount}",
+    "addTransaction": "Ajouter une transaction",
+    "lockedRow": "Verrouillée"
   },
   "status": {
     "cleared": "Encaissé",
@@ -53,6 +61,35 @@
     "differenceRequired": "La différence doit être {amount} pour terminer le rapprochement",
     "noneSelected": "Aucune transaction sélectionnée pour le rapprochement",
     "success": "{count, plural, one {# transaction rapprochée avec succès} other {# transactions rapprochées avec succès}}",
-    "reconcileFailed": "Échec du rapprochement des transactions"
+    "reconcileFailed": "Échec du rapprochement des transactions",
+    "deleted": "Transaction supprimée",
+    "transferDeleted": "Virement supprimé",
+    "deleteFailed": "Échec de la suppression de la transaction",
+    "voidStatus": "Une transaction annulée ne peut être modifiée que depuis le formulaire de transaction",
+    "statusFailed": "Échec du changement de statut"
+  },
+  "form": {
+    "newTitle": "Nouvelle transaction",
+    "editTitle": "Modifier la transaction"
+  },
+  "delete": {
+    "title": "Supprimer la transaction",
+    "message": "Supprimer cette transaction ? Elle sera retirée du compte et de ce rapprochement.",
+    "transferTitle": "Supprimer le virement",
+    "transferMessage": "Supprimer ce virement ? Ses deux côtés sont retirés, dans ce compte et dans l'autre."
+  },
+  "stale": {
+    "missedChip": "Oubliée",
+    "missedTooltip": "Cette transaction est datée du dernier relevé rapproché ou d'avant : ce relevé a donc été rapproché sans elle.",
+    "overdueChip": "En retard",
+    "overdueTooltip": "Cette transaction attend d'être rapprochée depuis plus d'un cycle de relevé."
+  },
+  "reminder": {
+    "title": "Rapprochement",
+    "badgeLabel": "{count, plural, one {# transaction en attente de rapprochement} other {# transactions en attente de rapprochement}}",
+    "accountLine": "{count, plural, one {# transaction} other {# transactions}}, la plus ancienne {date}",
+    "missedLine": "{count, plural, one {# omise d'un relevé rapproché} other {# omises de relevés rapprochés}}",
+    "overdueLine": "{count, plural, one {# de plus de {days} jours} other {# de plus de {days} jours}}",
+    "reconcileAction": "Rapprocher"
   }
 }

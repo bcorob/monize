@@ -40,9 +40,9 @@ describe("date entry goes through DateInput", () => {
       .filter(([, content]) => RAW_DATE_INPUT.test(content))
       .map(([path]) => path);
 
-    // A bare date input misses the locale-aware parsing and `CalendarPopover`,
-    // and shows the browser's own calendar icon beside Monize's -- the
-    // `.date-picker-hide` rule in globals.css exists to suppress exactly that.
+    // A bare date input misses the lenient parsing, the shortcuts and
+    // `CalendarPopover`, and hands the user the browser's own segment-jumping
+    // entry -- which is the thing issue #1201 was about.
     expect(offenders).toEqual([]);
   });
 
@@ -925,5 +925,71 @@ describe("TransactionList performs its own delete", () => {
     expect(list, `${LIST} not found -- update LIST in this test`).toBeTruthy();
     expect(DELETES.test(list)).toBe(true);
     expect(/onDeleted\?\.\(/.test(list)).toBe(true);
+  });
+});
+
+describe("a report never unmounts the date field being typed into", () => {
+  /**
+   * A component that answers a load with `if (isLoading) return <Skeleton/>`
+   * returns a *different tree*, and React unmounts whatever the previous tree
+   * held at that position -- including the date input the user is mid-way
+   * through typing. On the Net Worth report every keystroke that completed a
+   * date started a reload, so focus was ejected after two characters and the
+   * year could never be finished (issue #1201).
+   *
+   * The rule is narrow on purpose: it applies to a component that both hosts a
+   * date control **and** takes its loading flag from `useReportData`, whose
+   * fetch is re-run by the very date change being typed. A one-shot
+   * prerequisite load -- `isLoadingData` on the report *forms*, the register's
+   * first page -- is not the same thing: it resolves before the date field
+   * exists and never fires again, so an early return there costs nothing.
+   *
+   * The fix is to render the load and error states inside the one tree the
+   * component always returns. Duplicating the controls block into a second
+   * `return` is not a fix, and looked like one for a while: `CashFlowReport`
+   * did exactly that, but its two trees put the controls at different child
+   * indexes, so React reconciled the block against the summary cards and
+   * unmounted it anyway. That is why a second `<DateRangeSelector`/`<DateInput`
+   * in one file fails too.
+   */
+  const DATE_CONTROL = /<DateInput\b|showCustom/;
+  // Negated classes already cross newlines, so no dotAll flag is needed (and
+  // the ES2017 target would reject one).
+  const REPORT_DATA_LOADING = /\{[^}]*\bisLoading\b[^}]*\}\s*=\s*useReportData\(/;
+  const EARLY_RETURN =
+    /\bif \(\s*!?(?:isLoading|error)\b[^)\n]*\)\s*\{?\s*(?:\/\/[^\n]*\n\s*)*return/;
+
+  const reportsWithDateControls = () =>
+    productionSources().filter(
+      ([, source]) => DATE_CONTROL.test(source) && REPORT_DATA_LOADING.test(source),
+    );
+
+  it("renders one tree, with the load and error states inside it", () => {
+    const offenders = reportsWithDateControls()
+      .filter(([, source]) => EARLY_RETURN.test(source))
+      .map(([path]) => path);
+
+    expect(offenders).toEqual([]);
+  });
+
+  it("renders its date controls in exactly one place", () => {
+    // A report legitimately holds two date *inputs* -- a range has two ends --
+    // so the thing to count is the controls block itself.
+    const offenders = reportsWithDateControls()
+      .filter(([, source]) => (source.match(/showCustom/g) ?? []).length > 1)
+      .map(([path]) => path);
+
+    // Two copies of the same controls block means two trees, whatever the
+    // second one was added to fix.
+    expect(offenders).toEqual([]);
+  });
+
+  it("still recognizes the reports it is meant to police", () => {
+    // Were `useReportData` renamed, or the date controls moved behind another
+    // component, both checks above would pass over an empty set. The reports
+    // with a custom date range are the subject; there are several.
+    const subjects = reportsWithDateControls().map(([path]) => path);
+    expect(subjects.length).toBeGreaterThan(4);
+    expect(subjects).toContain("/src/components/reports/NetWorthReport.tsx");
   });
 });

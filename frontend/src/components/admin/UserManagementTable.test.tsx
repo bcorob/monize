@@ -3,7 +3,7 @@ import { render, screen, fireEvent } from '@/test/render';
 import { UserManagementTable } from './UserManagementTable';
 
 vi.mock('@/hooks/useDateFormat', () => ({
-  useDateFormat: () => ({ formatDate: (d: Date) => d.toISOString().slice(0, 10) }),
+  useDateFormat: () => ({ dateFormat: 'browser', datePattern: 'YYYY-MM-DD', formatDate: (d: Date) => d.toISOString().slice(0, 10) }),
 }));
 
 describe('UserManagementTable', () => {

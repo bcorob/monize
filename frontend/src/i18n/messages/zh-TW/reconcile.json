@@ -28,7 +28,15 @@
     "colCategory": "類別",
     "colAmount": "金額",
     "colStatus": "狀態",
-    "finish": "完成對帳"
+    "finish": "完成對帳",
+    "colActions": "操作",
+    "selectRow": "選取 {payee} 的交易",
+    "groupByFlow": "依收入與支出分組",
+    "groupCredits": "收入 ({count})",
+    "groupDebits": "支出 ({count})",
+    "groupSubtotal": "分組小計 {amount}",
+    "addTransaction": "新增交易",
+    "lockedRow": "已鎖定"
   },
   "status": {
     "cleared": "已結清",
@@ -53,6 +61,35 @@
     "differenceRequired": "差異必須為 {amount} 才能完成對帳",
     "noneSelected": "未選取任何交易進行對帳",
     "success": "{count, plural, one {已成功對帳 # 筆交易} other {已成功對帳 # 筆交易}}",
-    "reconcileFailed": "對帳交易失敗"
+    "reconcileFailed": "對帳交易失敗",
+    "deleted": "交易已刪除",
+    "transferDeleted": "轉帳已刪除",
+    "deleteFailed": "刪除交易失敗",
+    "voidStatus": "作廢交易只能在交易表單中修改",
+    "statusFailed": "變更狀態失敗"
+  },
+  "form": {
+    "newTitle": "新增交易",
+    "editTitle": "編輯交易"
+  },
+  "delete": {
+    "title": "刪除交易",
+    "message": "刪除這筆交易？它將從帳戶與本次對帳中移除。",
+    "transferTitle": "刪除轉帳",
+    "transferMessage": "刪除這筆轉帳？它的兩邊都會被移除，本帳戶與對方帳戶。"
+  },
+  "stale": {
+    "missedChip": "遺漏",
+    "missedTooltip": "這筆交易的日期不晚於您上次對帳的對帳單，因此那份對帳單是在沒有它的情況下完成對帳的。",
+    "overdueChip": "逾期",
+    "overdueTooltip": "這筆交易等待對帳已超過一個對帳單週期。"
+  },
+  "reminder": {
+    "title": "對帳",
+    "badgeLabel": "{count, plural, one {# 筆交易待對帳} other {# 筆交易待對帳}}",
+    "accountLine": "{count, plural, one {# 筆交易} other {# 筆交易}}，最早 {date}",
+    "missedLine": "{count, plural, one {# 筆被已對帳的對帳單遺漏} other {# 筆被已對帳的對帳單遺漏}}",
+    "overdueLine": "{count, plural, one {# 筆超過 {days} 天} other {# 筆超過 {days} 天}}",
+    "reconcileAction": "對帳"
   }
 }

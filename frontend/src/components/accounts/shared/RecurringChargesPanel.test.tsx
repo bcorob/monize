@@ -6,7 +6,7 @@ vi.mock('@/hooks/useNumberFormat', () => ({
   useNumberFormat: () => ({ formatCurrency: (a: number) => `$${a.toFixed(2)}` }),
 }));
 vi.mock('@/hooks/useDateFormat', () => ({
-  useDateFormat: () => ({ formatDate: (d: string) => d }),
+  useDateFormat: () => ({ dateFormat: 'browser', datePattern: 'YYYY-MM-DD', formatDate: (d: string) => d }),
 }));
 
 // The lazily-loaded scheduled-bill form is replaced with a stub that echoes the

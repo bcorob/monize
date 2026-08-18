@@ -10,7 +10,7 @@ vi.mock('@/hooks/useNumberFormat', () => ({
   }),
 }));
 vi.mock('@/hooks/useDateFormat', () => ({
-  useDateFormat: () => ({ formatDate: (d: Date) => `${d.getFullYear()}` }),
+  useDateFormat: () => ({ dateFormat: 'browser', datePattern: 'YYYY-MM-DD', formatDate: (d: Date) => `${d.getFullYear()}` }),
 }));
 vi.mock('@/components/transactions/BalanceHistoryChart', () => ({
   BalanceHistoryChart: () => <div data-testid="balance-history-chart" />,

@@ -7,7 +7,7 @@ vi.mock('@/hooks/useNumberFormat', () => ({
   useNumberFormat: () => ({ formatCurrency: (a: number) => `$${a.toFixed(2)}` }),
 }));
 vi.mock('@/hooks/useDateFormat', () => ({
-  useDateFormat: () => ({ formatDate: (d: Date) => `${d.getMonth() + 1}/${d.getDate()}` }),
+  useDateFormat: () => ({ dateFormat: 'browser', datePattern: 'YYYY-MM-DD', formatDate: (d: Date) => `${d.getMonth() + 1}/${d.getDate()}` }),
 }));
 
 const cycle: StatementCycle = {

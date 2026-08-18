@@ -28,7 +28,15 @@
     "colCategory": "Categoría",
     "colAmount": "Cantidad",
     "colStatus": "Estado",
-    "finish": "Finalizar conciliación"
+    "finish": "Finalizar conciliación",
+    "colActions": "Acciones",
+    "selectRow": "Seleccionar la transacción de {payee}",
+    "groupByFlow": "Agrupar por entradas y salidas",
+    "groupCredits": "Entradas ({count})",
+    "groupDebits": "Salidas ({count})",
+    "groupSubtotal": "Subtotal del grupo {amount}",
+    "addTransaction": "Añadir transacción",
+    "lockedRow": "Bloqueada"
   },
   "status": {
     "cleared": "Compensada",
@@ -53,6 +61,35 @@
     "differenceRequired": "La diferencia debe ser {amount} para finalizar la conciliación",
     "noneSelected": "No se seleccionaron transacciones para conciliar",
     "success": "{count, plural, one {Se concilió correctamente # transacción} other {Se conciliaron correctamente # transacciones}}",
-    "reconcileFailed": "Error al conciliar las transacciones"
+    "reconcileFailed": "Error al conciliar las transacciones",
+    "deleted": "Transacción eliminada",
+    "transferDeleted": "Transferencia eliminada",
+    "deleteFailed": "Error al eliminar la transacción",
+    "voidStatus": "Una transacción anulada solo puede modificarse desde el formulario de transacción",
+    "statusFailed": "Error al cambiar el estado"
+  },
+  "form": {
+    "newTitle": "Nueva transacción",
+    "editTitle": "Editar transacción"
+  },
+  "delete": {
+    "title": "Eliminar transacción",
+    "message": "¿Eliminar esta transacción? Se quitará de la cuenta y de esta conciliación.",
+    "transferTitle": "Eliminar transferencia",
+    "transferMessage": "¿Eliminar esta transferencia? Se quitan sus dos lados, en esta cuenta y en la otra."
+  },
+  "stale": {
+    "missedChip": "Omitida",
+    "missedTooltip": "Esta transacción tiene fecha del último estado de cuenta conciliado o anterior, así que ese estado de cuenta se concilió sin ella.",
+    "overdueChip": "Atrasada",
+    "overdueTooltip": "Esta transacción lleva más de un ciclo de estado de cuenta esperando a ser conciliada."
+  },
+  "reminder": {
+    "title": "Conciliación",
+    "badgeLabel": "{count, plural, one {# transacción pendiente de conciliar} other {# transacciones pendientes de conciliar}}",
+    "accountLine": "{count, plural, one {# transacción} other {# transacciones}}, la más antigua {date}",
+    "missedLine": "{count, plural, one {# omitida de un estado de cuenta conciliado} other {# omitidas de estados de cuenta conciliados}}",
+    "overdueLine": "{count, plural, one {# de más de {days} días} other {# de más de {days} días}}",
+    "reconcileAction": "Conciliar"
   }
 }

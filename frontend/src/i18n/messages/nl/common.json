@@ -143,7 +143,8 @@
     "nextDay": "Volgende dag",
     "previousDay": "Vorige dag",
     "nextMonth": "Volgende maand",
-    "previousMonth": "Vorige maand"
+    "previousMonth": "Vorige maand",
+    "partialDateHint": "Typ een deel van een datum en de rest wordt aangevuld: dag en maand nemen het huidige jaar over."
   },
   "accountTypes": {
     "CHEQUING": "Betaalrekening",

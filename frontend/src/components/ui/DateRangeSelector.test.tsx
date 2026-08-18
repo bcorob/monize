@@ -3,7 +3,7 @@ import { render, screen, fireEvent } from '@/test/render';
 import { DateRangeSelector } from './DateRangeSelector';
 
 vi.mock('@/hooks/useDateFormat', () => ({
-  useDateFormat: () => ({ formatDate: (d: string) => d, dateFormat: 'YYYY-MM-DD' }),
+  useDateFormat: () => ({ formatDate: (d: string) => d, dateFormat: 'YYYY-MM-DD', datePattern: 'YYYY-MM-DD' }),
 }));
 
 describe('DateRangeSelector', () => {

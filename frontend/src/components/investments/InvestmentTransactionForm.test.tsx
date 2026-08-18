@@ -87,6 +87,12 @@ vi.mock('@/components/securities/SecurityForm', () => ({
   ),
 }));
 
+/** The date the form will submit: DateInput keeps it in a hidden input, while
+ *  the visible box renders it in whatever pattern the user prefers. */
+function canonicalDateValue(): string | undefined {
+  return document.querySelector<HTMLInputElement>('input[type="hidden"][name="transactionDate"]')?.value;
+}
+
 describe('InvestmentTransactionForm', () => {
   const brokerageAccount = {
     id: 'a1',
@@ -518,7 +524,9 @@ describe('InvestmentTransactionForm', () => {
       );
       render(<InvestmentTransactionForm accounts={accounts} />);
       await waitFor(() => {
-        expect(screen.getByLabelText('Date')).toHaveValue('2026-02-20');
+        // The canonical value, read off the hidden input the form submits --
+        // the visible box shows it in the user's own pattern.
+        expect(canonicalDateValue()).toBe('2026-02-20');
       });
     });
 
@@ -529,7 +537,7 @@ describe('InvestmentTransactionForm', () => {
       );
       render(<InvestmentTransactionForm accounts={accounts} />);
       await waitFor(() => {
-        expect(screen.getByLabelText('Date')).toHaveValue(getLocalDateString());
+        expect(canonicalDateValue()).toBe(getLocalDateString());
       });
       expect(sessionStorage.getItem(INVESTMENT_DATE_KEY)).toBeNull();
     });
@@ -2349,7 +2357,7 @@ describe('InvestmentTransactionForm - extra coverage', () => {
       await waitFor(() => {
         expect(screen.getByLabelText('Brokerage Account')).toHaveValue('a1');
       });
-      expect(screen.getByLabelText('Date')).toHaveValue('2026-09-09');
+      expect(canonicalDateValue()).toBe('2026-09-09');
       expect(screen.getByLabelText('Security')).toHaveValue('');
     });
 

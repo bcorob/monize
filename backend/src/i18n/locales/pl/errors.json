@@ -20,6 +20,7 @@
     "useFavouriteUpdateEndpoint": "Użyj punktu końcowego aktualizacji konta, aby zmienić ulubione",
     "startDateFormat": "startDate musi mieć format YYYY-MM-DD",
     "endDateFormat": "endDate musi mieć format YYYY-MM-DD",
+    "asOfDateFormat": "asOfDate musi mieć format YYYY-MM-DD",
     "invalidExportFormat": "Format musi być csv lub qif",
     "loanRequiredFields": "Konta pożyczek wymagają paymentAmount, paymentFrequency, paymentStartDate oraz sourceAccountId",
     "loanRequiresInterestRate": "Konta pożyczek wymagają oprocentowania",
@@ -452,6 +453,7 @@
   },
   "transactions": {
     "invalidStatus": "Nieprawidłowy status transakcji: {{ status }}",
+    "reconciledLocked": "Ta transakcja jest uzgodniona i zablokowana. Wyłącz opcję „Zablokuj uzgodnione transakcje” w Ustawieniach, aby ją zmienić.",
     "pagePositiveInteger": "page musi być dodatnią liczbą całkowitą",
     "limitPositiveInteger": "limit musi być dodatnią liczbą całkowitą",
     "limitMax200": "limit nie może przekraczać 200",

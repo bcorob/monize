@@ -29,6 +29,7 @@
     "useFavouriteUpdateEndpoint": "Use the account update endpoint to change favourites",
     "startDateFormat": "startDate must be YYYY-MM-DD",
     "endDateFormat": "endDate must be YYYY-MM-DD",
+    "asOfDateFormat": "asOfDate must be YYYY-MM-DD",
     "invalidExportFormat": "Format must be csv or qif",
     "loanRequiredFields": "Loan accounts require paymentAmount, paymentFrequency, paymentStartDate, and sourceAccountId",
     "loanRequiresInterestRate": "Loan accounts require an interest rate",
@@ -461,6 +462,7 @@
   },
   "transactions": {
     "invalidStatus": "Invalid transaction status: {{ status }}",
+    "reconciledLocked": "This transaction is reconciled and locked. Turn off 'Lock reconciled transactions' in Settings to change it.",
     "pagePositiveInteger": "page must be a positive integer",
     "limitPositiveInteger": "limit must be a positive integer",
     "limitMax200": "limit must not exceed 200",

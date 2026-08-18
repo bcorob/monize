@@ -28,7 +28,15 @@
     "colCategory": "Kategori",
     "colAmount": "Jumlah",
     "colStatus": "Status",
-    "finish": "Selesaikan Rekonsiliasi"
+    "finish": "Selesaikan Rekonsiliasi",
+    "colActions": "Tindakan",
+    "selectRow": "Pilih transaksi untuk {payee}",
+    "groupByFlow": "Kelompokkan berdasarkan uang masuk dan keluar",
+    "groupCredits": "Uang masuk ({count})",
+    "groupDebits": "Uang keluar ({count})",
+    "groupSubtotal": "Subtotal grup {amount}",
+    "addTransaction": "Tambah Transaksi",
+    "lockedRow": "Terkunci"
   },
   "status": {
     "cleared": "Dikonfirmasi",
@@ -53,6 +61,35 @@
     "differenceRequired": "Selisih harus {amount} untuk menyelesaikan rekonsiliasi",
     "noneSelected": "Tidak ada transaksi yang dipilih untuk rekonsiliasi",
     "success": "{count, plural, one {Berhasil merekonsiliasi # transaksi} other {Berhasil merekonsiliasi # transaksi}}",
-    "reconcileFailed": "Gagal merekonsiliasi transaksi"
+    "reconcileFailed": "Gagal merekonsiliasi transaksi",
+    "deleted": "Transaksi dihapus",
+    "transferDeleted": "Transfer dihapus",
+    "deleteFailed": "Gagal menghapus transaksi",
+    "voidStatus": "Transaksi batal hanya dapat diubah dari formulir transaksi",
+    "statusFailed": "Gagal mengubah status"
+  },
+  "form": {
+    "newTitle": "Transaksi Baru",
+    "editTitle": "Edit Transaksi"
+  },
+  "delete": {
+    "title": "Hapus Transaksi",
+    "message": "Hapus transaksi ini? Transaksi akan dihapus dari akun dan dari rekonsiliasi ini.",
+    "transferTitle": "Hapus Transfer",
+    "transferMessage": "Hapus transfer ini? Kedua sisinya dihapus, di akun ini dan di akun lainnya."
+  },
+  "stale": {
+    "missedChip": "Terlewat",
+    "missedTooltip": "Transaksi ini bertanggal pada atau sebelum laporan terakhir yang Anda rekonsiliasi, jadi laporan itu direkonsiliasi tanpa transaksi ini.",
+    "overdueChip": "Terlambat",
+    "overdueTooltip": "Transaksi ini menunggu direkonsiliasi lebih lama dari satu siklus laporan."
+  },
+  "reminder": {
+    "title": "Rekonsiliasi",
+    "badgeLabel": "{count, plural, one {# transaksi menunggu direkonsiliasi} other {# transaksi menunggu direkonsiliasi}}",
+    "accountLine": "{count, plural, one {# transaksi} other {# transaksi}}, terlama {date}",
+    "missedLine": "{count, plural, one {# terlewat dari laporan yang sudah direkonsiliasi} other {# terlewat dari laporan yang sudah direkonsiliasi}}",
+    "overdueLine": "{count, plural, one {# lebih lama dari {days} hari} other {# lebih lama dari {days} hari}}",
+    "reconcileAction": "Rekonsiliasi"
   }
 }

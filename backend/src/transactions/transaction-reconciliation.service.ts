@@ -16,10 +16,17 @@ import { AccountsService } from "../accounts/accounts.service";
 import {
   isTransactionInFuture,
   formatDateYMDLocal,
+  todayYMD,
 } from "../common/date-utils";
+import {
+  STALE_UNRECONCILED_DAYS,
+  staleCutoffDate,
+  type StaleUnreconciledSummary,
+} from "./stale-reconciliation";
 import { tr } from "../i18n/translate";
 import { withScopedDb } from "../common/db/scoped-db";
 import { lockTransactionRow } from "../common/db/locks";
+import { assertReconciledRowsMutable } from "./reconciled-lock.util";
 
 /** What a transition resolver returns, or it throws to refuse the transition. */
 interface ResolvedTransition {
@@ -78,6 +85,12 @@ export class TransactionReconciliationService {
           ),
         );
       }
+
+      // Strict reconciled lock. A status change away from RECONCILED is an
+      // alteration of a reconciled row, so it is refused here alongside edits
+      // and deletes -- otherwise "unreconcile, then edit" is the lock's own
+      // bypass, one click from the row it protects.
+      await assertReconciledRowsMutable(m, userId, [locked]);
 
       const oldStatus = locked.status as TransactionStatus;
       const { status, clearReconciledDate } = resolve(oldStatus);
@@ -278,6 +291,102 @@ export class TransactionReconciliationService {
     return findOne(userId, transactionId);
   }
 
+  /**
+   * Every account the user reconciles that has register rows left outstanding.
+   *
+   * Scoped to accounts with at least one RECONCILED row -- reconciliation is
+   * opt-in per account, and an account nobody reconciles has no overdue rows
+   * (`stale-reconciliation.ts` has the reasoning and the two reasons).
+   *
+   * The counts are disjoint by arithmetic rather than by a second predicate:
+   * `missed_count` is the one comparison the database makes, and `overdue` is
+   * whatever is left of the selection. That keeps `classifyStaleRow`'s rule --
+   * missed wins over overdue -- from having to be written twice in two
+   * languages that cannot be diffed.
+   *
+   * Closed accounts are excluded: their balances are settled and there is
+   * nothing the user can act on.
+   */
+  async getStaleUnreconciled(
+    userId: string,
+  ): Promise<StaleUnreconciledSummary> {
+    const overdueBefore = staleCutoffDate(todayYMD(), STALE_UNRECONCILED_DAYS);
+
+    const rows: {
+      account_id: string;
+      account_name: string;
+      currency_code: string;
+      count: string;
+      oldest_date: string;
+      last_reconciled_date: string;
+      missed_count: string;
+    }[] = await withScopedDb(this.dataSource, (m) =>
+      m.query(
+        `WITH reconciled AS (
+           SELECT account_id, MAX(transaction_date) AS last_reconciled_date
+             FROM transactions
+            WHERE user_id = $1
+              AND status = $2
+              AND parent_transaction_id IS NULL
+            GROUP BY account_id
+         )
+         SELECT a.id AS account_id,
+                a.name AS account_name,
+                a.currency_code,
+                COUNT(*)::text AS count,
+                TO_CHAR(MIN(t.transaction_date), 'YYYY-MM-DD') AS oldest_date,
+                TO_CHAR(r.last_reconciled_date, 'YYYY-MM-DD') AS last_reconciled_date,
+                COUNT(*) FILTER (
+                  WHERE t.transaction_date <= r.last_reconciled_date
+                )::text AS missed_count
+           FROM transactions t
+           JOIN reconciled r ON r.account_id = t.account_id
+           JOIN accounts a ON a.id = t.account_id
+          WHERE t.user_id = $1
+            AND t.parent_transaction_id IS NULL
+            AND t.status <> $2
+            AND t.status <> $3
+            AND a.is_closed = false
+            AND (
+              t.transaction_date <= r.last_reconciled_date
+              OR t.transaction_date < $4::date
+            )
+          GROUP BY a.id, a.name, a.currency_code, r.last_reconciled_date
+          ORDER BY MIN(t.transaction_date) ASC`,
+        [
+          userId,
+          TransactionStatus.RECONCILED,
+          TransactionStatus.VOID,
+          overdueBefore,
+        ],
+      ),
+    );
+
+    const accounts = rows.map((row) => {
+      // Raw selects bypass the entity transformers, so every aggregate arrives
+      // as a string and the dates are already TO_CHAR'd above.
+      const count = Number(row.count);
+      const missedCount = Number(row.missed_count);
+      return {
+        accountId: row.account_id,
+        accountName: row.account_name,
+        currencyCode: row.currency_code,
+        count,
+        oldestDate: row.oldest_date,
+        lastReconciledDate: row.last_reconciled_date,
+        missedCount,
+        overdueCount: count - missedCount,
+      };
+    });
+
+    return {
+      staleAfterDays: STALE_UNRECONCILED_DAYS,
+      overdueBefore,
+      accounts,
+      totalCount: accounts.reduce((sum, account) => sum + account.count, 0),
+    };
+  }
+
   async getReconciliationData(
     userId: string,
     accountId: string,
@@ -288,8 +397,18 @@ export class TransactionReconciliationService {
     reconciledBalance: number;
     clearedBalance: number;
     difference: number;
+    /**
+     * The account's most recent reconciled date, or null when it has never
+     * been reconciled. The client classifies each listed row against it with
+     * the same `classifyStaleRow` rule the reminder count uses, so the row
+     * highlight and the badge cannot disagree about what "overdue" means.
+     */
+    lastReconciledDate: string | null;
+    staleAfterDays: number;
+    overdueBefore: string;
   }> {
-    const [account, transactions, reconciledResult, clearedResult] =
+    const overdueBefore = staleCutoffDate(todayYMD(), STALE_UNRECONCILED_DAYS);
+    const [account, transactions, reconciledResult, clearedResult, lastRow] =
       await withScopedDb(this.dataSource, (m) =>
         Promise.all([
           this.accountsService.findOne(userId, accountId),
@@ -338,6 +457,17 @@ export class TransactionReconciliationService {
               statementDate,
             })
             .getRawOne(),
+          // TO_CHAR rather than the entity's DATE transformer: a raw select
+          // hands back a driver `Date`, which would serialize as an instant.
+          m.query(
+            `SELECT TO_CHAR(MAX(transaction_date), 'YYYY-MM-DD') AS last_reconciled_date
+               FROM transactions
+              WHERE user_id = $1
+                AND account_id = $2
+                AND status = $3
+                AND parent_transaction_id IS NULL`,
+            [userId, accountId, TransactionStatus.RECONCILED],
+          ) as Promise<{ last_reconciled_date: string | null }[]>,
         ]),
       );
 
@@ -354,6 +484,9 @@ export class TransactionReconciliationService {
       reconciledBalance,
       clearedBalance,
       difference,
+      lastReconciledDate: lastRow[0]?.last_reconciled_date ?? null,
+      staleAfterDays: STALE_UNRECONCILED_DAYS,
+      overdueBefore,
     };
   }
 
@@ -391,6 +524,13 @@ export class TransactionReconciliationService {
           ),
         );
       }
+
+      // Strict reconciled lock. Nothing the reconcile screen offers reaches an
+      // already-RECONCILED row -- getReconciliationData does not list them --
+      // but the endpoint takes ids, and re-reconciling one would move its
+      // reconciled_date. A refusal that only holds for the ids the UI happens
+      // to send is not a refusal.
+      await assertReconciledRowsMutable(m, userId, transactions);
 
       const voidTransactions = transactions.filter(
         (t) => t.status === TransactionStatus.VOID,

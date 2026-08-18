@@ -277,24 +277,22 @@ export function NetWorthReport() {
     return null;
   };
 
-  if (error) {
-    return <ReportError onRetry={reload} />;
-  }
-
-  if (isLoading) {
-    return (
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-6">
-        <div className="space-y-4">
-          <Skeleton className="h-8 w-1/3" />
-          <Skeleton className="h-96 w-full" />
-        </div>
-      </div>
-    );
-  }
+  // Loading and error states are rendered *inside* this tree, never as an
+  // early return. Returning a different tree unmounts the controls block, and
+  // with it the date field the user is typing into -- which is what made this
+  // report impossible to type a custom range into (issue #1201).
+  const dataUnavailable = isLoading || !!error;
 
   return (
     <div className="space-y-6">
       {/* Summary Cards */}
+      {dataUnavailable ? (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Skeleton className="h-24 w-full" />
+          <Skeleton className="h-24 w-full" />
+          <Skeleton className="h-24 w-full" />
+        </div>
+      ) : (
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-6">
           <div className="text-sm text-gray-500 dark:text-gray-400">{t('netWorth.currentNetWorth')}</div>
@@ -317,8 +315,9 @@ export function NetWorthReport() {
           </div>
         </div>
       </div>
+      )}
 
-      {/* Controls */}
+      {/* Controls -- always rendered so focus inside DateInput survives reloads */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-4">
         <div className="flex flex-wrap gap-4 items-center justify-between">
           <DateRangeSelector
@@ -351,7 +350,14 @@ export function NetWorthReport() {
 
       {/* Chart or Table */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 px-2 py-4 sm:p-6">
-        {chartData.length === 0 ? (
+        {error ? (
+          <ReportError onRetry={reload} />
+        ) : isLoading ? (
+          <div className="space-y-4">
+            <Skeleton className="h-8 w-1/3" />
+            <Skeleton className="h-96 w-full" />
+          </div>
+        ) : chartData.length === 0 ? (
           <p className="text-gray-500 dark:text-gray-400 text-center py-8">
             {t('netWorth.noData')}
           </p>

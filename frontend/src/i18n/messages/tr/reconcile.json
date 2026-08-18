@@ -28,7 +28,15 @@
     "colCategory": "Kategori",
     "colAmount": "Miktar",
     "colStatus": "Durum",
-    "finish": "Mutabakatı Tamamla"
+    "finish": "Mutabakatı Tamamla",
+    "colActions": "İşlemler",
+    "selectRow": "{payee} işlemini seç",
+    "groupByFlow": "Giren ve çıkan paraya göre grupla",
+    "groupCredits": "Giren ({count})",
+    "groupDebits": "Çıkan ({count})",
+    "groupSubtotal": "Grup ara toplamı {amount}",
+    "addTransaction": "İşlem Ekle",
+    "lockedRow": "Kilitli"
   },
   "status": {
     "cleared": "Temizlendi",
@@ -53,6 +61,35 @@
     "differenceRequired": "Mutabakatı tamamlamak için fark {amount} olmalıdır",
     "noneSelected": "Mutabakat için işlem seçilmedi",
     "success": "{count, plural, one {# işlem başarıyla mutabık kılındı} other {# işlem başarıyla mutabık kılındı}}",
-    "reconcileFailed": "İşlemler mutabık kılınamadı"
+    "reconcileFailed": "İşlemler mutabık kılınamadı",
+    "deleted": "İşlem silindi",
+    "transferDeleted": "Transfer silindi",
+    "deleteFailed": "İşlem silinemedi",
+    "voidStatus": "Geçersiz bir işlem yalnızca işlem formundan değiştirilebilir",
+    "statusFailed": "Durum değiştirilemedi"
+  },
+  "form": {
+    "newTitle": "Yeni İşlem",
+    "editTitle": "İşlemi Düzenle"
+  },
+  "delete": {
+    "title": "İşlemi Sil",
+    "message": "Bu işlem silinsin mi? Hesaptan ve bu mutabakattan kaldırılacak.",
+    "transferTitle": "Transferi Sil",
+    "transferMessage": "Bu transfer silinsin mi? Her iki tarafı da kaldırılır, bu hesapta ve diğerinde."
+  },
+  "stale": {
+    "missedChip": "Atlanmış",
+    "missedTooltip": "Bu işlemin tarihi, mutabık kıldığınız son ekstrenin tarihinde ya da öncesinde, yani o ekstre bu işlem olmadan mutabık kılınmış.",
+    "overdueChip": "Gecikmiş",
+    "overdueTooltip": "Bu işlem bir ekstre döneminden uzun süredir mutabakat bekliyor."
+  },
+  "reminder": {
+    "title": "Mutabakat",
+    "badgeLabel": "{count, plural, one {# işlem mutabakat bekliyor} other {# işlem mutabakat bekliyor}}",
+    "accountLine": "{count, plural, one {# işlem} other {# işlem}}, en eskisi {date}",
+    "missedLine": "{count, plural, one {# tanesi mutabık kılınmış ekstrede atlanmış} other {# tanesi mutabık kılınmış ekstrelerde atlanmış}}",
+    "overdueLine": "{count, plural, one {# tanesi {days} günden eski} other {# tanesi {days} günden eski}}",
+    "reconcileAction": "Mutabakat"
   }
 }

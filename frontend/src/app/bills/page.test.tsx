@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, fireEvent, act } from '@/test/render';
 import BillsPage from './page';
+import { useDensityStore } from '@/store/densityStore';
 
 // Mock next/image
 vi.mock('next/image', () => ({
@@ -447,6 +448,98 @@ describe('BillsPage', () => {
       fireEvent.click(screen.getByText('Calendar'));
       // Filter tabs hidden in calendar view
       expect(screen.queryByText('All (6)')).not.toBeInTheDocument();
+    });
+  });
+
+  /**
+   * Issue #1203: the Bills list had no density control at all. It sits at the
+   * far right of the bar the List/Calendar tabs and the All/Bills/Deposits
+   * chips already share, so every control that shapes the list is on one line.
+   */
+  describe('Density toggle', () => {
+    beforeEach(() => {
+      useDensityStore.setState({ densities: {} });
+    });
+
+    it('sits at the far right of the bar holding the view tabs and filter chips', async () => {
+      render(<BillsPage />);
+      await waitFor(() => expect(screen.getByTestId('scheduled-transaction-list')).toBeInTheDocument());
+
+      const bar = screen.getByText('List').closest('nav')!.parentElement!;
+      const toggle = screen.getByTitle('Toggle row density');
+
+      expect(bar).toContainElement(toggle);
+      expect(bar).toContainElement(screen.getByText('All (6)'));
+      // Last child of the bar, and last within that child: nothing sits right of it.
+      expect(bar.lastElementChild).toContainElement(toggle);
+      expect(toggle.parentElement?.lastElementChild).toBe(toggle);
+    });
+
+    it('is the plain toggle every other table draws, not a filled chip', async () => {
+      render(<BillsPage />);
+      await waitFor(() => expect(screen.getByTestId('scheduled-transaction-list')).toBeInTheDocument());
+
+      // It sits among the filter chips but is not one of them, so it carries no
+      // resting fill -- only the hover the borderless `sm` button has. Matched
+      // on whole class names, since `hover:bg-gray-100` contains the other.
+      const classes = screen.getByTitle('Toggle row density').className.split(/\s+/);
+      expect(classes).not.toContain('bg-gray-100');
+      expect(classes).not.toContain('dark:bg-gray-700');
+      expect(classes).toContain('hover:bg-gray-100');
+    });
+
+    it('stays visible below sm, where the type chips do not', async () => {
+      render(<BillsPage />);
+      await waitFor(() => expect(screen.getByTestId('scheduled-transaction-list')).toBeInTheDocument());
+
+      // The chips are in their own `hidden sm:flex` group; the toggle is not,
+      // because a phone is where tightening the rows matters most.
+      expect(screen.getByText('All (6)').parentElement?.className).toContain('hidden');
+      expect(screen.getByTitle('Toggle row density').parentElement?.className).not.toContain('hidden');
+    });
+
+    it('is absent in calendar view, which has no rows to tighten', async () => {
+      render(<BillsPage />);
+      await waitFor(() => expect(screen.getByTestId('scheduled-transaction-list')).toBeInTheDocument());
+
+      fireEvent.click(screen.getByText('Calendar'));
+      expect(screen.queryByTitle('Toggle row density')).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByText('List'));
+      expect(screen.getByTitle('Toggle row density')).toBeInTheDocument();
+    });
+
+    it('cycles normal to compact to dense and back', async () => {
+      render(<BillsPage />);
+      await waitFor(() => expect(screen.getByTestId('scheduled-transaction-list')).toBeInTheDocument());
+
+      const toggle = screen.getByTitle('Toggle row density');
+      expect(toggle).toHaveTextContent('Normal');
+
+      fireEvent.click(toggle);
+      expect(toggle).toHaveTextContent('Compact');
+      fireEvent.click(toggle);
+      expect(toggle).toHaveTextContent('Dense');
+      fireEvent.click(toggle);
+      expect(toggle).toHaveTextContent('Normal');
+    });
+
+    it('writes to the bills view, not the transactions register', async () => {
+      render(<BillsPage />);
+      await waitFor(() => expect(screen.getByTestId('scheduled-transaction-list')).toBeInTheDocument());
+
+      fireEvent.click(screen.getByTitle('Toggle row density'));
+
+      expect(useDensityStore.getState().densities.bills).toBe('compact');
+      expect(useDensityStore.getState().densities.transactions).toBeUndefined();
+    });
+
+    it('reads the level the store already holds for bills', async () => {
+      useDensityStore.setState({ densities: { bills: 'dense' } });
+      render(<BillsPage />);
+      await waitFor(() => expect(screen.getByTestId('scheduled-transaction-list')).toBeInTheDocument());
+
+      expect(screen.getByTitle('Toggle row density')).toHaveTextContent('Dense');
     });
   });
 

@@ -70,7 +70,7 @@ vi.mock('@/lib/errors', () => ({
 }));
 
 vi.mock('@/hooks/useDateFormat', () => ({
-  useDateFormat: () => ({ formatDate: (d: string) => d, dateFormat: 'browser' }),
+  useDateFormat: () => ({ formatDate: (d: string) => d, dateFormat: 'browser', datePattern: 'YYYY-MM-DD' }),
 }));
 
 const mockAccountsGetAll = vi.fn();
@@ -368,7 +368,7 @@ describe('ScheduledTransactionForm', () => {
       expect(screen.getByLabelText('Next Due Date')).toBeInTheDocument();
     });
     const dateInput = screen.getByLabelText('Next Due Date');
-    expect(dateInput).toHaveAttribute('type', 'date');
+    expect(dateInput).toHaveAttribute('type', 'text');
   });
 
   it('shows end date section when frequency is not ONCE', async () => {

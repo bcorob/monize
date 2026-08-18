@@ -128,6 +128,8 @@
     "showCreatedAtTooltip": "Mostra la data e l'ora in cui una transazione è stata originariamente creata nei moduli transazione. È separata dalla data della transazione e può aiutarti a capire quando una voce è stata effettivamente aggiunta a Monize.",
     "showWhatsNewLabel": "Mostra le Novità dopo un aggiornamento",
     "showWhatsNewTooltip": "Mostra un riepilogo delle note di rilascio al primo accesso dopo l'aggiornamento di Monize a una nuova versione. Puoi sempre riaprirlo facendo clic sul numero di versione in fondo a questa pagina o nella schermata di accesso.",
+    "lockReconciledLabel": "Blocca le transazioni riconciliate",
+    "lockReconciledTooltip": "Quando è disattivato, Monize avvisa prima di una modifica che sposterebbe la data o l'importo di una transazione riconciliata e poi la consente. Quando è attivo, le transazioni riconciliate non possono essere modificate, eliminate né riaperte. Disattivalo di nuovo per fare una correzione.",
     "timeFormatLabel": "Formato ora",
     "recentTransactionsLabel": "Transazioni recenti nel riempimento rapido",
     "recentTransactionsHelp": "Numero di voci mostrate nel popover della cronologia accanto al campo Beneficiario nei moduli transazione.",

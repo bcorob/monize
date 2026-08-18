@@ -20,6 +20,7 @@
     "useFavouriteUpdateEndpoint": "Usa el endpoint de actualización de cuenta para cambiar los favoritos",
     "startDateFormat": "startDate debe estar en formato YYYY-MM-DD",
     "endDateFormat": "endDate debe estar en formato YYYY-MM-DD",
+    "asOfDateFormat": "asOfDate debe estar en formato YYYY-MM-DD",
     "invalidExportFormat": "El formato debe ser csv o qif",
     "loanRequiredFields": "Las cuentas de préstamo requieren paymentAmount, paymentFrequency, paymentStartDate y sourceAccountId",
     "loanRequiresInterestRate": "Las cuentas de préstamo requieren una tasa de interés",
@@ -452,6 +453,7 @@
   },
   "transactions": {
     "invalidStatus": "Estado de transacción no válido: {{ status }}",
+    "reconciledLocked": "Esta transacción está conciliada y bloqueada. Desactiva «Bloquear transacciones conciliadas» en Ajustes para cambiarla.",
     "pagePositiveInteger": "page debe ser un entero positivo",
     "limitPositiveInteger": "limit debe ser un entero positivo",
     "limitMax200": "limit no debe superar 200",

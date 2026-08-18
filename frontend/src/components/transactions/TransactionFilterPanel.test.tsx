@@ -57,7 +57,7 @@ function createPayee(overrides: Partial<Payee> = {}): Payee {
 }
 
 vi.mock('@/hooks/useDateFormat', () => ({
-  useDateFormat: () => ({ formatDate: (d: string) => d, dateFormat: 'browser' }),
+  useDateFormat: () => ({ formatDate: (d: string) => d, dateFormat: 'browser', datePattern: 'YYYY-MM-DD' }),
 }));
 
 describe('TransactionFilterPanel', () => {
@@ -279,8 +279,12 @@ describe('TransactionFilterPanel', () => {
 
       expect(startInput).toBeInTheDocument();
       expect(endInput).toBeInTheDocument();
-      expect(startInput).toHaveAttribute('type', 'date');
-      expect(endInput).toHaveAttribute('type', 'date');
+      // Every desktop date field is the shared text input reading the user's
+      // pattern -- a native date box auto-advances its own segments and cannot
+      // take a partial date (issue #1201). The canonical value lives in the
+      // hidden input beside it.
+      expect(startInput).toHaveAttribute('type', 'text');
+      expect(endInput).toHaveAttribute('type', 'text');
     });
 
     it('calls handleFilterChange with setFilterStartDate when start date changes', () => {

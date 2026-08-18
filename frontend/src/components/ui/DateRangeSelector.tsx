@@ -98,17 +98,20 @@ export function DateRangeSelector({
       </div>
       {showCustom && value === 'custom' && (
         <div className="flex gap-4 mt-4">
+          {/* `onDateChange` is the whole contract: it fires with a canonical
+              YYYY-MM-DD however the user entered the date. The raw `onChange`
+              beside it only ever fired from the native input a touch device
+              still uses, where it reported the same change a second time; on
+              the desktop text field it was never called at all. */}
           <DateInput
             label={t('dateRange.startDate')}
             value={customStartDate}
             onDateChange={(date) => onCustomStartDateChange?.(date)}
-            onChange={(e) => onCustomStartDateChange?.(e.target.value)}
           />
           <DateInput
             label={t('dateRange.endDate')}
             value={customEndDate}
             onDateChange={(date) => onCustomEndDateChange?.(date)}
-            onChange={(e) => onCustomEndDateChange?.(e.target.value)}
           />
         </div>
       )}

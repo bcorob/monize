@@ -13,7 +13,7 @@ vi.mock('@/lib/transactions', () => ({
 }));
 
 vi.mock('@/hooks/useDateFormat', () => ({
-  useDateFormat: () => ({
+  useDateFormat: () => ({ dateFormat: 'browser', datePattern: 'YYYY-MM-DD',
     formatDate: (d: string) => d,
   }),
 }));
@@ -3030,6 +3030,92 @@ describe('TransactionList', () => {
       for (const cls of expected.split(' ')) {
         expect(cell?.className, `${level}: ${cls}`).toContain(cls);
       }
+    });
+  });
+
+  describe('stale reconciliation highlighting', () => {
+    const staleContext = {
+      lastReconciledByAccount: new Map([['acc-1', '2026-06-30']]),
+      overdueBefore: '2026-07-04',
+    };
+
+    it('marks a row the last reconciled statement left out', async () => {
+      const missed = createTransaction({
+        transactionDate: '2026-06-15',
+        status: TransactionStatus.CLEARED,
+      });
+
+      render(<TransactionList transactions={[missed]} staleContext={staleContext} />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('stale-reconciliation-chip')).toHaveAttribute(
+          'data-stale',
+          'missed',
+        );
+      });
+    });
+
+    it('marks a row older than the overdue boundary', async () => {
+      const overdue = createTransaction({
+        transactionDate: '2026-07-02',
+        status: TransactionStatus.UNRECONCILED,
+      });
+
+      render(<TransactionList transactions={[overdue]} staleContext={staleContext} />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('stale-reconciliation-chip')).toHaveAttribute(
+          'data-stale',
+          'overdue',
+        );
+      });
+    });
+
+    it('marks nothing without the context, which is how a failed lookup reads', async () => {
+      // The register must not silently start claiming everything is fine, nor
+      // start claiming everything is overdue, because a request did not answer.
+      const old = createTransaction({ transactionDate: '2020-01-01' });
+
+      render(<TransactionList transactions={[old]} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Grocery Store')).toBeInTheDocument();
+      });
+      expect(screen.queryByTestId('stale-reconciliation-chip')).not.toBeInTheDocument();
+    });
+
+    it('marks nothing in an account the user does not reconcile', async () => {
+      const other = createTransaction({
+        accountId: 'acc-99',
+        transactionDate: '2020-01-01',
+      });
+
+      render(<TransactionList transactions={[other]} staleContext={staleContext} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Grocery Store')).toBeInTheDocument();
+      });
+      expect(screen.queryByTestId('stale-reconciliation-chip')).not.toBeInTheDocument();
+    });
+
+    it('marks nothing on a reconciled or void row', async () => {
+      const done = createTransaction({
+        id: 'aaaaaaaa-e89b-12d3-a456-426614174000',
+        transactionDate: '2026-01-01',
+        status: TransactionStatus.RECONCILED,
+      });
+      const voided = createTransaction({
+        id: 'bbbbbbbb-e89b-12d3-a456-426614174000',
+        transactionDate: '2026-01-01',
+        status: TransactionStatus.VOID,
+      });
+
+      render(<TransactionList transactions={[done, voided]} staleContext={staleContext} />);
+
+      await waitFor(() => {
+        expect(screen.getAllByText('Grocery Store').length).toBe(2);
+      });
+      expect(screen.queryByTestId('stale-reconciliation-chip')).not.toBeInTheDocument();
     });
   });
 });

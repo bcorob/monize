@@ -507,24 +507,11 @@ export function SecurityPerformanceReport() {
     });
   };
 
-  if (error) {
-    return <ReportError onRetry={reloadBase} />;
-  }
-
-  if (isLoading) {
-    return (
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-6">
-        <div className="space-y-4">
-          <Skeleton className="h-8 w-1/3" />
-          <Skeleton className="h-64 w-full" />
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
-      {/* Security and benchmark selectors, and the chart's window */}
+      {/* Security and benchmark selectors, and the chart's window -- always
+          rendered so focus inside DateInput survives reloads. The load and
+          error states belong to the body below, not to the whole report. */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-4 space-y-4">
         <div className="flex flex-wrap gap-4 items-center justify-between">
           <div className="flex flex-wrap gap-2 items-center">
@@ -611,7 +598,16 @@ export function SecurityPerformanceReport() {
         </div>
       </div>
 
-      {selectedSecurityIds.length + activeIndexCodes.length === 0 ? (
+      {error ? (
+        <ReportError onRetry={reloadBase} />
+      ) : isLoading ? (
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-6">
+          <div className="space-y-4">
+            <Skeleton className="h-8 w-1/3" />
+            <Skeleton className="h-64 w-full" />
+          </div>
+        </div>
+      ) : selectedSecurityIds.length + activeIndexCodes.length === 0 ? (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-8 text-center">
           <p className="text-gray-500 dark:text-gray-400">
             {t('securityPerformance.selectPrompt')}

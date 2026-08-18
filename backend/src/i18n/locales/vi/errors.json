@@ -20,6 +20,7 @@
     "useFavouriteUpdateEndpoint": "Sử dụng điểm cuối cập nhật tài khoản để thay đổi mục yêu thích",
     "startDateFormat": "startDate phải có định dạng YYYY-MM-DD",
     "endDateFormat": "endDate phải có định dạng YYYY-MM-DD",
+    "asOfDateFormat": "asOfDate phải có định dạng YYYY-MM-DD",
     "invalidExportFormat": "Định dạng phải là csv hoặc qif",
     "loanRequiredFields": "Tài khoản vay yêu cầu paymentAmount, paymentFrequency, paymentStartDate và sourceAccountId",
     "loanRequiresInterestRate": "Tài khoản vay yêu cầu lãi suất",
@@ -452,6 +453,7 @@
   },
   "transactions": {
     "invalidStatus": "Trạng thái giao tác không hợp lệ: {{ status }}",
+    "reconciledLocked": "Giao dịch này đã đối soát và bị khóa. Hãy tắt \"Khóa giao dịch đã đối soát\" trong Cài đặt để thay đổi.",
     "pagePositiveInteger": "page phải là số nguyên dương",
     "limitPositiveInteger": "limit phải là số nguyên dương",
     "limitMax200": "limit không được vượt quá 200",

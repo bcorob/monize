@@ -143,7 +143,8 @@
     "nextDay": "Hari berikutnya",
     "previousDay": "Hari sebelumnya",
     "nextMonth": "Bulan berikutnya",
-    "previousMonth": "Bulan sebelumnya"
+    "previousMonth": "Bulan sebelumnya",
+    "partialDateHint": "Ketik sebagian tanggal dan sisanya akan dilengkapi: tanggal dan bulan memakai tahun berjalan."
   },
   "accountTypes": {
     "CHEQUING": "Giro",

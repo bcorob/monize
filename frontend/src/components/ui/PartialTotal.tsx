@@ -60,7 +60,15 @@ export function PartialTotal({ children, total, displayCurrency }: PartialTotalP
         *
       </span>
       <span className="sr-only">{t('partialTotal.srSuffix')}</span>
-      <InfoTooltip placement="top" text={explanation} />
+      {/* A money figure sits wherever money is reported: a summary card, a
+          group header with `overflow-hidden` on it, the right edge of a
+          narrow column. The CSS popover is `absolute` and a fixed 16rem
+          wide, so in all three it is clipped by an ancestor or by the
+          viewport -- and an explanation the reader cannot finish is the one
+          thing this marker exists to give them. `usePortal` is the door
+          `InfoTooltip` already has for exactly this: it renders fixed on
+          `document.body` and clamps itself to the viewport. */}
+      <InfoTooltip placement="top" text={explanation} usePortal />
     </span>
   );
 }

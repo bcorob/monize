@@ -349,6 +349,73 @@ describe("writeInvestments", () => {
     expect(investments.insert.mock.calls[0][0][0].description).toBe("VOO");
   });
 
+  it("labels the cash leg with the activity when Money recorded no payee", async () => {
+    // Issue #1204: Money files carry no payee on a trade, so every imported
+    // cash leg rendered as a bare "-" in the register -- the one column that
+    // could say why the money moved. The label is the same one a natively
+    // entered and a QIF-imported trade already store.
+    const { manager, transactions } = doubles();
+
+    await writeInvestments(manager, "user-1", {
+      ...baseInput,
+      transactions: [investment()],
+    });
+
+    expect(transactions.insert.mock.calls[0][0][0]).toMatchObject({
+      payeeId: null,
+      payeeName: "Buy: VOO 10 @ $100.00",
+    });
+  });
+
+  it("quotes the label in the row's own currency", async () => {
+    const { manager, transactions } = doubles();
+
+    await writeInvestments(manager, "user-1", {
+      ...baseInput,
+      transactions: [investment({ currencyCode: "EUR" })],
+    });
+
+    expect(transactions.insert.mock.calls[0][0][0].payeeName).toBe(
+      "Buy: VOO 10 @ €100.00",
+    );
+  });
+
+  it("labels an income leg with its total rather than a unit price", async () => {
+    const { manager, transactions } = doubles();
+
+    await writeInvestments(manager, "user-1", {
+      ...baseInput,
+      transactions: [
+        investment({
+          action: InvestmentAction.DIVIDEND,
+          quantity: null,
+          price: null,
+          commission: 0,
+          totalAmount: 42.5,
+          cashAmount: 42.5,
+        }),
+      ],
+    });
+
+    expect(transactions.insert.mock.calls[0][0][0].payeeName).toBe(
+      "Dividend: VOO $42.50",
+    );
+  });
+
+  it("says Unknown when the security handle resolves to nothing", async () => {
+    const { manager, transactions } = doubles();
+
+    await writeInvestments(manager, "user-1", {
+      ...baseInput,
+      symbolByHandle: new Map<number, string>(),
+      transactions: [investment()],
+    });
+
+    expect(transactions.insert.mock.calls[0][0][0].payeeName).toBe(
+      "Buy: Unknown 10 @ $100.00",
+    );
+  });
+
   it("carries Money's own payee and category onto the cash leg", async () => {
     const { manager, transactions } = doubles();
 
@@ -360,10 +427,30 @@ describe("writeInvestments", () => {
       transactions: [investment({ payeeHandle: 4, categoryHandle: 9 })],
     });
 
+    // The synthesized label is a fallback, never an override: a payee the
+    // user recorded in Money is not replaced by generated text.
     expect(transactions.insert.mock.calls[0][0][0]).toMatchObject({
       payeeId: "payee-4",
       payeeName: "Broker",
       categoryId: "category-9",
+    });
+  });
+
+  it("labels the leg rather than linking half a payee", async () => {
+    // A handle that resolves to an id but no name (or the reverse) is not a
+    // payee: writing one half leaves the register showing whichever survived.
+    const { manager, transactions } = doubles();
+
+    await writeInvestments(manager, "user-1", {
+      ...baseInput,
+      payeeIdByHandle: new Map([[4, "payee-4"]]),
+      payeeNameByHandle: new Map<number, string>(),
+      transactions: [investment({ payeeHandle: 4 })],
+    });
+
+    expect(transactions.insert.mock.calls[0][0][0]).toMatchObject({
+      payeeId: null,
+      payeeName: "Buy: VOO 10 @ $100.00",
     });
   });
 

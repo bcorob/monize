@@ -20,6 +20,7 @@
     "useFavouriteUpdateEndpoint": "Gebruik het rekeningbijwerkeindpunt om favorieten te wijzigen",
     "startDateFormat": "startDate moet JJJJ-MM-DD zijn",
     "endDateFormat": "endDate moet JJJJ-MM-DD zijn",
+    "asOfDateFormat": "asOfDate moet JJJJ-MM-DD zijn",
     "invalidExportFormat": "Formaat moet csv of qif zijn",
     "loanRequiredFields": "Leningrekeningen vereisen paymentAmount, paymentFrequency, paymentStartDate en sourceAccountId",
     "loanRequiresInterestRate": "Leningrekeningen vereisen een rentepercentage",
@@ -452,6 +453,7 @@
   },
   "transactions": {
     "invalidStatus": "Ongeldige transactiestatus: {{ status }}",
+    "reconciledLocked": "Deze transactie is afgestemd en vergrendeld. Zet 'Afgestemde transacties vergrendelen' uit in Instellingen om haar te wijzigen.",
     "pagePositiveInteger": "pagina moet een positief geheel getal zijn",
     "limitPositiveInteger": "limiet moet een positief geheel getal zijn",
     "limitMax200": "limiet mag niet meer dan 200 zijn",

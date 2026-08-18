@@ -28,7 +28,15 @@
     "colCategory": "カテゴリ",
     "colAmount": "金額",
     "colStatus": "ステータス",
-    "finish": "照合を完了"
+    "finish": "照合を完了",
+    "colActions": "操作",
+    "selectRow": "{payee} の取引を選択",
+    "groupByFlow": "入金と出金でグループ化",
+    "groupCredits": "入金 ({count})",
+    "groupDebits": "出金 ({count})",
+    "groupSubtotal": "グループ小計 {amount}",
+    "addTransaction": "取引を追加",
+    "lockedRow": "ロック中"
   },
   "status": {
     "cleared": "確認済み",
@@ -53,6 +61,35 @@
     "differenceRequired": "照合を完了するには差額が {amount} である必要があります",
     "noneSelected": "照合する取引が選択されていません",
     "success": "{count, plural, one {# 件の取引を正常に照合しました} other {# 件の取引を正常に照合しました}}",
-    "reconcileFailed": "取引の照合に失敗しました"
+    "reconcileFailed": "取引の照合に失敗しました",
+    "deleted": "取引を削除しました",
+    "transferDeleted": "振替を削除しました",
+    "deleteFailed": "取引を削除できませんでした",
+    "voidStatus": "無効な取引は取引フォームからのみ変更できます",
+    "statusFailed": "ステータスを変更できませんでした"
+  },
+  "form": {
+    "newTitle": "新規取引",
+    "editTitle": "取引を編集"
+  },
+  "delete": {
+    "title": "取引を削除",
+    "message": "この取引を削除しますか？口座とこの照合から取り除かれます。",
+    "transferTitle": "振替を削除",
+    "transferMessage": "この振替を削除しますか？この口座と相手口座の両方の明細が取り除かれます。"
+  },
+  "stale": {
+    "missedChip": "漏れ",
+    "missedTooltip": "この取引は最後に照合した明細書の日付以前のため、その明細書はこの取引を含めずに照合されています。",
+    "overdueChip": "期限超過",
+    "overdueTooltip": "この取引は明細書1周期を超えて照合を待っています。"
+  },
+  "reminder": {
+    "title": "照合",
+    "badgeLabel": "{count, plural, one {照合待ちの取引が # 件} other {照合待ちの取引が # 件}}",
+    "accountLine": "{count, plural, one {# 件の取引} other {# 件の取引}}、最も古いもの {date}",
+    "missedLine": "{count, plural, one {# 件が照合済み明細書から漏れています} other {# 件が照合済み明細書から漏れています}}",
+    "overdueLine": "{count, plural, one {# 件が {days} 日以上経過} other {# 件が {days} 日以上経過}}",
+    "reconcileAction": "照合"
   }
 }

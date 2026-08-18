@@ -20,6 +20,7 @@
     "useFavouriteUpdateEndpoint": "पसंदीदा बदलने के लिए खाता अपडेट एंडपॉइंट का उपयोग करें",
     "startDateFormat": "startDate YYYY-MM-DD प्रारूप में होनी चाहिए",
     "endDateFormat": "endDate YYYY-MM-DD प्रारूप में होनी चाहिए",
+    "asOfDateFormat": "asOfDate YYYY-MM-DD प्रारूप में होनी चाहिए",
     "invalidExportFormat": "प्रारूप csv या qif होना चाहिए",
     "loanRequiredFields": "ऋण खातों के लिए paymentAmount, paymentFrequency, paymentStartDate और sourceAccountId आवश्यक हैं",
     "loanRequiresInterestRate": "ऋण खातों के लिए ब्याज दर आवश्यक है",
@@ -452,6 +453,7 @@
   },
   "transactions": {
     "invalidStatus": "अमान्य लेनदेन स्थिति: {{ status }}",
+    "reconciledLocked": "यह लेनदेन समाधानित और लॉक है। इसे बदलने के लिए सेटिंग्स में \"समाधानित लेनदेन लॉक करें\" बंद करें।",
     "pagePositiveInteger": "page एक सकारात्मक पूर्णांक होना चाहिए",
     "limitPositiveInteger": "limit एक सकारात्मक पूर्णांक होना चाहिए",
     "limitMax200": "limit 200 से अधिक नहीं होनी चाहिए",

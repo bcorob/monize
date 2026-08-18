@@ -125,6 +125,14 @@ export class UpdatePreferencesDto {
 
   @ApiPropertyOptional({
     description:
+      "Strict mode: refuse any alteration of a RECONCILED transaction while on",
+  })
+  @IsOptional()
+  @IsBoolean()
+  lockReconciledTransactions?: boolean;
+
+  @ApiPropertyOptional({
+    description:
       "Show the What's New release-notes popup automatically after an upgrade",
   })
   @IsOptional()

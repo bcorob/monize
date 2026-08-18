@@ -44,6 +44,10 @@ import {
 import { tr } from "../i18n/translate";
 import { withScopedDb } from "../common/db/scoped-db";
 import { lockTransactionRows } from "../common/db/locks";
+import {
+  assertReconciledIdsMutable,
+  assertReconciledRowsMutable,
+} from "./reconciled-lock.util";
 
 export interface BulkDeleteResult {
   deleted: number;
@@ -259,6 +263,16 @@ export class TransactionBulkUpdateService {
           userId,
         );
       }
+
+      // Strict reconciled lock over every row this batch will write -- the
+      // selection, the transfer counterparts folded in with it, and the split
+      // parents' propagation targets. A refusal on the single-row route that
+      // the bulk route walks around is not a refusal.
+      await assertReconciledIdsMutable(m, userId, [
+        ...eligibleIds,
+        ...statusIds,
+        ...propagationTargetIds,
+      ]);
 
       // WP1b: read the pre-write values of exactly the fields this run changes,
       // before ANY update runs -- including the counterpart and propagated rows
@@ -579,6 +593,10 @@ export class TransactionBulkUpdateService {
       for (const tx of locked.values()) {
         affectedAccountIds.add(tx.accountId);
       }
+
+      // Strict reconciled lock over the locked delete set, primary rows and
+      // linked legs alike, before the first reversal.
+      await assertReconciledRowsMutable(m, userId, [...locked.values()]);
 
       const balanceAdjustments = new Map<string, number>();
       for (const tx of locked.values()) {

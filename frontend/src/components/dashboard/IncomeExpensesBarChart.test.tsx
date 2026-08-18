@@ -36,7 +36,7 @@ vi.mock('recharts', () => ({
 }));
 
 vi.mock('@/hooks/useDateFormat', () => ({
-  useDateFormat: () => ({ formatDate: (d: any) => typeof d === 'string' ? d : d.toISOString().slice(0, 10) }),
+  useDateFormat: () => ({ dateFormat: 'browser', datePattern: 'YYYY-MM-DD', formatDate: (d: any) => typeof d === 'string' ? d : d.toISOString().slice(0, 10) }),
 }));
 
 vi.mock('@/hooks/useChartDateFormat', () => ({

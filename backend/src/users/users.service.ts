@@ -216,6 +216,9 @@ export class UsersService {
     if (dto.showWhatsNew !== undefined) {
       patch.showWhatsNew = dto.showWhatsNew;
     }
+    if (dto.lockReconciledTransactions !== undefined) {
+      patch.lockReconciledTransactions = dto.lockReconciledTransactions;
+    }
     if (dto.weekStartsOn !== undefined) {
       patch.weekStartsOn = dto.weekStartsOn;
     }

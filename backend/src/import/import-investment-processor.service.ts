@@ -22,6 +22,10 @@ import {
   isQuantityOnlyAction,
   SHARE_MOVING_ACTIONS,
 } from "../securities/investment-replay.util";
+import {
+  formatInvestmentActionLabel,
+  formatInvestmentCashPayeeName,
+} from "../securities/investment-cash-payee.util";
 
 @Injectable()
 export class ImportInvestmentProcessorService {
@@ -518,27 +522,18 @@ export class ImportInvestmentProcessorService {
       }
     }
 
-    const formatAction = (act: string) => {
-      return act
-        .split("_")
-        .map(
-          (word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase(),
-        )
-        .join(" ");
-    };
-    const actionLabel = formatAction(action);
-
-    let payeeName: string;
-    if (
-      baseInvestmentAction(action) === InvestmentAction.BUY ||
-      baseInvestmentAction(action) === InvestmentAction.SELL
-    ) {
-      payeeName = `${actionLabel}: ${securitySymbol} ${quantity} @ $${price.toFixed(2)}`;
-    } else if (action === InvestmentAction.INTEREST) {
-      payeeName = `${actionLabel}: $${totalAmount.toFixed(2)}`;
-    } else {
-      payeeName = `${actionLabel}: ${securitySymbol} $${totalAmount.toFixed(2)}`;
-    }
+    // The label is rendered in the security's currency, because the price and
+    // total it quotes are denominated there -- this used to hard-code a `$`
+    // over an amount the very next block converts out of that currency.
+    const payeeName = formatInvestmentCashPayeeName({
+      action,
+      symbol: securitySymbol,
+      quantity,
+      price,
+      totalAmount,
+      currencyCode: securityCurrency ?? cashAccountCurrency,
+    });
+    const actionLabel = formatInvestmentActionLabel(action);
 
     const isCrossAccountTransfer = cashAccountId !== ctx.accountId;
 

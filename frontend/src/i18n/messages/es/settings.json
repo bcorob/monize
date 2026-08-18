@@ -128,6 +128,8 @@
     "showCreatedAtTooltip": "Muestra la fecha y hora en que se creó originalmente una transacción en los formularios. Esto es independiente de la fecha de la transacción y puede ayudarte a saber cuándo se agregó realmente la entrada a Monize.",
     "showWhatsNewLabel": "Mostrar Novedades después de una actualización",
     "showWhatsNewTooltip": "Muestra un resumen de las notas de la versión la primera vez que inicias sesión después de que Monize se actualice a una nueva versión. Siempre puedes volver a abrirlo haciendo clic en el número de versión que aparece en la parte inferior de esta página o en la pantalla de inicio de sesión.",
+    "lockReconciledLabel": "Bloquear transacciones conciliadas",
+    "lockReconciledTooltip": "Mientras esto esté desactivado, Monize te avisa antes de un cambio que modificaría la fecha o el importe de una transacción conciliada y luego lo permite. Mientras esté activado, las transacciones conciliadas no se pueden editar, eliminar ni desconciliar. Desactívalo de nuevo para hacer una corrección.",
     "timeFormatLabel": "Formato de hora",
     "recentTransactionsLabel": "Transacciones recientes en completado rápido",
     "recentTransactionsHelp": "Número de entradas mostradas en el historial emergente junto al campo Beneficiario en los formularios de transacciones.",

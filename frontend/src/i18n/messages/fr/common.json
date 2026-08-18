@@ -143,7 +143,8 @@
     "nextDay": "Jour suivant",
     "previousDay": "Jour précédent",
     "nextMonth": "Mois suivant",
-    "previousMonth": "Mois précédent"
+    "previousMonth": "Mois précédent",
+    "partialDateHint": "Saisissez une partie de la date et le reste est complété : le jour et le mois reprennent l'année en cours."
   },
   "accountTypes": {
     "CHEQUING": "Compte courant",

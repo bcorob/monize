@@ -143,7 +143,8 @@
     "nextDay": "다음 날",
     "previousDay": "이전 날",
     "nextMonth": "다음 달",
-    "previousMonth": "이전 달"
+    "previousMonth": "이전 달",
+    "partialDateHint": "날짜의 일부만 입력하면 나머지는 자동으로 채워집니다. 일과 월만 입력하면 올해가 적용됩니다."
   },
   "accountTypes": {
     "CHEQUING": "당좌예금",

@@ -123,6 +123,23 @@ So when a mapper is about to warn that it cannot represent something, check firs
 right answer is to *create* the row Monize needs rather than to report the mismatch. A warning
 about 3,255 rows the user cannot act on is a sign the mapping is wrong, not that the file is.
 
+### A row Monize writes itself has to say why it exists
+
+Because Monize writes the trade's cash leg rather than importing Money's, the columns on that row
+are Monize's to fill -- and `payee` was left empty. Money records no payee on a trade, so every
+imported cash leg rendered as a bare `-` in the register: the one column that could say why the
+money moved, on rows that exist only to say a trade settled (issue #1204).
+
+The leg now carries the same activity label a natively entered and a QIF-imported trade already
+store (`Buy: VOO 10 @ $100.00`), built by `backend/src/securities/investment-cash-payee.util.ts` --
+the one implementation of that label, quoted in the row's own currency. Money's payee still wins
+when the file recorded one; the label is the fallback, never an override, so nothing the user
+entered is replaced by generated text.
+
+The general rule: when the importer synthesizes a row Money has no copy of, ask what each column
+would have held had a person entered it. An empty column on a row nobody wrote reads as missing
+data rather than as a row that never had any.
+
 ### And the same gap read the other way: a row Money *does* store may be one Monize writes anyway
 
 The mirror of the rule above, and the way it goes wrong. When a trade is funded from the

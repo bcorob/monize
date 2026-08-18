@@ -128,6 +128,8 @@
     "showCreatedAtTooltip": "Hiển thị ngày và giờ giao tác được tạo ban đầu trên biểu mẫu giao tác. Điều này khác với ngày giao tác và có thể giúp bạn biết khi nào mục nhập thực sự được thêm vào Monize.",
     "showWhatsNewLabel": "Hiển thị Có gì mới sau khi nâng cấp",
     "showWhatsNewTooltip": "Hiển thị bản tóm tắt ghi chú phát hành trong lần đầu tiên bạn đăng nhập sau khi Monize cập nhật lên phiên bản mới. Bạn luôn có thể mở lại bằng cách nhấp vào số phiên bản ở cuối trang này hoặc trên màn hình đăng nhập.",
+    "lockReconciledLabel": "Khóa giao dịch đã đối soát",
+    "lockReconciledTooltip": "Khi tùy chọn này tắt, Monize cảnh báo trước khi có chỉnh sửa làm thay đổi ngày hoặc số tiền của một giao dịch đã đối soát, rồi vẫn cho phép. Khi bật, giao dịch đã đối soát hoàn toàn không thể chỉnh sửa, xóa hay hủy đối soát. Hãy tắt lại để thực hiện chỉnh sửa.",
     "timeFormatLabel": "Định dạng giờ",
     "recentTransactionsLabel": "Giao tác gần đây trong điền nhanh",
     "recentTransactionsHelp": "Số mục được hiển thị trong cửa sổ bật lên lịch sử bên cạnh trường Người nhận trên biểu mẫu giao tác.",

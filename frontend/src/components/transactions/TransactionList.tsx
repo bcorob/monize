@@ -4,6 +4,7 @@ import React, { useState, useMemo, useCallback, useRef } from 'react';
 import { useTranslations } from 'next-intl';
 import toast from 'react-hot-toast';
 import { Transaction, TransactionStatus } from '@/types/transaction';
+import { classifyStaleRow } from '@/lib/stale-reconciliation';
 import { nextCycleStatus } from '@/lib/transaction-status-cycle';
 import { CategoryBudgetStatus } from '@/types/budget';
 import { transactionsApi } from '@/lib/transactions';
@@ -87,6 +88,18 @@ interface TransactionListProps {
     string,
     { canCreate: boolean; canEdit: boolean; canDelete: boolean }
   >;
+  /**
+   * What the register needs to say which rows are overdue for reconciliation:
+   * the last reconciled date of each account the user reconciles, and the date
+   * the server chose as the overdue boundary. Undefined means the caller has no
+   * information -- a page that has not asked, or whose request failed -- and no
+   * row is marked, which is the right answer for both. An account absent from
+   * the map has never been reconciled and so has no overdue rows at all.
+   */
+  staleContext?: {
+    lastReconciledByAccount: Map<string, string>;
+    overdueBefore: string;
+  };
 }
 
 export function TransactionList({
@@ -104,6 +117,7 @@ export function TransactionList({
   onDateFilterClick,
   onAccountFilterClick,
   onPayeeFilterClick,
+  staleContext,
   onExport,
   isExporting,
   startingBalance,
@@ -549,6 +563,16 @@ export function TransactionList({
                     isFuture={isFuture}
                     isHighlighted={!!highlightTransactionId && transaction.id === highlightTransactionId}
                     showFxColumns={showFxColumns}
+                    staleReason={
+                      staleContext
+                        ? classifyStaleRow(
+                            transaction.status,
+                            transaction.transactionDate,
+                            staleContext.lastReconciledByAccount.get(transaction.accountId) ?? null,
+                            staleContext.overdueBefore,
+                          ) ?? undefined
+                        : undefined
+                    }
                   />
                 </React.Fragment>
               );

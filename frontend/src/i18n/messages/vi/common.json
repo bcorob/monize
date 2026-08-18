@@ -143,7 +143,8 @@
     "nextDay": "Ngày tiếp theo",
     "previousDay": "Ngày trước",
     "nextMonth": "Tháng tiếp theo",
-    "previousMonth": "Tháng trước"
+    "previousMonth": "Tháng trước",
+    "partialDateHint": "Nhập một phần của ngày và phần còn lại sẽ được điền: ngày và tháng lấy theo năm hiện tại."
   },
   "accountTypes": {
     "CHEQUING": "Tài khoản thanh toán",

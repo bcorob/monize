@@ -33,7 +33,7 @@ vi.mock('@/lib/logger', () => ({
 }));
 
 vi.mock('@/hooks/useDateFormat', () => ({
-  useDateFormat: () => ({ formatDate: (d: string) => d, dateFormat: 'browser' }),
+  useDateFormat: () => ({ formatDate: (d: string) => d, dateFormat: 'browser', datePattern: 'YYYY-MM-DD' }),
 }));
 
 function makePayee(overrides: Partial<Payee> & { id: string; name: string }): Payee {

@@ -28,7 +28,15 @@
     "colCategory": "分类",
     "colAmount": "金额",
     "colStatus": "状态",
-    "finish": "完成对账"
+    "finish": "完成对账",
+    "colActions": "操作",
+    "selectRow": "选择 {payee} 的交易",
+    "groupByFlow": "按收入和支出分组",
+    "groupCredits": "收入 ({count})",
+    "groupDebits": "支出 ({count})",
+    "groupSubtotal": "分组小计 {amount}",
+    "addTransaction": "添加交易",
+    "lockedRow": "已锁定"
   },
   "status": {
     "cleared": "已结算",
@@ -53,6 +61,35 @@
     "differenceRequired": "差额必须为 {amount} 才能完成对账",
     "noneSelected": "未选择任何交易进行对账",
     "success": "{count, plural, one {成功对账 # 笔交易} other {成功对账 # 笔交易}}",
-    "reconcileFailed": "对账交易失败"
+    "reconcileFailed": "对账交易失败",
+    "deleted": "交易已删除",
+    "transferDeleted": "转账已删除",
+    "deleteFailed": "删除交易失败",
+    "voidStatus": "作废交易只能在交易表单中修改",
+    "statusFailed": "更改状态失败"
+  },
+  "form": {
+    "newTitle": "新建交易",
+    "editTitle": "编辑交易"
+  },
+  "delete": {
+    "title": "删除交易",
+    "message": "删除这笔交易？它将从账户和本次对账中移除。",
+    "transferTitle": "删除转账",
+    "transferMessage": "删除这笔转账？它的两边都会被移除，本账户和对方账户。"
+  },
+  "stale": {
+    "missedChip": "遗漏",
+    "missedTooltip": "这笔交易的日期不晚于你上次对账的对账单，因此那份对账单是在没有它的情况下完成对账的。",
+    "overdueChip": "逾期",
+    "overdueTooltip": "这笔交易等待对账已超过一个对账单周期。"
+  },
+  "reminder": {
+    "title": "对账",
+    "badgeLabel": "{count, plural, one {# 笔交易待对账} other {# 笔交易待对账}}",
+    "accountLine": "{count, plural, one {# 笔交易} other {# 笔交易}}，最早 {date}",
+    "missedLine": "{count, plural, one {# 笔被已对账的对账单遗漏} other {# 笔被已对账的对账单遗漏}}",
+    "overdueLine": "{count, plural, one {# 笔超过 {days} 天} other {# 笔超过 {days} 天}}",
+    "reconcileAction": "对账"
   }
 }

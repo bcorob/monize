@@ -8,6 +8,7 @@ import { DataSource } from "typeorm";
 import { TransactionTransferService } from "./transaction-transfer.service";
 import { Transaction, TransactionStatus } from "./entities/transaction.entity";
 import { TransactionSplit } from "./entities/transaction-split.entity";
+import { UserPreference } from "../users/entities/user-preference.entity";
 import { Category } from "../categories/entities/category.entity";
 import { AccountsService } from "../accounts/accounts.service";
 import { PayeesService } from "../payees/payees.service";
@@ -61,6 +62,7 @@ describe("TransactionTransferService", () => {
   let transactionsRepository: Record<string, jest.Mock>;
   let splitsRepository: Record<string, jest.Mock>;
   let categoriesRepository: Record<string, jest.Mock>;
+  let userPreferenceRepository: Record<string, jest.Mock>;
   let accountsService: Record<string, jest.Mock>;
   let payeesService: Record<string, jest.Mock>;
   let netWorthService: Record<string, jest.Mock>;
@@ -130,6 +132,13 @@ describe("TransactionTransferService", () => {
     categoriesRepository = {
       // Default: any category id resolves to an owned category.
       findOne: jest.fn().mockResolvedValue({ id: "cat-1", userId: "user-1" }),
+    };
+
+    userPreferenceRepository = {
+      findOne: jest.fn().mockResolvedValue({
+        userId: "user-1",
+        lockReconciledTransactions: false,
+      }),
     };
 
     accountsService = {
@@ -265,6 +274,10 @@ describe("TransactionTransferService", () => {
       [Transaction, transactionsRepository],
       [TransactionSplit, splitsRepository],
       [Category, categoriesRepository],
+      // The strict reconciled lock reads the caller's preference when either
+      // locked leg is RECONCILED. Default: off, which is what every existing
+      // user has and what these per-leg reconciliation tests describe.
+      [UserPreference, userPreferenceRepository],
     ]);
     mockDataSource = tenantMocks.dataSource;
 

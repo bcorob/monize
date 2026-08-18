@@ -56,7 +56,7 @@ vi.mock('@/lib/errors', () => ({
 }));
 
 vi.mock('@/hooks/useDateFormat', () => ({
-  useDateFormat: () => ({ formatDate: (d: string) => d, dateFormat: 'browser' }),
+  useDateFormat: () => ({ formatDate: (d: string) => d, dateFormat: 'browser', datePattern: 'YYYY-MM-DD' }),
 }));
 
 vi.mock('@/hooks/useNumberFormat', () => ({
@@ -368,7 +368,7 @@ describe('OverrideEditorDialog', () => {
   // --- Date override ---
   it('allows changing occurrence date', () => {
     render(<OverrideEditorDialog {...defaultProps} />);
-    const dateInput = screen.getByDisplayValue('2025-03-01');
+    const dateInput = screen.getByLabelText('Occurrence Date');
     expect(dateInput).toBeInTheDocument();
 
     fireEvent.change(dateInput, { target: { value: '2025-03-05' } });
@@ -385,7 +385,7 @@ describe('OverrideEditorDialog', () => {
     render(<OverrideEditorDialog {...defaultProps} existingOverride={existingOverride} />);
 
     // Change the date
-    const dateInput = screen.getByDisplayValue('2025-03-01');
+    const dateInput = screen.getByLabelText('Occurrence Date');
     fireEvent.change(dateInput, { target: { value: '2025-03-10' } });
 
     // Save
@@ -538,7 +538,7 @@ describe('OverrideEditorDialog', () => {
     render(<OverrideEditorDialog {...defaultProps} existingOverride={existingOverride} />);
 
     // Date should be set to override date
-    const dateInput = screen.getByDisplayValue('2025-03-05');
+    const dateInput = screen.getByLabelText('Occurrence Date');
     expect(dateInput).toBeInTheDocument();
 
     // Description should be set

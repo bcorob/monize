@@ -1164,6 +1164,16 @@ export class TransactionsController {
   // :id param route below, otherwise NestJS matches "reconcile" as an :id
   // value and returns a 400 (ParseUUIDPipe rejects non-UUID strings).
 
+  @Get("reconcile/stale")
+  @ApiOperation({
+    summary: "Accounts the user reconciles that have outstanding register rows",
+  })
+  @ApiResponse({ status: 200, description: "Stale reconciliation summary" })
+  @ApiResponse({ status: 401, description: "Unauthorized" })
+  getStaleUnreconciled(@Request() req) {
+    return this.transactionsService.getStaleUnreconciled(req.user.id);
+  }
+
   @Get("reconcile/:accountId")
   @ApiOperation({ summary: "Get reconciliation data for an account" })
   @ApiParam({ name: "accountId", description: "Account UUID" })

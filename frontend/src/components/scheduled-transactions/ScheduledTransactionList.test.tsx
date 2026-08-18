@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@/test/render';
 import { ScheduledTransactionList } from './ScheduledTransactionList';
 import toast from 'react-hot-toast';
+import { useDensityStore } from '@/store/densityStore';
 
 vi.mock('react-hot-toast', () => ({
   default: {
@@ -11,7 +12,7 @@ vi.mock('react-hot-toast', () => ({
 }));
 
 vi.mock('@/hooks/useDateFormat', () => ({
-  useDateFormat: () => ({ formatDate: (d: string) => d }),
+  useDateFormat: () => ({ dateFormat: 'browser', datePattern: 'YYYY-MM-DD', formatDate: (d: string) => d }),
 }));
 
 vi.mock('@/hooks/useNumberFormat', () => ({
@@ -1087,5 +1088,90 @@ describe('ScheduledTransactionList - foreign currency', () => {
   it('shows no second line for an ordinary schedule', () => {
     render(<ScheduledTransactionList transactions={[createTransaction()]} />);
     expect(screen.queryByText(/USD/)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * Issue #1203: the list had no density control at all, so every bill occupied
+ * roughly three lines and nothing could be done about it. The control itself
+ * lives on the Bills page, beside the List/Calendar and All/Bills/Deposits
+ * selectors (its tests are there); what belongs here is that the level the
+ * store holds for `bills` is what reaches the DOM.
+ */
+describe('ScheduledTransactionList - row density', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useDensityStore.setState({ densities: {} });
+  });
+
+  it.each([
+    ['normal', 'px-3 sm:px-6 py-4'],
+    ['compact', 'px-4 py-2'],
+    ['dense', 'px-3 py-1'],
+  ] as const)('uses the default scale at %s density', (level, expected) => {
+    useDensityStore.setState({ densities: { bills: level } });
+    render(<ScheduledTransactionList transactions={[createTransaction()]} />);
+
+    const cell = screen.getByText('Netflix').closest('td');
+    for (const cls of expected.split(' ')) {
+      expect(cell?.className, `${level}: ${cls}`).toContain(cls);
+    }
+  });
+
+  it('puts the payee beside the name at dense instead of under it', () => {
+    useDensityStore.setState({ densities: { bills: 'dense' } });
+    render(
+      <ScheduledTransactionList
+        transactions={[createTransaction({ payeeName: 'Netflix Inc' })]}
+      />,
+    );
+
+    // Same parent, laid out as a row: the three-line row the issue reported is
+    // one line at dense, and the payee is still on screen rather than dropped.
+    const name = screen.getByText('Netflix');
+    const payee = screen.getByText('Netflix Inc');
+    expect(payee.parentElement).toBe(name.parentElement);
+    expect(name.parentElement?.className).toContain('flex');
+  });
+
+  it('stacks the payee under the name at normal', () => {
+    render(
+      <ScheduledTransactionList
+        transactions={[createTransaction({ payeeName: 'Netflix Inc' })]}
+      />,
+    );
+
+    expect(screen.getByText('Netflix').parentElement?.className).not.toContain('flex');
+  });
+
+  it('stripes alternating rows once the padding between them is gone', () => {
+    useDensityStore.setState({ densities: { bills: 'compact' } });
+    render(
+      <ScheduledTransactionList
+        transactions={[
+          createTransaction({ id: 's1', name: 'First' }),
+          createTransaction({ id: 's2', name: 'Second' }),
+        ]}
+      />,
+    );
+
+    expect(screen.getByText('First').closest('tr')?.className).toContain('bg-white');
+    expect(screen.getByText('Second').closest('tr')?.className).toContain('bg-gray-50');
+  });
+
+  it('leaves an overdue row its own ground rather than striping it', () => {
+    useDensityStore.setState({ densities: { bills: 'compact' } });
+    render(
+      <ScheduledTransactionList
+        transactions={[
+          createTransaction({ id: 's1', name: 'First' }),
+          createTransaction({ id: 's2', name: 'Second', nextDueDate: pastDate(3) }),
+        ]}
+      />,
+    );
+
+    const overdue = screen.getByText('Second').closest('tr')!;
+    expect(overdue.className).toContain('bg-red-50');
+    expect(overdue.className).not.toContain('bg-gray-50');
   });
 });

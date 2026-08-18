@@ -5,6 +5,11 @@ import { QuestionMarkCircleIcon } from '@heroicons/react/24/outline';
 import { Input } from './Input';
 import { CalendarPopover } from './CalendarPopover';
 import { cn, getLocalDateString, formatDate, parseDateFromFormat, inputBaseClasses, inputErrorClasses } from '@/lib/utils';
+import {
+  TYPEABLE_DATE_SEPARATORS,
+  datePatternLiteralChars,
+  parseFlexibleDate,
+} from '@/lib/date-parse';
 import { useDateFormat } from '@/hooks/useDateFormat';
 
 interface DateInputProps extends InputHTMLAttributes<HTMLInputElement> {
@@ -12,6 +17,14 @@ interface DateInputProps extends InputHTMLAttributes<HTMLInputElement> {
   error?: string;
   onDateChange?: (date: string) => void;
 }
+
+/**
+ * Room for a date typed the long way round -- "September 14, 2026" is 18
+ * characters, and the pattern's own length (10) would cut it off mid-word.
+ * A bound is still worth having so a paste of a paragraph does not land in a
+ * date field, but it is no longer the pattern's.
+ */
+const MAX_TYPED_DATE_LENGTH = 24;
 
 function parseOrToday(value: string): Date {
   if (value) {
@@ -65,6 +78,9 @@ function DateShortcutTooltip() {
               <kbd className="font-mono">-</kbd><span>{t('dateInput.previousDay')}</span>
               <kbd className="font-mono">PgUp</kbd><span>{t('dateInput.nextMonth')}</span>
               <kbd className="font-mono">PgDn</kbd><span>{t('dateInput.previousMonth')}</span>
+            </span>
+            <span className="block mt-2 pt-2 border-t border-gray-200 dark:border-gray-600">
+              {t('dateInput.partialDateHint')}
             </span>
           </>
         </div>,
@@ -126,23 +142,15 @@ function resolveShortcutDate(key: string, currentValue: string): Date | null {
   }
 }
 
-// React-controlled inputs ignore direct .value assignments.
-// Use the native setter to bypass React and then dispatch a change event
-// so that both react-hook-form register() and controlled onChange handlers work.
-const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-  HTMLInputElement.prototype,
-  'value',
-)?.set;
-
 // Checks if a string looks like a YYYY-MM-DD date
 function isIsoDate(value: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
 
-// Parse a date format string (e.g. "DD/MM/YYYY") into the segments it contains
+// Parse a date pattern (e.g. "DD/MM/YYYY") into the segments it contains
 // together with the character range each segment occupies in a formatted date.
-// Used so desktop-formatted mode can map the cursor position back to a
-// day/month/year segment and adjust it with ArrowUp/ArrowDown.
+// Used so the text input can map the cursor position back to a day/month/year
+// segment and adjust it with ArrowUp/ArrowDown.
 type DateSegmentType = 'day' | 'month' | 'year';
 interface DateSegment {
   type: DateSegmentType;
@@ -178,27 +186,24 @@ function findSegmentAtCursor(format: string, cursor: number): DateSegment | null
   return segments.find(s => cursor >= s.start && cursor <= s.end) ?? null;
 }
 
-// Collect the literal separator characters of a format (everything that is not
-// a Y/M/D placeholder), e.g. "-" for YYYY-MM-DD or "/" for DD/MM/YYYY.
-function getFormatSeparators(format: string): Set<string> {
-  const separators = new Set<string>();
-  for (const ch of format) {
-    if (ch !== 'Y' && ch !== 'M' && ch !== 'D') separators.add(ch);
-  }
-  return separators;
-}
-
-// Return only characters that can legally appear in a value formatted with
-// `format` -- digits always, letters only when the format contains a month
-// name segment (MMM), and any separator that literally appears in the format.
-function stripInvalidFormatChars(text: string, format: string): string {
-  const allowsLetters = format.includes('MMM');
-  const separators = getFormatSeparators(format);
+/**
+ * Keep only characters that could belong to a typed date: letters (a month
+ * name), digits, any separator a person might reach for, and whatever literal
+ * the active pattern uses.
+ *
+ * Deliberately wider than the pattern itself. A user typing `9-14` into
+ * `MM/DD/YYYY` means the fourteenth of September, and stripping the `-`
+ * because the pattern spells its separator `/` turns that into `914`. The
+ * parser decides what the text means; this only keeps out what is not a date
+ * at all.
+ */
+function stripUntypeableChars(text: string, pattern: string): string {
+  const literals = datePatternLiteralChars(pattern);
   let result = '';
   for (const ch of text) {
-    if (/\d/.test(ch)) result += ch;
-    else if (allowsLetters && /[a-zA-Z]/.test(ch)) result += ch;
-    else if (separators.has(ch)) result += ch;
+    if (/[\p{L}\p{N}]/u.test(ch)) result += ch;
+    else if (TYPEABLE_DATE_SEPARATORS.has(ch)) result += ch;
+    else if (literals.has(ch)) result += ch;
   }
   return result;
 }
@@ -234,31 +239,43 @@ const calendarIconSvg = (
   </svg>
 );
 
-type InputMode = 'desktop-formatted' | 'desktop-browser' | 'touch-formatted' | 'touch-browser';
+/**
+ * Two input modes, and the split is the pointer, never the format.
+ *
+ * `browser` used to select a native `<input type="date">` on the desktop, which
+ * is why one date field in the app behaved unlike the next: the native control
+ * jumps between its own segments after two keystrokes, takes only the first two
+ * digits of a year typed into a partly-filled field, and cannot be handed
+ * `9-14` at all. Every desktop field is now the same text box reading the same
+ * pattern (issue #1201), with `browser` resolved to a real pattern upstream.
+ *
+ * Touch keeps the native picker, because a phone's date wheel is a better
+ * control than a text box and nobody types a date on one by choice.
+ */
+type InputMode = 'desktop' | 'touch';
 
-function getInputMode(dateFormat: string): InputMode {
-  const touch = isTouchDevice();
-  if (dateFormat === 'browser') return touch ? 'touch-browser' : 'desktop-browser';
-  return touch ? 'touch-formatted' : 'desktop-formatted';
+function getInputMode(): InputMode {
+  return isTouchDevice() ? 'touch' : 'desktop';
 }
 
 export const DateInput = forwardRef<HTMLInputElement, DateInputProps>(
   ({ onDateChange, onKeyDown, onChange: externalOnChange, onBlur: externalOnBlur, value: externalValue, label, id, name, ...props }, ref) => {
     const inputId = id || (label ? `input-${label.toLowerCase().replace(/\s+/g, '-')}` : undefined);
-    const { dateFormat } = useDateFormat();
-    const mode = getInputMode(dateFormat);
+    const { datePattern } = useDateFormat();
+    const mode = getInputMode();
 
-    // Internal YYYY-MM-DD value for desktop and touch-formatted modes
+    // Internal YYYY-MM-DD value; the display string is the same date rendered
+    // through the user's pattern.
     const [isoValue, setIsoValue] = useState<string>((externalValue as string) || '');
     const [displayValue, setDisplayValue] = useState(() => {
       const val = (externalValue as string) || '';
-      return val ? formatDate(val, dateFormat) : '';
+      return val ? formatDate(val, datePattern) : '';
     });
     const isFocusedRef = useRef(false);
     const localRef = useRef<HTMLInputElement>(null);
-    // Hidden native date input ref for touch-formatted mode
+    // Hidden native date input ref for touch mode
     const nativeDateRef = useRef<HTMLInputElement>(null);
-    // Visible text input ref for desktop-formatted mode
+    // Visible text input ref for desktop mode
     const textInputRef = useRef<HTMLInputElement>(null);
     // Segment range to re-select after emitDateChange re-renders the text input
     const pendingSelectionRef = useRef<[number, number] | null>(null);
@@ -271,11 +288,10 @@ export const DateInput = forwardRef<HTMLInputElement, DateInputProps>(
       else if (ref) (ref as React.MutableRefObject<HTMLInputElement | null>).current = node;
     }, [ref]);
 
-    // On mount in formatted modes, read the initial value from the DOM.
-    // react-hook-form sets defaultValues through the ref after mount, so we
-    // use a microtask to let it complete before reading.
+    // On mount, read the initial value from the DOM. react-hook-form sets
+    // defaultValues through the ref after mount, so we use a microtask to let
+    // it complete before reading.
     useEffect(() => {
-      if (mode === 'touch-browser' || mode === 'desktop-browser') return;
       // If we already have a value from props, nothing to do
       if (externalValue) return;
 
@@ -285,7 +301,7 @@ export const DateInput = forwardRef<HTMLInputElement, DateInputProps>(
         const domVal = node.value;
         if (domVal && isIsoDate(domVal)) {
           setIsoValue(domVal);
-          setDisplayValue(formatDate(domVal, dateFormat));
+          setDisplayValue(formatDate(domVal, datePattern));
         }
       };
 
@@ -296,44 +312,86 @@ export const DateInput = forwardRef<HTMLInputElement, DateInputProps>(
       const timer = setTimeout(readDomValue, 0);
       return () => clearTimeout(timer);
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [mode, dateFormat]);
+    }, [mode, datePattern]);
 
     // Sync explicit value prop changes to internal state. When the caller is
     // uncontrolled (RHF register, no value prop), externalValue is undefined
-    // and we skip -- the mount effect below reads the ref-injected DOM value
+    // and we skip -- the mount effect above reads the ref-injected DOM value
     // instead.
     useEffect(() => {
-      if (mode === 'touch-browser') return;
       if (externalValue === undefined) return;
       const newIso = (externalValue as string) || '';
       setIsoValue(newIso);
       if (!isFocusedRef.current) {
-        setDisplayValue(newIso ? formatDate(newIso, dateFormat) : '');
+        setDisplayValue(newIso ? formatDate(newIso, datePattern) : '');
       }
-    }, [externalValue, dateFormat, mode]);
+    }, [externalValue, datePattern]);
 
     // Emit a YYYY-MM-DD value change through all relevant callbacks
     const emitDateChange = useCallback((dateStr: string) => {
       setIsoValue(dateStr);
-      setDisplayValue(formatDate(dateStr, dateFormat));
+      setDisplayValue(formatDate(dateStr, datePattern));
       if (onDateChange) {
         onDateChange(dateStr);
       }
-    }, [onDateChange, dateFormat]);
+    }, [onDateChange, datePattern]);
 
-    // Keyboard shortcut handler (works in all modes)
+    /**
+     * Read the text on screen as a date: the canonical form first, then the
+     * lenient reading of what a person actually typed.
+     *
+     * A partial entry is completed from the value the field already holds, so
+     * `14` in a field showing September stays in September, and only falls back
+     * to today when the field is empty.
+     */
+    const parseTypedValue = useCallback((text: string): string | null => {
+      const strict = parseDateFromFormat(text, datePattern);
+      if (strict) return strict;
+      return parseFlexibleDate(text, datePattern, parseOrToday(isoValue));
+    }, [datePattern, isoValue]);
+
+    // Commit whatever is typed, then show it in canonical form. Returns true
+    // when the text named a date.
+    const commitTypedValue = useCallback((): boolean => {
+      const parsed = parseTypedValue(displayValue);
+      if (parsed) {
+        // A field that hands back its own value has not been edited. Blur runs
+        // on every tab-through, and `onDateChange` is not always just a setter
+        // -- the transactions filter switches its time period to Custom from
+        // it, and the transfer form re-resolves an exchange rate -- so a
+        // re-emit of the value already held is a change the user did not make.
+        // The display is still canonicalized: that part is presentation.
+        if (parsed === isoValue) {
+          setDisplayValue(formatDate(parsed, datePattern));
+        } else {
+          emitDateChange(parsed);
+        }
+        return true;
+      }
+      // Unreadable text is not a request to clear the field: put back what the
+      // field holds. An empty box is the only way to mean "no date".
+      if (!displayValue.trim() && isoValue) {
+        setIsoValue('');
+        onDateChange?.('');
+      } else if (isoValue) {
+        setDisplayValue(formatDate(isoValue, datePattern));
+      }
+      return false;
+    }, [parseTypedValue, displayValue, emitDateChange, isoValue, datePattern, onDateChange]);
+
+    // Keyboard shortcut handler (works in both modes)
     const handleKeyDown = useCallback((e: KeyboardEvent<HTMLInputElement>) => {
-      // Desktop-formatted segment navigation: ArrowUp/ArrowDown increments the
-      // day/month/year segment that the cursor is currently in, restoring the
-      // segment highlight after the re-render so repeated arrow presses keep
-      // stepping the same segment.
+      // Segment navigation: ArrowUp/ArrowDown increments the day/month/year
+      // segment that the cursor is currently in, restoring the segment
+      // highlight after the re-render so repeated arrow presses keep stepping
+      // the same segment.
       if (
-        mode === 'desktop-formatted'
+        mode === 'desktop'
         && (e.key === 'ArrowUp' || e.key === 'ArrowDown')
         && isoValue
       ) {
         const cursor = e.currentTarget.selectionStart ?? 0;
-        const segment = findSegmentAtCursor(dateFormat, cursor);
+        const segment = findSegmentAtCursor(datePattern, cursor);
         if (segment) {
           e.preventDefault();
           const delta = e.key === 'ArrowUp' ? 1 : -1;
@@ -344,43 +402,41 @@ export const DateInput = forwardRef<HTMLInputElement, DateInputProps>(
         }
       }
 
-      // In desktop-formatted mode the user types the date by hand, so a key that
-      // is a literal separator in the active format (e.g. "-" in YYYY-MM-DD)
-      // must be inserted as text rather than hijacked by a day-step shortcut --
-      // but only while the date is incomplete. Once a full, canonical date is
-      // shown, that same key resumes its shortcut role (e.g. "-" steps the day
-      // back), since there is nothing left to type. The +/- shortcuts are
-      // unaffected for formats that do not use the character as a separator.
-      const isCompleteDate = !!isoValue && displayValue === formatDate(isoValue, dateFormat);
-      if (
-        mode === 'desktop-formatted'
-        && !isCompleteDate
-        && getFormatSeparators(dateFormat).has(e.key)
-      ) {
+      const isCompleteDate = !!isoValue && displayValue === formatDate(isoValue, datePattern);
+
+      // Enter finishes the entry the way blurring does, so a partial date is
+      // the date the form submits rather than the text left over from typing
+      // it. Not prevented: the form's own Enter handling still runs, and by
+      // then the parsed value has already gone out through onDateChange.
+      if (mode === 'desktop' && e.key === 'Enter' && !isCompleteDate) {
+        commitTypedValue();
         onKeyDown?.(e);
         return;
       }
 
-      const isFormatted = mode === 'desktop-formatted' || mode === 'touch-formatted';
-      const currentIso = isFormatted ? isoValue : e.currentTarget.value;
+      // While a date is being typed, a character that could be part of one is
+      // text, not a shortcut: `-` in `9-14`, `.` in `14.9`, a letter in `Sep`.
+      // Once a full canonical date is shown there is nothing left to type, so
+      // those keys resume their shortcut role (`-` steps the day back).
+      const couldBeTypedDateChar =
+        TYPEABLE_DATE_SEPARATORS.has(e.key)
+        || datePatternLiteralChars(datePattern).has(e.key)
+        || (e.key.length === 1 && /\p{L}/u.test(e.key));
+      if (mode === 'desktop' && !isCompleteDate && displayValue && couldBeTypedDateChar) {
+        onKeyDown?.(e);
+        return;
+      }
+
+      const currentIso = mode === 'desktop' ? isoValue : e.currentTarget.value;
       const newDate = resolveShortcutDate(e.key, currentIso);
 
       if (newDate) {
         e.preventDefault();
-        const dateStr = getLocalDateString(newDate);
-
-        if (isFormatted) {
-          emitDateChange(dateStr);
-        } else if (onDateChange) {
-          onDateChange(dateStr);
-        } else {
-          nativeInputValueSetter?.call(e.currentTarget, dateStr);
-          e.currentTarget.dispatchEvent(new Event('input', { bubbles: true }));
-        }
+        emitDateChange(getLocalDateString(newDate));
       }
 
       onKeyDown?.(e);
-    }, [mode, isoValue, displayValue, dateFormat, emitDateChange, onDateChange, onKeyDown]);
+    }, [mode, isoValue, displayValue, datePattern, emitDateChange, commitTypedValue, onKeyDown]);
 
     // Restore a segment highlight after the controlled text input re-renders
     // with a new displayValue.
@@ -393,21 +449,25 @@ export const DateInput = forwardRef<HTMLInputElement, DateInputProps>(
       pendingSelectionRef.current = null;
     }, [displayValue]);
 
-    // Desktop text mode: handle user typing in the formatted input. Strip any
-    // character that can't appear in the format so users can't enter letters
-    // in MM/DD/YYYY or the like. maxLength on the input handles the
-    // "too-long" case at the DOM level.
+    // Desktop: handle user typing in the formatted input. Strip anything that
+    // could not be part of a date, so a stray character cannot land in the box.
     //
     // Deliberately does NOT reformat displayValue when parsing succeeds --
     // otherwise an unpadded intermediate like "12/3/2026" would be rewritten
     // to "12/03/2026" in the middle of a "12/03/2026" -> "12/23/2026" edit
     // and the user's next keystroke would land in the wrong place. The blur
     // handler applies the canonical format once editing is done.
+    //
+    // Only a *complete* date is reported while typing. The lenient reading of a
+    // partial entry waits for blur or Enter: `9` is a valid day on its own, and
+    // announcing the ninth of the month the moment it is typed would send the
+    // parent -- a report reloading on every date change -- off after a date
+    // nobody asked for.
     const handleTextChange = useCallback((e: ChangeEvent<HTMLInputElement>) => {
-      const text = stripInvalidFormatChars(e.target.value, dateFormat);
+      const text = stripUntypeableChars(e.target.value, datePattern);
       setDisplayValue(text);
 
-      const parsed = parseDateFromFormat(text, dateFormat);
+      const parsed = parseDateFromFormat(text, datePattern);
       if (parsed) {
         setIsoValue(parsed);
         onDateChange?.(parsed);
@@ -415,20 +475,14 @@ export const DateInput = forwardRef<HTMLInputElement, DateInputProps>(
         setIsoValue('');
         onDateChange?.('');
       }
-    }, [dateFormat, onDateChange]);
+    }, [datePattern, onDateChange]);
 
-    // Desktop text mode: reformat on blur
+    // Desktop: complete and reformat on blur
     const handleTextBlur = useCallback((e: React.FocusEvent<HTMLInputElement>) => {
       isFocusedRef.current = false;
-      const parsed = parseDateFromFormat(displayValue, dateFormat);
-      if (parsed) {
-        setDisplayValue(formatDate(parsed, dateFormat));
-        emitDateChange(parsed);
-      } else if (isoValue) {
-        setDisplayValue(formatDate(isoValue, dateFormat));
-      }
+      commitTypedValue();
       externalOnBlur?.(e);
-    }, [displayValue, dateFormat, isoValue, emitDateChange, externalOnBlur]);
+    }, [commitTypedValue, externalOnBlur]);
 
     const handleTextFocus = useCallback(() => {
       isFocusedRef.current = true;
@@ -472,13 +526,13 @@ export const DateInput = forwardRef<HTMLInputElement, DateInputProps>(
       </div>
     );
 
-    // --- Touch + custom format mode ---
+    // --- Touch mode ---
     // The user sees the date in their preferred format, but the actual
     // interactive element is a transparent native date input layered on top.
     // Letting the user tap directly into the native input is the only reliable
     // way to open the picker on iPad WebKit -- programmatic showPicker() on a
     // hidden input fails silently there.
-    if (mode === 'touch-formatted') {
+    if (mode === 'touch') {
       return (
         <div className="w-full">
           {labelBlock}
@@ -494,7 +548,7 @@ export const DateInput = forwardRef<HTMLInputElement, DateInputProps>(
                 !displayValue && 'text-gray-400 dark:text-gray-500',
               )}
             >
-              {displayValue || dateFormat}
+              {displayValue || datePattern}
             </div>
             {/* Calendar icon overlay (visual only, taps pass through) */}
             <span
@@ -536,132 +590,54 @@ export const DateInput = forwardRef<HTMLInputElement, DateInputProps>(
       );
     }
 
-    // Calendar icon + popover shared by both desktop modes
-    const calendarButton = (
-      <button
-        type="button"
-        tabIndex={-1}
-        onClick={handleCalendarClick}
-        aria-label="Open date picker"
-        className="absolute top-px bottom-px right-px z-10 flex items-center pr-2.5 pl-1 bg-white dark:bg-gray-800 rounded-r-md text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
-      >
-        {calendarIconSvg}
-      </button>
-    );
-
-    // --- Desktop + custom format mode ---
-    // Visible text input displays the date in the user's chosen format
+    // --- Desktop mode ---
+    // Visible text input displays the date in the user's pattern
     // (e.g. DD/MM/YYYY). A hidden input holds the canonical YYYY-MM-DD value
     // and is bound to react-hook-form via the forwarded ref.
-    if (mode === 'desktop-formatted') {
-      return (
-        <div className="w-full">
-          {labelBlock}
-          <div className="relative" ref={calendarAnchorRef}>
-            <Input
-              ref={textInputRef}
-              id={inputId}
-              type="text"
-              value={displayValue}
-              onChange={handleTextChange}
-              onFocus={handleTextFocus}
-              onBlur={handleTextBlur}
-              onKeyDown={handleKeyDown}
-              error={props.error}
-              placeholder={dateFormat}
-              maxLength={dateFormat.length}
-              className="pr-9"
-              {...props}
-            />
-            {calendarButton}
-            {showCalendar && (
-              <CalendarPopover
-                value={isoValue}
-                onSelect={handleCalendarSelect}
-                onClose={handleCalendarClose}
-                anchorRef={calendarAnchorRef}
-              />
-            )}
-            {/* Hidden input bound to react-hook-form for value/ref management */}
-            <input
-              ref={mergedRef}
-              type="hidden"
-              name={name}
-              value={isoValue}
-              readOnly
-            />
-          </div>
-        </div>
-      );
-    }
-
-    // --- Desktop + browser-locale mode ---
-    // Native date input (supports arrow-key segment navigation) with the
-    // browser's built-in picker icon hidden, replaced by CalendarPopover.
-    if (mode === 'desktop-browser') {
-      return (
-        <div className="w-full">
-          {labelBlock}
-          <div className="relative" ref={calendarAnchorRef}>
-            <Input
-              ref={ref}
-              id={inputId}
-              type="date"
-              value={externalValue}
-              onChange={(e) => {
-                externalOnChange?.(e);
-                if (e.target.value) onDateChange?.(e.target.value);
-              }}
-              onBlur={externalOnBlur}
-              onKeyDown={handleKeyDown}
-              error={props.error}
-              className="pr-9 date-picker-hide"
-              name={name}
-              {...props}
-            />
-            {calendarButton}
-            {showCalendar && (
-              <CalendarPopover
-                value={(externalValue as string) || ''}
-                onSelect={(date) => {
-                  if (onDateChange) onDateChange(date);
-                  externalOnChange?.({ target: { value: date } } as ChangeEvent<HTMLInputElement>);
-                }}
-                onClose={handleCalendarClose}
-                anchorRef={calendarAnchorRef}
-              />
-            )}
-          </div>
-        </div>
-      );
-    }
-
-    // --- Touch browser mode ---
-    // Native date input using the browser's locale format with native picker.
-    // The calendar icon is a visual overlay only -- pointer-events-none lets
-    // taps fall through to the input, which opens the picker via user gesture.
     return (
       <div className="w-full">
         {labelBlock}
-        <div className="relative">
+        <div className="relative" ref={calendarAnchorRef}>
           <Input
-            ref={ref}
+            ref={textInputRef}
             id={inputId}
-            type="date"
-            value={externalValue}
-            onChange={externalOnChange}
-            onBlur={externalOnBlur}
+            type="text"
+            value={displayValue}
+            onChange={handleTextChange}
+            onFocus={handleTextFocus}
+            onBlur={handleTextBlur}
             onKeyDown={handleKeyDown}
-            className="pr-10"
-            name={name}
+            error={props.error}
+            placeholder={datePattern}
+            maxLength={MAX_TYPED_DATE_LENGTH}
+            className="pr-9"
             {...props}
           />
-          <span
-            aria-hidden="true"
-            className="absolute inset-y-0 right-3 flex items-center text-gray-400 dark:text-gray-500 pointer-events-none"
+          <button
+            type="button"
+            tabIndex={-1}
+            onClick={handleCalendarClick}
+            aria-label="Open date picker"
+            className="absolute top-px bottom-px right-px z-10 flex items-center pr-2.5 pl-1 bg-white dark:bg-gray-800 rounded-r-md text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
           >
             {calendarIconSvg}
-          </span>
+          </button>
+          {showCalendar && (
+            <CalendarPopover
+              value={isoValue}
+              onSelect={handleCalendarSelect}
+              onClose={handleCalendarClose}
+              anchorRef={calendarAnchorRef}
+            />
+          )}
+          {/* Hidden input bound to react-hook-form for value/ref management */}
+          <input
+            ref={mergedRef}
+            type="hidden"
+            name={name}
+            value={isoValue}
+            readOnly
+          />
         </div>
       </div>
     );

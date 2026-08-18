@@ -28,7 +28,15 @@
     "colCategory": "Categorie",
     "colAmount": "Bedrag",
     "colStatus": "Status",
-    "finish": "Afstemming voltooien"
+    "finish": "Afstemming voltooien",
+    "colActions": "Acties",
+    "selectRow": "Transactie voor {payee} selecteren",
+    "groupByFlow": "Groeperen op inkomend en uitgaand",
+    "groupCredits": "Inkomend ({count})",
+    "groupDebits": "Uitgaand ({count})",
+    "groupSubtotal": "Subtotaal groep {amount}",
+    "addTransaction": "Transactie toevoegen",
+    "lockedRow": "Vergrendeld"
   },
   "status": {
     "cleared": "Bevestigd",
@@ -53,6 +61,35 @@
     "differenceRequired": "Het verschil moet {amount} zijn om de afstemming te voltooien",
     "noneSelected": "Geen transacties geselecteerd voor afstemming",
     "success": "{count, plural, one {# transactie succesvol afgestemd} other {# transacties succesvol afgestemd}}",
-    "reconcileFailed": "Transacties afstemmen mislukt"
+    "reconcileFailed": "Transacties afstemmen mislukt",
+    "deleted": "Transactie verwijderd",
+    "transferDeleted": "Overboeking verwijderd",
+    "deleteFailed": "Transactie verwijderen mislukt",
+    "voidStatus": "Een ongeldige transactie kan alleen via het transactieformulier worden gewijzigd",
+    "statusFailed": "Status wijzigen mislukt"
+  },
+  "form": {
+    "newTitle": "Nieuwe transactie",
+    "editTitle": "Transactie bewerken"
+  },
+  "delete": {
+    "title": "Transactie verwijderen",
+    "message": "Deze transactie verwijderen? Ze wordt uit de rekening en uit deze afstemming verwijderd.",
+    "transferTitle": "Overboeking verwijderen",
+    "transferMessage": "Deze overboeking verwijderen? Beide kanten worden verwijderd, in deze rekening en in de andere."
+  },
+  "stale": {
+    "missedChip": "Gemist",
+    "missedTooltip": "Deze transactie is gedateerd op of vóór het laatste afgestemde afschrift, dus dat afschrift is zonder haar afgestemd.",
+    "overdueChip": "Achterstallig",
+    "overdueTooltip": "Deze transactie wacht al langer dan een afschriftcyclus op afstemming."
+  },
+  "reminder": {
+    "title": "Afstemming",
+    "badgeLabel": "{count, plural, one {# transactie wacht op afstemming} other {# transacties wachten op afstemming}}",
+    "accountLine": "{count, plural, one {# transactie} other {# transacties}}, oudste {date}",
+    "missedLine": "{count, plural, one {# ontbreekt in een afgestemd afschrift} other {# ontbreken in afgestemde afschriften}}",
+    "overdueLine": "{count, plural, one {# ouder dan {days} dagen} other {# ouder dan {days} dagen}}",
+    "reconcileAction": "Afstemmen"
   }
 }

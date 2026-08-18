@@ -295,7 +295,7 @@ vi.mock('@/lib/categoryUtils', () => ({
 }));
 
 vi.mock('@/hooks/useDateFormat', () => ({
-  useDateFormat: () => ({ formatDate: (d: string) => d, dateFormat: 'browser' }),
+  useDateFormat: () => ({ formatDate: (d: string) => d, dateFormat: 'browser', datePattern: 'YYYY-MM-DD' }),
 }));
 
 vi.mock('@/lib/logger', () => ({
@@ -1968,13 +1968,13 @@ describe('TransactionForm', () => {
   // =========================================================================
 
   describe('date field rendering', () => {
-    it('renders date input with type="date"', async () => {
+    it('renders the date field as the shared text input, not a native date box', async () => {
       render(<TransactionForm onSuccess={mockOnSuccess} onCancel={mockOnCancel} />);
 
       await waitFor(() => {
         const dateInput = screen.getByLabelText('Date');
         expect(dateInput).toBeInTheDocument();
-        expect(dateInput).toHaveAttribute('type', 'date');
+        expect(dateInput).toHaveAttribute('type', 'text');
       });
     });
 
@@ -2053,7 +2053,7 @@ describe('TransactionForm', () => {
       await waitFor(() => {
         const dateInput = screen.getByLabelText('Date');
         expect(dateInput).toBeInTheDocument();
-        expect(dateInput).toHaveAttribute('type', 'date');
+        expect(dateInput).toHaveAttribute('type', 'text');
       });
     });
 
@@ -2069,7 +2069,7 @@ describe('TransactionForm', () => {
       await waitFor(() => {
         const dateInput = screen.getByLabelText('Date');
         expect(dateInput).toBeInTheDocument();
-        expect(dateInput).toHaveAttribute('type', 'date');
+        expect(dateInput).toHaveAttribute('type', 'text');
       });
     });
   });

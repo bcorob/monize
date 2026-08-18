@@ -28,7 +28,15 @@
     "colCategory": "Categoria",
     "colAmount": "Importo",
     "colStatus": "Stato",
-    "finish": "Completa riconciliazione"
+    "finish": "Completa riconciliazione",
+    "colActions": "Azioni",
+    "selectRow": "Seleziona la transazione di {payee}",
+    "groupByFlow": "Raggruppa per entrate e uscite",
+    "groupCredits": "Entrate ({count})",
+    "groupDebits": "Uscite ({count})",
+    "groupSubtotal": "Subtotale del gruppo {amount}",
+    "addTransaction": "Aggiungi transazione",
+    "lockedRow": "Bloccata"
   },
   "status": {
     "cleared": "Compensata",
@@ -53,6 +61,35 @@
     "differenceRequired": "La differenza deve essere {amount} per completare la riconciliazione",
     "noneSelected": "Nessuna transazione selezionata per la riconciliazione",
     "success": "{count, plural, one {# transazione riconciliata con successo} other {# transazioni riconciliate con successo}}",
-    "reconcileFailed": "Riconciliazione transazioni non riuscita"
+    "reconcileFailed": "Riconciliazione transazioni non riuscita",
+    "deleted": "Transazione eliminata",
+    "transferDeleted": "Trasferimento eliminato",
+    "deleteFailed": "Impossibile eliminare la transazione",
+    "voidStatus": "Una transazione annullata può essere modificata solo dal modulo della transazione",
+    "statusFailed": "Impossibile cambiare lo stato"
+  },
+  "form": {
+    "newTitle": "Nuova transazione",
+    "editTitle": "Modifica transazione"
+  },
+  "delete": {
+    "title": "Elimina transazione",
+    "message": "Eliminare questa transazione? Verrà rimossa dal conto e da questa riconciliazione.",
+    "transferTitle": "Elimina trasferimento",
+    "transferMessage": "Eliminare questo trasferimento? Entrambi i lati vengono rimossi, in questo conto e nell'altro."
+  },
+  "stale": {
+    "missedChip": "Omessa",
+    "missedTooltip": "Questa transazione ha una data pari o precedente all'ultimo estratto conto riconciliato, quindi quell'estratto conto è stato riconciliato senza di essa.",
+    "overdueChip": "In ritardo",
+    "overdueTooltip": "Questa transazione attende di essere riconciliata da più di un ciclo di estratto conto."
+  },
+  "reminder": {
+    "title": "Riconciliazione",
+    "badgeLabel": "{count, plural, one {# transazione in attesa di riconciliazione} other {# transazioni in attesa di riconciliazione}}",
+    "accountLine": "{count, plural, one {# transazione} other {# transazioni}}, la più vecchia {date}",
+    "missedLine": "{count, plural, one {# omessa da un estratto conto riconciliato} other {# omesse da estratti conto riconciliati}}",
+    "overdueLine": "{count, plural, one {# più vecchia di {days} giorni} other {# più vecchie di {days} giorni}}",
+    "reconcileAction": "Riconcilia"
   }
 }

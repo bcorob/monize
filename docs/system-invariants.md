@@ -60,6 +60,7 @@ guessing -- see INV-AUTH-004.
 | INV-HOLDING-001 | A holding equals a deterministic replay of the investment ledger | unenforced |
 | INV-HOLDING-002 | Every view replays the ledger the same way | unenforced |
 | INV-TRANSFER-001 | A transfer's two legs share one status and one balance decision | unenforced |
+| INV-RECONCILE-001 | While the strict lock is on, a reconciled transaction is not altered | partial |
 | INV-FX-001 | An unavailable rate never becomes 1:1 | unenforced |
 | INV-OCCURRENCE-001 | One scheduled occurrence has at most one financial effect | unenforced |
 | INV-OCCURRENCE-002 | A stored override price survives reopening | unenforced |
@@ -297,6 +298,73 @@ Required tests      Per status-changing endpoint, assert both legs moved and bot
                     balances are consistent. Include the split-transfer variant,
                     which links through the split parent, not a mirror leg.
 Status              unenforced
+```
+
+### INV-RECONCILE-001 -- while the strict lock is on, a reconciled transaction is not altered
+
+```text
+Statement           While user_preferences.lock_reconciled_transactions is true,
+                    no request may change a RECONCILED transaction of that user:
+                    not its fields, not its splits, not its existence, and not
+                    its status -- unreconciling included, since an escape hatch
+                    one click from the row is not a lock. Turning the preference
+                    off is the only way through, and that is a deliberate
+                    decision about the whole ledger rather than an accident on
+                    one row.
+Source of truth     transactions.status, read from the row locked by the writing
+                    transaction; user_preferences.lock_reconciled_transactions
+                    for whether the lock applies.
+Enforcement         assertReconciledRowsMutable / assertReconciledIdsMutable
+                    (backend/src/transactions/reconciled-lock.util.ts), called
+                    inside each mutation's own withScopedDb, after the row lock
+                    and before the first write.
+                    backend/src/transactions/reconciled-lock.guard.spec.ts
+                    enumerates the covered entry points, extracts each method's
+                    body and fails when one stops asking -- and separately fails
+                    when an assertion sits before its transaction opens.
+                    Covered: TransactionsService.update / remove,
+                    TransactionReconciliationService.applyStatusTransition (the
+                    resolver behind clear / reconcile / unreconcile and
+                    PATCH :id/status) and its bulkReconcile,
+                    TransactionTransferService.removeTransfer /
+                    updateTransfer, TransactionBulkUpdateService.bulkUpdate /
+                    bulkDelete, TransactionSplitService.updateSplits / addSplit /
+                    removeSplit. The AI assistant, the MCP tools and the joint
+                    register reach the ledger through these same methods, so they
+                    inherit the refusal rather than needing their own.
+                    NOT covered, and this is why the status is `partial`:
+                    - action-history.service.ts (undo / redo) writes prior field
+                      values straight onto a transaction row. An undo of an older
+                      action can therefore alter a row that has since been
+                      reconciled.
+                    - investment-transactions.service.ts recomputes a split
+                      parent's amount when an embedded investment row changes,
+                      and writes it without consulting the lock.
+                    - The backup restore is deliberately exempt: it rewrites the
+                      whole ledger under withPreserveTimestamps, and a
+                      per-row refusal there would produce a half-restored
+                      database, which is worse than the thing the lock prevents.
+Concurrency scope   per transaction row, under the same lock as the write
+Retry semantics     A refusal is terminal, not retryable: the answer does not
+                    change until the user changes the preference. Nothing is
+                    written, so a client retry is harmless.
+Crash semantics     Not applicable -- the guard writes nothing. A crash before
+                    commit rolls back the whole mutation, guard included.
+Failure response    409 Conflict, errors.transactions.reconciledLocked
+Required tests      Unit: the guard refuses on a reconciled row, allows the same
+                    write with the lock off, refuses a mixed set on the strength
+                    of one reconciled row, and does not read the preference when
+                    no row is reconciled
+                    (backend/src/transactions/reconciled-lock.util.spec.ts).
+                    Service: a refusal leaves the row and the balance untouched
+                    (backend/src/transactions/transaction-reconciliation.service.spec.ts,
+                    "the strict reconciled lock"). Source scan: every listed
+                    entry point still asks, inside its transaction
+                    (backend/src/transactions/reconciled-lock.guard.spec.ts).
+                    Still owed: a two-connection test that the refusal holds
+                    against a concurrent write, and coverage of the two
+                    uncovered paths above.
+Status              partial
 ```
 
 ### INV-FX-001 -- an unavailable rate is not 1:1

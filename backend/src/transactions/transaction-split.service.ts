@@ -27,6 +27,7 @@ import { validateSplitAmountSum } from "../common/split-amount.util";
 import { tr } from "../i18n/translate";
 import { withScopedDb } from "../common/db/scoped-db";
 import { lockTransactionRow, lockTransactionRows } from "../common/db/locks";
+import { assertReconciledRowsMutable } from "./reconciled-lock.util";
 import { removeLockedTransactionLeg } from "./remove-transaction-leg";
 
 function inferSplitKind(split: CreateTransactionSplitDto): SplitKind {
@@ -852,6 +853,10 @@ export class TransactionSplitService {
           ),
         );
       }
+      // Strict reconciled lock: replacing a reconciled parent's split set
+      // rewrites the row the statement was matched against.
+      await assertReconciledRowsMutable(m, userId, [parent]);
+
       this.validateSplits(splits, parent.amount);
 
       for (const acc of await this.deleteSplitSideEffects(
@@ -968,6 +973,9 @@ export class TransactionSplitService {
           ),
         );
       }
+
+      // Strict reconciled lock, before the split set is read or written.
+      await assertReconciledRowsMutable(m, userId, [parent]);
 
       const existingSplits = await m.getRepository(TransactionSplit).find({
         where: { transactionId: transaction.id },
@@ -1152,6 +1160,9 @@ export class TransactionSplitService {
           ),
         );
       }
+
+      // Strict reconciled lock, before the split is read or removed.
+      await assertReconciledRowsMutable(m, userId, [lockedParent]);
 
       const split = await m.getRepository(TransactionSplit).findOne({
         where: { id: splitId, transactionId: transaction.id },

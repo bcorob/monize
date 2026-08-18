@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
 import { useTranslations } from 'next-intl';
@@ -12,16 +13,33 @@ import { Button } from '@/components/ui/Button';
 import { DateInput } from '@/components/ui/DateInput';
 import { CurrencyInput } from '@/components/ui/CurrencyInput';
 import { Select } from '@/components/ui/Select';
+import { Modal } from '@/components/ui/Modal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
+import { UnsavedChangesDialog } from '@/components/ui/UnsavedChangesDialog';
+import { ReconcileTable } from '@/components/reconcile/ReconcileTable';
+import { sumAmounts, type ReconcileSortField } from '@/components/reconcile/reconcile-rows';
 import { transactionsApi } from '@/lib/transactions';
 import { scheduledTransactionsApi } from '@/lib/scheduled-transactions';
 import { getLocalDateString } from '@/lib/utils';
 import { accountsApi } from '@/lib/accounts';
 import { Account } from '@/types/account';
 import { ScheduledTransaction } from '@/types/scheduled-transaction';
-import { ReconciliationData, TransactionStatus } from '@/types/transaction';
+import { ReconciliationData, Transaction, TransactionStatus } from '@/types/transaction';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
+import { useSortableTable } from '@/hooks/useSortableTable';
+import { useLocalStorage } from '@/hooks/useLocalStorage';
+import { useFormModal } from '@/hooks/useFormModal';
+import { usePreferencesStore } from '@/store/preferencesStore';
+import { nextCycleStatus } from '@/lib/transaction-status-cycle';
 import { getCurrencySymbol } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errors';
+import { notifyReconciliationChanged } from '@/lib/reconciliationSignal';
+
+const TransactionForm = dynamic(
+  () => import('@/components/transactions/TransactionForm').then((m) => m.TransactionForm),
+  { ssr: false },
+);
 
 const LIABILITY_TYPES = new Set(['CREDIT_CARD', 'LOAN', 'MORTGAGE', 'LINE_OF_CREDIT']);
 
@@ -30,7 +48,25 @@ const LIABILITY_TYPES = new Set(['CREDIT_CARD', 'LOAN', 'MORTGAGE', 'LINE_OF_CRE
 // mortgages have fixed payments and are intentionally excluded.
 const PAYMENT_PROMPT_TYPES = new Set(['CREDIT_CARD', 'LINE_OF_CREDIT']);
 
+const SORT_STORAGE_KEY = 'reconcile.sort';
+const GROUP_STORAGE_KEY = 'reconcile.groupByFlow';
+
 type ReconcileStep = 'setup' | 'reconcile' | 'complete';
+
+/**
+ * Everything that changes what a reconciliation response *means*.
+ *
+ * A payload without it cannot be told from the previous account's, so the
+ * reload below adopts a response only while the key it was issued under is
+ * still the key on screen.
+ */
+function reconciliationKey(
+  accountId: string,
+  statementDate: string,
+  statementBalance: number | undefined,
+): string {
+  return `${accountId}|${statementDate}|${statementBalance ?? ''}`;
+}
 
 export default function ReconcilePage() {
   return (
@@ -47,6 +83,9 @@ function ReconcileContent() {
   const searchParams = useSearchParams();
   const preselectedAccountId = searchParams.get('accountId');
   const { formatCurrency: formatCurrencyBase, defaultCurrency } = useNumberFormat();
+  const reconciledLocked = usePreferencesStore(
+    (s) => s.preferences?.lockReconciledTransactions ?? false,
+  );
 
   const [step, setStep] = useState<ReconcileStep>('setup');
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -59,9 +98,31 @@ function ReconcileContent() {
   const [selectedTransactionIds, setSelectedTransactionIds] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(false);
   const [isReconciling, setIsReconciling] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Transaction | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   // Post-reconciliation liability-payment prompt: the scheduled bill (if any)
   // that pays down the reconciled liability account.
   const [paymentBill, setPaymentBill] = useState<ScheduledTransaction | null>(null);
+
+  const { sortField, sortDirection, handleSort } = useSortableTable<ReconcileSortField>(
+    SORT_STORAGE_KEY,
+    { field: 'date', direction: 'asc' },
+  );
+  const [groupByFlow, setGroupByFlow] = useLocalStorage<boolean>(GROUP_STORAGE_KEY, false);
+
+  const transactionModal = useFormModal<Transaction>();
+  const { close: closeTransactionModal } = transactionModal;
+
+  // The key the payload on screen was loaded under. A reload adopts its
+  // response only while this still matches, so a response for the account the
+  // user has left cannot replace the one they are looking at.
+  const activeKey = reconciliationKey(selectedAccountId, statementDate, statementBalance);
+  const activeKeyRef = useRef(activeKey);
+  // Synced in an effect rather than assigned during render: a render React
+  // discards must not leave the ref describing a selection that never appeared.
+  useEffect(() => {
+    activeKeyRef.current = activeKey;
+  }, [activeKey]);
 
   // Load accounts
   useEffect(() => {
@@ -144,6 +205,87 @@ function ReconcileContent() {
     }
   };
 
+  /**
+   * Refetch the list after a write from inside the reconcile step.
+   *
+   * Selection is carried across by id: a row the user had ticked stays ticked
+   * if it is still listed, a row that has gone (deleted, or edited past the
+   * statement date) drops out rather than leaving a phantom in the selected
+   * total, and a row that has newly appeared is ticked only when it arrives
+   * CLEARED -- the same rule the initial load uses, so an added transaction
+   * behaves the way one already on the statement would.
+   */
+  const reloadReconciliationData = useCallback(async () => {
+    if (statementBalance === undefined) return;
+    const originKey = reconciliationKey(selectedAccountId, statementDate, statementBalance);
+    try {
+      const data = await transactionsApi.getReconciliationData(
+        selectedAccountId,
+        statementDate,
+        statementBalance,
+      );
+      if (activeKeyRef.current !== originKey) return;
+      setReconciliationData(data);
+      // The header reminder counts outstanding rows across every account, and
+      // an add, a delete or a status change here moves that count.
+      notifyReconciliationChanged();
+      setSelectedTransactionIds((prev) => {
+        const next = new Set<string>();
+        for (const transaction of data.transactions) {
+          const wasListed = prev.has(transaction.id);
+          if (wasListed || transaction.status === TransactionStatus.CLEARED) {
+            next.add(transaction.id);
+          }
+        }
+        return next;
+      });
+    } catch (error) {
+      toast.error(getErrorMessage(error, t('toasts.loadDataFailed')));
+    }
+  }, [selectedAccountId, statementDate, statementBalance, t]);
+
+  const handleFormSuccess = useCallback(async () => {
+    closeTransactionModal();
+    await reloadReconciliationData();
+  }, [closeTransactionModal, reloadReconciliationData]);
+
+  const handleDeleteConfirm = useCallback(async () => {
+    if (!deleteTarget || isDeleting) return;
+    setIsDeleting(true);
+    try {
+      if (deleteTarget.isTransfer) {
+        await transactionsApi.deleteTransfer(deleteTarget.id);
+        toast.success(t('toasts.transferDeleted'));
+      } else {
+        await transactionsApi.delete(deleteTarget.id);
+        toast.success(t('toasts.deleted'));
+      }
+      setDeleteTarget(null);
+      await reloadReconciliationData();
+    } catch (error) {
+      toast.error(getErrorMessage(error, t('toasts.deleteFailed')));
+    } finally {
+      setIsDeleting(false);
+    }
+  }, [deleteTarget, isDeleting, reloadReconciliationData, t]);
+
+  const handleCycleStatus = useCallback(
+    async (transaction: Transaction) => {
+      const next = nextCycleStatus(transaction.status);
+      if (next === null) {
+        toast.error(t('toasts.voidStatus'));
+        return;
+      }
+      try {
+        await transactionsApi.updateStatus(transaction.id, next);
+        await reloadReconciliationData();
+      } catch (error) {
+        toast.error(getErrorMessage(error, t('toasts.statusFailed')));
+      }
+    },
+    [reloadReconciliationData, t],
+  );
+
   const handleToggleTransaction = (transactionId: string) => {
     setSelectedTransactionIds((prev) => {
       const newSet = new Set(prev);
@@ -166,18 +308,24 @@ function ReconcileContent() {
     setSelectedTransactionIds(new Set());
   };
 
-  // Calculate the current difference based on selected transactions
-  // Use rounding to avoid floating-point precision drift from summing many decimals
+  const selectedTransactions = useMemo(
+    () =>
+      reconciliationData
+        ? reconciliationData.transactions.filter((tx) => selectedTransactionIds.has(tx.id))
+        : [],
+    [reconciliationData, selectedTransactionIds],
+  );
+
+  // Calculate the current difference based on selected transactions.
+  // Both sums accumulate in integer units of the storage precision, so a long
+  // statement cannot drift a cent away from the figure the user is trying to
+  // match.
   const calculatedDifference = useMemo(() => {
     if (!reconciliationData) return 0;
-
-    const selectedSum = reconciliationData.transactions
-      .filter((t) => selectedTransactionIds.has(t.id))
-      .reduce((sum, t) => sum + Number(t.amount), 0);
-
+    const selectedSum = sumAmounts(selectedTransactions);
     const newBalance = Number(reconciliationData.reconciledBalance) + selectedSum;
     return Math.round(((statementBalance ?? 0) - newBalance) * 100) / 100;
-  }, [reconciliationData, selectedTransactionIds, statementBalance]);
+  }, [reconciliationData, selectedTransactions, statementBalance]);
 
   const handleFinishReconciliation = async () => {
     if (Math.abs(calculatedDifference) > 0.01) {
@@ -198,6 +346,7 @@ function ReconcileContent() {
         statementDate
       );
       toast.success(t('toasts.success', { count: result.reconciled }));
+      notifyReconciliationChanged();
 
       // For revolving-credit accounts, look for an existing scheduled bill that
       // pays down this account so we can offer to update its next instance.
@@ -341,11 +490,7 @@ function ReconcileContent() {
             <div>
               <p className="text-xs text-gray-500 dark:text-gray-400 uppercase">{t('summary.selected', { count: selectedCount })}</p>
               <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                {formatCurrency(
-                  reconciliationData.transactions
-                    .filter((t) => selectedTransactionIds.has(t.id))
-                    .reduce((sum, t) => sum + Number(t.amount), 0)
-                )}
+                {formatCurrency(sumAmounts(selectedTransactions))}
               </p>
             </div>
             <div>
@@ -365,16 +510,33 @@ function ReconcileContent() {
 
         {/* Transaction List */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
-          <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+          <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex flex-wrap justify-between items-center gap-3">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
               {t('list.heading', { count: totalCount })}
             </h3>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Siblings rather than a <label> around the switch: ToggleSwitch
+                  renders a button, which a label cannot be `for`, so wrapping it
+                  would put a cursor-pointer on text that does nothing. The
+                  accessible name comes from the switch's own aria-label. */}
+              <div className="flex items-center gap-2 mr-2">
+                <ToggleSwitch
+                  checked={groupByFlow}
+                  onChange={setGroupByFlow}
+                  label={t('list.groupByFlow')}
+                />
+                <span className="text-sm text-gray-700 dark:text-gray-300">
+                  {t('list.groupByFlow')}
+                </span>
+              </div>
               <Button variant="outline" size="sm" onClick={handleSelectAll}>
                 {t('list.selectAll')}
               </Button>
               <Button variant="outline" size="sm" onClick={handleSelectNone}>
                 {t('list.selectNone')}
+              </Button>
+              <Button size="sm" onClick={transactionModal.openCreate}>
+                {t('list.addTransaction')}
               </Button>
             </div>
           </div>
@@ -384,84 +546,22 @@ function ReconcileContent() {
               {t('list.empty')}
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                <thead className="bg-gray-50 dark:bg-gray-700/50">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase w-10">
-                      <span className="sr-only">{t('list.colSelect')}</span>
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                      {t('list.colDate')}
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                      {t('list.colPayee')}
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                      {t('list.colCategory')}
-                    </th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                      {t('list.colAmount')}
-                    </th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                      {t('list.colStatus')}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                  {reconciliationData.transactions.map((transaction) => (
-                    <tr
-                      key={transaction.id}
-                      className={`cursor-pointer transition-colors ${
-                        selectedTransactionIds.has(transaction.id)
-                          ? 'bg-blue-50 dark:bg-blue-900/20'
-                          : 'hover:bg-gray-50 dark:hover:bg-gray-700/30'
-                      }`}
-                      onClick={() => handleToggleTransaction(transaction.id)}
-                    >
-                      <td className="px-4 py-3">
-                        <input
-                          type="checkbox"
-                          checked={selectedTransactionIds.has(transaction.id)}
-                          onChange={() => handleToggleTransaction(transaction.id)}
-                          onClick={(e) => e.stopPropagation()}
-                          className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800"
-                        />
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100 whitespace-nowrap">
-                        {format(new Date(transaction.transactionDate), 'MMM d, yyyy')}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
-                        {transaction.payee?.name || transaction.payeeName || '-'}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
-                        {transaction.category?.name || '-'}
-                      </td>
-                      <td
-                        className={`px-4 py-3 text-sm text-right whitespace-nowrap font-medium ${
-                          Number(transaction.amount) >= 0
-                            ? 'text-green-600 dark:text-green-400'
-                            : 'text-red-600 dark:text-red-400'
-                        }`}
-                      >
-                        {formatCurrency(Number(transaction.amount))}
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        {transaction.status === TransactionStatus.CLEARED ? (
-                          <span className="text-blue-600 dark:text-blue-400" title={t('status.cleared')}>C</span>
-                        ) : transaction.status === TransactionStatus.UNRECONCILED ? (
-                          <span className="text-gray-400" title={t('status.unreconciled')}>-</span>
-                        ) : transaction.status === TransactionStatus.VOID ? (
-                          <span className="text-gray-400 line-through" title={t('status.void')}>V</span>
-                        ) : (
-                          <span className="text-green-600 dark:text-green-400" title={t('status.reconciled')}>R</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <ReconcileTable
+              transactions={reconciliationData.transactions}
+              selectedIds={selectedTransactionIds}
+              onToggle={handleToggleTransaction}
+              sortField={sortField}
+              sortDirection={sortDirection}
+              onSort={handleSort}
+              groupByFlow={groupByFlow}
+              lastReconciledDate={reconciliationData.lastReconciledDate ?? null}
+              overdueBefore={reconciliationData.overdueBefore ?? ''}
+              formatCurrency={formatCurrency}
+              onEdit={transactionModal.openEdit}
+              onDelete={setDeleteTarget}
+              onCycleStatus={handleCycleStatus}
+              reconciledLocked={reconciledLocked}
+            />
           )}
 
           <div className="p-4 border-t border-gray-200 dark:border-gray-700 flex justify-between">
@@ -577,6 +677,39 @@ function ReconcileContent() {
         {step === 'setup' && renderSetupStep()}
         {step === 'reconcile' && renderReconcileStep()}
         {step === 'complete' && renderCompleteStep()}
+
+        <Modal
+          isOpen={transactionModal.showForm}
+          onClose={transactionModal.close}
+          {...transactionModal.modalProps}
+          maxWidth="6xl"
+          className="p-6 !max-w-[69rem]"
+        >
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">
+            {transactionModal.isEditing ? t('form.editTitle') : t('form.newTitle')}
+          </h2>
+          <TransactionForm
+            key={transactionModal.editingItem?.id || 'new'}
+            transaction={transactionModal.editingItem}
+            defaultAccountId={selectedAccountId}
+            onSuccess={handleFormSuccess}
+            onCancel={transactionModal.close}
+            onDirtyChange={transactionModal.setFormDirty}
+            submitRef={transactionModal.formSubmitRef}
+          />
+        </Modal>
+        <UnsavedChangesDialog {...transactionModal.unsavedChangesDialog} />
+
+        <ConfirmDialog
+          isOpen={deleteTarget !== null}
+          title={deleteTarget?.isTransfer ? t('delete.transferTitle') : t('delete.title')}
+          message={deleteTarget?.isTransfer ? t('delete.transferMessage') : t('delete.message')}
+          confirmLabel={tc('actions.delete')}
+          cancelLabel={tc('cancel')}
+          variant="danger"
+          onConfirm={handleDeleteConfirm}
+          onCancel={() => setDeleteTarget(null)}
+        />
       </main>
     </PageLayout>
   );

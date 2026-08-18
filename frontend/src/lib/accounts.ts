@@ -15,6 +15,7 @@ import {
   DetectedLoanPayment,
   SetupLoanPaymentsData,
   SetupLoanPaymentsResponse,
+  AccountBalancesAsOfResponse,
 } from '@/types/account';
 import { StatementCycle, InterestPaid } from '@/types/credit-card-detail';
 import { BalanceForecast } from '@/types/banking-detail';
@@ -200,6 +201,25 @@ export const accountsApi = {
         return response.data;
       },
       30_000, // 30 sec
+    );
+  },
+
+  // Every account's balance measured at a single date (issue #1198). A balance
+  // is a point-in-time figure, so the date is part of the request and the
+  // response echoes it back -- the payload cannot be told from the previous
+  // one otherwise.
+  getBalancesAsOf: async (asOfDate: string): Promise<AccountBalancesAsOfResponse> => {
+    const cacheKey = `accounts:balances-as-of:${asOfDate}`;
+    return dedupe(
+      cacheKey,
+      async () => {
+        const response = await apiClient.get<AccountBalancesAsOfResponse>(
+          '/accounts/balances-as-of',
+          { params: { asOfDate } },
+        );
+        return response.data;
+      },
+      30_000, // 30 sec -- these move with every transaction write
     );
   },
 

@@ -23,6 +23,8 @@ import {
   HIGHLIGHT_FLASH_CELL,
   useScrollIntoViewWhen,
 } from '@/hooks/useHighlightTarget';
+import { useTableDensity, type DensityLevel } from '@/hooks/useTableDensity';
+import { useDensityPreference } from '@/store/densityStore';
 
 interface ScheduledActionLabels {
   post: string;
@@ -149,6 +151,10 @@ interface ConfirmState {
 interface ScheduledTransactionRowProps {
   transaction: ScheduledTransaction;
   isProcessing: boolean;
+  density: DensityLevel;
+  cellPadding: string;
+  /** Row position, for the striping that carries a row across a dense table. */
+  index: number;
   formatDate: (date: string) => string;
   formatAmount: (amount: number | null | undefined, currencyCode?: string) => JSX.Element;
   getDueDateStatus: (nextDueDate: string | undefined | null) => { label: string; className: string } | null;
@@ -164,6 +170,9 @@ interface ScheduledTransactionRowProps {
 const ScheduledTransactionRow = memo(function ScheduledTransactionRow({
   transaction,
   isProcessing,
+  density,
+  cellPadding,
+  index,
   formatDate,
   formatAmount,
   getDueDateStatus,
@@ -195,19 +204,34 @@ const ScheduledTransactionRow = memo(function ScheduledTransactionRow({
   const effectiveDueDate = transaction.nextOverride?.overrideDate || transaction.nextDueDate || '';
   const dueDateStatus = effectiveDueDate ? getDueDateStatus(effectiveDueDate) : null;
   const payee = transaction.payeeName || transaction.payee?.name;
+  const isOverdue = dueDateStatus?.label === t('list.dueDateStatus.overdue');
+  // One expression, used by the row and by the sticky actions cell that has to
+  // sit on the same ground as the row it belongs to.
+  const rowBackground = isOverdue
+    ? 'bg-red-50 dark:bg-red-900/10'
+    : density !== 'normal' && index % 2 === 1
+      ? 'bg-gray-50 dark:bg-table-stripe-dark'
+      : 'bg-white dark:bg-gray-900';
+  const badgePadding = density === 'dense' ? 'px-1.5 py-0.5' : 'px-2 py-0.5';
+  // At dense a row is one line: the secondary line each of these cells carries
+  // sits beside its primary rather than under it. Nothing is dropped -- the
+  // payee, the frequency and the occurrence count are all still on screen.
+  const stackedLines = density === 'dense' ? 'flex items-baseline gap-1.5 flex-wrap' : '';
 
   return (
     <tr
       ref={rowRef}
-      className={`group hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer select-none ${!transaction.isActive ? 'opacity-50' : ''} ${dueDateStatus?.label === t('list.dueDateStatus.overdue') ? 'bg-red-50 dark:bg-red-900/10' : 'bg-white dark:bg-gray-900'} ${isHighlighted ? HIGHLIGHT_FLASH : ''}`}
+      className={`group hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer select-none ${!transaction.isActive ? 'opacity-50' : ''} ${rowBackground} ${isHighlighted ? HIGHLIGHT_FLASH : ''}`}
       {...getRowHandlers(transaction)}
     >
       {/* Name / Payee */}
-      <td className="px-4 py-3">
-        <div className="text-sm font-medium text-gray-900 dark:text-gray-100">{transaction.name}</div>
-        {payee && payee !== transaction.name && (
-          <div className="text-xs text-gray-500 dark:text-gray-400">{payee}</div>
-        )}
+      <td className={cellPadding}>
+        <div className={stackedLines}>
+          <div className="text-sm font-medium text-gray-900 dark:text-gray-100">{transaction.name}</div>
+          {payee && payee !== transaction.name && (
+            <div className="text-xs text-gray-500 dark:text-gray-400">{payee}</div>
+          )}
+        </div>
         {/* Mobile-only: show schedule info under name */}
         <div className="sm:hidden mt-0.5">
           <div className="text-xs text-gray-500 dark:text-gray-400">
@@ -223,15 +247,15 @@ const ScheduledTransactionRow = memo(function ScheduledTransactionRow({
       </td>
 
       {/* Account */}
-      <td className="px-4 py-3 hidden sm:table-cell">
+      <td className={`${cellPadding} hidden sm:table-cell`}>
         <div className="text-sm text-gray-900 dark:text-gray-100">{transaction.account?.name}</div>
       </td>
 
       {/* Category */}
-      <td className="px-4 py-3 hidden md:table-cell">
+      <td className={`${cellPadding} hidden md:table-cell`}>
         {transaction.isInvestment ? (
           <span
-            className="inline-flex text-xs font-medium rounded-full px-2 py-0.5 bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200"
+            className={`inline-flex text-xs font-medium rounded-full ${badgePadding} bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200`}
             title={
               transaction.investmentSecurity
                 ? `${transaction.investmentAction || ''} ${transaction.investmentSecurity.symbol || transaction.investmentSecurity.name}`.trim()
@@ -244,21 +268,21 @@ const ScheduledTransactionRow = memo(function ScheduledTransactionRow({
           </span>
         ) : transaction.isTransfer ? (
           <span
-            className="inline-flex text-xs font-medium rounded-full px-2 py-0.5 bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
+            className={`inline-flex text-xs font-medium rounded-full ${badgePadding} bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200`}
             title={`Transfer to ${transaction.transferAccount?.name || 'account'}`}
           >
             Transfer
           </span>
         ) : transaction.isSplit ? (
           <span
-            className="inline-flex text-xs font-medium rounded-full px-2 py-0.5 bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200"
+            className={`inline-flex text-xs font-medium rounded-full ${badgePadding} bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200`}
             title={transaction.splits?.map(s => s.category?.name || 'Uncategorized').join(', ')}
           >
             Split ({transaction.splits?.length || 0})
           </span>
         ) : transaction.category ? (
           <span
-            className="inline-flex text-xs font-medium rounded-full px-2 py-0.5"
+            className={`inline-flex text-xs font-medium rounded-full ${badgePadding}`}
             style={{
               backgroundColor: categoryColor
                 ? `color-mix(in srgb, ${categoryColor} 15%, var(--category-bg-base, #e5e7eb))`
@@ -276,7 +300,7 @@ const ScheduledTransactionRow = memo(function ScheduledTransactionRow({
       </td>
 
       {/* Amount */}
-      <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-right">
+      <td className={`${cellPadding} whitespace-nowrap text-sm font-medium text-right`}>
         {(() => {
           const baseAmount = scheduledOccurrenceAmount(transaction, false);
           const overrideAmount = transaction.nextOverride
@@ -325,52 +349,54 @@ const ScheduledTransactionRow = memo(function ScheduledTransactionRow({
       </td>
 
       {/* Schedule (Frequency + Next Due + Remaining) */}
-      <td className="px-4 py-3 hidden sm:table-cell">
-        <div className="text-sm text-gray-900 dark:text-gray-100">
-          {/* Show override date if it differs from the original next due date */}
-          {transaction.nextOverride?.overrideDate &&
-           transaction.nextDueDate &&
-           transaction.nextOverride.overrideDate !== String(transaction.nextDueDate).split('T')[0] ? (
-            <span className="inline-flex flex-col align-middle">
-              <span className="text-xs text-gray-400 dark:text-gray-500 line-through leading-tight">
-                {formatDate(transaction.nextDueDate)}
+      <td className={`${cellPadding} hidden sm:table-cell`}>
+        <div className={stackedLines}>
+          <div className="text-sm text-gray-900 dark:text-gray-100">
+            {/* Show override date if it differs from the original next due date */}
+            {transaction.nextOverride?.overrideDate &&
+             transaction.nextDueDate &&
+             transaction.nextOverride.overrideDate !== String(transaction.nextDueDate).split('T')[0] ? (
+              <span className="inline-flex flex-col align-middle">
+                <span className="text-xs text-gray-400 dark:text-gray-500 line-through leading-tight">
+                  {formatDate(transaction.nextDueDate)}
+                </span>
+                <span className="leading-tight" title="Date modified for this occurrence">
+                  {formatDate(transaction.nextOverride.overrideDate)}
+                </span>
               </span>
-              <span className="leading-tight" title="Date modified for this occurrence">
-                {formatDate(transaction.nextOverride.overrideDate)}
+            ) : (
+              transaction.nextDueDate ? formatDate(transaction.nextDueDate) : '\u2014'
+            )}
+            {dueDateStatus && (
+              <span
+                className={`ml-1.5 inline-flex text-xs font-medium rounded-full px-1.5 py-0.5 ${dueDateStatus.className}`}
+              >
+                {dueDateStatus.label}
               </span>
-            </span>
-          ) : (
-            transaction.nextDueDate ? formatDate(transaction.nextDueDate) : '\u2014'
-          )}
-          {dueDateStatus && (
-            <span
-              className={`ml-1.5 inline-flex text-xs font-medium rounded-full px-1.5 py-0.5 ${dueDateStatus.className}`}
-            >
-              {dueDateStatus.label}
-            </span>
-          )}
-        </div>
-        <div className="text-xs text-gray-500 dark:text-gray-400">
-          {t(`frequency.${transaction.frequency}`)}
-          {transaction.occurrencesRemaining !== null && (
-            <span className="ml-1">{'\u00b7'} {t('list.occurrencesRemaining', { count: transaction.occurrencesRemaining })}</span>
-          )}
-          {transaction.overrideCount !== undefined && transaction.overrideCount > 0 && (
-            <span
-              className="ml-1.5 inline-flex text-xs font-medium rounded-full px-1.5 py-0.5 bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200"
-              title={t('list.modifiedTitle', { count: transaction.overrideCount })}
-            >
-              {t('list.modifiedBadge', { count: transaction.overrideCount })}
-            </span>
-          )}
+            )}
+          </div>
+          <div className="text-xs text-gray-500 dark:text-gray-400">
+            {t(`frequency.${transaction.frequency}`)}
+            {transaction.occurrencesRemaining !== null && (
+              <span className="ml-1">{'\u00b7'} {t('list.occurrencesRemaining', { count: transaction.occurrencesRemaining })}</span>
+            )}
+            {transaction.overrideCount !== undefined && transaction.overrideCount > 0 && (
+              <span
+                className="ml-1.5 inline-flex text-xs font-medium rounded-full px-1.5 py-0.5 bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200"
+                title={t('list.modifiedTitle', { count: transaction.overrideCount })}
+              >
+                {t('list.modifiedBadge', { count: transaction.overrideCount })}
+              </span>
+            )}
+          </div>
         </div>
       </td>
 
       {/* Auto-post */}
-      <td className="px-4 py-3 text-center hidden md:table-cell">
+      <td className={`${cellPadding} text-center hidden md:table-cell`}>
         {transaction.autoPost ? (
           <span
-            className="inline-flex items-center text-xs font-medium rounded-full px-2 py-0.5 bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+            className={`inline-flex items-center text-xs font-medium rounded-full ${badgePadding} bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200`}
             title={t('list.autoPostTitle')}
           >
             {t('list.autoPostBadge')}
@@ -381,8 +407,10 @@ const ScheduledTransactionRow = memo(function ScheduledTransactionRow({
       </td>
 
       {/* Actions */}
-      <td className={`px-4 py-3 whitespace-nowrap text-right hidden min-[480px]:table-cell sticky right-0 ${dueDateStatus?.label === t('list.dueDateStatus.overdue') ? 'bg-red-50 dark:bg-red-900/10' : 'bg-white dark:bg-gray-900'} group-hover:bg-gray-100 dark:group-hover:bg-gray-800 ${isHighlighted ? HIGHLIGHT_FLASH_CELL : ''}`} onClick={(e) => e.stopPropagation()}>
-        <RowActions actions={actions} density="compact" />
+      <td className={`${cellPadding} whitespace-nowrap text-right hidden min-[480px]:table-cell sticky right-0 ${rowBackground} group-hover:bg-gray-100 dark:group-hover:bg-gray-800 ${isHighlighted ? HIGHLIGHT_FLASH_CELL : ''}`} onClick={(e) => e.stopPropagation()}>
+        {/* Icon-only from `compact` up: five verbs as text labels would widen
+            the cell past the data it sits beside. Dense still tightens them. */}
+        <RowActions actions={actions} density={density === 'dense' ? 'dense' : 'compact'} />
       </td>
     </tr>
   );
@@ -411,6 +439,8 @@ export function ScheduledTransactionList({
   const t = useTranslations('scheduledTransactions');
   const { formatDate } = useDateFormat();
   const { formatCurrency } = useNumberFormat();
+  const { density } = useDensityPreference('bills');
+  const { cellPadding, headerPadding } = useTableDensity(density);
   const [actionInProgress, setActionInProgress] = useState<string | null>(null);
   const [confirmState, setConfirmState] = useState<ConfirmState>({
     isOpen: false,
@@ -571,35 +601,38 @@ export function ScheduledTransactionList({
       <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
         <thead className="bg-gray-50 dark:bg-gray-800">
           <tr>
-            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+            <th className={`${headerPadding} text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider`}>
               {t('list.columns.namePayee')}
             </th>
-            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden sm:table-cell">
+            <th className={`${headerPadding} text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden sm:table-cell`}>
               {t('list.columns.account')}
             </th>
-            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden md:table-cell">
+            <th className={`${headerPadding} text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden md:table-cell`}>
               {t('list.columns.category')}
             </th>
-            <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+            <th className={`${headerPadding} text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider`}>
               {t('list.columns.amount')}
             </th>
-            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden sm:table-cell">
+            <th className={`${headerPadding} text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden sm:table-cell`}>
               {t('list.columns.schedule')}
             </th>
-            <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden md:table-cell">
+            <th className={`${headerPadding} text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden md:table-cell`}>
               {t('list.columns.auto')}
             </th>
-            <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden min-[480px]:table-cell sticky right-0 bg-gray-50 dark:bg-gray-800">
+            <th className={`${headerPadding} text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden min-[480px]:table-cell sticky right-0 bg-gray-50 dark:bg-gray-800`}>
               {t('list.columns.actions')}
             </th>
           </tr>
         </thead>
         <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
-          {transactions.map((transaction) => (
+          {transactions.map((transaction, index) => (
             <ScheduledTransactionRow
               key={transaction.id}
               transaction={transaction}
               isProcessing={actionInProgress === transaction.id}
+              density={density}
+              cellPadding={cellPadding}
+              index={index}
               formatDate={formatDate}
               formatAmount={formatAmount}
               getDueDateStatus={getDueDateStatus}

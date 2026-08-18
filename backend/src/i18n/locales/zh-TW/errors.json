@@ -20,6 +20,7 @@
     "useFavouriteUpdateEndpoint": "請使用科目更新端點來變更我的最愛",
     "startDateFormat": "startDate 必須為 YYYY-MM-DD 格式",
     "endDateFormat": "endDate 必須為 YYYY-MM-DD 格式",
+    "asOfDateFormat": "asOfDate 必須為 YYYY-MM-DD 格式",
     "invalidExportFormat": "格式必須為 csv 或 qif",
     "loanRequiredFields": "貸款科目需要 paymentAmount、paymentFrequency、paymentStartDate 和 sourceAccountId",
     "loanRequiresInterestRate": "貸款科目需要利率",
@@ -452,6 +453,7 @@
   },
   "transactions": {
     "invalidStatus": "無效的交易狀態：{{ status }}",
+    "reconciledLocked": "此交易已對帳並遭鎖定。要修改請在設定中關閉「鎖定已對帳交易」。",
     "pagePositiveInteger": "page 必須是正整數",
     "limitPositiveInteger": "limit 必須是正整數",
     "limitMax200": "limit 不得超過 200",

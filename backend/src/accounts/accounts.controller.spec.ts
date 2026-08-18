@@ -7,6 +7,7 @@ import { LoanPaymentDetectorService } from "./loan-payment-detector.service";
 import { LoanPaymentSetupService } from "./loan-payment-setup.service";
 import { StatementCycleService } from "./statement-cycle.service";
 import { BalanceForecastService } from "./balance-forecast.service";
+import { AccountBalancesReportService } from "./account-balances-report.service";
 import { DelegationService } from "../delegation/delegation.service";
 
 describe("AccountsController", () => {
@@ -15,6 +16,7 @@ describe("AccountsController", () => {
   let mockExportService: Partial<Record<keyof AccountExportService, jest.Mock>>;
   let mockStatementCycleService: Record<string, jest.Mock>;
   let mockBalanceForecastService: Record<string, jest.Mock>;
+  let mockBalancesReport: Record<string, jest.Mock>;
   let mockDelegationService: Record<string, jest.Mock>;
   let mockCrossOwnerAccess: Record<string, jest.Mock>;
   let mockJointAccounts: Record<string, jest.Mock>;
@@ -52,6 +54,10 @@ describe("AccountsController", () => {
 
     mockBalanceForecastService = {
       getBalanceForecast: jest.fn(),
+    };
+
+    mockBalancesReport = {
+      getBalancesAsOf: jest.fn(),
     };
 
     mockDelegationService = {
@@ -100,6 +106,10 @@ describe("AccountsController", () => {
         {
           provide: BalanceForecastService,
           useValue: mockBalanceForecastService,
+        },
+        {
+          provide: AccountBalancesReportService,
+          useValue: mockBalancesReport,
         },
         {
           provide: DelegationService,
@@ -620,6 +630,107 @@ describe("AccountsController", () => {
       expect(mockAccountsService.getTransactionCount).toHaveBeenCalledWith(
         "user-1",
         "account-1",
+      );
+    });
+  });
+
+  describe("getBalancesAsOf()", () => {
+    const payload = (asOfDate: string, accounts: any[] = []) => ({
+      asOfDate,
+      accounts,
+    });
+
+    it("defaults to today when no date is supplied", async () => {
+      mockBalancesReport.getBalancesAsOf.mockResolvedValue(payload("today"));
+
+      await controller.getBalancesAsOf(mockReq);
+
+      const [, date] = mockBalancesReport.getBalancesAsOf.mock.calls[0];
+      expect(date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    });
+
+    it("passes the requested date through", async () => {
+      mockBalancesReport.getBalancesAsOf.mockResolvedValue(
+        payload("2020-01-01"),
+      );
+
+      const result = await controller.getBalancesAsOf(mockReq, "2020-01-01");
+
+      expect(result).toEqual(payload("2020-01-01"));
+      expect(mockBalancesReport.getBalancesAsOf).toHaveBeenCalledWith(
+        "user-1",
+        "2020-01-01",
+        [],
+      );
+    });
+
+    // The refusal comes before any read: a malformed date must not reach a
+    // query at all.
+    it("rejects a date that is not YYYY-MM-DD without reading anything", async () => {
+      await expect(
+        controller.getBalancesAsOf(mockReq, "01/01/2020"),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockBalancesReport.getBalancesAsOf).not.toHaveBeenCalled();
+    });
+
+    it("includes the caller's jointly shared accounts in own context", async () => {
+      mockJointAccounts.jointAccountIdSetFor.mockResolvedValue(
+        new Set(["joint-1"]),
+      );
+      mockBalancesReport.getBalancesAsOf.mockResolvedValue(
+        payload("2020-01-01"),
+      );
+
+      await controller.getBalancesAsOf(mockReq, "2020-01-01");
+
+      expect(mockBalancesReport.getBalancesAsOf).toHaveBeenCalledWith(
+        "user-1",
+        "2020-01-01",
+        ["joint-1"],
+      );
+    });
+
+    // A delegate sees the accounts their grant names and nothing else, and the
+    // grant restricts the query rather than filtering its result -- an
+    // owner-wide read narrowed afterwards has still read the other balances.
+    it("restricts an acting delegate's query to their readable accounts", async () => {
+      mockDelegationService.readableAccountIds.mockResolvedValue(["acc-1"]);
+      mockBalancesReport.getBalancesAsOf.mockResolvedValue(
+        payload("2020-01-01", [{ accountId: "acc-1" }]),
+      );
+
+      const result = await controller.getBalancesAsOf(
+        { user: { id: "owner-1", isActing: true, delegationId: "del-1" } },
+        "2020-01-01",
+      );
+
+      expect(result.accounts).toEqual([{ accountId: "acc-1" }]);
+      expect(mockBalancesReport.getBalancesAsOf).toHaveBeenCalledWith(
+        "owner-1",
+        "2020-01-01",
+        [],
+        ["acc-1"],
+      );
+    });
+
+    // An empty grant is "no accounts", never "no restriction".
+    it("passes an empty grant through as an empty restriction", async () => {
+      mockDelegationService.readableAccountIds.mockResolvedValue([]);
+      mockBalancesReport.getBalancesAsOf.mockResolvedValue(
+        payload("2020-01-01", []),
+      );
+
+      const result = await controller.getBalancesAsOf(
+        { user: { id: "owner-1", isActing: true, delegationId: "del-1" } },
+        "2020-01-01",
+      );
+
+      expect(result).toEqual({ asOfDate: "2020-01-01", accounts: [] });
+      expect(mockBalancesReport.getBalancesAsOf).toHaveBeenCalledWith(
+        "owner-1",
+        "2020-01-01",
+        [],
+        [],
       );
     });
   });

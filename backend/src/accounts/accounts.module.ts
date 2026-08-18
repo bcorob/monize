@@ -17,6 +17,7 @@ import { AccountsController } from "./accounts.controller";
 import { MortgageReminderService } from "./mortgage-reminder.service";
 import { StatementCycleService } from "./statement-cycle.service";
 import { BalanceForecastService } from "./balance-forecast.service";
+import { AccountBalancesReportService } from "./account-balances-report.service";
 import { CategoriesModule } from "../categories/categories.module";
 import { ScheduledTransactionsModule } from "../scheduled-transactions/scheduled-transactions.module";
 import { NetWorthModule } from "../net-worth/net-worth.module";
@@ -56,8 +57,14 @@ import { LoanRateChangesModule } from "../loan-rate-changes/loan-rate-changes.mo
     MortgageReminderService,
     StatementCycleService,
     BalanceForecastService,
+    AccountBalancesReportService,
   ],
   controllers: [AccountsController],
-  exports: [AccountsService, StatementCycleService, BalanceForecastService],
+  exports: [
+    AccountsService,
+    StatementCycleService,
+    BalanceForecastService,
+    AccountBalancesReportService,
+  ],
 })
 export class AccountsModule {}

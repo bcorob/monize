@@ -69,6 +69,7 @@ const mockPreferences: UserPreferences = {
     recentTransactionsLimit: 5,
   aiBubbleEnabled: false,
   showWhatsNew: true,
+  lockReconciledTransactions: false,
   language: 'en',
   createdAt: '2024-01-01T00:00:00Z',
   updatedAt: '2024-01-01T00:00:00Z',
@@ -153,6 +154,51 @@ describe('PreferencesSection', () => {
       expect(userSettingsApi.updatePreferences).toHaveBeenCalledWith(
         expect.objectContaining({ recentTransactionsLimit: 10 }),
       );
+    });
+  });
+
+  describe('the strict reconciled lock', () => {
+    it('renders the toggle off for a user who has not enabled it', async () => {
+      render(<PreferencesSection preferences={mockPreferences} onPreferencesUpdated={mockOnPreferencesUpdated} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Lock reconciled transactions')).toBeInTheDocument();
+      });
+      expect(
+        screen.getByRole('switch', { name: 'Lock reconciled transactions' }),
+      ).toHaveAttribute('aria-checked', 'false');
+    });
+
+    it('sends the flag when it is turned on and saved', async () => {
+      (userSettingsApi.updatePreferences as ReturnType<typeof vi.fn>).mockResolvedValue(mockPreferences);
+
+      render(<PreferencesSection preferences={mockPreferences} onPreferencesUpdated={mockOnPreferencesUpdated} />);
+
+      fireEvent.click(screen.getByRole('switch', { name: 'Lock reconciled transactions' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Save Preferences' }));
+
+      await waitFor(() => {
+        expect(userSettingsApi.updatePreferences).toHaveBeenCalledWith(
+          expect.objectContaining({ lockReconciledTransactions: true }),
+        );
+      });
+    });
+
+    it('sends the stored value untouched when nothing is changed', async () => {
+      // The bulk save resends every field it owns, so a preference it forgot
+      // to include would be silently reset on the next unrelated save.
+      (userSettingsApi.updatePreferences as ReturnType<typeof vi.fn>).mockResolvedValue(mockPreferences);
+      const locked = { ...mockPreferences, lockReconciledTransactions: true };
+
+      render(<PreferencesSection preferences={locked} onPreferencesUpdated={mockOnPreferencesUpdated} />);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Save Preferences' }));
+
+      await waitFor(() => {
+        expect(userSettingsApi.updatePreferences).toHaveBeenCalledWith(
+          expect.objectContaining({ lockReconciledTransactions: true }),
+        );
+      });
     });
   });
 

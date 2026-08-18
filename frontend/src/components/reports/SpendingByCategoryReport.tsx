@@ -162,24 +162,9 @@ export function SpendingByCategoryReport() {
     );
   };
 
-  if (isLoading) {
-    return (
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-6">
-        <div className="space-y-4">
-          <Skeleton className="h-8 w-1/3" />
-          <Skeleton className="h-64 w-full" />
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return <ReportError onRetry={reload} />;
-  }
-
   return (
     <div className="space-y-6">
-      {/* Controls */}
+      {/* Controls -- always rendered so focus inside DateInput survives reloads */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-4">
         <div className="flex flex-wrap gap-4 items-center justify-between">
           <DateRangeSelector
@@ -207,9 +192,18 @@ export function SpendingByCategoryReport() {
         </div>
       </div>
 
-      {/* Chart */}
+      {/* Chart -- loading and error render here rather than in place of the
+          whole report, so the controls above (and the date field being typed
+          into) stay mounted across a reload. */}
       <div ref={chartRef} className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 px-2 py-4 sm:p-6">
-        {chartData.length === 0 ? (
+        {error ? (
+          <ReportError onRetry={reload} />
+        ) : isLoading ? (
+          <div className="space-y-4">
+            <Skeleton className="h-8 w-1/3" />
+            <Skeleton className="h-64 w-full" />
+          </div>
+        ) : chartData.length === 0 ? (
           <p className="text-gray-500 dark:text-gray-400 text-center py-8">
             {t('spendingByCategory.noData')}
           </p>

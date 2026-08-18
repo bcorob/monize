@@ -20,6 +20,7 @@
     "useFavouriteUpdateEndpoint": "お気に入りを変更するには口座更新エンドポイントを使用してください",
     "startDateFormat": "startDate は YYYY-MM-DD 形式でなければなりません",
     "endDateFormat": "endDate は YYYY-MM-DD 形式でなければなりません",
+    "asOfDateFormat": "asOfDate は YYYY-MM-DD 形式でなければなりません",
     "invalidExportFormat": "形式は csv または qif でなければなりません",
     "loanRequiredFields": "ローン口座には paymentAmount、paymentFrequency、paymentStartDate、および sourceAccountId が必要です",
     "loanRequiresInterestRate": "ローン口座には利率が必要です",
@@ -452,6 +453,7 @@
   },
   "transactions": {
     "invalidStatus": "無効な取引ステータス：{{ status }}",
+    "reconciledLocked": "この取引は照合済みでロックされています。変更するには設定で「照合済み取引をロックする」をオフにしてください。",
     "pagePositiveInteger": "page は正の整数でなければなりません",
     "limitPositiveInteger": "limit は正の整数でなければなりません",
     "limitMax200": "limit は200を超えてはなりません",

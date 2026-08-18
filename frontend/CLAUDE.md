@@ -110,7 +110,47 @@ Each of these exists once. Use it; do not hand-roll a second one. Every rule her
 
 ### Date entry -- `DateInput`, never a raw `<input type="date">`
 
-`components/ui/DateInput.tsx` is the only place a raw date input is allowed, and `ui-conventions.test.ts` fails the build if another appears. It carries the locale-aware parsing, the keyboard shortcuts, and `CalendarPopover` -- the custom picker that the `.date-picker-hide` CSS in `globals.css` exists to make room for by hiding the browser's own icon. A bare `<input type="date">` gets none of that and shows two calendar icons. 32 components use `DateInput`; yours should too.
+`components/ui/DateInput.tsx` is the only place a raw date input is allowed, and `ui-conventions.test.ts` fails the build if another appears. It carries the lenient parsing of what someone typed, the keyboard shortcuts, and `CalendarPopover` -- the custom picker whose icon is the only one on screen, because the desktop field is no longer a native date input at all. A bare `<input type="date">` gets none of that, and hands the user the browser's segment-jumping entry instead. 32 components use `DateInput`; yours should too.
+
+**On a desktop it is a text box, whatever the user's format preference is.** It
+used to render a native `<input type="date">` for the `browser` preference --
+which is the default, so most users got it -- and the shared text input for
+everybody else. That is one component behaving as two: the native control jumps
+to its own next segment after two keystrokes, takes only the first two digits of
+a year typed into a partly-filled field, and cannot be handed `9-14` at all
+(issue #1201). The pointer decides the mode now, not the format: touch keeps the
+native picker, because a phone's date wheel is the better control there and
+nobody types a date on one by choice.
+
+**`browser` is not a pattern, and nothing below `useDateFormat` should see it.**
+`datePattern` off that hook is the concrete arrangement (`MM/DD/YYYY`,
+`DD.MM.YYYY`, ...), resolved from the locale by `resolveDateFormatPattern`
+(`lib/date-parse.ts`). Parsing what someone typed is impossible without it: `7/8`
+is 8 July in one arrangement and 7 August in another, and a sentinel cannot
+answer that question. `parseFlexibleDate` takes the pattern for exactly this
+reason; `parseDateFromFormat` stays strict, for a value that should already be
+canonical.
+
+**A partial entry is completed, and an unreadable one changes nothing.** A day
+and month take the year from the date the field already holds (today when it is
+empty), and a lone number is a day in the month on screen. Text that names no
+real date restores what was there -- clearing the box is the only way to mean
+"no date". None of that happens on the keystroke: the lenient reading waits for
+blur or Enter, because `9` is a valid day on its own and announcing it mid-word
+sends a report off fetching a date nobody asked for.
+
+**A screen that hosts a date field does not answer a load with a second tree.**
+`if (isLoading) return <Skeleton/>` returns a different tree, and React unmounts
+whatever the previous one held at that position -- including the field being
+typed into. Render the load and error states *inside* the one tree the component
+always returns. Duplicating the controls block into the second `return` is not a
+fix and looked like one: `CashFlowReport` did that, and its two trees put the
+block at different child indexes, so React reconciled it against the summary
+cards and unmounted it anyway. `ui-conventions.test.ts` fails both shapes for any
+component that pairs a date control with a `useReportData` loading flag -- the
+flag the date change itself re-triggers. A one-shot prerequisite load (the report
+*forms*' `isLoadingData`) is a different thing and is deliberately not policed:
+it resolves before the date field exists and never fires again.
 
 ### Currency entry -- `CurrencyInput`, never a raw number input
 
@@ -453,6 +493,37 @@ balance is computed for one page of one account and means nothing beside another
 page's rows, and a failed reload that keeps the rows has to keep the balance too.
 `ui-conventions.test.ts` fails any `<TransactionList>` that sets
 `isSingleAccountView` without passing `startingBalance`.
+
+### An overdue-reconciliation window is the server's number, never the client's
+
+Whether an unreconciled row is *overdue* is decided by `classifyStaleRow`
+(`lib/stale-reconciliation.ts`), and it takes the boundary date as an argument
+because the server owns it: every response that asks for a classification
+carries `overdueBefore` (and `staleAfterDays` for the copy that names it), from
+`STALE_UNRECONCILED_DAYS` in `backend/src/transactions/stale-reconciliation.ts`.
+A component that hardcodes the number goes on saying 45 after the constant
+moves, and the row highlight then disagrees with the count in the header badge
+about which rows it is counting -- two surfaces describing the same ledger,
+neither obviously wrong.
+
+Three things the helper decides that a call site must not re-decide:
+
+- **An account nobody reconciles has no overdue rows**, whatever their age.
+  `lastReconciledDate` null is the whole of that test. Reconciliation is opt-in,
+  and a badge telling a user who has never reconciled that their entire history
+  is outstanding is one they will turn off and never look at again.
+- **`missed` wins over `overdue`.** A row can satisfy both comparisons; counted
+  under both, the two lines in the reminder add up to more than the badge.
+- **A RECONCILED or VOID row is never outstanding.** The status test lives
+  inside the helper rather than beside each caller, because both callers had
+  their own reason to believe they would never be handed one.
+
+**A failed lookup is not a clean ledger.** `useStaleReconciliation` returns
+`undefined` when the request fails, and every consumer reads undefined as "no
+information" and marks nothing -- the register keeps rendering, the badge does
+not appear. Returning an empty context instead would make an outage
+indistinguishable from a ledger that is up to date, which is the same class of
+mistake as `accounts = []` on a failed accounts request.
 
 ### A long list -- page it, or bound it and scroll with `scrollbar-slim`
 

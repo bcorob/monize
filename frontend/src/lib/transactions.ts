@@ -20,6 +20,7 @@ import {
   FxFeeMonthlyTotal,
   GroupedTotal,
   RecurringChargeInfo,
+  StaleUnreconciledSummary,
 } from '@/types/transaction';
 import { invalidateBalanceCaches } from './apiCache';
 
@@ -482,6 +483,14 @@ export const transactionsApi = {
       {
         params: { statementDate, statementBalance },
       },
+    );
+    return response.data;
+  },
+
+  // Accounts the user reconciles that still have outstanding register rows
+  getStaleUnreconciled: async (): Promise<StaleUnreconciledSummary> => {
+    const response = await apiClient.get<StaleUnreconciledSummary>(
+      '/transactions/reconcile/stale',
     );
     return response.data;
   },

@@ -28,7 +28,15 @@
     "colCategory": "Kategoria",
     "colAmount": "Kwota",
     "colStatus": "Status",
-    "finish": "Zakończ uzgadnianie"
+    "finish": "Zakończ uzgadnianie",
+    "colActions": "Akcje",
+    "selectRow": "Zaznacz transakcję dla {payee}",
+    "groupByFlow": "Grupuj według wpływów i wydatków",
+    "groupCredits": "Wpływy ({count})",
+    "groupDebits": "Wydatki ({count})",
+    "groupSubtotal": "Suma częściowa grupy {amount}",
+    "addTransaction": "Dodaj transakcję",
+    "lockedRow": "Zablokowana"
   },
   "status": {
     "cleared": "Rozliczona",
@@ -53,6 +61,35 @@
     "differenceRequired": "Aby zakończyć uzgadnianie, różnica musi wynosić {amount}",
     "noneSelected": "Nie wybrano transakcji do uzgodnienia",
     "success": "{count, plural, one {Pomyślnie uzgodniono # transakcję} few {Pomyślnie uzgodniono # transakcje} many {Pomyślnie uzgodniono # transakcji} other {Pomyślnie uzgodniono # transakcji}}",
-    "reconcileFailed": "Nie udało się uzgodnić transakcji"
+    "reconcileFailed": "Nie udało się uzgodnić transakcji",
+    "deleted": "Usunięto transakcję",
+    "transferDeleted": "Usunięto przelew",
+    "deleteFailed": "Nie udało się usunąć transakcji",
+    "voidStatus": "Anulowaną transakcję można zmienić tylko z formularza transakcji",
+    "statusFailed": "Nie udało się zmienić statusu"
+  },
+  "form": {
+    "newTitle": "Nowa transakcja",
+    "editTitle": "Edytuj transakcję"
+  },
+  "delete": {
+    "title": "Usuń transakcję",
+    "message": "Usunąć tę transakcję? Zostanie usunięta z konta i z tego uzgodnienia.",
+    "transferTitle": "Usuń przelew",
+    "transferMessage": "Usunąć ten przelew? Obie jego strony zostaną usunięte, na tym koncie i na drugim."
+  },
+  "stale": {
+    "missedChip": "Pominięta",
+    "missedTooltip": "Ta transakcja ma datę ostatniego uzgodnionego wyciągu lub wcześniejszą, więc ten wyciąg został uzgodniony bez niej.",
+    "overdueChip": "Zaległa",
+    "overdueTooltip": "Ta transakcja czeka na uzgodnienie dłużej niż jeden cykl wyciągu."
+  },
+  "reminder": {
+    "title": "Uzgadnianie",
+    "badgeLabel": "{count, plural, one {# transakcja czeka na uzgodnienie} few {# transakcje czekają na uzgodnienie} many {# transakcji czeka na uzgodnienie} other {# transakcji czeka na uzgodnienie}}",
+    "accountLine": "{count, plural, one {# transakcja} few {# transakcje} many {# transakcji} other {# transakcji}}, najstarsza {date}",
+    "missedLine": "{count, plural, one {# pominięta w uzgodnionym wyciągu} few {# pominięte w uzgodnionych wyciągach} many {# pominiętych w uzgodnionych wyciągach} other {# pominiętych w uzgodnionych wyciągach}}",
+    "overdueLine": "{count, plural, one {# starsza niż {days} dni} few {# starsze niż {days} dni} many {# starszych niż {days} dni} other {# starszych niż {days} dni}}",
+    "reconcileAction": "Uzgodnij"
   }
 }

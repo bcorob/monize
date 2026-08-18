@@ -1,9 +1,14 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { DataSource } from "typeorm";
-import { BadRequestException, NotFoundException } from "@nestjs/common";
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from "@nestjs/common";
 import { TransactionReconciliationService } from "./transaction-reconciliation.service";
 import { Transaction, TransactionStatus } from "./entities/transaction.entity";
 import { TransactionSplit } from "./entities/transaction-split.entity";
+import { UserPreference } from "../users/entities/user-preference.entity";
 import { AccountsService } from "../accounts/accounts.service";
 import { TransactionSplitService } from "./transaction-split.service";
 import { isTransactionInFuture } from "../common/date-utils";
@@ -42,6 +47,7 @@ describe("TransactionReconciliationService", () => {
   let accountsService: Record<string, jest.Mock>;
   let splitService: Record<string, jest.Mock>;
   let splitsRepository: Record<string, jest.Mock>;
+  let userPreferenceRepository: Record<string, jest.Mock>;
   let managerQuery: jest.Mock;
   let dataSource: DataSourceMock;
 
@@ -128,9 +134,18 @@ describe("TransactionReconciliationService", () => {
     // The VOID-crossing guard asks whether the row is a split-transfer
     // counterpart leg; none of these fixtures is, so the lookup finds nothing.
     splitsRepository = { findOne: jest.fn().mockResolvedValue(null) };
+    userPreferenceRepository = {
+      findOne: jest
+        .fn()
+        .mockResolvedValue({ userId, lockReconciledTransactions: false }),
+    };
     const tenantMocks = createScopedDbMocks([
       [Transaction, transactionsRepository],
       [TransactionSplit, splitsRepository],
+      // The strict reconciled lock reads the caller's preference whenever a
+      // locked row is RECONCILED. Default: the lock is off, so these tests
+      // describe the prompt-and-allow behaviour every existing user has.
+      [UserPreference, userPreferenceRepository],
     ]);
     dataSource = tenantMocks.dataSource;
     tenantMocks.manager.update.mockImplementation((_entity, id, payload) =>
@@ -875,6 +890,89 @@ describe("TransactionReconciliationService", () => {
       ).rejects.toThrow(BadRequestException);
 
       expect(transactionsRepository.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("the strict reconciled lock", () => {
+    const lockOn = () =>
+      userPreferenceRepository.findOne.mockResolvedValue({
+        userId,
+        lockReconciledTransactions: true,
+      });
+
+    it("refuses to unreconcile a reconciled row while the lock is on", async () => {
+      // Unreconciling is the click a user reaching for "edit anyway" finds
+      // first. Leaving it open would make the lock one extra step rather than
+      // a lock, so it is refused alongside edits and deletes and the way
+      // through is the Settings toggle.
+      lockOn();
+      const transaction = stageTransaction({
+        status: TransactionStatus.RECONCILED,
+        reconciledDate: "2026-01-15",
+      });
+
+      await expect(
+        service.unreconcile(userId, transaction.id, mockFindOne),
+      ).rejects.toThrow(ConflictException);
+    });
+
+    it("writes nothing when it refuses", async () => {
+      // A refusal that had already written would be the exact failure
+      // docs/financial-calculation-contract.md section 7 names: an error on
+      // screen beside the change in the database.
+      lockOn();
+      const transaction = stageTransaction({
+        status: TransactionStatus.RECONCILED,
+        reconciledDate: "2026-01-15",
+      });
+
+      await expect(
+        service.unreconcile(userId, transaction.id, mockFindOne),
+      ).rejects.toThrow(ConflictException);
+      expect(transactionsRepository.update).not.toHaveBeenCalled();
+      expect(accountsService.updateBalance).not.toHaveBeenCalled();
+    });
+
+    it("leaves a row that is not reconciled alone", async () => {
+      // The lock is about reconciled rows. Clearing an unreconciled one is
+      // ordinary work and must not be caught by it.
+      lockOn();
+      const transaction = stageTransaction({
+        status: TransactionStatus.UNRECONCILED,
+      });
+      mockFindOne.mockResolvedValue(
+        makeTransaction({ status: TransactionStatus.CLEARED }),
+      );
+
+      await expect(
+        service.markCleared(
+          userId,
+          transaction.id,
+          true,
+          mockTriggerNetWorthRecalc,
+          mockFindOne,
+        ),
+      ).resolves.toBeDefined();
+      expect(transactionsRepository.update).toHaveBeenCalledWith("tx-1", {
+        status: TransactionStatus.CLEARED,
+      });
+    });
+
+    it("allows the same unreconcile with the lock off", async () => {
+      const transaction = stageTransaction({
+        status: TransactionStatus.RECONCILED,
+        reconciledDate: "2026-01-15",
+      });
+      mockFindOne.mockResolvedValue(
+        makeTransaction({
+          status: TransactionStatus.CLEARED,
+          reconciledDate: null,
+        }),
+      );
+
+      await expect(
+        service.unreconcile(userId, transaction.id, mockFindOne),
+      ).resolves.toBeDefined();
     });
   });
 

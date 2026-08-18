@@ -128,6 +128,8 @@
     "showCreatedAtTooltip": "Zeigt in Buchungsformularen das Datum und die Uhrzeit an, zu der eine Buchung ursprünglich erstellt wurde. Dies ist unabhängig vom Buchungsdatum und kann helfen nachzuvollziehen, wann ein Eintrag tatsächlich zu Monize hinzugefügt wurde.",
     "showWhatsNewLabel": "Neuigkeiten nach einem Update anzeigen",
     "showWhatsNewTooltip": "Zeigt eine Zusammenfassung der Versionshinweise an, wenn Sie sich zum ersten Mal anmelden, nachdem Monize auf eine neue Version aktualisiert wurde. Sie können sie jederzeit erneut öffnen, indem Sie auf die Versionsnummer unten auf dieser Seite oder auf dem Anmeldebildschirm klicken.",
+    "lockReconciledLabel": "Abgeglichene Buchungen sperren",
+    "lockReconciledTooltip": "Solange dies deaktiviert ist, warnt Monize vor einer Änderung, die das Datum oder den Betrag einer abgeglichenen Buchung verschieben würde, und lässt sie dann zu. Solange es aktiviert ist, können abgeglichene Buchungen überhaupt nicht bearbeitet, gelöscht oder wieder geöffnet werden. Deaktivieren Sie es erneut, um eine Korrektur vorzunehmen.",
     "timeFormatLabel": "Zeitformat",
     "recentTransactionsLabel": "Zuletzt verwendete Buchungen in der Schnellausfüllung",
     "recentTransactionsHelp": "Anzahl der Einträge im Verlaufs-Popover neben dem Zahlungsempfänger-Feld in Buchungsformularen.",

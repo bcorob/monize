@@ -20,6 +20,7 @@
     "useFavouriteUpdateEndpoint": "Favorileri değiştirmek için hesap güncelleme uç noktasını kullanın",
     "startDateFormat": "startDate YYYY-AA-GG biçiminde olmalıdır",
     "endDateFormat": "endDate YYYY-AA-GG biçiminde olmalıdır",
+    "asOfDateFormat": "asOfDate YYYY-AA-GG biçiminde olmalıdır",
     "invalidExportFormat": "Biçim csv veya qif olmalıdır",
     "loanRequiredFields": "Kredi hesapları için paymentAmount, paymentFrequency, paymentStartDate ve sourceAccountId gereklidir",
     "loanRequiresInterestRate": "Kredi hesapları için faiz oranı gereklidir",
@@ -452,6 +453,7 @@
   },
   "transactions": {
     "invalidStatus": "Geçersiz işlem durumu: {{ status }}",
+    "reconciledLocked": "Bu işlem mutabık kılınmış ve kilitli. Değiştirmek için Ayarlar'da 'Mutabık kılınan işlemleri kilitle' seçeneğini kapatın.",
     "pagePositiveInteger": "page pozitif bir tamsayı olmalıdır",
     "limitPositiveInteger": "limit pozitif bir tamsayı olmalıdır",
     "limitMax200": "limit 200'ü geçemez",

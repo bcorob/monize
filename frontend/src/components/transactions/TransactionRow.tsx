@@ -14,6 +14,7 @@ import { formatAmountWithCommas, getDecimalPlacesForCurrency } from '@/lib/forma
 import { foreignTransactionFee } from '@/lib/fx-fees';
 import { transferDirection } from '@/lib/transfer-label';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
+import type { StaleUnreconciledReason } from '@/lib/stale-reconciliation';
 
 const INVESTMENT_ACTION_LABELS: Record<string, string> = {
   BUY: 'Buy',
@@ -176,6 +177,13 @@ export interface TransactionRowProps {
   isHighlighted?: boolean;
   /** Render the foreign-currency columns (paid currency, paid amount, fee paid). */
   showFxColumns?: boolean;
+  /**
+   * Why this row is overdue for reconciliation, from `classifyStaleRow`.
+   * Undefined means either "not stale" or "no information" -- the caller only
+   * supplies it for accounts the user actually reconciles, and a page that
+   * could not load that context supplies it for none.
+   */
+  staleReason?: StaleUnreconciledReason;
 }
 
 export const TransactionRow = memo(function TransactionRow({
@@ -215,9 +223,13 @@ export const TransactionRow = memo(function TransactionRow({
   isFuture,
   isHighlighted,
   showFxColumns = false,
+  staleReason,
 }: TransactionRowProps) {
   const t = useTranslations('transactions');
   const tc = useTranslations('common');
+  // The reconciliation chips live in the reconcile catalog so the register and
+  // the reconcile table say the same thing about the same row.
+  const tr = useTranslations('reconcile');
   const { formatCurrency } = useNumberFormat();
   const isVoid = transaction.status === TransactionStatus.VOID;
 
@@ -266,7 +278,23 @@ export const TransactionRow = memo(function TransactionRow({
         </td>
       )}
       <td className={`${cellPadding} whitespace-nowrap text-sm text-gray-900 dark:text-gray-100 ${isVoid ? 'line-through' : ''}`}>
-        {formatDate(transaction.transactionDate)}
+        <span className={`flex items-center gap-1.5 ${isVoid ? 'line-through' : ''}`}>
+          {formatDate(transaction.transactionDate)}
+          {staleReason && (
+            <span
+              data-testid="stale-reconciliation-chip"
+              data-stale={staleReason}
+              className="inline-flex items-center rounded-full bg-amber-200 dark:bg-amber-800 px-1.5 py-0.5 text-[10px] font-medium text-amber-900 dark:text-amber-100"
+              title={
+                staleReason === 'missed'
+                  ? tr('stale.missedTooltip')
+                  : tr('stale.overdueTooltip')
+              }
+            >
+              {staleReason === 'missed' ? tr('stale.missedChip') : tr('stale.overdueChip')}
+            </span>
+          )}
+        </span>
       </td>
       <td className={`${cellPadding} whitespace-nowrap text-sm text-gray-900 dark:text-gray-100 ${isVoid ? 'line-through' : ''} hidden lg:table-cell`}>
         {transaction.account?.name || '-'}

@@ -128,6 +128,8 @@
     "showCreatedAtTooltip": "Wyświetla datę i godzinę pierwotnego utworzenia transakcji w formularzach. Jest to odrębne od daty transakcji i pomaga ustalić, kiedy wpis faktycznie dodano do Monize.",
     "showWhatsNewLabel": "Pokaż „Co nowego” po aktualizacji",
     "showWhatsNewTooltip": "Wyświetla podsumowanie informacji o wydaniu przy pierwszym logowaniu po zaktualizowaniu Monize do nowej wersji. Zawsze możesz otworzyć je ponownie, klikając numer wersji na dole tej strony lub na ekranie logowania.",
+    "lockReconciledLabel": "Zablokuj uzgodnione transakcje",
+    "lockReconciledTooltip": "Gdy ta opcja jest wyłączona, Monize ostrzega przed edycją, która zmieniłaby datę lub kwotę uzgodnionej transakcji, a potem ją dopuszcza. Gdy jest włączona, uzgodnionych transakcji nie można w ogóle edytować, usuwać ani cofać ich uzgodnienia. Wyłącz ją ponownie, aby wprowadzić poprawkę.",
     "timeFormatLabel": "Format czasu",
     "recentTransactionsLabel": "Ostatnie transakcje w szybkim uzupełnianiu",
     "recentTransactionsHelp": "Liczba wpisów wyświetlanych w okienku przycisku historii obok pola Odbiorca w formularzach transakcji.",

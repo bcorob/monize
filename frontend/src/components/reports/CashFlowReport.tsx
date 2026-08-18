@@ -189,43 +189,21 @@ export function CashFlowReport() {
     />
   );
 
-  if (error) {
-    return <ReportError onRetry={reload} />;
-  }
-
-  if (isLoading) {
-    // Render the controls block too so focus inside DateInput survives
-    // reloads triggered by typing in the custom date range.
-    return (
-      <div className="space-y-6">
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-4">
-          <div className="flex flex-wrap gap-4 items-center justify-between">
-            <DateRangeSelector
-              ranges={["3m", "6m", "1y"]}
-              value={dateRange}
-              onChange={setDateRange}
-              showCustom
-              customStartDate={startDate}
-              onCustomStartDateChange={setStartDate}
-              customEndDate={endDate}
-              onCustomEndDateChange={setEndDate}
-            />
-            <ExportDropdown onExportPdf={handleExportPdf} />
-          </div>
-        </div>
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-6">
-          <div className="space-y-4">
-            <Skeleton className="h-8 w-1/3" />
-            <Skeleton className="h-64 w-full" />
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // Loading and error render inside this tree, never as an early return: a
+  // second tree unmounts the controls block and ejects focus from the date
+  // field being typed into (issue #1201).
+  const dataUnavailable = isLoading || !!error;
 
   return (
     <div className="space-y-6">
       {/* Summary Cards */}
+      {dataUnavailable ? (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Skeleton className="h-24 w-full" />
+          <Skeleton className="h-24 w-full" />
+          <Skeleton className="h-24 w-full" />
+        </div>
+      ) : (
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4 sm:p-6">
           <div className="text-sm text-green-600 dark:text-green-400">
@@ -271,8 +249,12 @@ export function CashFlowReport() {
           </div>
         </div>
       </div>
+      )}
 
-      {/* Controls */}
+      {/* Controls -- always rendered so focus inside DateInput survives reloads.
+          It sits between the cards and the chart, and both of those change with
+          the data, so it can only stay mounted if this is the one tree the
+          component ever returns. */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-4">
         <div className="flex flex-wrap gap-4 items-center justify-between">
           <DateRangeSelector
@@ -289,6 +271,17 @@ export function CashFlowReport() {
         </div>
       </div>
 
+      {error ? (
+        <ReportError onRetry={reload} />
+      ) : isLoading ? (
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-6">
+          <div className="space-y-4">
+            <Skeleton className="h-8 w-1/3" />
+            <Skeleton className="h-64 w-full" />
+          </div>
+        </div>
+      ) : (
+        <>
       {/* Monthly Chart */}
       <div ref={chartRef} className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 px-2 py-4 sm:p-6">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 px-1 sm:px-0">
@@ -398,6 +391,8 @@ export function CashFlowReport() {
           </div>
         </div>
       </div>
+        </>
+      )}
     </div>
   );
 }

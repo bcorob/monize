@@ -4,6 +4,12 @@
     "addFavourite": "Add to favorites"
   },
   "accountBalances": {
+    "groupByFavourite": "Favorite",
+    "favouritesLabel": "Favorites",
+    "favouritesOnly": "Favorites only",
+    "favouritesOthers": "Everything except favorites",
+    "groupFavourite": "Favorites",
+    "groupOther": "Not favorites",
     "accountTypes": {
       "CHEQUING": "Checking"
     }

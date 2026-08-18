@@ -24,6 +24,7 @@ import { BillsFilterPanel } from '@/components/scheduled-transactions/BillsFilte
 import { OverrideEditorDialog } from '@/components/scheduled-transactions/OverrideEditorDialog';
 import { OccurrenceDatePicker } from '@/components/scheduled-transactions/OccurrenceDatePicker';
 import { PostTransactionDialog } from '@/components/scheduled-transactions/PostTransactionDialog';
+import { DensityToggle } from '@/components/ui/DensityToggle';
 import { PageLayout } from '@/components/layout/PageLayout';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
@@ -695,22 +696,32 @@ function BillsContent() {
               </button>
             </nav>
             {viewMode === 'list' && (
-              <div className="hidden sm:flex pr-4 gap-2">
-                {(['all', 'bills', 'deposits'] as const).map((type) => (
-                  <button
-                    key={type}
-                    onClick={() => setFilterType(type)}
-                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                      filterType === type
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                    }`}
-                  >
-                    {type === 'all' ? t('viewTabs.filterAll', { count: scheduledTransactions.length }) :
-                     type === 'bills' ? t('viewTabs.filterBills', { count: scheduledTransactions.filter((st) => scheduledKind(st) === 'bill').length }) :
-                     t('viewTabs.filterDeposits', { count: scheduledTransactions.filter((st) => scheduledKind(st) === 'deposit').length })}
-                  </button>
-                ))}
+              <div className="flex items-center pr-4 gap-2">
+                <div className="hidden sm:flex gap-2">
+                  {(['all', 'bills', 'deposits'] as const).map((type) => (
+                    <button
+                      key={type}
+                      onClick={() => setFilterType(type)}
+                      className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                        filterType === type
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                      }`}
+                    >
+                      {type === 'all' ? t('viewTabs.filterAll', { count: scheduledTransactions.length }) :
+                       type === 'bills' ? t('viewTabs.filterBills', { count: scheduledTransactions.filter((st) => scheduledKind(st) === 'bill').length }) :
+                       t('viewTabs.filterDeposits', { count: scheduledTransactions.filter((st) => scheduledKind(st) === 'deposit').length })}
+                    </button>
+                  ))}
+                </div>
+                {/* Density belongs to the list, so it sits with the list's own
+                    controls and is absent from the calendar. `sm` -- the plain
+                    borderless button every other table's toggle is, rather than
+                    a filled chip: it is not a fourth filter beside All/Bills/
+                    Deposits and must not read as one. It stays visible below
+                    `sm`, where the type chips do not: the rows are still there
+                    to tighten. */}
+                <DensityToggle view="bills" />
               </div>
             )}
             {viewMode === 'calendar' && (

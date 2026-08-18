@@ -20,6 +20,7 @@
     "useFavouriteUpdateEndpoint": "Verwenden Sie den Konto-Aktualisierungsendpunkt, um Favoriten zu ändern",
     "startDateFormat": "startDate muss im Format YYYY-MM-DD sein",
     "endDateFormat": "endDate muss im Format YYYY-MM-DD sein",
+    "asOfDateFormat": "asOfDate muss im Format YYYY-MM-DD sein",
     "invalidExportFormat": "Format muss csv oder qif sein",
     "loanRequiredFields": "Darlehenskonten erfordern paymentAmount, paymentFrequency, paymentStartDate und sourceAccountId",
     "loanRequiresInterestRate": "Darlehenskonten erfordern einen Zinssatz",
@@ -452,6 +453,7 @@
   },
   "transactions": {
     "invalidStatus": "Ungültiger Buchungsstatus: {{ status }}",
+    "reconciledLocked": "Diese Buchung ist abgeglichen und gesperrt. Deaktivieren Sie „Abgeglichene Buchungen sperren“ in den Einstellungen, um sie zu ändern.",
     "pagePositiveInteger": "page muss eine positive ganze Zahl sein",
     "limitPositiveInteger": "limit muss eine positive ganze Zahl sein",
     "limitMax200": "limit darf 200 nicht überschreiten",

@@ -84,6 +84,7 @@ export const RULES: Record<string, TableRules> = {
     default_quote_provider: keep,
     recent_transactions_limit: keep,
     ai_bubble_enabled: keep,
+    lock_reconciled_transactions: keep,
     language: keep,
     last_client_timezone: drop, // location hint
     created_at: keep,

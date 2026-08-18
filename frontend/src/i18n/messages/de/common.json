@@ -143,7 +143,8 @@
     "nextDay": "Nächster Tag",
     "previousDay": "Vorheriger Tag",
     "nextMonth": "Nächster Monat",
-    "previousMonth": "Vorheriger Monat"
+    "previousMonth": "Vorheriger Monat",
+    "partialDateHint": "Geben Sie einen Teil eines Datums ein, der Rest wird ergänzt: Tag und Monat übernehmen das aktuelle Jahr."
   },
   "accountTypes": {
     "CHEQUING": "Girokonto",

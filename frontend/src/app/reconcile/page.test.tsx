@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, fireEvent } from '@/test/render';
+import { render, screen, waitFor, fireEvent, within, act } from '@/test/render';
 import ReconcilePage from './page';
 import { TransactionStatus } from '@/types/transaction';
 
@@ -67,6 +67,9 @@ const mockGetAll = vi.fn();
 const mockGetReconciliationData = vi.fn();
 const mockBulkReconcile = vi.fn();
 const mockScheduledGetAll = vi.fn();
+const mockDelete = vi.fn();
+const mockDeleteTransfer = vi.fn();
+const mockUpdateStatus = vi.fn();
 
 vi.mock('@/lib/accounts', () => ({
   accountsApi: {
@@ -84,6 +87,26 @@ vi.mock('@/lib/transactions', () => ({
   transactionsApi: {
     getReconciliationData: (...args: any[]) => mockGetReconciliationData(...args),
     bulkReconcile: (...args: any[]) => mockBulkReconcile(...args),
+    delete: (...args: any[]) => mockDelete(...args),
+    deleteTransfer: (...args: any[]) => mockDeleteTransfer(...args),
+    updateStatus: (...args: any[]) => mockUpdateStatus(...args),
+  },
+}));
+
+// The transaction form is loaded through next/dynamic; render a stand-in that
+// exposes the success callback so the page's reload path can be driven.
+vi.mock('next/dynamic', () => ({
+  default: () => {
+    const DynamicTransactionForm = (props: any) => (
+      <div data-testid="reconcile-transaction-form">
+        <span data-testid="form-mode">{props.transaction ? props.transaction.id : 'new'}</span>
+        <span data-testid="form-default-account">{props.defaultAccountId}</span>
+        <button data-testid="form-succeed" onClick={() => props.onSuccess?.()}>
+          Saved
+        </button>
+      </div>
+    );
+    return DynamicTransactionForm;
   },
 }));
 
@@ -203,6 +226,9 @@ describe('ReconcilePage', () => {
     mockGetReconciliationData.mockResolvedValue(mockReconciliationData);
     mockBulkReconcile.mockResolvedValue({ reconciled: 2 });
     mockScheduledGetAll.mockResolvedValue([]);
+    mockDelete.mockResolvedValue(undefined);
+    mockDeleteTransfer.mockResolvedValue(undefined);
+    mockUpdateStatus.mockResolvedValue(undefined);
   });
 
   describe('Setup Step', () => {
@@ -363,10 +389,126 @@ describe('ReconcilePage', () => {
       }, { timeout: 3000 });
     });
 
-    it('displays transaction status indicators', async () => {
+    it('displays each row status through the shared status cell', async () => {
       await advanceToReconcileStep();
-      expect(screen.getAllByTitle('Cleared').length).toBe(2);
-      expect(screen.getByTitle('Unreconciled')).toBeInTheDocument();
+      // The reconcile table renders the register's own StatusCellButton, so the
+      // dense letters and the click-to-cycle tooltip are the register's.
+      expect(screen.getAllByTitle('Click to cycle status').length).toBe(3);
+      expect(screen.getAllByText('C').length).toBe(2);
+      expect(screen.getAllByText('-').length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  describe('Editing from inside the reconcile step', () => {
+    async function advanceToReconcileStep() {
+      render(<ReconcilePage />);
+      await waitFor(() => expect(screen.getByText(/Checking/)).toBeInTheDocument(), { timeout: 3000 });
+      fireEvent.change(screen.getByLabelText('Account'), { target: { value: 'acc-1' } });
+      fireEvent.change(screen.getByLabelText('Statement Ending Balance'), { target: { value: '1500' } });
+      fireEvent.click(screen.getAllByText('Start Reconciliation').find(el => el.tagName === 'BUTTON')!);
+      await waitFor(() => expect(screen.getByText('Statement Balance')).toBeInTheDocument(), { timeout: 3000 });
+    }
+
+    function rowFor(id: string) {
+      return screen.getByTestId(`reconcile-row-${id}`);
+    }
+
+    it('opens a blank form filed against the account being reconciled', async () => {
+      await advanceToReconcileStep();
+      fireEvent.click(screen.getByText('Add Transaction'));
+      expect(screen.getByTestId('form-mode')).toHaveTextContent('new');
+      expect(screen.getByTestId('form-default-account')).toHaveTextContent('acc-1');
+    });
+
+    it('opens the clicked row for editing', async () => {
+      await advanceToReconcileStep();
+      fireEvent.click(within(rowFor('tx-2')).getByLabelText('Edit'));
+      expect(screen.getByTestId('form-mode')).toHaveTextContent('tx-2');
+    });
+
+    it('reloads the list after a save', async () => {
+      await advanceToReconcileStep();
+      mockGetReconciliationData.mockClear();
+      fireEvent.click(screen.getByText('Add Transaction'));
+      await act(async () => {
+        fireEvent.click(screen.getByTestId('form-succeed'));
+      });
+      expect(mockGetReconciliationData).toHaveBeenCalledWith('acc-1', expect.any(String), 1500);
+      expect(screen.queryByTestId('reconcile-transaction-form')).not.toBeInTheDocument();
+    });
+
+    it('keeps a ticked row ticked across the reload', async () => {
+      await advanceToReconcileStep();
+      // tx-2 arrives UNRECONCILED, so it is not selected by default.
+      fireEvent.click(rowFor('tx-2'));
+      expect(screen.getByText('Selected (3)')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByText('Add Transaction'));
+      await act(async () => {
+        fireEvent.click(screen.getByTestId('form-succeed'));
+      });
+      await waitFor(() => expect(screen.getByText('Selected (3)')).toBeInTheDocument());
+    });
+
+    it('drops a row that is no longer listed from the selection', async () => {
+      // A phantom id left in the set would keep contributing its amount to the
+      // selected total, so the difference would never reach zero and the user
+      // could not finish.
+      await advanceToReconcileStep();
+      expect(screen.getByText('Selected (2)')).toBeInTheDocument();
+
+      mockGetReconciliationData.mockResolvedValue({
+        ...mockReconciliationData,
+        transactions: mockTransactions.filter((t) => t.id !== 'tx-1'),
+      });
+      fireEvent.click(within(rowFor('tx-1')).getByLabelText('Delete'));
+      await act(async () => {
+        fireEvent.click(screen.getByText('Delete'));
+      });
+      await waitFor(() => expect(screen.getByText('Selected (1)')).toBeInTheDocument());
+    });
+
+    it('deletes a plain transaction through the plain delete', async () => {
+      await advanceToReconcileStep();
+      fireEvent.click(within(rowFor('tx-1')).getByLabelText('Delete'));
+      await act(async () => {
+        fireEvent.click(screen.getByText('Delete'));
+      });
+      expect(mockDelete).toHaveBeenCalledWith('tx-1');
+      expect(mockDeleteTransfer).not.toHaveBeenCalled();
+    });
+
+    it('deletes a transfer through the transfer delete, so both legs go', async () => {
+      // Calling the plain delete on a transfer leaves the counterpart behind,
+      // holding money that no longer has a source.
+      mockGetReconciliationData.mockResolvedValue({
+        ...mockReconciliationData,
+        transactions: [{ ...mockTransactions[0], isTransfer: true }],
+      });
+      await advanceToReconcileStep();
+      fireEvent.click(within(rowFor('tx-1')).getByLabelText('Delete'));
+      await act(async () => {
+        fireEvent.click(screen.getByText('Delete'));
+      });
+      expect(mockDeleteTransfer).toHaveBeenCalledWith('tx-1');
+      expect(mockDelete).not.toHaveBeenCalled();
+    });
+
+    it('asks before deleting', async () => {
+      await advanceToReconcileStep();
+      fireEvent.click(within(rowFor('tx-1')).getByLabelText('Delete'));
+      expect(screen.getByText('Delete Transaction')).toBeInTheDocument();
+      expect(mockDelete).not.toHaveBeenCalled();
+    });
+
+    it('cycles a row status and reloads', async () => {
+      await advanceToReconcileStep();
+      mockGetReconciliationData.mockClear();
+      await act(async () => {
+        fireEvent.click(within(rowFor('tx-2')).getByTitle('Click to cycle status'));
+      });
+      expect(mockUpdateStatus).toHaveBeenCalledWith('tx-2', 'CLEARED');
+      expect(mockGetReconciliationData).toHaveBeenCalled();
     });
   });
 

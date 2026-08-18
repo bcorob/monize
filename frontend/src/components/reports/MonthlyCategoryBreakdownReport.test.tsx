@@ -24,6 +24,7 @@ vi.mock('@/hooks/useDateFormat', () => ({
       return `${mon}/${year}`;
     },
     dateFormat: 'MM/DD/YYYY',
+    datePattern: 'MM/DD/YYYY',
   }),
 }));
 
