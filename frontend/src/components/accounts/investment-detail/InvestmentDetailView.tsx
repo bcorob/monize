@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { format } from 'date-fns';
 import { accountsApi } from '@/lib/accounts';
 import { investmentsApi } from '@/lib/investments';
@@ -40,6 +40,15 @@ export function InvestmentDetailView({ account, refreshKey = 0 }: InvestmentDeta
   const [dividendInterestYtd, setDividendInterestYtd] = useState(0);
   const [realizedGainsYtd, setRealizedGainsYtd] = useState(0);
   const [loadedForId, setLoadedForId] = useState<string | null>(null);
+  // Bumped by the register panel after any write on either ledger. The figures
+  // above it -- the summary card, the allocation and the holdings list, cash row
+  // included -- are all derived from those rows, so a deposit that does not
+  // re-run this effect leaves them reading their pre-write values (issue #1190).
+  const [writeKey, setWriteKey] = useState(0);
+  const handleRegisterWrite = useCallback(() => setWriteKey((k) => k + 1), []);
+  // Which *account* the data on screen describes. A re-fetch triggered by a
+  // write or a price refresh is still this account's data, so it does not
+  // blank the page out from under the user.
   const isLoading = loadedForId !== account.id;
 
   useEffect(() => {
@@ -86,7 +95,7 @@ export function InvestmentDetailView({ account, refreshKey = 0 }: InvestmentDeta
     return () => {
       cancelled = true;
     };
-  }, [account, refreshKey]);
+  }, [account, refreshKey, writeKey]);
 
   const accountIds = cash ? [brokerage.id, cash.id] : [brokerage.id];
   const currency = brokerage.currencyCode;
@@ -108,7 +117,11 @@ export function InvestmentDetailView({ account, refreshKey = 0 }: InvestmentDeta
           accountIds={accountIds}
           valuationComplete={summary?.valuationComplete}
         />
-        <InvestmentValueChart accountIds={accountIds} displayCurrency={currency} />
+        <InvestmentValueChart
+          accountIds={accountIds}
+          displayCurrency={currency}
+          refreshKey={writeKey}
+        />
       </div>
 
       <GroupedHoldingsList
@@ -130,6 +143,7 @@ export function InvestmentDetailView({ account, refreshKey = 0 }: InvestmentDeta
       <InvestmentRegisterPanel
         holdingsAccount={brokerage}
         cashAccount={cash}
+        onDataChanged={handleRegisterWrite}
       />
     </div>
   );

@@ -36,3 +36,13 @@
 # The root "/" returns a 307 redirect to /login with no body; redirects legitimately
 # omit Content-Type, and X-Content-Type-Options: nosniff blocks any sniffing.
 10019	IGNORE	(Content-Type Header Missing - bodiless 307 redirect, mitigated by nosniff)
+# Reports every entry present in localStorage, whatever it holds. On /login the
+# app writes two zustand persist envelopes and nothing else:
+#   auth-storage        {"state":{"isAuthenticated":false},"version":0}
+#   monize-preferences  {"state":{"preferences":null},"version":0}
+# No token, profile or PII: auth/refresh tokens are httpOnly cookies the backend
+# owns, and the profile is refetched from the API on load. That claim is about
+# the source, so frontend/src/store/persisted-storage.guard.test.ts pins the
+# pre-login footprint and fails when a store widens it or a new one appears --
+# this line cannot outlive what it was written for.
+120000	IGNORE	(Information in Browser localStorage - non-identifying zustand persist envelopes, pinned by persisted-storage.guard.test.ts)

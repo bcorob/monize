@@ -80,7 +80,7 @@ describe('TransactionList', () => {
       <TransactionList
         transactions={[]}
         onEdit={mockOnEdit}
-        onDelete={mockOnDelete}
+        onDeleted={mockOnDelete}
         onRefresh={mockOnRefresh}
       />
     );
@@ -105,7 +105,7 @@ describe('TransactionList', () => {
       <TransactionList
         transactions={transactions}
         onEdit={mockOnEdit}
-        onDelete={mockOnDelete}
+        onDeleted={mockOnDelete}
         onRefresh={mockOnRefresh}
       />
     );
@@ -171,7 +171,7 @@ describe('TransactionList', () => {
       <TransactionList
         transactions={[transaction]}
         onEdit={mockOnEdit}
-        onDelete={mockOnDelete}
+        onDeleted={mockOnDelete}
         onRefresh={mockOnRefresh}
       />
     );
@@ -1336,7 +1336,7 @@ describe('TransactionList', () => {
         <TransactionList
           transactions={[tx]}
           onEdit={mockOnEdit}
-          onDelete={mockOnDelete}
+          onDeleted={mockOnDelete}
           onRefresh={mockOnRefresh}
         />
       );
@@ -1356,7 +1356,7 @@ describe('TransactionList', () => {
         <TransactionList
           transactions={[tx]}
           onEdit={mockOnEdit}
-          onDelete={mockOnDelete}
+          onDeleted={mockOnDelete}
           onRefresh={mockOnRefresh}
         />
       );
@@ -1387,7 +1387,7 @@ describe('TransactionList', () => {
         <TransactionList
           transactions={[transferTx]}
           onEdit={mockOnEdit}
-          onDelete={mockOnDelete}
+          onDeleted={mockOnDelete}
           onRefresh={mockOnRefresh}
         />
       );
@@ -1410,7 +1410,7 @@ describe('TransactionList', () => {
         <TransactionList
           transactions={[tx]}
           onEdit={mockOnEdit}
-          onDelete={mockOnDelete}
+          onDeleted={mockOnDelete}
           onRefresh={mockOnRefresh}
         />
       );
@@ -1444,7 +1444,7 @@ describe('TransactionList', () => {
         <TransactionList
           transactions={[transferTx]}
           onEdit={mockOnEdit}
-          onDelete={mockOnDelete}
+          onDeleted={mockOnDelete}
           onRefresh={mockOnRefresh}
         />
       );
@@ -1467,7 +1467,7 @@ describe('TransactionList', () => {
         <TransactionList
           transactions={[tx]}
           onEdit={mockOnEdit}
-          onDelete={mockOnDelete}
+          onDeleted={mockOnDelete}
           onRefresh={mockOnRefresh}
         />
       );
@@ -1486,7 +1486,7 @@ describe('TransactionList', () => {
       });
     });
 
-    it('calls onDelete and onRefresh after successful deletion', async () => {
+    it('calls onDeleted and onRefresh after successful deletion', async () => {
       const { transactionsApi } = await import('@/lib/transactions');
       vi.mocked(transactionsApi.delete).mockResolvedValueOnce(undefined);
 
@@ -1496,7 +1496,7 @@ describe('TransactionList', () => {
         <TransactionList
           transactions={[tx]}
           onEdit={mockOnEdit}
-          onDelete={mockOnDelete}
+          onDeleted={mockOnDelete}
           onRefresh={mockOnRefresh}
         />
       );
@@ -2373,7 +2373,7 @@ describe('TransactionList', () => {
         <TransactionList
           transactions={[investmentTx]}
           onEdit={mockOnEdit}
-          onDelete={mockOnDelete}
+          onDeleted={mockOnDelete}
           onRefresh={mockOnRefresh}
         />
       );

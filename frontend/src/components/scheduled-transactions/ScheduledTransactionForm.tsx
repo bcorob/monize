@@ -24,6 +24,7 @@ import { investmentsApi } from '@/lib/investments';
 import { getLocalDateString } from '@/lib/utils';
 import { payeesApi } from '@/lib/payees';
 import { categoriesApi } from '@/lib/categories';
+import { createCategoryFromInput } from '@/lib/category-create';
 import { accountsApi } from '@/lib/accounts';
 import { tagsApi } from '@/lib/tags';
 import { ScheduledTransaction, FrequencyType, FREQUENCY_VALUES } from '@/types/scheduled-transaction';
@@ -933,19 +934,29 @@ export function ScheduledTransactionForm({
     }
   };
 
-  const handleCategoryCreate = async (name: string) => {
-    if (!name.trim()) return;
-
+  // Create a category from text typed into any of this form's category pickers
+  // -- the Category field, and each split line's own picker. Returns the
+  // created category so a split line can assign it to the row that asked; null
+  // means nothing was created (blank input, or the request failed).
+  const createCategoryFromTypedName = async (name: string): Promise<Category | null> => {
     try {
-      const newCategory = await categoriesApi.create({ name: name.trim() });
-      setCategories((prev) => [...prev, newCategory]);
-      setSelectedCategoryId(newCategory.id);
-      setValue('categoryId', newCategory.id, { shouldDirty: true, shouldValidate: true });
-      toast.success(t('form.toasts.categoryCreated', { name }));
+      const result = await createCategoryFromInput(name, categories);
+      if (!result) return null;
+      setCategories((prev) => [...prev, ...result.created]);
+      toast.success(t('form.toasts.categoryCreated', { name: result.displayName }));
+      return result.category;
     } catch (error) {
       logger.error('Failed to create category:', error);
       toast.error(getErrorMessage(error, t('form.toasts.categoryCreateFailed')));
+      return null;
     }
+  };
+
+  const handleCategoryCreate = async (name: string) => {
+    const newCategory = await createCategoryFromTypedName(name);
+    if (!newCategory) return;
+    setSelectedCategoryId(newCategory.id);
+    setValue('categoryId', newCategory.id, { shouldDirty: true, shouldValidate: true });
   };
 
   const handleTransactionAmountChange = (amount: number) => {
@@ -1637,6 +1648,7 @@ export function ScheduledTransactionForm({
               onTransactionAmountChange={handleTransactionAmountChange}
               currencyCode={watchedCurrencyCode || defaultCurrency}
               onConvertToRegular={handleConvertToRegular}
+              onCreateCategory={createCategoryFromTypedName}
             />
           </div>
 

@@ -31,6 +31,7 @@ import { SummaryCard, SummaryIcons } from '@/components/ui/SummaryCard';
 import { scheduledTransactionsApi } from '@/lib/scheduled-transactions';
 import { transactionsApi } from '@/lib/transactions';
 import { categoriesApi } from '@/lib/categories';
+import { createCategoryFromInput } from '@/lib/category-create';
 import { buildCategoryColorMap } from '@/lib/categoryUtils';
 import { accountsApi } from '@/lib/accounts';
 import { ScheduledTransaction, ScheduledTransactionOverride } from '@/types/scheduled-transaction';
@@ -80,6 +81,10 @@ export default function BillsPage() {
 function BillsContent() {
   const t = useTranslations('bills');
   const tc = useTranslations('common');
+  // The two occurrence dialogs live in the scheduled-transaction domain and
+  // their copy is in that catalog; the category toasts they raise from here
+  // read from it rather than duplicating the same two strings under `bills`.
+  const tsched = useTranslations('scheduledTransactions');
   const router = useRouter();
   const searchParams = useSearchParams();
   const postBillId = searchParams.get('postBillId');
@@ -350,6 +355,28 @@ function BillsContent() {
   const handleDatePickerClose = () => {
     setDatePicker({ isOpen: false, transaction: null, overrides: [] });
   };
+
+  // Create a category from text typed into either occurrence dialog's category
+  // picker -- the plain Category field and each split line's own. The page owns
+  // the category list both dialogs read, so it owns the creation; the created
+  // row is returned so the dialog can select it, and appended here so it
+  // appears in the picker.
+  const createCategoryFromTypedName = useCallback(
+    async (name: string): Promise<Category | null> => {
+      try {
+        const result = await createCategoryFromInput(name, categories);
+        if (!result) return null;
+        setCategories((prev) => [...prev, ...result.created]);
+        toast.success(tsched('form.toasts.categoryCreated', { name: result.displayName }));
+        return result.category;
+      } catch (error) {
+        logger.error('Failed to create category:', error);
+        toast.error(getErrorMessage(error, tsched('form.toasts.categoryCreateFailed')));
+        return null;
+      }
+    },
+    [categories, tsched],
+  );
 
   const handleOverrideEditorClose = () => {
     const wasReconcileDeepLink = overrideEditor.prefillAmount != null;
@@ -817,6 +844,7 @@ function BillsContent() {
           prefillAmount={overrideEditor.prefillAmount}
           onClose={handleOverrideEditorClose}
           onSave={handleOverrideEditorSave}
+          onCreateCategory={createCategoryFromTypedName}
         />
       )}
 
@@ -831,6 +859,7 @@ function BillsContent() {
           futureTransactions={futureTransactions}
           onClose={handlePostDialogClose}
           onPosted={handlePostDialogPosted}
+          onCreateCategory={createCategoryFromTypedName}
         />
       )}
 

@@ -340,6 +340,26 @@ number is data, and prefixing one stops the column adding up (issue #1134).
 Amounts here bypass `escapeCsv`, so the rule covers the text columns that can
 still hold a number, such as a cheque number written `-123`.
 
+## A partial escape is indistinguishable from a correct one
+
+Interpolating a literal into a pattern goes through `escapeRegExp`
+(`src/common/escape-regexp.util.ts`) -- never a hand-written
+`replace(/[.*+?^${}()|[\]\\]/g, "\\$&")`, and never a subset of that class.
+`repo-paths.util.ts` escaped only dots, which reads as complete because a
+repository path contains dots and nothing else interesting; it left `\` alone,
+so a prefix carrying `\d` would have interpolated as the digit class and matched
+input nobody wrote (CodeQL `js/incomplete-sanitization`, CWE-020). The class was
+already spelled out in four other files, and the fifth copy was the wrong one --
+which is the argument for one function rather than a remembered character class.
+`escape-regexp.guard.spec.ts` scans `src/` and fails on either shape.
+
+Where the pattern is built from a list, export the builder and test it against a
+prefix carrying a metacharacter. `ROOTED`'s entries contain at most a dot, so
+over its real inputs the broken escape and the correct one agree exactly; only a
+synthetic prefix can tell them apart (`buildPlainRootedPathPattern`). Do not
+escape `-`: outside a character class it is literal, and `\-` is a SyntaxError
+under the `u` flag -- so never interpolate the result *inside* a class.
+
 ## Rejection happens before the write
 
 A check capable of refusing a command belongs inside the transaction that performs it, and under the same lock when concurrency is in play. A service that mutates, commits, and returns a success-shaped value for a caller to reject afterwards has already done the thing the `409` says it did not do.

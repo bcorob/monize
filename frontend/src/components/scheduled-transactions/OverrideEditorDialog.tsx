@@ -43,6 +43,13 @@ interface OverrideEditorDialogProps {
   prefillAmount?: number | null;
   onClose: () => void;
   onSave: () => void;
+  /**
+   * Create a category from text typed into any of this dialog's category
+   * pickers -- the Category field and each split line's own -- resolving to the
+   * created category. The page owns the category list, so it owns the creation.
+   * When omitted the pickers only select from what already exists.
+   */
+  onCreateCategory?: (name: string) => Promise<Category | null | undefined>;
 }
 
 export function OverrideEditorDialog({
@@ -55,6 +62,7 @@ export function OverrideEditorDialog({
   prefillAmount,
   onClose,
   onSave,
+  onCreateCategory,
 }: OverrideEditorDialogProps) {
   const t = useTranslations('scheduledTransactions');
   const tc = useTranslations('common');
@@ -696,6 +704,7 @@ export function OverrideEditorDialog({
                 transactionAmount={amount}
                 onTransactionAmountChange={handleAmountChange}
                 currencyCode={scheduledTransaction.currencyCode}
+                onCreateCategory={onCreateCategory}
               />
             ) : (
               <div>
@@ -708,6 +717,16 @@ export function OverrideEditorDialog({
                   value={categoryId}
                   initialDisplayValue={currentCategory?.name || ''}
                   onChange={(value) => setCategoryId(value || '')}
+                  onCreateNew={
+                    onCreateCategory
+                      ? async (name) => {
+                          const created = await onCreateCategory(name);
+                          if (created) setCategoryId(created.id);
+                        }
+                      : undefined
+                  }
+                  allowCustomValue={!!onCreateCategory}
+                  valueIsId
                 />
               </div>
             )}

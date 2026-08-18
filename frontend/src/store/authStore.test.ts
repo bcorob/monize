@@ -134,15 +134,11 @@ describe('authStore', () => {
     });
   });
 
-  describe('persistence', () => {
-    it('only persists user and isAuthenticated (not token)', () => {
-      // The partialize function should exclude token
-      const store = useAuthStore;
-      // Access the persist API to check partialize config
-      const persistOptions = (store as any).persist;
-      expect(persistOptions).toBeDefined();
-    });
-  });
+  // What this store may write to localStorage lives in
+  // persisted-storage.guard.test.ts, which runs partialize over a populated
+  // state and asserts the pre-login footprint byte for byte. The test that
+  // used to sit here asserted only that a persist API existed, under a title
+  // claiming it checked the token was excluded.
 
   describe('rehydration 502 handling', () => {
     it('keeps authenticated state on 502 error and sets backend down', async () => {

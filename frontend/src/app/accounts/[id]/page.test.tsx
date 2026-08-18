@@ -46,11 +46,21 @@ vi.mock('@/lib/errors', () => ({
   getErrorMessage: vi.fn((_e: unknown, fallback: string) => fallback),
 }));
 
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({
-    formatCurrency: (amount: number) => `$${amount.toFixed(2)}`,
-  }),
-}));
+// Only `formatCurrency` is pinned, so the assertions read `$1234.00` whatever
+// the ambient preferences say. The rest of the hook's surface comes from the
+// real one: a mock offering a subset is a fiction the moment a component this
+// page mounts reaches for another formatter -- `InvestmentValueChart` calls
+// `formatSignedPercent`, which is undefined on a hand-written object.
+vi.mock('@/hooks/useNumberFormat', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/hooks/useNumberFormat')>();
+  return {
+    ...actual,
+    useNumberFormat: () => ({
+      ...actual.useNumberFormat(),
+      formatCurrency: (amount: number) => `$${amount.toFixed(2)}`,
+    }),
+  };
+});
 
 const mockGetById = vi.fn();
 const mockGetAll = vi.fn();

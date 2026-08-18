@@ -73,7 +73,9 @@ vi.mock('@/lib/categoryUtils', () => ({
 }));
 
 vi.mock('@/components/transactions/SplitEditor', () => ({
-  SplitEditor: () => <div data-testid="split-editor">SplitEditor</div>,
+  SplitEditor: ({ onCreateCategory }: any) => (
+    <div data-testid="split-editor">{onCreateCategory ? 'can-create' : 'no-create'}</div>
+  ),
   SplitRow: null,
   createEmptySplits: () => [
     { id: '1', categoryId: '', amount: 0, memo: '', splitType: 'category' },
@@ -86,13 +88,23 @@ vi.mock('@/components/transactions/SplitEditor', () => ({
 }));
 
 vi.mock('@/components/ui/Combobox', () => ({
-  Combobox: ({ placeholder, onChange, value }: any) => (
-    <input
-      placeholder={placeholder}
-      data-testid="combobox-category"
-      value={value || ''}
-      onChange={(e: any) => onChange?.(e.target.value, '')}
-    />
+  Combobox: ({ placeholder, onChange, onCreateNew, value }: any) => (
+    <>
+      <input
+        placeholder={placeholder}
+        data-testid="combobox-category"
+        value={value || ''}
+        onChange={(e: any) => onChange?.(e.target.value, '')}
+      />
+      {onCreateNew && (
+        <button
+          data-testid="combobox-category-create"
+          onClick={() => onCreateNew('vet bills')}
+        >
+          Create
+        </button>
+      )}
+    </>
   ),
 }));
 
@@ -422,6 +434,62 @@ describe('OverrideEditorDialog', () => {
   it('shows split toggle for non-transfer transactions', () => {
     render(<OverrideEditorDialog {...defaultProps} />);
     expect(screen.getByLabelText('Split this occurrence')).toBeInTheDocument();
+  });
+
+  // --- Creating a category from the dialog (issue #1187 follow-up) ---
+  describe('creating a category', () => {
+    it('offers no create option when the page cannot create categories', () => {
+      render(<OverrideEditorDialog {...defaultProps} />);
+      expect(screen.queryByTestId('combobox-category-create')).not.toBeInTheDocument();
+    });
+
+    it('selects the category the page created', async () => {
+      const onCreateCategory = vi
+        .fn()
+        .mockResolvedValue({ id: 'c-new', name: 'Vet Bills', parentId: null });
+
+      render(
+        <OverrideEditorDialog {...defaultProps} onCreateCategory={onCreateCategory} />,
+      );
+
+      await act(async () => {
+        fireEvent.click(screen.getByTestId('combobox-category-create'));
+      });
+
+      expect(onCreateCategory).toHaveBeenCalledWith('vet bills');
+      expect(screen.getByTestId('combobox-category')).toHaveValue('c-new');
+    });
+
+    it('leaves the field alone when nothing was created', async () => {
+      const onCreateCategory = vi.fn().mockResolvedValue(null);
+
+      render(
+        <OverrideEditorDialog {...defaultProps} onCreateCategory={onCreateCategory} />,
+      );
+
+      await act(async () => {
+        fireEvent.click(screen.getByTestId('combobox-category-create'));
+      });
+
+      expect(screen.getByTestId('combobox-category')).toHaveValue('c1');
+    });
+
+    it('passes the creator through to the split editor', () => {
+      render(
+        <OverrideEditorDialog
+          {...defaultProps}
+          onCreateCategory={vi.fn()}
+        />,
+      );
+      fireEvent.click(screen.getByLabelText('Split this occurrence'));
+      expect(screen.getByTestId('split-editor')).toHaveTextContent('can-create');
+    });
+
+    it('leaves the split editor without a creator when the page has none', () => {
+      render(<OverrideEditorDialog {...defaultProps} />);
+      fireEvent.click(screen.getByLabelText('Split this occurrence'));
+      expect(screen.getByTestId('split-editor')).toHaveTextContent('no-create');
+    });
   });
 
   it('does not show split toggle for transfer transactions', () => {

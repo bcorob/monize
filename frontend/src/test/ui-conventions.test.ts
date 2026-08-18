@@ -743,3 +743,173 @@ describe("a transaction status cell is the shared StatusCellButton", () => {
     expect(DENSE_LABEL_KEY.test(wrapper)).toBe(true);
   });
 });
+
+describe("a category typed into a picker is created by one helper", () => {
+  /** The one module allowed to turn typed picker text into a category. */
+  const HELPER = "/src/lib/category-create.ts";
+  /**
+   * The Categories page's own create form is a different thing: it collects a
+   * name, parent, colour and icon from real fields, so there is no typed text
+   * to parse and no `Parent: Child` shorthand to honour.
+   */
+  const FULL_FORM = "/src/app/categories/page.tsx";
+  const CREATE_CALL = /categoriesApi\.create\(/;
+
+  it("has no second inline category-creation path", () => {
+    const offenders = productionSources()
+      .filter(([path]) => path !== HELPER && path !== FULL_FORM)
+      .filter(([, content]) => CREATE_CALL.test(content))
+      .map(([path]) => path);
+
+    // Three copies of this existed -- the transaction form, the account form's
+    // asset category, and the scheduled transaction form -- and the third had
+    // neither title casing nor the `Parent: Child` shorthand, so `travel:
+    // hotels` became a child of Travel in two fields and a single flat category
+    // named "Travel: Hotels" in the other. Use `createCategoryFromInput`.
+    expect(offenders).toEqual([]);
+  });
+
+  it("still finds the helper, so the rule cannot pass by accident", () => {
+    const helper = sources[HELPER];
+    expect(helper, `${HELPER} not found -- update HELPER in this test`).toBeTruthy();
+    expect(/export async function createCategoryFromInput\(/.test(helper)).toBe(true);
+  });
+});
+
+describe("a register that draws a Balance column is given the balance", () => {
+  /** The list that renders the column and computes the running balances. */
+  const LIST = "/src/components/transactions/TransactionList.tsx";
+
+  /** The attribute text of every `<TransactionList ...>` opening tag in a file. */
+  function transactionListTags(content: string): string[] {
+    const tags: string[] = [];
+    const open = /<TransactionList[\s>]/g;
+    let match: RegExpExecArray | null;
+    while ((match = open.exec(content)) !== null) {
+      let depth = 0;
+      for (let i = match.index; i < content.length; i++) {
+        if (content[i] === "{") depth++;
+        else if (content[i] === "}") depth--;
+        else if (content[i] === ">" && depth === 0) {
+          tags.push(content.slice(match.index, i));
+          break;
+        }
+      }
+    }
+    return tags;
+  }
+
+  it("supplies startingBalance wherever isSingleAccountView is set", () => {
+    const offenders = productionSources()
+      .flatMap(([path, content]) =>
+        transactionListTags(content).map((tag) => [path, tag] as const),
+      )
+      .filter(([, tag]) => /\bisSingleAccountView\b/.test(tag))
+      .filter(([, tag]) => !/\bstartingBalance\b/.test(tag))
+      .map(([path]) => path);
+
+    // `isSingleAccountView` alone draws the Balance column, and the number in
+    // it comes from the backend's `startingBalance` run down the page. The
+    // investment register panel read the rows off the response and dropped that
+    // field, so the column it had just asked for rendered "-" on every row
+    // (issue #1188). The two are one decision: ask for the column, supply the
+    // balance, and take both from the same response.
+    expect(offenders).toEqual([]);
+  });
+
+  it("still needs the balance to draw the column, so the rule cannot pass by accident", () => {
+    // Were the list to start deriving the running balance itself, this check
+    // would be demanding a prop nothing reads. This fails first and says so.
+    const list = sources[LIST];
+    expect(list, `${LIST} not found -- update LIST in this test`).toBeTruthy();
+    expect(/isSingleAccountView \|\| startingBalance !== undefined/.test(list)).toBe(
+      true,
+    );
+  });
+});
+
+describe("TransactionList performs its own delete", () => {
+  /** The list that owns the confirmation, the API call and the toast. */
+  const LIST = "/src/components/transactions/TransactionList.tsx";
+  /** Every way a caller could delete the row a second time. */
+  const DELETES =
+    /(?:transactionsApi\.(?:delete|deleteTransfer)|investmentsApi\.deleteTransaction)\(/;
+
+  /**
+   * The expression a file hands to `<TransactionList onDeleted={...}>`, resolved
+   * to the callback's own source where it is passed by name. Brace-matched
+   * rather than regex-terminated, because the handler is usually a `useCallback`
+   * whose body contains braces of its own.
+   */
+  function deletedHandlerSources(content: string): string[] {
+    const bodies: string[] = [];
+    const prop = /onDeleted=\{/g;
+    while (prop.exec(content) !== null) {
+      const expression = braceMatched(content, prop.lastIndex - 1);
+      const identifier = expression.trim();
+      bodies.push(
+        /^[A-Za-z_$][\w$]*$/.test(identifier)
+          ? definitionOf(content, identifier)
+          : expression,
+      );
+    }
+    return bodies;
+  }
+
+  /** The text between `{` at `open` and its matching `}`. */
+  function braceMatched(content: string, open: number): string {
+    let depth = 0;
+    for (let i = open; i < content.length; i++) {
+      if (content[i] === "{") depth++;
+      else if (content[i] === "}" && --depth === 0)
+        return content.slice(open + 1, i);
+    }
+    return content.slice(open + 1);
+  }
+
+  /**
+   * The initialiser of `const <name> = ...`, taken to the `;` at nesting depth
+   * zero. Returns the empty string when the name is not defined in this file --
+   * an imported handler is out of reach of a source scan, and saying so by
+   * finding nothing is better than guessing.
+   */
+  function definitionOf(content: string, name: string): string {
+    const start = content.search(
+      new RegExp(`\\bconst\\s+${name}\\s*=`),
+    );
+    if (start < 0) return "";
+    let depth = 0;
+    for (let i = start; i < content.length; i++) {
+      const c = content[i];
+      if (c === "(" || c === "{" || c === "[") depth++;
+      else if (c === ")" || c === "}" || c === "]") depth--;
+      else if (c === ";" && depth === 0) return content.slice(start, i);
+    }
+    return content.slice(start);
+  }
+
+  it("is never asked to delete a row twice", () => {
+    const offenders = productionSources()
+      .filter(([, content]) => content.includes("<TransactionList"))
+      .filter(([, content]) => deletedHandlerSources(content).some((body) => DELETES.test(body)))
+      .map(([path]) => path);
+
+    // `onDeleted` reports a delete this list has already performed; it is not a
+    // request to perform one. The investment register panel gave it a handler
+    // shaped like `InvestmentTransactionList`'s -- whose `onDelete` *is* the
+    // performer -- so every cash row was deleted twice and the 404 from the
+    // second attempt landed beside the success toast (issue #1192). Reach for
+    // `onRefresh` to reload after a delete.
+    expect(offenders).toEqual([]);
+  });
+
+  it("still owns the delete, so the rule cannot pass by accident", () => {
+    // Were the contract to flip -- the list asking its parent to delete -- the
+    // check above would be policing the opposite of the truth. This fails first
+    // and says what to update.
+    const list = sources[LIST];
+    expect(list, `${LIST} not found -- update LIST in this test`).toBeTruthy();
+    expect(DELETES.test(list)).toBe(true);
+    expect(/onDeleted\?\.\(/.test(list)).toBe(true);
+  });
+});

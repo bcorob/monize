@@ -1,5 +1,7 @@
 import { basename } from "path";
 
+import { escapeRegExp } from "./escape-regexp.util";
+
 /**
  * The grammar and inventory that decide whether a written reference to a file --
  * in a doc, a source comment, or a migration comment -- is a claim about this
@@ -482,12 +484,24 @@ export function extractSqlComments(sql: string): string[] {
 // Claims inside a comment.
 // ---------------------------------------------------------------------------
 
-const PLAIN_ROOTED_PATH = new RegExp(
-  `(?<![\\w./@-])(?:${ROOTED.map((p) =>
-    p.replace(/\./g, "\\.").replace(/\/$/, ""),
-  ).join("|")})/[\\w./@-]*?\\.(?:${EXTENSIONS_LONGEST_FIRST})(?![\\w])`,
-  "g",
-);
+/**
+ * The pattern that finds a rooted path in running prose, built from a list of
+ * prefixes. Exported (rather than inlined over `ROOTED`) so the escaping can be
+ * tested against a prefix carrying a metacharacter: every entry in `ROOTED`
+ * today contains at most a dot, which is exactly why an escape that handled
+ * only dots read as complete.
+ */
+export function buildPlainRootedPathPattern(prefixes: string[]): RegExp {
+  const alternatives = prefixes
+    .map((prefix) => escapeRegExp(prefix.replace(/\/$/, "")))
+    .join("|");
+  return new RegExp(
+    `(?<![\\w./@-])(?:${alternatives})/[\\w./@-]*?\\.(?:${EXTENSIONS_LONGEST_FIRST})(?![\\w])`,
+    "g",
+  );
+}
+
+const PLAIN_ROOTED_PATH = buildPlainRootedPathPattern(ROOTED);
 
 /**
  * The path claims a single comment makes. Backticked spans are the strong idiom

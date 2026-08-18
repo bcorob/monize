@@ -167,6 +167,12 @@ vi.mock('@/components/ui/Combobox', () => ({
       >
         Create
       </button>
+      <button
+        data-testid={`combobox-create-nested-${label || 'unnamed'}`}
+        onClick={() => onCreateNew?.('travel: hotels')}
+      >
+        Create nested
+      </button>
       {(options || []).map((opt: any) => (
         <button
           key={opt.value}
@@ -1248,6 +1254,35 @@ describe('ScheduledTransactionForm', () => {
 
     await waitFor(() => {
       expect(mockCategoriesCreate).toHaveBeenCalledWith({ name: 'New Item' });
+    });
+  });
+
+  // This form used to create the typed text verbatim as one flat category, so
+  // "travel: hotels" became a top-level category literally named "Travel:
+  // Hotels" here while the transaction form made Hotels a child of Travel. Both
+  // now go through `createCategoryFromInput`.
+  it('creates a parent and child for "Parent: Child" typed into the category field', async () => {
+    mockCategoriesCreate
+      .mockResolvedValueOnce({ id: 'parent-cat', name: 'Travel', parentId: null })
+      .mockResolvedValueOnce({ id: 'child-cat', name: 'Hotels', parentId: 'parent-cat' });
+
+    render(<ScheduledTransactionForm />);
+
+    await waitFor(() => {
+      expect(mockCategoriesGetAll).toHaveBeenCalled();
+    });
+
+    fireEvent.click(screen.getByTestId('combobox-create-nested-Category'));
+
+    await waitFor(() => {
+      expect(mockCategoriesCreate).toHaveBeenNthCalledWith(1, { name: 'Travel' });
+    });
+    expect(mockCategoriesCreate).toHaveBeenNthCalledWith(2, {
+      name: 'Hotels',
+      parentId: 'parent-cat',
+    });
+    await waitFor(() => {
+      expect(toast.success).toHaveBeenCalledWith('Category "Travel: Hotels" created');
     });
   });
 

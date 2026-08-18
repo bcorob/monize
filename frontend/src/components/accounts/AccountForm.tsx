@@ -24,6 +24,7 @@ import { Category } from '@/types/category';
 import { accountsApi } from '@/lib/accounts';
 import { useMainAccountName } from '@/hooks/useMainAccountName';
 import { categoriesApi } from '@/lib/categories';
+import { createCategoryFromInput } from '@/lib/category-create';
 import { exchangeRatesApi, CurrencyInfo } from '@/lib/exchange-rates';
 import { getCurrencySymbol } from '@/lib/format';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
@@ -632,63 +633,27 @@ export function AccountForm({ account, onSubmit, onCancel, onDirtyChange, submit
     }
   };
 
-  // Convert string to title case (capitalize first letter of each word)
-  const toTitleCase = (str: string): string => {
-    return str
-      .toLowerCase()
-      .split(' ')
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(' ');
-  };
-
   // Handle asset category creation - supports "Parent: Child" format
   const handleAssetCategoryCreate = async (name: string) => {
-    if (!name.trim()) return;
-
     try {
-      let categoryName = toTitleCase(name.trim());
-      let parentId: string | undefined;
-      let parentName: string | undefined;
-
-      // Check for "Parent: Child" format
-      if (categoryName.includes(':')) {
-        const parts = categoryName.split(':').map(p => p.trim());
-        if (parts.length === 2 && parts[0] && parts[1]) {
-          parentName = toTitleCase(parts[0]);
-          const childName = toTitleCase(parts[1]);
-
-          // Find existing parent category (case-insensitive, top-level only)
-          let parentCategory = categories.find(
-            c => c.name.toLowerCase() === parentName!.toLowerCase() && !c.parentId
-          );
-
-          // If parent doesn't exist, create it first
-          if (!parentCategory) {
-            const newParent = await categoriesApi.create({ name: parentName });
-            setCategories(prev => [...prev, newParent]);
-            parentCategory = newParent;
-          }
-
-          parentId = parentCategory.id;
-          parentName = parentCategory.name; // Use actual name from existing category
-          categoryName = childName;
-        }
-      }
-
-      const newCategory = await categoriesApi.create({
-        name: categoryName,
-        parentId,
+      const result = await createCategoryFromInput(name, categories, {
         isIncome: false, // Asset value changes are typically not income
       });
-      setCategories(prev => [...prev, newCategory]);
-      setSelectedAssetCategoryId(newCategory.id);
-      setAssetCategoryName(parentName ? `${parentName}: ${categoryName}` : categoryName);
-      setValue('assetCategoryId', newCategory.id, { shouldDirty: true, shouldValidate: true });
+      if (!result) return;
+      setCategories(prev => [...prev, ...result.created]);
+      setSelectedAssetCategoryId(result.category.id);
+      setAssetCategoryName(result.displayName);
+      setValue('assetCategoryId', result.category.id, { shouldDirty: true, shouldValidate: true });
 
-      if (parentId && parentName) {
-        toast.success(t('toasts.categoryCreatedNested', { parent: parentName, name: categoryName }));
+      if (result.parentName) {
+        toast.success(
+          t('toasts.categoryCreatedNested', {
+            parent: result.parentName,
+            name: result.category.name,
+          }),
+        );
       } else {
-        toast.success(t('toasts.categoryCreated', { name: categoryName }));
+        toast.success(t('toasts.categoryCreated', { name: result.category.name }));
       }
     } catch (error) {
       logger.error('Failed to create category:', error);

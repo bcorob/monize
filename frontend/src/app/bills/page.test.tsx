@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor, fireEvent } from '@/test/render';
+import { render, screen, waitFor, fireEvent, act } from '@/test/render';
 import BillsPage from './page';
 
 // Mock next/image
@@ -90,6 +90,7 @@ vi.mock('@/lib/utils', () => ({
 
 const mockGetAll = vi.fn();
 const mockGetAllCategories = vi.fn();
+const mockCreateCategory = vi.fn();
 const mockGetAllAccounts = vi.fn();
 const mockHasOverrides = vi.fn();
 const mockGetOverrides = vi.fn();
@@ -109,6 +110,7 @@ vi.mock('@/lib/scheduled-transactions', () => ({
 vi.mock('@/lib/categories', () => ({
   categoriesApi: {
     getAll: (...args: any[]) => mockGetAllCategories(...args),
+    create: (...args: any[]) => mockCreateCategory(...args),
   },
 }));
 
@@ -233,10 +235,21 @@ vi.mock('@/components/scheduled-transactions/OccurrenceDatePicker', () => ({
 }));
 
 vi.mock('@/components/scheduled-transactions/PostTransactionDialog', () => ({
-  PostTransactionDialog: ({ isOpen, onClose, onPosted }: any) => isOpen ? (
+  PostTransactionDialog: ({ isOpen, onClose, onPosted, categories, onCreateCategory }: any) => isOpen ? (
     <div data-testid="post-dialog">
       <button data-testid="post-close" onClick={onClose}>Close</button>
       <button data-testid="post-confirm" onClick={onPosted}>Confirm Post</button>
+      <span data-testid="post-category-names">
+        {(categories || []).map((c: any) => c.name).join(',')}
+      </span>
+      {onCreateCategory && (
+        <button
+          data-testid="post-create-category"
+          onClick={() => onCreateCategory('travel: hotels')}
+        >
+          Create category
+        </button>
+      )}
     </div>
   ) : null,
 }));
@@ -264,6 +277,7 @@ describe('BillsPage', () => {
     vi.useFakeTimers({ now, shouldAdvanceTime: true });
     mockGetAll.mockResolvedValue(mockScheduledTransactions);
     mockGetAllCategories.mockResolvedValue([]);
+    mockCreateCategory.mockReset();
     mockGetAllAccounts.mockResolvedValue([]);
     mockGetAllTransactions.mockResolvedValue({ data: [], total: 0 });
     mockHasOverrides.mockResolvedValue({ hasOverrides: false, count: 0 });
@@ -747,6 +761,54 @@ describe('BillsPage', () => {
 
       await waitFor(() => {
         expect(screen.getByTestId('post-dialog')).toBeInTheDocument();
+      });
+    });
+
+    // Both occurrence dialogs let the user name a category that does not exist
+    // yet; the page owns the list they read, so it owns the creation and has to
+    // add every row created -- the parent included -- or the picker shows a
+    // child whose parent is missing (issue #1187 follow-up).
+    it('creates a category for the post dialog and adds every created row to the list', async () => {
+      mockCreateCategory
+        .mockResolvedValueOnce({ id: 'parent-cat', name: 'Travel', parentId: null })
+        .mockResolvedValueOnce({ id: 'child-cat', name: 'Hotels', parentId: 'parent-cat' });
+
+      render(<BillsPage />);
+      await waitFor(() => expect(screen.getByTestId('scheduled-transaction-list')).toBeInTheDocument());
+
+      fireEvent.click(screen.getByTestId('post-st-1'));
+      await waitFor(() => expect(screen.getByTestId('post-dialog')).toBeInTheDocument());
+
+      await act(async () => {
+        fireEvent.click(screen.getByTestId('post-create-category'));
+      });
+
+      expect(mockCreateCategory).toHaveBeenNthCalledWith(1, { name: 'Travel' });
+      expect(mockCreateCategory).toHaveBeenNthCalledWith(2, {
+        name: 'Hotels',
+        parentId: 'parent-cat',
+      });
+      await waitFor(() => {
+        expect(screen.getByTestId('post-category-names')).toHaveTextContent('Travel,Hotels');
+      });
+    });
+
+    it('reports a failed category creation instead of silently doing nothing', async () => {
+      mockCreateCategory.mockRejectedValue(new Error('boom'));
+
+      render(<BillsPage />);
+      await waitFor(() => expect(screen.getByTestId('scheduled-transaction-list')).toBeInTheDocument());
+
+      fireEvent.click(screen.getByTestId('post-st-1'));
+      await waitFor(() => expect(screen.getByTestId('post-dialog')).toBeInTheDocument());
+
+      const toast = await import('react-hot-toast');
+      await act(async () => {
+        fireEvent.click(screen.getByTestId('post-create-category'));
+      });
+
+      await waitFor(() => {
+        expect(toast.default.error).toHaveBeenCalledWith('Failed to create category');
       });
     });
 

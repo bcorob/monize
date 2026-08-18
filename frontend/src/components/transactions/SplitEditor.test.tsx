@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@/test/render';
+import { render, screen, fireEvent, act } from '@/test/render';
 import { SplitEditor, SplitRow, createEmptySplits, toSplitRows, toCreateSplitData } from './SplitEditor';
 
 vi.mock('@/lib/format', () => ({
@@ -2292,5 +2292,270 @@ describe('SplitEditor — foreign-currency toggle', () => {
 
     const newSplits = mockOnChange.mock.calls[mockOnChange.mock.calls.length - 1][0];
     expect(newSplits[0].amount).toBe(-40);
+  });
+});
+
+/**
+ * Issue #1187: a split line's category field silently discarded text that
+ * matched no category, while the non-split transaction form's Category field
+ * offered to create one. Both are the same Combobox; the split copy was simply
+ * missing `allowCustomValue`/`onCreateNew`, so there was nothing to click.
+ */
+describe('SplitEditor — creating a category from a split line', () => {
+  const mockOnChange = vi.fn();
+  const mockCategories = [
+    { id: 'cat-1', name: 'Groceries', parentId: null, isIncome: false },
+  ] as any[];
+
+  const newCategory = {
+    id: 'cat-new',
+    name: 'Vet Bills',
+    parentId: null,
+    isIncome: false,
+  } as any;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  function twoSplits(): SplitRow[] {
+    return [
+      createSplitRow({ id: 'split-1', amount: -30 }),
+      createSplitRow({ id: 'split-2', amount: -20 }),
+    ];
+  }
+
+  /** The first split's category input (the mobile card layout renders first). */
+  function firstCategoryInput() {
+    return screen.getAllByPlaceholderText('Select category...')[0];
+  }
+
+  it('offers no create option when the surface cannot create categories', () => {
+    render(
+      <SplitEditor
+        splits={twoSplits()}
+        onChange={mockOnChange}
+        categories={mockCategories}
+        transactionAmount={-50}
+      />
+    );
+
+    fireEvent.change(firstCategoryInput(), { target: { value: 'Vet Bills' } });
+
+    expect(screen.queryByText('Create "Vet Bills"')).not.toBeInTheDocument();
+  });
+
+  it('offers to create a category for text matching none', () => {
+    render(
+      <SplitEditor
+        splits={twoSplits()}
+        onChange={mockOnChange}
+        categories={mockCategories}
+        transactionAmount={-50}
+        onCreateCategory={vi.fn()}
+      />
+    );
+
+    fireEvent.change(firstCategoryInput(), { target: { value: 'Vet Bills' } });
+
+    expect(screen.getByText('Create "Vet Bills"')).toBeInTheDocument();
+  });
+
+  it('offers no create option for text that already names a category', () => {
+    render(
+      <SplitEditor
+        splits={twoSplits()}
+        onChange={mockOnChange}
+        categories={mockCategories}
+        transactionAmount={-50}
+        onCreateCategory={vi.fn()}
+      />
+    );
+
+    fireEvent.change(firstCategoryInput(), { target: { value: 'Groceries' } });
+
+    expect(screen.queryByText('Create "Groceries"')).not.toBeInTheDocument();
+  });
+
+  it('assigns the created category to the row that asked', async () => {
+    const onCreateCategory = vi.fn().mockResolvedValue(newCategory);
+
+    render(
+      <SplitEditor
+        splits={twoSplits()}
+        onChange={mockOnChange}
+        categories={mockCategories}
+        transactionAmount={-50}
+        onCreateCategory={onCreateCategory}
+      />
+    );
+
+    fireEvent.change(firstCategoryInput(), { target: { value: 'Vet Bills' } });
+    await act(async () => {
+      fireEvent.click(screen.getByText('Create "Vet Bills"'));
+    });
+
+    expect(onCreateCategory).toHaveBeenCalledWith('Vet Bills');
+    const updated = mockOnChange.mock.calls[mockOnChange.mock.calls.length - 1][0];
+    expect(updated[0].categoryId).toBe('cat-new');
+    expect(updated[1].categoryId).toBeUndefined();
+  });
+
+  it('signs the row from the new category, which the parent has not sent back yet', async () => {
+    // The parent appends the new category to its own list, but that state
+    // update has not re-rendered this component when the create resolves --
+    // `categories` still holds only Groceries. The expense flag has to come
+    // from the category the creator returned, or a positive amount stays
+    // positive on an expense line.
+    const onCreateCategory = vi.fn().mockResolvedValue(newCategory);
+
+    render(
+      <SplitEditor
+        splits={[
+          createSplitRow({ id: 'split-1', amount: 30 }),
+          createSplitRow({ id: 'split-2', amount: -20 }),
+        ]}
+        onChange={mockOnChange}
+        categories={mockCategories}
+        transactionAmount={-50}
+        onCreateCategory={onCreateCategory}
+      />
+    );
+
+    fireEvent.change(firstCategoryInput(), { target: { value: 'Vet Bills' } });
+    await act(async () => {
+      fireEvent.click(screen.getByText('Create "Vet Bills"'));
+    });
+
+    const updated = mockOnChange.mock.calls[mockOnChange.mock.calls.length - 1][0];
+    expect(updated[0].categoryId).toBe('cat-new');
+    expect(updated[0].amount).toBe(-30);
+  });
+
+  it('leaves the row untouched when nothing was created', async () => {
+    const onCreateCategory = vi.fn().mockResolvedValue(null);
+
+    render(
+      <SplitEditor
+        splits={twoSplits()}
+        onChange={mockOnChange}
+        categories={mockCategories}
+        transactionAmount={-50}
+        onCreateCategory={onCreateCategory}
+      />
+    );
+
+    fireEvent.change(firstCategoryInput(), { target: { value: 'Vet Bills' } });
+    await act(async () => {
+      fireEvent.click(screen.getByText('Create "Vet Bills"'));
+    });
+
+    expect(onCreateCategory).toHaveBeenCalled();
+    expect(mockOnChange).not.toHaveBeenCalled();
+  });
+
+  it('follows the row it was typed into when the rows move while the request is in flight', async () => {
+    // The create is asynchronous, so the split that asked for the category can
+    // have moved by the time it arrives. Addressing the row by index would put
+    // the category on whatever now sits at position 0.
+    let resolveCreate: (c: unknown) => void = () => {};
+    const onCreateCategory = vi.fn().mockReturnValue(
+      new Promise((resolve) => {
+        resolveCreate = resolve;
+      })
+    );
+
+    const { rerender } = render(
+      <SplitEditor
+        splits={twoSplits()}
+        onChange={mockOnChange}
+        categories={mockCategories}
+        transactionAmount={-50}
+        onCreateCategory={onCreateCategory}
+      />
+    );
+
+    fireEvent.change(firstCategoryInput(), { target: { value: 'Vet Bills' } });
+    await act(async () => {
+      fireEvent.click(screen.getByText('Create "Vet Bills"'));
+    });
+
+    // A new split is inserted ahead of the one that asked.
+    const reordered: SplitRow[] = [
+      createSplitRow({ id: 'split-3', amount: 0 }),
+      createSplitRow({ id: 'split-1', amount: -30 }),
+      createSplitRow({ id: 'split-2', amount: -20 }),
+    ];
+    await act(async () => {
+      rerender(
+        <SplitEditor
+          splits={reordered}
+          onChange={mockOnChange}
+          categories={mockCategories}
+          transactionAmount={-50}
+          onCreateCategory={onCreateCategory}
+        />
+      );
+    });
+
+    await act(async () => {
+      resolveCreate(newCategory);
+    });
+
+    const updated = mockOnChange.mock.calls[mockOnChange.mock.calls.length - 1][0];
+    expect(updated.map((s: SplitRow) => s.categoryId)).toEqual([
+      undefined,
+      'cat-new',
+      undefined,
+    ]);
+  });
+
+  it('drops the category quietly when its row is gone by the time it arrives', async () => {
+    let resolveCreate: (c: unknown) => void = () => {};
+    const onCreateCategory = vi.fn().mockReturnValue(
+      new Promise((resolve) => {
+        resolveCreate = resolve;
+      })
+    );
+
+    const { rerender } = render(
+      <SplitEditor
+        splits={twoSplits()}
+        onChange={mockOnChange}
+        categories={mockCategories}
+        transactionAmount={-50}
+        onCreateCategory={onCreateCategory}
+      />
+    );
+
+    fireEvent.change(firstCategoryInput(), { target: { value: 'Vet Bills' } });
+    await act(async () => {
+      fireEvent.click(screen.getByText('Create "Vet Bills"'));
+    });
+
+    const remaining: SplitRow[] = [
+      createSplitRow({ id: 'split-2', amount: -20 }),
+      createSplitRow({ id: 'split-4', amount: -30 }),
+    ];
+    await act(async () => {
+      rerender(
+        <SplitEditor
+          splits={remaining}
+          onChange={mockOnChange}
+          categories={mockCategories}
+          transactionAmount={-50}
+          onCreateCategory={onCreateCategory}
+        />
+      );
+    });
+
+    mockOnChange.mockClear();
+    await act(async () => {
+      resolveCreate(newCategory);
+    });
+
+    // Nothing is assigned -- and in particular nothing lands on split-2, which
+    // is what an index-based apply would have done.
+    expect(mockOnChange).not.toHaveBeenCalled();
   });
 });

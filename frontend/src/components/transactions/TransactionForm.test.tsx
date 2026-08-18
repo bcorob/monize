@@ -224,6 +224,14 @@ vi.mock('@/lib/categories', () => ({
   },
 }));
 
+const mockGetJointReferenceData = vi.fn();
+
+vi.mock('@/lib/delegation', () => ({
+  delegationApi: {
+    getJointReferenceData: (...args: any[]) => mockGetJointReferenceData(...args),
+  },
+}));
+
 const mockAccountsGetAll = vi.fn();
 
 vi.mock('@/lib/accounts', () => ({
@@ -304,7 +312,17 @@ vi.mock('@hookform/resolvers/zod', () => ({
 }));
 
 vi.mock('./SplitEditor', () => ({
-  SplitEditor: () => <div data-testid="split-editor">Split Editor</div>,
+  SplitEditor: ({ categories, onCreateCategory }: any) => (
+    <div data-testid="split-editor">
+      Split Editor
+      <span data-testid="split-editor-categories">
+        {(categories || []).map((c: any) => c.name).join(',')}
+      </span>
+      <span data-testid="split-editor-can-create">
+        {onCreateCategory ? 'yes' : 'no'}
+      </span>
+    </div>
+  ),
   createEmptySplits: () => [
     { id: 'split-1', splitType: 'category', amount: 0, categoryId: undefined, memo: '' },
     { id: 'split-2', splitType: 'category', amount: 0, categoryId: undefined, memo: '' },
@@ -450,6 +468,12 @@ describe('TransactionForm', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockAccountsGetAll.mockResolvedValue(mockAccounts);
+    mockGetJointReferenceData.mockResolvedValue({
+      categories: [],
+      payees: [],
+      payeesCanCreate: false,
+      categoriesCanCreate: false,
+    });
     mockPayeesGetAll.mockResolvedValue(mockPayees);
     mockCategoriesGetAll.mockResolvedValue(mockCategories);
     mockGetRecent.mockResolvedValue([]);
@@ -463,6 +487,152 @@ describe('TransactionForm', () => {
   // =========================================================================
   // Existing tests (preserved)
   // =========================================================================
+
+  // =========================================================================
+  // Joint accounts: a joint row belongs to the sharing owner, so every category
+  // picker on the form offers the OWNER's list -- the split lines included.
+  // =========================================================================
+  describe('joint accounts', () => {
+    const jointAccount = {
+      ...mockAccounts[0],
+      id: 'acc-joint',
+      name: 'Shared Chequing',
+      isJoint: true,
+      ownerLabel: 'Sam',
+    } as any;
+
+    const ownerCategories = [
+      { id: 'own-cat-1', name: 'Owner Groceries', parentId: null, isIncome: false, isSystem: false, icon: null, color: null },
+    ];
+
+    beforeEach(() => {
+      mockAccountsGetAll.mockResolvedValue([...mockAccounts, jointAccount]);
+      mockGetJointReferenceData.mockResolvedValue({
+        categories: ownerCategories,
+        payees: [],
+        payeesCanCreate: false,
+        categoriesCanCreate: false,
+      });
+    });
+
+    /** A split transaction already stored in the joint account. */
+    function jointSplitTransaction() {
+      return { ...createSplitTransaction(), accountId: 'acc-joint' };
+    }
+
+    // Split mode is unreachable from the mode button on a joint account, but
+    // opening a split row that already lives there puts the form straight into
+    // it -- and the editor was handed the CALLER's categories, so the owner's
+    // split lines resolved to nothing and any pick wrote one of the caller's
+    // own ids onto the owner's row.
+    it("hands the split editor the owner's categories, not the caller's", async () => {
+      render(
+        <TransactionForm
+          transaction={jointSplitTransaction()}
+          onSuccess={mockOnSuccess}
+          onCancel={mockOnCancel}
+        />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId('split-editor-categories')).toHaveTextContent(
+          'Owner Groceries'
+        );
+      });
+      expect(screen.getByTestId('split-editor-categories')).not.toHaveTextContent(
+        'Groceries,'
+      );
+    });
+
+    it('offers no category creation from a joint split line', async () => {
+      render(
+        <TransactionForm
+          transaction={jointSplitTransaction()}
+          onSuccess={mockOnSuccess}
+          onCancel={mockOnCancel}
+        />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId('split-editor')).toBeInTheDocument();
+      });
+      expect(screen.getByTestId('split-editor-can-create')).toHaveTextContent('no');
+    });
+
+    // `categoriesApi.create` writes to the caller's own ledger, so offering
+    // "+ Create" here created the category in the wrong place and put an id the
+    // owner does not own on the form.
+    it('offers no category creation on the joint Category field', async () => {
+      render(
+        <TransactionForm
+          defaultAccountId="acc-joint"
+          onSuccess={mockOnSuccess}
+          onCancel={mockOnCancel}
+        />
+      );
+
+      await waitFor(() => {
+        expect(mockGetJointReferenceData).toHaveBeenCalledWith('acc-joint');
+      });
+      await waitFor(() => {
+        expect(screen.queryByTestId('combobox-create-Category')).not.toBeInTheDocument();
+      });
+    });
+
+    it("still offers category creation on the user's own account", async () => {
+      render(
+        <TransactionForm
+          defaultAccountId="acc-1"
+          onSuccess={mockOnSuccess}
+          onCancel={mockOnCancel}
+        />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId('combobox-create-Category')).toBeInTheDocument();
+      });
+      expect(mockGetJointReferenceData).not.toHaveBeenCalled();
+    });
+
+    it("signs the amount from the owner's category on a joint account", async () => {
+      mockGetJointReferenceData.mockResolvedValue({
+        categories: [
+          { id: 'own-inc', name: 'Owner Salary', parentId: null, isIncome: true, isSystem: false, icon: null, color: null },
+        ],
+        payees: [],
+        payeesCanCreate: false,
+        categoriesCanCreate: false,
+      });
+
+      render(
+        <TransactionForm
+          defaultAccountId="acc-joint"
+          onSuccess={mockOnSuccess}
+          onCancel={mockOnCancel}
+        />
+      );
+
+      await waitFor(() => {
+        expect(mockGetJointReferenceData).toHaveBeenCalledWith('acc-joint');
+      });
+
+      const amountInput = screen.getByLabelText('Amount') as HTMLInputElement;
+      fireEvent.change(amountInput, { target: { value: '-40' } });
+      fireEvent.blur(amountInput);
+
+      // The sign lookup used the caller's own list, which cannot resolve an
+      // owner category id, so an income category never flipped the amount.
+      await act(async () => {
+        fireEvent.change(screen.getByTestId('combobox-input-Category'), {
+          target: { value: 'Owner Salary' },
+        });
+      });
+
+      await waitFor(() => {
+        expect(Number(amountInput.value)).toBeGreaterThan(0);
+      });
+    });
+  });
 
   it('fetches accounts including closed accounts on mount', async () => {
     render(<TransactionForm onSuccess={mockOnSuccess} onCancel={mockOnCancel} />);

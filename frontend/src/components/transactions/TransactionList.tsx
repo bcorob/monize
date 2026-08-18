@@ -22,7 +22,17 @@ interface TransactionListProps {
   onEdit?: (transaction: Transaction) => void;
   onDuplicate?: (transaction: Transaction) => void;
   onScheduleRecurring?: (transaction: Transaction) => void;
-  onDelete?: (id: string) => void;
+  /**
+   * Notification that the row has **already been deleted** -- this list owns the
+   * confirmation, the `transactionsApi.delete`/`deleteTransfer` call and the
+   * toast, and calls this afterwards with the id it removed. It is not a request
+   * to perform the delete: a handler that deletes again issues a second request
+   * for a row that no longer exists, so the user gets the success toast and a
+   * "not found" error side by side (issue #1192). Past tense is the whole
+   * contract -- reach for `onRefresh` to reload, and this only when the caller
+   * needs the id (an optimistic removal, a counterpart to drop).
+   */
+  onDeleted?: (id: string) => void;
   onRefresh?: () => void;
   onTransactionUpdate?: (transaction: Transaction) => void;
   onPayeeClick?: (payeeId: string) => void;
@@ -77,7 +87,7 @@ export function TransactionList({
   onEdit,
   onDuplicate,
   onScheduleRecurring,
-  onDelete,
+  onDeleted,
   onRefresh,
   onTransactionUpdate,
   onPayeeClick,
@@ -248,14 +258,14 @@ export function TransactionList({
         await transactionsApi.delete(transaction.id);
         toast.success(t('list.delete.success'));
       }
-      onDelete?.(transaction.id);
+      onDeleted?.(transaction.id);
       onRefresh?.();
     } catch (error) {
       toast.error(getErrorMessage(error, t('list.delete.error')));
     } finally {
       setDeletingId(null);
     }
-  }, [deleteConfirm.transaction, onDelete, onRefresh, t]);
+  }, [deleteConfirm.transaction, onDeleted, onRefresh, t]);
 
   const handleDeleteCancel = useCallback(() => {
     setDeleteConfirm({ isOpen: false, transaction: null });

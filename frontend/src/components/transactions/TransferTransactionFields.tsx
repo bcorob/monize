@@ -47,7 +47,10 @@ interface TransferTransactionFieldsProps {
   categoryOptions: Array<{ value: string; label: string }>;
   selectedCategoryId: string;
   handleCategoryChange: (categoryId: string, name: string) => void;
-  handleCategoryCreate: (name: string) => void;
+  /** Absent when the surface cannot create categories (a joint account
+   *  offers the owner's list and nothing more), which removes the
+   *  "+ Create" row from the picker. */
+  handleCategoryCreate?: (name: string) => void;
   transaction?: Transaction;
   createdAtSlot?: ReactNode;
 }
@@ -290,7 +293,7 @@ export function TransferTransactionFields({
             initialDisplayValue={transaction?.category?.name || ''}
             onChange={handleCategoryChange}
             onCreateNew={handleCategoryCreate}
-            allowCustomValue={true}
+            allowCustomValue={!!handleCategoryCreate}
             valueIsId
             error={errors.categoryId?.message as string | undefined}
           />

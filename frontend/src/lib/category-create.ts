@@ -1,0 +1,112 @@
+import { categoriesApi } from './categories';
+import { Category } from '@/types/category';
+
+/**
+ * Turning text typed into a picker into a category happens on five surfaces:
+ * the transaction form's category field and each of its split lines, the
+ * scheduled transaction form and its splits, and the asset-value category on
+ * the account form. The rules below -- title casing, and the `Parent: Child`
+ * shorthand that creates or reuses a parent -- had been written out inline
+ * three times, and the scheduled form's copy had neither, so `travel: hotels`
+ * became a child of Travel in one field and a single flat category literally
+ * named "Travel: Hotels" in another.
+ *
+ * `createCategoryFromInput` is the only place typed text becomes a category;
+ * the guard in `src/test/ui-conventions.test.ts` fails on a second
+ * `categoriesApi.create` call site outside the categories page's own full
+ * create form.
+ *
+ * It lives beside `categories.ts` rather than inside it for two reasons: that
+ * module is a typed axios wrapper (`frontend/CLAUDE.md`) and this is
+ * multi-request orchestration over it, and roughly thirty suites replace
+ * `@/lib/categories` wholesale with a mock -- a helper defined in the mocked
+ * module would vanish with it, while one that *imports* it runs against
+ * whatever `categoriesApi` the test installed.
+ */
+
+/** Capitalize the first letter of each word. */
+export function toTitleCase(str: string): string {
+  return str
+    .toLowerCase()
+    .split(' ')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+export interface CreatedCategory {
+  /** The category the user asked for -- the child, when `Parent: Child` was typed. */
+  category: Category;
+  /**
+   * Every category actually created, parent first. Callers append this to their
+   * own category list so both rows appear in the picker, not only the child.
+   */
+  created: Category[];
+  /** The parent's name when one applies, so a caller can name it in a toast. */
+  parentName?: string;
+  /** `Parent: Child` when nested, otherwise the category's own name. */
+  displayName: string;
+}
+
+export interface CreateCategoryFromInputOptions {
+  /** Passed through to the API for the created leaf category. */
+  isIncome?: boolean;
+}
+
+/**
+ * Create a category from text typed into a picker.
+ *
+ * Returns `null` for blank input -- that is "nothing to do", not a failure.
+ * API errors propagate; the caller owns the toast, because the surfaces differ
+ * in which catalog their copy lives in.
+ */
+export async function createCategoryFromInput(
+  name: string,
+  categories: Category[],
+  options: CreateCategoryFromInputOptions = {},
+): Promise<CreatedCategory | null> {
+  if (!name.trim()) return null;
+
+  let categoryName = toTitleCase(name.trim());
+  let parentId: string | undefined;
+  let parentName: string | undefined;
+  const created: Category[] = [];
+
+  // "Parent: Child" creates (or reuses) the parent, then the child under it.
+  if (categoryName.includes(':')) {
+    const parts = categoryName.split(':').map((p) => p.trim());
+    if (parts.length === 2 && parts[0] && parts[1]) {
+      const typedParentName = toTitleCase(parts[0]);
+      const childName = toTitleCase(parts[1]);
+
+      // Match an existing top-level category case-insensitively; a child
+      // category cannot itself be a parent.
+      let parentCategory = categories.find(
+        (c) => c.name.toLowerCase() === typedParentName.toLowerCase() && !c.parentId,
+      );
+
+      if (!parentCategory) {
+        parentCategory = await categoriesApi.create({ name: typedParentName });
+        created.push(parentCategory);
+      }
+
+      parentId = parentCategory.id;
+      // The existing category's own name, not the typed casing.
+      parentName = parentCategory.name;
+      categoryName = childName;
+    }
+  }
+
+  const category = await categoriesApi.create({
+    name: categoryName,
+    parentId,
+    ...(options.isIncome !== undefined ? { isIncome: options.isIncome } : {}),
+  });
+  created.push(category);
+
+  return {
+    category,
+    created,
+    parentName,
+    displayName: parentName ? `${parentName}: ${categoryName}` : categoryName,
+  };
+}

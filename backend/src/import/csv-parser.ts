@@ -9,6 +9,7 @@
  */
 
 import type { QifTransaction, QifParseResult } from "./qif-parser";
+import { escapeRegExp } from "../common/escape-regexp.util";
 import { roundToDecimals } from "../common/round.util";
 
 export interface CsvHeadersResult {
@@ -685,7 +686,7 @@ function parseDateCustom(dateStr: string, format: string): string | null {
       i += 2;
     } else {
       // Escape regex special chars for literal separator
-      regex += format[i].replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      regex += escapeRegExp(format[i]);
       i += 1;
     }
   }

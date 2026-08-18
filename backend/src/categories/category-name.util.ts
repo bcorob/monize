@@ -1,5 +1,6 @@
 import { EntityManager } from "typeorm";
 import { Category } from "./entities/category.entity";
+import { escapeRegExp } from "../common/escape-regexp.util";
 import { suggestClosestNames } from "../common/name-suggestions.util";
 
 /**
@@ -47,7 +48,7 @@ export const UNKNOWN_CATEGORY_LABEL = "Unknown category";
 const INPUT_SEPARATORS = ["->", ":", "/", ">"];
 
 const SEPARATOR_PATTERN = new RegExp(
-  `\\s*(?:${INPUT_SEPARATORS.map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})\\s*`,
+  `\\s*(?:${INPUT_SEPARATORS.map(escapeRegExp).join("|")})\\s*`,
   "g",
 );
 

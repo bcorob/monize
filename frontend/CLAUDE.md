@@ -189,6 +189,28 @@ selectable, parents included**. A bare leaf name is ambiguous once two parents
 own the same leaf, and a picker shaped differently from the transaction form's
 reads as a second component. `CategorySwitcher` carries the regression tests.
 
+**A picker the user types into creates through `createCategoryFromInput`
+(`lib/category-create.ts`), and never inline.** It owns title casing and the
+`Parent: Child` shorthand -- create or reuse the parent, then the child under
+it -- and returns every row it created so the caller can append all of them to
+its own list, not only the leaf. Three inline copies of that parsing existed
+and the scheduled transaction form's had none of it, so `travel: hotels` became
+a child of Travel in two fields and one flat category named "Travel: Hotels" in
+the third. The guard in `src/test/ui-conventions.test.ts` fails on a second
+`categoriesApi.create` call site outside the helper and the Categories page's
+own full create form.
+
+Whether a picker *offers* to create is a property of the surface, not of the
+field: a form that can create passes the creator to **every** category picker it
+renders, its split lines included. `SplitEditor`'s lines silently discarded text
+matching no category while the Category field beside them offered "+ Create"
+(issue #1187) -- the split copy was the same `Combobox` missing
+`allowCustomValue` and `onCreateNew`. An asynchronous create addresses the row
+it came from **by id**: rows can be added, removed or reordered while the
+request is in flight, and the new category's `isIncome` comes from what the
+creator returned, since the parent's appended list has not re-rendered the
+editor yet.
+
 ### An account balance is coloured by its sign -- `balanceColor`, never by account type
 
 `balanceColor` (`lib/format.ts`) is the one rule: negative is red, everything
@@ -309,6 +331,71 @@ close fills the field, instead of the previous security's quote lingering becaus
 the field is non-empty. A NaN or zero close is not a usable price -- gate the
 "Latest:" placeholder on a positive `roundedMarketPrice`, never a bare
 `marketPrice != null`, so it never renders as "Latest: NaN".
+
+### Two transaction lists, two opposite delete contracts -- read the tense
+
+`InvestmentTransactionList`'s `onDelete` **asks the parent to delete**: the list
+raises a confirmation and hands back an id. `TransactionList`'s `onDeleted`
+**reports a delete it already performed** -- it owns the confirmation, the
+`transactionsApi.delete`/`deleteTransfer` call and the toast. The two are a few
+lines apart in `InvestmentRegisterPanel`, and a handler written for the first
+shape and wired to the second deleted every cash row twice: the second request
+404'd on the row the first had removed, so the user got "Transaction deleted"
+and "not found" side by side (issue #1192). Worse for a transfer, where the list
+correctly calls `deleteTransfer` and the parent then calls the plain `delete`.
+
+Reach for `onRefresh` to reload after a delete, and for `onDeleted` only when
+you need the id itself (an optimistic removal, a counterpart to drop) -- never to
+perform the delete. `ui-conventions.test.ts` scans every `<TransactionList` for
+an `onDeleted` handler that deletes, in both the named and inline forms.
+
+**The signal has to reach whatever else is derived from those rows.** The panel's
+own reload is not the page: the account detail view draws the portfolio summary,
+the allocation and the Holdings by Account list -- cash row included -- above it,
+and a cash deposit that only reloaded the register left all three at their
+pre-write figures until the page was reloaded by hand (issue #1190). Dropping the
+caches is half of it; `invalidateBalanceCaches` only makes the *next* fetch
+honest, and nothing mounted refetches on its own. `InvestmentRegisterPanel` raises
+`onDataChanged` after every write for exactly this, and `InvestmentDetailView`
+re-runs its load from it.
+
+**A sibling that fetches for itself needs the signal as a prop, not as a
+re-render.** Re-running the parent's load refreshes what the parent fetched, and
+`InvestmentValueChart` fetches its own series -- so the write reaches it as
+`refreshKey`, the same convention the header's price refresh uses. Two details it
+cannot skip: the intraday series is served from `sessionStorage`, so a re-fetch
+that trusted the cache hands back the pre-write points (drop it with
+`clearAllIntradayCache` and pass `skipCache`), and the effect must gate on the
+key it has already **acted on** rather than on running -- `loadData` changes
+identity on every range, account and currency change, and the load effect already
+covers those, so an ungated second effect fetches twice for each of them and
+again on any mount under a non-zero key.
+
+**A form's account list is a property of the form, not of the page that opened
+it.** The same `InvestmentTransactionForm` is mounted from the Investments page
+and from an account's detail page, and only the first passed `allAccounts` -- so
+"Funds From (optional)" on the detail page offered nothing but the account's own
+linked cash, which is the one option the field exists to replace (issue #1191).
+When a surface mounts a shared form against a narrower scope, narrow the *scope*
+props (`accounts`, `defaultAccountId`) and keep supplying the wide ones. A failed
+lookup there stays `undefined`, never `[]`: the form reads undefined as "not
+supplied" and falls back, while an empty array is a claim that the user has no
+other accounts.
+
+### Asking for the Balance column and supplying the balance are one decision
+
+`<TransactionList isSingleAccountView>` draws the Balance column, and the number
+in it is the backend's `startingBalance` run down the page -- the list derives
+nothing on its own, so the column arrives empty without it. `InvestmentRegisterPanel`
+read the rows off `transactionsApi.getAll` and dropped the `startingBalance` that
+came with them, so the account detail page's cash register showed "-" on every row
+while the Investments page's copy of the same register was right (issue #1188).
+
+Take both from the same response and adopt them in the same block: a starting
+balance is computed for one page of one account and means nothing beside another
+page's rows, and a failed reload that keeps the rows has to keep the balance too.
+`ui-conventions.test.ts` fails any `<TransactionList>` that sets
+`isSingleAccountView` without passing `startingBalance`.
 
 ### A long list -- page it, or bound it and scroll with `scrollbar-slim`
 
@@ -743,6 +830,32 @@ untidy: every toggle on it is one whose save cannot succeed.
 The converse is not true. An account the caller owns and has shared *out*
 carries `jointGranteeCount`, is still theirs, and stays assignable.
 
+### On a joint row, *every* picker reads the owner's list -- and creation is off
+
+A joint row belongs to the sharing owner and may only carry the owner's
+reference ids, so `TransactionForm` derives `effectiveCategories` /
+`effectivePayees` from the grant-gated reference-data endpoint. The rule is that
+**everything** downstream reads those, not the caller's own `categories`: the
+option list, the income/expense sign lookups, and the split editor. Three sites
+still read `categories`, and each failed differently and quietly -- the sign
+lookup could not resolve an owner id, so choosing an income category left the
+amount negative; `SplitEditor` was handed the caller's list, so the owner's
+split lines resolved to nothing and any pick wrote one of the caller's ids onto
+the owner's row. Split mode is blocked on the *mode button* for a joint account,
+which is not the same as being unreachable: opening a split row that already
+lives there puts the form straight into it.
+
+Creation is a separate question with a blunter answer: **do not offer it.**
+`categoriesApi.create` writes to the caller's ledger and there is no client path
+that creates on someone else's, so "+ Create" on a joint account made the
+category in the wrong place and put an id the owner does not own on the form.
+The delegation carries a `categoriesCanCreate` capability with nothing on the
+client to drive yet; until an owner-scoped create exists, withhold the creator
+(`jointSafeCategoryCreator`) rather than gate the button on a flag the code
+cannot honour. Withholding it is also what makes the rule hold everywhere at
+once -- the Category field, the transfer form's, and every split line take the
+same optional prop, so there is one decision rather than four.
+
 ## Form Patterns
 
 `useFormModal<T>` (`hooks/useFormModal.ts`) manages create/edit modal state with browser-history integration (back button closes), unsaved-changes detection via `UnsavedChangesDialog`, and form submit exposed via ref. Returns `showForm`, `editingItem`, `openCreate()`, `openEdit(item)`, `close()`, `modalProps`, `unsavedChangesDialog`.
@@ -822,5 +935,6 @@ Colour themes are pure CSS variable overrides in `src/app/themes.css` (`html[dat
 
 - **Zod:** Configured with `jitless: true` (`zodConfig.ts`) for CSP compliance -- no `new Function()`
 - **Auth tokens:** Stored in httpOnly cookies (backend-managed), never in JS-accessible storage
+- **localStorage is readable by any XSS, and by any scanner pointed at a public page.** A store that persists there must be listed in `src/store/persisted-storage.guard.test.ts` with the reason its contents may sit in storage, and the pre-login footprint (`auth-storage` and `monize-preferences`, both empty envelopes) is pinned there byte for byte -- the ZAP baseline's rule 120000 is silenced in `.github/zap/rules.tsv` on exactly that claim, so widening a `partialize` fails the guard rather than shipping under an IGNORE written for a smaller footprint.
 - **CSP:** Per-request nonce generated in proxy, `strict-dynamic` for script-src
 - **ESLint:** `no-new-func: error` enforced to prevent CSP violations

@@ -107,7 +107,7 @@ Cross-layer rules live in `docs/`, not in this file, because they are too long t
 
 Two of these say something about a guarantee's wording that applies everywhere: any use of "atomic", "single-use", "exactly once", "retryable", "cannot", "always", "complete" or "transactional" must name the mechanism that makes it true -- the transaction, the index, the conditional `UPDATE`, the verified checksum. Three comments in this codebase claimed a lock, an atomic increment and a joint commit that the code beside them did not implement, and each was believed for as long as it existed. If the mechanism cannot be named, the wording is wrong, not merely vague.
 
-### Running the suites locally -- three ways a green branch reads as red
+### Running the suites locally -- four ways a green branch reads as red
 
 CI runs in UTC with one Playwright worker. A local run does neither, and both differences produce failures that look like regressions and are not.
 
@@ -117,6 +117,16 @@ CI runs in UTC with one Playwright worker. A local run does neither, and both di
 There is a third way, and it is the nastier one because no flag fixes it: **a test that reads the wall clock is a test about today's date.** `TZ=UTC` pins the offset, not the day. `AutoBackupService` promotes a daily artifact to weekly on the 7th, 14th, 21st and 28th and to monthly on the 1st, so on five days a month a single backup leaves two files in the folder and every assertion counting artifacts fails -- ten of them did, on `main`, with nothing having changed. A suite that is green because of the date it ran is not evidence about the code, and the failure it eventually produces points at the module rather than at the calendar.
 
 So pin the clock in the spec rather than waiting the failure out, and derive the pinned value from the constants the behaviour actually branches on (`WEEKLY_DAYS`, `MONTHLY_DAY` are exported for this) so widening one fails a named guard instead of silently re-dating ten assertions. `backend/src/backup/auto-backup.service.spec.ts` is the pattern: fake `Date` only -- faking `nextTick`/`queueMicrotask` under real `fs.promises` deadlocks rather than fails -- install the fake timers once, move the date through a single `withClockAt` helper, and let a source scan fail a second installation.
+
+The fourth is the one that hides a failure in the file you are writing rather than
+in one you did not touch: **a guard that walks the tree with `gitListFiles` cannot
+see an untracked file.** `doc-paths.spec.ts` and `source-comment-paths.spec.ts` list
+their subjects with `git ls-files` (`backend/src/common/repo-tree.util.ts`), which
+is right -- a scan must not read build output or somebody's scratch file -- and it
+means a brand-new spec or util is invisible to them until it is staged. So a run
+that is green before `git add` and red in CI on the same content is not a flake:
+the new file was simply not among the files scanned. Run those guards after staging
+(`git add -N` is enough), not before.
 
 Also: `scripts/verify-schema.sh` reproduces the "Schema vs Migrations Drift" job locally and needs nothing but Docker. Every migration has to be a no-op replayed on top of `schema.sql` (`CREATE ... IF NOT EXISTS`, `DROP ... IF EXISTS` before `CREATE POLICY`/`TRIGGER`), because that is also how the app boots: `db-init` applies `schema.sql` and `db-migrate` then replays the whole directory. A migration missing its guard does not just fail the drift check -- it aborts container start-up, and the E2E and Lighthouse jobs then report only "backend exited (1)".
 

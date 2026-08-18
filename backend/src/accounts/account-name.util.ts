@@ -1,3 +1,4 @@
+import { escapeRegExp } from "../common/escape-regexp.util";
 import { tr } from "../i18n/translate";
 import { AccountSubType } from "./entities/account.entity";
 
@@ -62,8 +63,6 @@ export function pairHalfName(
 }
 
 function stripSuffixes(name: string, words: string[]): string {
-  const suffixes = [...new Set(words)]
-    .filter(Boolean)
-    .map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const suffixes = [...new Set(words)].filter(Boolean).map(escapeRegExp);
   return name.replace(new RegExp(` - (${suffixes.join("|")})$`), "");
 }

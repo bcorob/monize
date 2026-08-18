@@ -1,3 +1,5 @@
+import { escapeRegExp } from "../escape-regexp.util";
+
 /**
  * Classifier for "does this instruction text *recommend* a prohibited database
  * primitive", separated from the spec that scans the live documents so it can be
@@ -58,8 +60,8 @@ export function findProhibitedGuidance(
   typeNames: string[] = PROHIBITED_TYPE_NAMES,
 ): ProhibitedGuidanceHit[] {
   const alternatives = [
-    ...callNames.map((name) => `${escape(name)}\\(`),
-    ...typeNames.map((name) => escape(name)),
+    ...callNames.map((name) => `${escapeRegExp(name)}\\(`),
+    ...typeNames.map(escapeRegExp),
   ];
   if (alternatives.length === 0) return [];
   const pattern = new RegExp(`(?:${alternatives.join("|")})`, "g");
@@ -78,8 +80,4 @@ export function findProhibitedGuidance(
     hits.push({ token: match[0], excerpt: excerpt.trim() });
   }
   return hits;
-}
-
-function escape(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

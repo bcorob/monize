@@ -726,6 +726,90 @@ describe('InvestmentValueChart', () => {
     });
   });
 
+  // Issue #1190. The chart fetches on mount and on a range or currency change,
+  // so a write elsewhere on the page -- a cash deposit, a trade -- moved today's
+  // point with nothing to tell the chart. `refreshKey` is that signal.
+  describe('refreshKey', () => {
+    it('re-fetches a daily range when the key is bumped', async () => {
+      const { rerender } = render(<InvestmentValueChart refreshKey={0} />);
+      await screen.findByText('Portfolio Value Over Time');
+      const before = vi.mocked(netWorthApi.getInvestmentsDaily).mock.calls.length;
+
+      await act(async () => {
+        rerender(<InvestmentValueChart refreshKey={1} />);
+      });
+
+      await waitFor(() => {
+        expect(
+          vi.mocked(netWorthApi.getInvestmentsDaily).mock.calls.length,
+        ).toBeGreaterThan(before);
+      });
+    });
+
+    // The intraday series is served from sessionStorage, so a re-fetch that
+    // trusted the cache would hand back the pre-write points.
+    it('drops the intraday cache and re-fetches when the key is bumped', async () => {
+      dateRangeState.dateRange = '1d';
+      vi.mocked(investmentsApi.getIntradayValue).mockResolvedValue({
+        points: [{ timestamp: '2024-01-02T15:00:00.000Z', value: 9000 }],
+        interval: '1m',
+        currency: 'CAD',
+        range: '1d',
+        fetchedAt: '2024-01-02T15:00:00.000Z',
+        skippedSymbols: [],
+        failedSymbols: [],
+        fallbackToDaily: false,
+      });
+
+      const { rerender } = render(<InvestmentValueChart refreshKey={0} />);
+      await screen.findByText('Portfolio Value Over Time');
+      await waitFor(() =>
+        expect(window.sessionStorage.getItem('monize-intraday|1d||CAD')).toBeTruthy(),
+      );
+      const before = vi.mocked(investmentsApi.getIntradayValue).mock.calls.length;
+
+      await act(async () => {
+        rerender(<InvestmentValueChart refreshKey={1} />);
+      });
+
+      await waitFor(() => {
+        expect(
+          vi.mocked(investmentsApi.getIntradayValue).mock.calls.length,
+        ).toBeGreaterThan(before);
+      });
+    });
+
+    // Mounting under a key that is already non-zero is not a write: the initial
+    // fetch belongs to the load effect, and firing here as well would double
+    // every request the chart makes on an account switch.
+    it('does not fetch twice when mounted under a non-zero key', async () => {
+      render(<InvestmentValueChart refreshKey={4} />);
+      await screen.findByText('Portfolio Value Over Time');
+
+      await waitFor(() =>
+        expect(netWorthApi.getInvestmentsDaily).toHaveBeenCalledTimes(1),
+      );
+    });
+
+    // A range change already re-fetches through the load effect. Were the
+    // write-refresh effect to depend on the loader it would fetch again for the
+    // same change.
+    it('does not fetch twice when only the range changes', async () => {
+      const { rerender } = render(<InvestmentValueChart refreshKey={2} />);
+      await screen.findByText('Portfolio Value Over Time');
+      dateRangeState.dateRange = '3m';
+      dateRangeState.resolvedRange = { start: '2023-10-01', end: '2024-01-01' };
+
+      await act(async () => {
+        rerender(<InvestmentValueChart refreshKey={2} titleSuffix="RRSP" />);
+      });
+
+      await waitFor(() =>
+        expect(netWorthApi.getInvestmentsDaily).toHaveBeenCalledTimes(2),
+      );
+    });
+  });
+
   it('uses monthly API for 5y range (not in DAILY_RANGES)', async () => {
     dateRangeState.dateRange = '5y';
     dateRangeState.resolvedRange = { start: '2019-01-01', end: '2024-01-01' };

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import toast from 'react-hot-toast';
+import { accountsApi } from '@/lib/accounts';
 import { investmentsApi } from '@/lib/investments';
 import { transactionsApi } from '@/lib/transactions';
 import { invalidateBalanceCaches } from '@/lib/apiCache';
@@ -35,6 +36,14 @@ interface InvestmentRegisterPanelProps {
    * ledger, which offers the brokerage register alone.
    */
   cashAccount: Account | null;
+  /**
+   * Raised after any write on either ledger, so the surrounding view can
+   * re-fetch what it derives from these rows. A cash deposit moves the cash
+   * balance the Holdings by Account list is showing, and reloading this panel
+   * alone left that figure at its pre-write value until the page was reloaded
+   * (issue #1190).
+   */
+  onDataChanged?: () => void;
 }
 
 /**
@@ -50,6 +59,7 @@ interface InvestmentRegisterPanelProps {
 export function InvestmentRegisterPanel({
   holdingsAccount,
   cashAccount,
+  onDataChanged,
 }: InvestmentRegisterPanelProps) {
   const t = useTranslations('accountDetail-investment');
   const [view, setView] = useLocalStorage<InvestmentTransactionView>(
@@ -63,7 +73,20 @@ export function InvestmentRegisterPanel({
   const [cashTx, setCashTx] = useState<Transaction[]>([]);
   const [cashPage, setCashPage] = useState(1);
   const [cashTotal, setCashTotal] = useState(0);
+  // The balance the page's first row runs from. It is part of the same
+  // payload as the rows and is only meaningful beside them, so it is adopted
+  // in the same block -- a starting balance from one page against another
+  // page's rows is a running balance for transactions nobody is looking at.
+  const [cashStartingBalance, setCashStartingBalance] = useState<
+    number | undefined
+  >(undefined);
   const [reloadKey, setReloadKey] = useState(0);
+  // Every account the user can fund a trade from, for the brokerage form's
+  // "Funds From" / "Deposit To" pickers. Undefined until it loads and after a
+  // failure, because the form reads undefined as "not supplied" and falls back
+  // to the pair -- an empty array would be a claim that the user has no other
+  // accounts. See the effect below.
+  const [allAccounts, setAllAccounts] = useState<Account[] | undefined>(undefined);
   // The key of the request the data on screen answered. Deriving the loading
   // flag from it, rather than setting one at the top of the effect, keeps the
   // payload and the request that produced it together -- and setState in an
@@ -112,6 +135,7 @@ export function InvestmentRegisterPanel({
       if (cash) {
         setCashTx(cash.data);
         setCashTotal(cash.pagination?.total ?? cash.data.length);
+        setCashStartingBalance(cash.startingBalance);
       }
       setLoadedKey(requestKey);
     })();
@@ -120,13 +144,37 @@ export function InvestmentRegisterPanel({
     };
   }, [requestKey, holdingsAccountId, cashAccountId, brokeragePage, cashPage]);
 
+  // The pair alone is not the set of accounts a trade can be funded from -- a
+  // purchase is as often paid for out of a chequing account or another
+  // brokerage's cash. The Investments page hands the same form the full list;
+  // the detail page passed only the two accounts it had, so the picker offered
+  // nothing but the linked cash account (issue #1191).
+  useEffect(() => {
+    let cancelled = false;
+    accountsApi
+      .getAll()
+      .then((accounts) => {
+        if (!cancelled) setAllAccounts(accounts);
+      })
+      // A failed lookup is not an empty list: leaving this undefined keeps the
+      // form on its own fallback rather than showing an empty picker.
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const afterWrite = useCallback(() => {
     // A trade settles into the cash ledger and a cash row can carry an
     // investment split, so either side moves balances the cached account list
     // and portfolio summary are showing.
     invalidateBalanceCaches();
     reload();
-  }, [reload]);
+    // Dropped caches only make the *next* fetch honest. The holdings, the
+    // portfolio summary and the allocation beside this panel are already
+    // rendered, so they have to be told to fetch again.
+    onDataChanged?.();
+  }, [reload, onDataChanged]);
 
   const brokerageForm = useFormModal<InvestmentTransaction>();
   const cashForm = useFormModal<Transaction>();
@@ -143,17 +191,11 @@ export function InvestmentRegisterPanel({
     [afterWrite, t],
   );
 
-  const handleDeleteCash = useCallback(
-    async (id: string) => {
-      try {
-        await transactionsApi.delete(id);
-        afterWrite();
-      } catch (error) {
-        toast.error(getErrorMessage(error, t('register.deleteFailed')));
-      }
-    },
-    [afterWrite, t],
-  );
+  // There is deliberately no cash-delete handler here. `InvestmentTransactionList`
+  // asks its parent to perform the delete; `TransactionList` performs its own and
+  // only reports it afterwards, so the cash register needs `onRefresh` and
+  // nothing else. Deleting again from here 404'd on the row the list had just
+  // removed, putting a "not found" toast beside the success one (issue #1192).
 
   const accountsForForm = cashAccount
     ? [holdingsAccount, cashAccount]
@@ -210,7 +252,6 @@ export function InvestmentRegisterPanel({
           <TransactionList
             transactions={cashTx}
             onEdit={cashForm.openEdit}
-            onDelete={handleDeleteCash}
             onRefresh={afterWrite}
             isSingleAccountView
             currentPage={cashPage}
@@ -218,6 +259,7 @@ export function InvestmentRegisterPanel({
             totalItems={cashTotal}
             pageSize={PAGE_SIZE}
             onPageChange={setCashPage}
+            startingBalance={cashStartingBalance}
           />
         </div>
       )}
@@ -231,6 +273,7 @@ export function InvestmentRegisterPanel({
       >
         <InvestmentTransactionForm
           accounts={accountsForForm}
+          allAccounts={allAccounts}
           transaction={brokerageForm.editingItem}
           defaultAccountId={holdingsAccount.id}
           onSuccess={() => {

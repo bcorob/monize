@@ -35,7 +35,10 @@ interface NormalTransactionFieldsProps {
   handlePayeeChange: (payeeId: string, payeeName: string) => void;
   handlePayeeCreate: (name: string) => void;
   handleCategoryChange: (categoryId: string, name: string) => void;
-  handleCategoryCreate: (name: string) => void;
+  /** Absent when the surface cannot create categories (a joint account
+   *  offers the owner's list and nothing more), which removes the
+   *  "+ Create" row from the picker. */
+  handleCategoryCreate?: (name: string) => void;
   handleAmountChange: (value: number | undefined) => void;
   handleModeChange: (mode: 'normal' | 'split' | 'transfer') => void;
   /** Quick-fill the form from a previous transaction. When undefined, the
@@ -219,7 +222,7 @@ export function NormalTransactionFields({
                 initialDisplayValue={transaction?.category?.name || ''}
                 onChange={handleCategoryChange}
                 onCreateNew={handleCategoryCreate}
-                allowCustomValue={true}
+                allowCustomValue={!!handleCategoryCreate}
                 valueIsId
                 usePortal
                 error={errors.categoryId?.message as string | undefined}

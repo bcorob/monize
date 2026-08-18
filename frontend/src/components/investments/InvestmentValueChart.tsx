@@ -57,9 +57,19 @@ interface InvestmentValueChartProps {
   accountIds?: string[];
   displayCurrency?: string | null;
   titleSuffix?: string;
+  /**
+   * Bumped by the surrounding view when a write changed the rows this series is
+   * computed from. The chart otherwise fetches on mount and on a range or
+   * currency change only, so a cash deposit or a trade moved today's point and
+   * left the line -- and the Highest / Lowest / Change figures beside it -- at
+   * their pre-write values (issue #1190). A bump also drops the intraday
+   * sessionStorage entry, which would serve the pre-write points back to a
+   * re-fetch that trusted it.
+   */
+  refreshKey?: number;
 }
 
-export function InvestmentValueChart({ accountIds, displayCurrency, titleSuffix }: InvestmentValueChartProps) {
+export function InvestmentValueChart({ accountIds, displayCurrency, titleSuffix, refreshKey = 0 }: InvestmentValueChartProps) {
   const t = useTranslations('investments');
   const tc = useTranslations('common');
   const { formatCurrency, formatCurrencyCompact, formatCurrencyAxis, formatCurrencyFlag, formatSignedPercent } = useNumberFormat();
@@ -331,6 +341,23 @@ export function InvestmentValueChart({ accountIds, displayCurrency, titleSuffix 
       window.removeEventListener(INVESTMENT_CHART_REFRESH_EVENT, handler);
     };
   }, [isIntraday, loadData]);
+
+  // Re-fetch when the surrounding view reports a write.
+  //
+  // The key this chart has already acted on is what gates the fetch, not the
+  // effect running: `loadData` changes identity on every range, account and
+  // currency change, and the effect above already re-fetches for each of those.
+  // Without the comparison this effect would fetch a second time for all of
+  // them, and once more on any mount under an already-nonzero key.
+  const actedOnRefreshKey = useRef(refreshKey);
+  useEffect(() => {
+    if (actedOnRefreshKey.current === refreshKey) return;
+    actedOnRefreshKey.current = refreshKey;
+    // The daily and monthly endpoints are uncached, so re-asking is enough; the
+    // intraday one is served from sessionStorage until it is dropped.
+    if (isIntraday) clearAllIntradayCache();
+    void loadData({ skipCache: true });
+  }, [refreshKey, isIntraday, loadData]);
 
   // On 1D / 1W / MTD the change is reported against the close of the trading
   // day before the window rather than against the first point drawn, unless the

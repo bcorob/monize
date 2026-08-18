@@ -39,6 +39,7 @@ import {
 } from '@/lib/lastTransactionDate';
 import { payeesApi } from '@/lib/payees';
 import { categoriesApi } from '@/lib/categories';
+import { createCategoryFromInput } from '@/lib/category-create';
 import { accountsApi } from '@/lib/accounts';
 import { delegationApi, JointReferenceData } from '@/lib/delegation';
 import { tagsApi } from '@/lib/tags';
@@ -717,7 +718,10 @@ function TransactionFormFields({ transaction, duplicateFrom, defaultAccountId, d
       // "amount must be positive" check. Mirrors the mode guard in
       // handleAmountChange. Re-signs the foreign amount when entering a foreign
       // currency, so the behaviour matches account-currency entry.
-      const category = categories.find(c => c.id === categoryId);
+      // `effectiveCategories`, not `categories`: on a joint account the picker
+      // offers the OWNER's list, so the caller's own list cannot resolve the id
+      // and the income/expense sign was never applied there.
+      const category = effectiveCategories.find(c => c.id === categoryId);
       if (category && mode === 'normal') {
         resignActiveAmount(category);
       }
@@ -734,11 +738,11 @@ function TransactionFormFields({ transaction, duplicateFrom, defaultAccountId, d
   const activeSigningCategory = (): Category | undefined => {
     if (mode === 'split') {
       return splits.length > 0 && splits[0].categoryId
-        ? categories.find((c) => c.id === splits[0].categoryId)
+        ? effectiveCategories.find((c) => c.id === splits[0].categoryId)
         : undefined;
     }
     return selectedCategoryId
-      ? categories.find((c) => c.id === selectedCategoryId)
+      ? effectiveCategories.find((c) => c.id === selectedCategoryId)
       : undefined;
   };
 
@@ -946,69 +950,51 @@ function TransactionFormFields({ transaction, duplicateFrom, defaultAccountId, d
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isForeign, entryCurrency, accountCurrency, watchedDate]);
 
-  // Convert string to title case (capitalize first letter of each word)
-  const toTitleCase = (str: string): string => {
-    return str
-      .toLowerCase()
-      .split(' ')
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(' ');
+  // Create a category from text typed into any of this form's category
+  // pickers -- the Category field, and each split line's own picker. Returns
+  // the created category so a split line can assign it to the row that asked;
+  // null means nothing was created (blank input, or the request failed).
+  const createCategoryFromTypedName = async (name: string): Promise<Category | null> => {
+    try {
+      const result = await createCategoryFromInput(name, categories);
+      if (!result) return null;
+      setCategories(prev => [...prev, ...result.created]);
+      toast.success(t('form.toasts.categoryCreated', { name: result.displayName }));
+      return result.category;
+    } catch (error) {
+      logger.error('Failed to create category:', error);
+      toast.error(getErrorMessage(error, t('form.toasts.categoryCreateFailed')));
+      return null;
+    }
   };
 
   // Handle creating a new category - called when user clicks "Create" in dropdown
   // Supports "Parent: Child" format to create subcategories
-  const handleCategoryCreate = async (name: string) => {
-    if (!name.trim()) return;
+  // A joint row belongs to the sharing owner and may only carry the owner's
+  // category ids, but `categoriesApi.create` writes to the CALLER's ledger --
+  // there is no client path that creates a category on someone else's, so the
+  // delegation's `categoriesCanCreate` capability has nothing to drive here
+  // yet. Offering "+ Create" on a joint account therefore created the category
+  // in the wrong place and put an id the owner does not own on the form. Until
+  // an owner-scoped create exists, joint accounts select from the owner's list
+  // and nothing more; withholding the creator is what removes the option from
+  // every one of this form's category pickers at once.
+  const jointSafeCategoryCreator = selectedIsJoint
+    ? undefined
+    : createCategoryFromTypedName;
 
-    try {
-      let categoryName = toTitleCase(name.trim());
-      let parentId: string | undefined;
-      let parentName: string | undefined;
-
-      // Check for "Parent: Child" format
-      if (categoryName.includes(':')) {
-        const parts = categoryName.split(':').map(p => p.trim());
-        if (parts.length === 2 && parts[0] && parts[1]) {
-          parentName = toTitleCase(parts[0]);
-          const childName = toTitleCase(parts[1]);
-
-          // Find existing parent category (case-insensitive, top-level only)
-          let parentCategory = categories.find(
-            c => c.name.toLowerCase() === parentName!.toLowerCase() && !c.parentId
-          );
-
-          // If parent doesn't exist, create it first
-          if (!parentCategory) {
-            const newParent = await categoriesApi.create({ name: parentName });
-            setCategories(prev => [...prev, newParent]);
-            parentCategory = newParent;
-          }
-
-          parentId = parentCategory.id;
-          parentName = parentCategory.name; // Use actual name from existing category
-          categoryName = childName;
-        }
+  // Undefined on a joint account, for the reason above -- which is what takes
+  // "+ Create" out of the Category field and the transfer form's, exactly as it
+  // does out of the split lines.
+  const handleCategoryCreate = jointSafeCategoryCreator
+    ? async (name: string) => {
+        const newCategory = await jointSafeCategoryCreator(name);
+        if (!newCategory) return;
+        setSelectedCategoryId(newCategory.id);
+        setValue('categoryId', newCategory.id, { shouldDirty: true, shouldValidate: true });
+        categoryWasAutoSetRef.current = false;
       }
-
-      const newCategory = await categoriesApi.create({
-        name: categoryName,
-        parentId,
-      });
-      setCategories(prev => [...prev, newCategory]);
-      setSelectedCategoryId(newCategory.id);
-      setValue('categoryId', newCategory.id, { shouldDirty: true, shouldValidate: true });
-      categoryWasAutoSetRef.current = false;
-
-      if (parentId && parentName) {
-        toast.success(t('form.toasts.categoryCreated', { name: `${parentName}: ${categoryName}` }));
-      } else {
-        toast.success(t('form.toasts.categoryCreated', { name: categoryName }));
-      }
-    } catch (error) {
-      logger.error('Failed to create category:', error);
-      toast.error(getErrorMessage(error, t('form.toasts.categoryCreateFailed')));
-    }
-  };
+    : undefined;
 
   // Created At override (only when editing and preference is enabled)
   const userTimezone = resolveTimezone(timezonePref);
@@ -1576,7 +1562,7 @@ function TransactionFormFields({ transaction, duplicateFrom, defaultAccountId, d
           <SplitEditor
             splits={splits}
             onChange={setSplits}
-            categories={categories}
+            categories={effectiveCategories}
             tags={tags}
             accounts={accounts}
             sourceAccountId={watchedAccountId || ''}
@@ -1590,6 +1576,7 @@ function TransactionFormFields({ transaction, duplicateFrom, defaultAccountId, d
             onConvertToRegular={handleConvertToRegular}
             displayCurrencyCode={isForeign ? entryCurrency : undefined}
             displayRate={isForeign ? (fxRate ?? undefined) : undefined}
+            onCreateCategory={jointSafeCategoryCreator}
           />
         </div>
       )}

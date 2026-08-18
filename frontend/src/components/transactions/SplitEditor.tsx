@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useTranslations } from 'next-intl';
 import { Input } from '@/components/ui/Input';
 import { CurrencyInput } from '@/components/ui/CurrencyInput';
@@ -56,6 +56,14 @@ interface SplitEditorProps {
    */
   displayCurrencyCode?: string;
   displayRate?: number;
+  /**
+   * Create a category from text typed into a split line's category picker,
+   * resolving to the created category (or null/undefined when nothing was
+   * created). When provided, the picker offers the same "+ Create" row as the
+   * non-split transaction form's category field; when omitted, typed text that
+   * matches nothing is discarded, which is what every split line used to do.
+   */
+  onCreateCategory?: (name: string) => Promise<Category | null | undefined>;
 }
 
 export function SplitEditor({
@@ -73,6 +81,7 @@ export function SplitEditor({
   onConvertToRegular,
   displayCurrencyCode,
   displayRate,
+  onCreateCategory,
 }: SplitEditorProps) {
   const t = useTranslations('transactions');
   const accountOptionLabel = useAccountOptionLabel({ withCurrency: false });
@@ -153,6 +162,18 @@ export function SplitEditor({
     setLocalSplits(splits);
   }, [splits]);
 
+  // A category created from a split line is applied before the parent's own
+  // state update has re-rendered this component, so the new row is not in
+  // `categories` yet. Remember what was created here so the income/expense sign
+  // rules below can still read its `isIncome` flag on the very first apply.
+  const createdCategoriesRef = useRef<Category[]>([]);
+  const findCategory = useCallback(
+    (id: string): Category | undefined =>
+      categories.find((c) => c.id === id) ??
+      createdCategoriesRef.current.find((c) => c.id === id),
+    [categories],
+  );
+
   const splitsTotal = localSplits.reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
   const remaining = Number(transactionAmount) - splitsTotal;
   // Balance is always judged in the account currency so distribution and the
@@ -215,7 +236,7 @@ export function SplitEditor({
 
     // If changing category, adjust the amount sign based on income/expense
     if (field === 'categoryId' && value) {
-      const category = categories.find(c => c.id === value);
+      const category = findCategory(value);
       if (category) {
         const currentAmount = Number(newSplits[index].amount) || 0;
         if (currentAmount !== 0) {
@@ -252,7 +273,7 @@ export function SplitEditor({
     if (field === 'amount') {
       const categoryId = newSplits[index].categoryId;
       if (categoryId) {
-        const category = categories.find(c => c.id === categoryId);
+        const category = findCategory(categoryId);
         if (category) {
           const newAmount = Number(value) || 0;
           if (newAmount !== 0) {
@@ -272,6 +293,31 @@ export function SplitEditor({
     newSplits[index] = { ...newSplits[index], [field]: value };
     setLocalSplits(newSplits);
     onChange(newSplits);
+  };
+
+  // The apply step of an asynchronous create has to run against the splits as
+  // they are when the category comes back, not as they were when the user
+  // typed: rows can be added, removed or reordered while the request is in
+  // flight. Both are read through a ref that every render refreshes.
+  const latestRef = useRef({ localSplits, handleSplitChange });
+  useEffect(() => {
+    latestRef.current = { localSplits, handleSplitChange };
+  });
+
+  // Create a category from the text typed into a split line and assign it to
+  // the row that asked. The row is addressed by its id rather than its index
+  // for the same reason.
+  const handleCategoryCreate = async (splitId: string, name: string) => {
+    if (!onCreateCategory) return;
+    const category = await onCreateCategory(name);
+    if (!category) return;
+    createdCategoriesRef.current = [...createdCategoriesRef.current, category];
+    const { localSplits: current, handleSplitChange: applyChange } = latestRef.current;
+    const index = current.findIndex((s) => s.id === splitId);
+    // The row was removed while the request was in flight: the category still
+    // exists (the user asked for it), it simply has nowhere to land.
+    if (index === -1) return;
+    applyChange(index, 'categoryId', category.id);
   };
 
   const addSplit = () => {
@@ -532,6 +578,11 @@ export function SplitEditor({
                     currencyCode={currencyCode}
                   />
                 ) : split.splitType === 'category' || !supportsTransfers ? (
+                  // Same picker as the non-split form's Category field: an id-backed
+                  // combobox offering "+ Create" for text that matches no category,
+                  // so a split line can name one that does not exist yet instead of
+                  // discarding what was typed (issue #1187). The create affordance
+                  // appears only where the surface can actually create one.
                   <Combobox
                     placeholder={t('splitEditor.selectCategory')}
                     options={categoryOptions}
@@ -540,6 +591,13 @@ export function SplitEditor({
                     onChange={(categoryId) =>
                       handleSplitChange(index, 'categoryId', categoryId || undefined)
                     }
+                    onCreateNew={
+                      onCreateCategory
+                        ? (name) => handleCategoryCreate(split.id, name)
+                        : undefined
+                    }
+                    allowCustomValue={!!onCreateCategory}
+                    valueIsId
                     disabled={disabled}
                   />
                 ) : (
@@ -694,6 +752,11 @@ export function SplitEditor({
                       currencyCode={currencyCode}
                     />
                   ) : split.splitType === 'category' || !supportsTransfers ? (
+                    // Same picker as the non-split form's Category field: an id-backed
+                    // combobox offering "+ Create" for text that matches no category,
+                    // so a split line can name one that does not exist yet instead of
+                    // discarding what was typed (issue #1187). The create affordance
+                    // appears only where the surface can actually create one.
                     <Combobox
                       placeholder={t('splitEditor.selectCategory')}
                       options={categoryOptions}
@@ -702,6 +765,13 @@ export function SplitEditor({
                       onChange={(categoryId) =>
                         handleSplitChange(index, 'categoryId', categoryId || undefined)
                       }
+                      onCreateNew={
+                        onCreateCategory
+                          ? (name) => handleCategoryCreate(split.id, name)
+                          : undefined
+                      }
+                      allowCustomValue={!!onCreateCategory}
+                      valueIsId
                       disabled={disabled}
                     />
                   ) : (
