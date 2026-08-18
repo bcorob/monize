@@ -4,6 +4,7 @@ import { InvestmentTransactionList } from './InvestmentTransactionList';
 import { investmentsApi } from '@/lib/investments';
 import { TransactionStatus } from '@/types/transaction';
 import toast from 'react-hot-toast';
+import { useDensityStore } from '@/store/densityStore';
 
 vi.mock('@/lib/investments', () => ({
   investmentsApi: {
@@ -192,19 +193,17 @@ describe('InvestmentTransactionList', () => {
     expect(screen.getByText('Normal')).toBeInTheDocument();
   });
 
-  it('calls onDensityChange prop when cycling density', () => {
-    const onDensityChange = vi.fn();
+  it('cycles the shared density preference', () => {
     const transactions = [makeTx()] as any[];
+    useDensityStore.setState({ densities: { investments: 'normal' } });
     render(
       <InvestmentTransactionList
         transactions={transactions}
         isLoading={false}
-        density="normal"
-        onDensityChange={onDensityChange}
       />
     );
     fireEvent.click(screen.getByText('Normal'));
-    expect(onDensityChange).toHaveBeenCalledWith('compact');
+    expect(useDensityStore.getState().densities.investments).toBe('compact');
   });
 
   it('shows filter button when onFiltersChange provided', () => {
@@ -482,11 +481,11 @@ describe('InvestmentTransactionList', () => {
   describe('density display in rows', () => {
     it('shows short action labels in dense mode', () => {
       const tx = makeTx({ id: 'tx-dense', action: 'BUY' });
+      useDensityStore.setState({ densities: { investments: 'dense' } });
       render(
         <InvestmentTransactionList
           transactions={[tx] as any[]}
           isLoading={false}
-          density="dense"
         />
       );
       // In dense mode "Buy" stays "Buy" (shortLabel equals label for BUY)
@@ -495,11 +494,11 @@ describe('InvestmentTransactionList', () => {
 
     it('shows short label for DIVIDEND in dense mode', () => {
       const tx = makeTx({ id: 'tx-dense-div', action: 'DIVIDEND' });
+      useDensityStore.setState({ densities: { investments: 'dense' } });
       render(
         <InvestmentTransactionList
           transactions={[tx] as any[]}
           isLoading={false}
-          density="dense"
         />
       );
       // shortLabel for DIVIDEND is 'Div'
@@ -508,11 +507,11 @@ describe('InvestmentTransactionList', () => {
 
     it('hides the security name in compact/dense mode', () => {
       const tx = makeTx({ id: 'tx-compact', action: 'BUY' });
+      useDensityStore.setState({ densities: { investments: 'compact' } });
       render(
         <InvestmentTransactionList
           transactions={[tx] as any[]}
           isLoading={false}
-          density="compact"
         />
       );
       // In compact mode, the <div> with security name is not rendered
@@ -521,11 +520,11 @@ describe('InvestmentTransactionList', () => {
 
     it('shows the security name in normal mode', () => {
       const tx = makeTx({ id: 'tx-normal', action: 'BUY' });
+      useDensityStore.setState({ densities: { investments: 'normal' } });
       render(
         <InvestmentTransactionList
           transactions={[tx] as any[]}
           isLoading={false}
-          density="normal"
         />
       );
       expect(screen.getByText('Apple Inc.')).toBeInTheDocument();
@@ -533,11 +532,11 @@ describe('InvestmentTransactionList', () => {
 
     it('shows icon-only edit and delete buttons in dense mode', () => {
       const tx = makeTx({ id: 'tx-edit-dense', action: 'BUY' });
+      useDensityStore.setState({ densities: { investments: 'dense' } });
       render(
         <InvestmentTransactionList
           transactions={[tx] as any[]}
           isLoading={false}
-          density="dense"
           onEdit={vi.fn()}
           onDelete={vi.fn()}
         />
@@ -552,11 +551,11 @@ describe('InvestmentTransactionList', () => {
         makeTx({ id: 't1', action: 'BUY' }),
         makeTx({ id: 't2', action: 'SELL' }),
       ] as any[];
+      useDensityStore.setState({ densities: { investments: 'compact' } });
       render(
         <InvestmentTransactionList
           transactions={transactions}
           isLoading={false}
-          density="compact"
         />
       );
       // At index=1 (second row) with compact density, the stripe class is applied

@@ -48,12 +48,6 @@
       "notes": "Ghi chú",
       "actions": "Hành động"
     },
-    "density": {
-      "normal": "Bình thường",
-      "compact": "Thu gọn",
-      "dense": "Dày đặc",
-      "toggle": "Chuyển đổi mật độ hàng"
-    },
     "noCategory": "Không có",
     "statusBadge": {
       "active": "Đang hoạt động",

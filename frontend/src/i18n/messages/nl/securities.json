@@ -57,12 +57,6 @@
       "actions": "Acties",
       "favourite": "Favoriet"
     },
-    "density": {
-      "normal": "Normaal",
-      "compact": "Compact",
-      "dense": "Dicht",
-      "toggle": "Rijdichtheid wisselen"
-    },
     "statusBadge": {
       "active": "Actief",
       "activeShort": "Act",

@@ -381,6 +381,63 @@ props (`accounts`, `defaultAccountId`) and keep supplying the wide ones. A faile
 lookup there stays `undefined`, never `[]`: the form reads undefined as "not
 supplied" and falls back, while an empty array is a claim that the user has no
 other accounts.
+### Row density is remembered per view, by one store -- `useDensityPreference(view)`
+
+Each surface keeps its own level -- Accounts at normal while the transactions
+register is dense -- but exactly one store holds them all, under one key. Read
+it with `useDensityPreference(view)` (`@/store/densityStore`), which returns
+`density`, `setDensity` and `cycleDensity` already bound to that view; pass the
+level *down* to rows and `RowActions` as a prop, but never accept a change
+callback back up. `DensityView` is a union, so a mistyped view is a compile
+error rather than a bucket nothing ever writes to.
+
+It was thirteen stores before issue #1193: eleven pages each owning a
+`useLocalStorage('monize-<view>-density')`, `AccountList` hand-rolling a
+twelfth under `accounts.filter.density`, and three surfaces -- the investment
+account detail register among them -- persisting nothing at all, so they fell
+through to a `useState('normal')` that reset on every remount. The defect was
+never that the levels differed per view; it was that each surface reimplemented
+storing them and some forgot. `densityStore.ts` migrates all twelve legacy keys
+into their own views and deletes them, so nobody loses a setting on the release
+that fixes losing settings.
+
+**A component rendered from more than one surface takes a `densityView` prop.**
+`TransactionList` is mounted from six places and `InvestmentTransactionList`
+from two; the prop defaults to the owning page's view, so a caller that is not
+that page and forgets it silently shares the register's bucket -- two unrelated
+screens moving together, with nothing on screen to explain why. The guard fails
+on a call site outside the owning page that does not pass one.
+
+The preference is browser-local rather than a `user_preferences` column on
+purpose -- a 13" laptop and a desktop monitor signed into the same account
+should not have to agree -- and it is classified in
+`persisted-storage.guard.test.ts` like every other localStorage-backed store.
+
+**The button is `DensityToggle`, and the strip above a table is
+`DensityToggleBar`** (`components/ui/DensityToggle.tsx`). Eleven surfaces drew
+it by hand: seven byte-identical, the rest differing only in size and placement,
+but each reading its label from its own namespace under one of five key shapes.
+That is how the *translations* drifted without anyone noticing -- fourteen of
+nineteen locales had at least one density string that disagreed with itself
+across surfaces, and Korean had six different words for "Dense". The copy now
+lives once, at `common.density.*`. Pass `size` (`sm` above a table, `md` beside
+`text-sm` toolbar controls, `chip` in a row of filter chips) and `className` for
+positioning; never colour or padding.
+
+**Cell padding is `useTableDensity(density, scale)`**, whose table is data in
+one file. There were five copies of it, agreeing at some levels and silently
+disagreeing at others, so a deliberate difference was indistinguishable from a
+drifted one. Two scales are deliberate: `default`, and `wide` for a register
+with enough columns that the phone inset has to give way before the data does
+(the investment register). A third variant means a named entry there, not a
+`switch` in a component.
+
+None of those files was wrong on its own, which is why the rule is a scan:
+`density-preference.guard.test.ts` fails on a local density `useState` (typed or
+bare), a density key at any storage call site, an `onDensityChange` prop, a
+`cycleDensity` that does not come from the store, a shared list rendered without
+a `densityView`, a second copy of the toggle markup, a density string in any
+catalog but `common`, and a hand-rolled padding `switch`.
 
 ### Asking for the Balance column and supplying the balance are one decision
 

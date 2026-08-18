@@ -43,12 +43,6 @@
       "status": "状态",
       "actions": "操作"
     },
-    "density": {
-      "normal": "普通",
-      "compact": "紧凑",
-      "dense": "密集",
-      "toggle": "切换行密度"
-    },
     "defaultBadge": "默认",
     "statusBadge": {
       "active": "启用",

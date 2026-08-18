@@ -137,13 +137,11 @@ vi.mock('@/components/tags/TagForm', () => ({
 
 const mockOnSort = vi.fn();
 vi.mock('@/components/tags/TagList', () => ({
-  TagList: ({ tags, onEdit, onDelete, onTagClick, onSort, sortField, sortDirection, density, onDensityChange }: any) => {
+  TagList: ({ tags, onEdit, onDelete, onTagClick, onSort, sortField, sortDirection }: any) => {
     mockOnSort.mockImplementation((field: any) => onSort(field));
     return (
       <div data-testid="tag-list">
         <span data-testid="sort-info">{sortField} {sortDirection}</span>
-        <span data-testid="density-info">{density}</span>
-        <button data-testid="density-btn" onClick={() => onDensityChange('compact')}>Density</button>
         <button data-testid="sort-name" onClick={() => onSort('name')}>SortByName</button>
         <button data-testid="sort-count" onClick={() => onSort('count')}>SortByCount</button>
         <button data-testid="sort-created" onClick={() => onSort('createdAt')}>SortByCreated</button>
@@ -603,17 +601,6 @@ describe('TagsPage', () => {
     fireEvent.click(screen.getByTestId('sort-created'));
     await waitFor(() => {
       expect(screen.getByTestId('sort-info')).toHaveTextContent('createdAt desc');
-    });
-  });
-
-  it('updates list density when changed', async () => {
-    mockGetAll.mockResolvedValue(mockTags);
-    await renderPage();
-    await waitFor(() => expect(screen.getByTestId('tag-list')).toBeInTheDocument());
-    expect(screen.getByTestId('density-info')).toHaveTextContent('normal');
-    fireEvent.click(screen.getByTestId('density-btn'));
-    await waitFor(() => {
-      expect(screen.getByTestId('density-info')).toHaveTextContent('compact');
     });
   });
 });

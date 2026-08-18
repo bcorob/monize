@@ -74,11 +74,7 @@
     "badgeExpense": "支出",
     "systemBadge": "（システム）",
     "inheritedColorTitle": "親から継承",
-    "viewTransactionsTitle": "このカテゴリの取引を表示",
-    "densityToggleTitle": "行の密度を切り替え",
-    "densityNormal": "通常",
-    "densityCompact": "コンパクト",
-    "densityDense": "密集"
+    "viewTransactionsTitle": "このカテゴリの取引を表示"
   },
   "deleteDialog": {
     "title": "「{name}」を削除しますか？",

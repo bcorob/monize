@@ -43,12 +43,6 @@
       "status": "Status",
       "actions": "Actions"
     },
-    "density": {
-      "normal": "Normal",
-      "compact": "Compact",
-      "dense": "Dense",
-      "toggle": "Toggle row density"
-    },
     "defaultBadge": "Default",
     "statusBadge": {
       "active": "Active",

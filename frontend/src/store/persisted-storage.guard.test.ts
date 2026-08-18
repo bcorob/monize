@@ -24,6 +24,8 @@ const PERSISTED_STORE_KEYS: Record<string, string> = {
     'pre-login: null until a session loads preferences; display settings only, cleared by logout().',
   'monize:ai-chat-messages':
     'authenticated only: written after login, removed by logout() so conversations do not cross accounts.',
+  'monize-density':
+    'authenticated only: the store is imported by the list components, none of which the login page renders. One of three row-density levels -- a fact about the screen, not the account, so it survives logout deliberately.',
 };
 
 // What an unauthenticated visitor's browser holds, verbatim. These are the two

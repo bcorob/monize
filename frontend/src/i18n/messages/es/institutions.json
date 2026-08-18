@@ -30,12 +30,6 @@
       "actions": "Acciones"
     },
     "accountCount": "{count, plural, =0 {Sin cuentas} one {# cuenta} other {# cuentas}}",
-    "density": {
-      "title": "Cambiar densidad de filas",
-      "normal": "Normal",
-      "compact": "Compacto",
-      "dense": "Denso"
-    },
     "statusFilter": {
       "all": "Todas",
       "active": "Activas",

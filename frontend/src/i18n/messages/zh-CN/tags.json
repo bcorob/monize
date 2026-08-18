@@ -42,12 +42,6 @@
       "title": "未找到标签",
       "body": "没有标签符合您当前的搜索条件。"
     },
-    "density": {
-      "title": "切换行密度",
-      "normal": "正常",
-      "compact": "紧凑",
-      "dense": "密集"
-    },
     "header": {
       "name": "名称",
       "icon": "图标",

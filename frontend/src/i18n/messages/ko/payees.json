@@ -48,12 +48,6 @@
       "notes": "메모",
       "actions": "작업"
     },
-    "density": {
-      "normal": "보통",
-      "compact": "압축",
-      "dense": "밀집",
-      "toggle": "행 밀도 전환"
-    },
     "noCategory": "없음",
     "statusBadge": {
       "active": "활성",

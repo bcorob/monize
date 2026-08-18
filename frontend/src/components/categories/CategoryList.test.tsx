@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@/test/render';
 import { CategoryList } from './CategoryList';
 import { Category } from '@/types/category';
+import { useDensityStore } from '@/store/densityStore';
 
 const mockPush = vi.fn();
 
@@ -463,27 +464,26 @@ describe('CategoryList', () => {
       makeCategory({ id: 'c1', name: 'Food' }),
     ];
 
-    render(<CategoryList categories={categories} onEdit={onEdit} onRefresh={onRefresh} density="compact" />);
+    useDensityStore.setState({ densities: { categories: 'compact' } });
+    render(<CategoryList categories={categories} onEdit={onEdit} onRefresh={onRefresh} />);
     expect(screen.getByText('Compact')).toBeInTheDocument();
   });
 
-  it('calls onDensityChange callback when provided', () => {
-    const onDensityChange = vi.fn();
+  it('cycles the shared density preference', () => {
     const categories = [
       makeCategory({ id: 'c1', name: 'Food' }),
     ];
 
+    useDensityStore.setState({ densities: { categories: 'normal' } });
     render(
       <CategoryList
         categories={categories}
         onEdit={onEdit}
         onRefresh={onRefresh}
-        density="normal"
-        onDensityChange={onDensityChange}
       />,
     );
     fireEvent.click(screen.getByTitle('Toggle row density'));
-    expect(onDensityChange).toHaveBeenCalledWith('compact');
+    expect(useDensityStore.getState().densities.categories).toBe('compact');
   });
 
   it('hides description column in dense mode', () => {
@@ -491,7 +491,8 @@ describe('CategoryList', () => {
       makeCategory({ id: 'c1', name: 'Food', description: 'Groceries' }),
     ];
 
-    render(<CategoryList categories={categories} onEdit={onEdit} onRefresh={onRefresh} density="dense" />);
+    useDensityStore.setState({ densities: { categories: 'dense' } });
+    render(<CategoryList categories={categories} onEdit={onEdit} onRefresh={onRefresh} />);
     expect(screen.queryByText('Description')).not.toBeInTheDocument();
     expect(screen.queryByText('Groceries')).not.toBeInTheDocument();
   });
@@ -501,7 +502,8 @@ describe('CategoryList', () => {
       makeCategory({ id: 'c1', name: 'Food', description: 'Groceries' }),
     ];
 
-    render(<CategoryList categories={categories} onEdit={onEdit} onRefresh={onRefresh} density="compact" />);
+    useDensityStore.setState({ densities: { categories: 'compact' } });
+    render(<CategoryList categories={categories} onEdit={onEdit} onRefresh={onRefresh} />);
     expect(screen.queryByText('Description')).not.toBeInTheDocument();
   });
 
@@ -510,7 +512,8 @@ describe('CategoryList', () => {
       makeCategory({ id: 'c1', name: 'Transfer', isSystem: true }),
     ];
 
-    render(<CategoryList categories={categories} onEdit={onEdit} onRefresh={onRefresh} density="dense" />);
+    useDensityStore.setState({ densities: { categories: 'dense' } });
+    render(<CategoryList categories={categories} onEdit={onEdit} onRefresh={onRefresh} />);
     expect(screen.queryByText('(System)')).not.toBeInTheDocument();
   });
 

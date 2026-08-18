@@ -74,11 +74,7 @@
     "badgeExpense": "Витрата",
     "systemBadge": "(Системна)",
     "inheritedColorTitle": "Успадкований від батьківської",
-    "viewTransactionsTitle": "Переглянути транзакції в цій категорії",
-    "densityToggleTitle": "Перемкнути щільність рядків",
-    "densityNormal": "Нормальна",
-    "densityCompact": "Компактна",
-    "densityDense": "Щільна"
+    "viewTransactionsTitle": "Переглянути транзакції в цій категорії"
   },
   "deleteDialog": {
     "title": "Видалити \"{name}\"?",

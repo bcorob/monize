@@ -74,11 +74,7 @@
     "badgeExpense": "Uitgaven",
     "systemBadge": "(Systeem)",
     "inheritedColorTitle": "Overgenomen van bovenliggende",
-    "viewTransactionsTitle": "Transacties in deze categorie bekijken",
-    "densityToggleTitle": "Rijdichtheid wisselen",
-    "densityNormal": "Normaal",
-    "densityCompact": "Compact",
-    "densityDense": "Dicht"
+    "viewTransactionsTitle": "Transacties in deze categorie bekijken"
   },
   "deleteDialog": {
     "title": "Verwijder \"{name}\"?",

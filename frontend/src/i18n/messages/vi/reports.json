@@ -4,7 +4,6 @@
     "subtitle": "Tạo thông tin chi tiết về sức khỏe tài chính của bạn",
     "searchPlaceholder": "Tìm kiếm báo cáo theo tên hoặc mô tả...",
     "allReports": "Tất cả báo cáo",
-    "densityTitle": "Chuyển sang chế độ xem {nextDensity}",
     "removeFavourite": "Xóa khỏi mục yêu thích",
     "addFavourite": "Thêm vào mục yêu thích",
     "tableReport": "Báo cáo",
@@ -27,11 +26,6 @@
       "bills": "Hóa đơn",
       "budget": "Ngân sách",
       "custom": "Tùy chỉnh"
-    },
-    "density": {
-      "normal": "Bình thường",
-      "compact": "Gọn",
-      "dense": "Dày đặc"
     },
     "names": {
       "spending-by-category": "Chi tiêu theo danh mục",

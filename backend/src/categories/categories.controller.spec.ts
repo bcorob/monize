@@ -2,6 +2,7 @@ import { Test, TestingModule } from "@nestjs/testing";
 import { CategoriesController } from "./categories.controller";
 import { CategoriesService } from "./categories.service";
 import { CategoryDetailService } from "./category-detail.service";
+import { JointCategoriesService } from "./joint-categories.service";
 import { DEFAULT_CATEGORY_COUNTRY_CODES } from "./country-category-additions";
 
 describe("CategoriesController", () => {
@@ -11,6 +12,9 @@ describe("CategoriesController", () => {
   >;
   let mockCategoryDetailService: Partial<
     Record<keyof CategoryDetailService, jest.Mock>
+  >;
+  let mockJointCategoriesService: Partial<
+    Record<keyof JointCategoriesService, jest.Mock>
   >;
   const mockReq = { user: { id: "user-1" } };
 
@@ -31,6 +35,9 @@ describe("CategoriesController", () => {
     mockCategoryDetailService = {
       getDetail: jest.fn(),
     };
+    mockJointCategoriesService = {
+      create: jest.fn(),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [CategoriesController],
@@ -42,6 +49,10 @@ describe("CategoriesController", () => {
         {
           provide: CategoryDetailService,
           useValue: mockCategoryDetailService,
+        },
+        {
+          provide: JointCategoriesService,
+          useValue: mockJointCategoriesService,
         },
       ],
     }).compile();
@@ -267,6 +278,45 @@ describe("CategoriesController", () => {
         "user-1",
         "cat-1",
         null,
+      );
+    });
+  });
+
+  describe("createForJointAccount()", () => {
+    it("delegates to jointCategories.create with the account and dto", () => {
+      const dto = { name: "Daycare" };
+      mockJointCategoriesService.create!.mockReturnValue("created");
+
+      const result = controller.createForJointAccount(
+        mockReq,
+        "account-1",
+        dto as never,
+      );
+
+      expect(result).toBe("created");
+      expect(mockJointCategoriesService.create).toHaveBeenCalledWith(
+        "user-1",
+        "account-1",
+        dto,
+      );
+      // The owner-ledger create never runs through the caller-scoped service.
+      expect(mockCategoriesService.create).not.toHaveBeenCalled();
+    });
+
+    it("passes the REAL user, so an acting session cannot borrow the owner's identity", () => {
+      const actingReq = {
+        user: { id: "owner-1", realUserId: "delegate-1" },
+      };
+      mockJointCategoriesService.create!.mockReturnValue("created");
+
+      controller.createForJointAccount(actingReq, "account-1", {
+        name: "Daycare",
+      } as never);
+
+      expect(mockJointCategoriesService.create).toHaveBeenCalledWith(
+        "delegate-1",
+        "account-1",
+        { name: "Daycare" },
       );
     });
   });

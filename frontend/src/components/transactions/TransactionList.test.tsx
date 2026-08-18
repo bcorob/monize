@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@/test/render';
 import { TransactionList } from './TransactionList';
 import { Transaction, TransactionStatus } from '@/types/transaction';
+import { useDensityStore } from '@/store/densityStore';
 
 vi.mock('@/lib/transactions', () => ({
   transactionsApi: {
@@ -1065,12 +1066,12 @@ describe('TransactionList', () => {
     it('does not display reference number in compact density', async () => {
       const tx = createTransaction({ referenceNumber: 'CHQ-12345' });
 
+      useDensityStore.setState({ densities: { transactions: 'compact' } });
       render(
         <TransactionList
           transactions={[tx]}
           onEdit={mockOnEdit}
           onRefresh={mockOnRefresh}
-          density="compact"
         />
       );
 
@@ -1152,12 +1153,12 @@ describe('TransactionList', () => {
     it('shows abbreviated status in dense mode', async () => {
       const tx = createTransaction({ status: TransactionStatus.CLEARED });
 
+      useDensityStore.setState({ densities: { transactions: 'dense' } });
       render(
         <TransactionList
           transactions={[tx]}
           onEdit={mockOnEdit}
           onRefresh={mockOnRefresh}
-          density="dense"
         />
       );
 
@@ -1169,12 +1170,12 @@ describe('TransactionList', () => {
     it('shows abbreviated R for reconciled in dense mode', async () => {
       const tx = createTransaction({ status: TransactionStatus.RECONCILED });
 
+      useDensityStore.setState({ densities: { transactions: 'dense' } });
       render(
         <TransactionList
           transactions={[tx]}
           onEdit={mockOnEdit}
           onRefresh={mockOnRefresh}
-          density="dense"
         />
       );
 
@@ -1186,12 +1187,12 @@ describe('TransactionList', () => {
     it('shows abbreviated V for void in dense mode', async () => {
       const tx = createTransaction({ status: TransactionStatus.VOID, isVoid: true });
 
+      useDensityStore.setState({ densities: { transactions: 'dense' } });
       render(
         <TransactionList
           transactions={[tx]}
           onEdit={mockOnEdit}
           onRefresh={mockOnRefresh}
-          density="dense"
         />
       );
 
@@ -1750,12 +1751,12 @@ describe('TransactionList', () => {
 
   describe('density with controlled prop', () => {
     it('uses propDensity when provided', async () => {
+      useDensityStore.setState({ densities: { transactions: 'compact' } });
       render(
         <TransactionList
           transactions={[createTransaction()]}
           onEdit={mockOnEdit}
           onRefresh={mockOnRefresh}
-          density="compact"
         />
       );
 
@@ -1765,16 +1766,13 @@ describe('TransactionList', () => {
       });
     });
 
-    it('calls onDensityChange when density toggle is clicked', async () => {
-      const mockOnDensityChange = vi.fn();
-
+    it('cycles the shared preference from normal to compact', async () => {
+      useDensityStore.setState({ densities: { transactions: 'normal' } });
       render(
         <TransactionList
           transactions={[createTransaction()]}
           onEdit={mockOnEdit}
           onRefresh={mockOnRefresh}
-          density="normal"
-          onDensityChange={mockOnDensityChange}
         />
       );
 
@@ -1782,20 +1780,17 @@ describe('TransactionList', () => {
       fireEvent.click(densityButton);
 
       await waitFor(() => {
-        expect(mockOnDensityChange).toHaveBeenCalledWith('compact');
+        expect(useDensityStore.getState().densities.transactions).toBe('compact');
       });
     });
 
-    it('cycles from compact to dense via onDensityChange', async () => {
-      const mockOnDensityChange = vi.fn();
-
+    it('cycles the shared preference from compact to dense', async () => {
+      useDensityStore.setState({ densities: { transactions: 'compact' } });
       render(
         <TransactionList
           transactions={[createTransaction()]}
           onEdit={mockOnEdit}
           onRefresh={mockOnRefresh}
-          density="compact"
-          onDensityChange={mockOnDensityChange}
         />
       );
 
@@ -1803,20 +1798,17 @@ describe('TransactionList', () => {
       fireEvent.click(densityButton);
 
       await waitFor(() => {
-        expect(mockOnDensityChange).toHaveBeenCalledWith('dense');
+        expect(useDensityStore.getState().densities.transactions).toBe('dense');
       });
     });
 
-    it('cycles from dense back to normal via onDensityChange', async () => {
-      const mockOnDensityChange = vi.fn();
-
+    it('cycles the shared preference from dense to normal', async () => {
+      useDensityStore.setState({ densities: { transactions: 'dense' } });
       render(
         <TransactionList
           transactions={[createTransaction()]}
           onEdit={mockOnEdit}
           onRefresh={mockOnRefresh}
-          density="dense"
-          onDensityChange={mockOnDensityChange}
         />
       );
 
@@ -1824,7 +1816,7 @@ describe('TransactionList', () => {
       fireEvent.click(densityButton);
 
       await waitFor(() => {
-        expect(mockOnDensityChange).toHaveBeenCalledWith('normal');
+        expect(useDensityStore.getState().densities.transactions).toBe('normal');
       });
     });
   });
@@ -2544,12 +2536,12 @@ describe('TransactionList', () => {
         createTransaction({ id: 'tx-2', payeeName: 'Second' }),
       ];
 
+      useDensityStore.setState({ densities: { transactions: 'compact' } });
       render(
         <TransactionList
           transactions={transactions}
           onEdit={mockOnEdit}
           onRefresh={mockOnRefresh}
-          density="compact"
         />
       );
 
@@ -3012,6 +3004,32 @@ describe('TransactionList', () => {
       // dash is present somewhere in the row's fee cell.
       const feeCell = cells[cells.length - 3];
       expect(feeCell.textContent).toBe('-');
+    });
+  });
+  // A green suite after a padding change is a finding, and this is the case it
+  // was missing: the register spelled its own padding table out, so the values
+  // reaching the DOM were pinned nowhere. It was one of five copies, and the
+  // only one whose `normal` inset (a flat `px-4`) matched neither of the other
+  // four.
+  describe('cell padding comes from the shared scale', () => {
+    it.each([
+      ['normal', 'px-3 sm:px-6 py-4'],
+      ['compact', 'px-4 py-2'],
+      ['dense', 'px-3 py-1'],
+    ] as const)('uses the default scale at %s density', (level, expected) => {
+      useDensityStore.setState({ densities: { transactions: level } });
+      render(
+        <TransactionList
+          transactions={[createTransaction()]}
+          onEdit={mockOnEdit}
+          onRefresh={mockOnRefresh}
+        />
+      );
+
+      const cell = screen.getByText('Grocery Store').closest('td');
+      for (const cls of expected.split(' ')) {
+        expect(cell?.className, `${level}: ${cls}`).toContain(cls);
+      }
     });
   });
 });

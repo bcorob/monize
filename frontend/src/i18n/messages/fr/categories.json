@@ -74,11 +74,7 @@
     "badgeExpense": "Dépense",
     "systemBadge": "(Système)",
     "inheritedColorTitle": "Hérité du parent",
-    "viewTransactionsTitle": "Voir les transactions de cette catégorie",
-    "densityToggleTitle": "Modifier la densité des lignes",
-    "densityNormal": "Normal",
-    "densityCompact": "Compact",
-    "densityDense": "Dense"
+    "viewTransactionsTitle": "Voir les transactions de cette catégorie"
   },
   "deleteDialog": {
     "title": "Supprimer « {name} » ?",

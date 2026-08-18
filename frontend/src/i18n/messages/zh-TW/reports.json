@@ -4,7 +4,6 @@
     "subtitle": "產生有關財務狀況的洞察",
     "searchPlaceholder": "依名稱或描述搜尋報表...",
     "allReports": "所有報表",
-    "densityTitle": "切換至 {nextDensity} 檢視",
     "removeFavourite": "從最愛移除",
     "addFavourite": "加入最愛",
     "tableReport": "報表",
@@ -27,11 +26,6 @@
       "bills": "帳單",
       "budget": "預算",
       "custom": "自訂"
-    },
-    "density": {
-      "normal": "一般",
-      "compact": "緊密",
-      "dense": "密集"
     },
     "names": {
       "spending-by-category": "依類別分析支出",

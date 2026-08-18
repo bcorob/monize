@@ -269,6 +269,7 @@
     "jointRequiresRead": "LEES-toegang is vereist om een rekening als gezamenlijk te markeren",
     "jointRequiresFullAccount": "Gezamenlijke rekeningen kunnen alleen worden gedeeld met gebruikers die een eigen Monize-account hebben",
     "jointPayeeCreateNotGranted": "De eigenaar van de rekening heeft u geen toestemming gegeven om begunstigden aan te maken. Kies in plaats daarvan een bestaande begunstigde.",
+    "jointCategoryCreateNotGranted": "De eigenaar van de rekening heeft u geen toestemming gegeven om categorieën aan te maken. Kies in plaats daarvan een bestaande categorie.",
     "jointTagsNotAllowed": "Tags zijn persoonlijk en kunnen niet worden ingesteld op transacties van een gedeelde rekening.",
     "jointSplitsNotAllowed": "Gesplitste transacties in een gedeelde rekening kunnen alleen door de eigenaar worden beheerd.",
     "jointTransferRowLocked": "Dit is een overboeking. Gebruik de overboekingseditor."

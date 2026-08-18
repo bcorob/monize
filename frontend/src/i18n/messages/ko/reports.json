@@ -4,7 +4,6 @@
     "subtitle": "재무 건전성에 대한 통찰력을 생성하세요",
     "searchPlaceholder": "이름이나 설명으로 보고서 검색...",
     "allReports": "모든 보고서",
-    "densityTitle": "{nextDensity} 보기로 전환",
     "removeFavourite": "즐겨찾기에서 제거",
     "addFavourite": "즐겨찾기에 추가",
     "tableReport": "보고서",
@@ -27,11 +26,6 @@
       "bills": "청구서",
       "budget": "예산",
       "custom": "사용자 정의"
-    },
-    "density": {
-      "normal": "보통",
-      "compact": "좁게",
-      "dense": "빽빽하게"
     },
     "names": {
       "spending-by-category": "카테고리별 지출",

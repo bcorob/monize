@@ -4,7 +4,6 @@
     "subtitle": "深入了解您的财务健康状况",
     "searchPlaceholder": "按名称或描述搜索报告...",
     "allReports": "所有报告",
-    "densityTitle": "切换到{nextDensity}视图",
     "removeFavourite": "从收藏中移除",
     "addFavourite": "添加到收藏",
     "tableReport": "报告",
@@ -27,11 +26,6 @@
       "bills": "账单",
       "budget": "预算",
       "custom": "自定义"
-    },
-    "density": {
-      "normal": "正常",
-      "compact": "紧凑",
-      "dense": "密集"
     },
     "names": {
       "spending-by-category": "按分类支出",

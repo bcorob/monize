@@ -48,12 +48,6 @@
       "notes": "Примітки",
       "actions": "Дії"
     },
-    "density": {
-      "normal": "Звичайна",
-      "compact": "Компактна",
-      "dense": "Щільна",
-      "toggle": "Перемкнути щільність рядків"
-    },
     "noCategory": "Немає",
     "statusBadge": {
       "active": "Активний",

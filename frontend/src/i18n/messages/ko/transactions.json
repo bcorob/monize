@@ -133,12 +133,6 @@
       "noData": "내보낼 거래가 없습니다",
       "error": "거래 내보내기에 실패했습니다"
     },
-    "density": {
-      "title": "행 밀도 전환",
-      "normal": "보통",
-      "compact": "좁게",
-      "dense": "빽빽하게"
-    },
     "delete": {
       "transferTitle": "이체 삭제",
       "transactionTitle": "거래 삭제",

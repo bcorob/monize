@@ -269,6 +269,7 @@
     "jointRequiresRead": "Se requiere acceso de LECTURA para marcar una cuenta como conjunta",
     "jointRequiresFullAccount": "Las cuentas conjuntas solo se pueden compartir con usuarios que tengan su propia cuenta de Monize",
     "jointPayeeCreateNotGranted": "El propietario de la cuenta no le ha concedido permiso para crear beneficiarios. Elija uno de sus beneficiarios existentes.",
+    "jointCategoryCreateNotGranted": "El propietario de la cuenta no le ha concedido permiso para crear categorías. Elija una de sus categorías existentes.",
     "jointTagsNotAllowed": "Las etiquetas son personales, por lo que no se pueden asignar a transacciones de una cuenta compartida.",
     "jointSplitsNotAllowed": "Solo el propietario puede gestionar transacciones divididas en una cuenta compartida.",
     "jointTransferRowLocked": "Esto es una transferencia. Use el editor de transferencias."

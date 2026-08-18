@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@/test/render';
 import { PayeeList } from './PayeeList';
 import { Payee } from '@/types/payee';
+import { useDensityStore } from '@/store/densityStore';
 
 const mockPush = vi.fn();
 
@@ -594,27 +595,26 @@ describe('PayeeList', () => {
       makePayee({ id: 'p1', name: 'Walmart' }),
     ];
 
-    render(<PayeeList payees={payees} onEdit={onEdit} onRefresh={onRefresh} density="compact" />);
+    useDensityStore.setState({ densities: { payees: 'compact' } });
+    render(<PayeeList payees={payees} onEdit={onEdit} onRefresh={onRefresh} />);
     expect(screen.getByText('Compact')).toBeInTheDocument();
   });
 
-  it('calls onDensityChange callback when provided', () => {
-    const onDensityChange = vi.fn();
+  it('cycles the shared density preference', () => {
     const payees = [
       makePayee({ id: 'p1', name: 'Walmart' }),
     ];
 
+    useDensityStore.setState({ densities: { payees: 'normal' } });
     render(
       <PayeeList
         payees={payees}
         onEdit={onEdit}
         onRefresh={onRefresh}
-        density="normal"
-        onDensityChange={onDensityChange}
       />,
     );
     fireEvent.click(screen.getByTitle('Toggle row density'));
-    expect(onDensityChange).toHaveBeenCalledWith('compact');
+    expect(useDensityStore.getState().densities.payees).toBe('compact');
   });
 
   it('hides notes column in dense mode', () => {
@@ -622,7 +622,8 @@ describe('PayeeList', () => {
       makePayee({ id: 'p1', name: 'Netflix', notes: 'Streaming' }),
     ];
 
-    render(<PayeeList payees={payees} onEdit={onEdit} onRefresh={onRefresh} density="dense" />);
+    useDensityStore.setState({ densities: { payees: 'dense' } });
+    render(<PayeeList payees={payees} onEdit={onEdit} onRefresh={onRefresh} />);
     expect(screen.queryByText('Notes')).not.toBeInTheDocument();
     expect(screen.queryByText('Streaming')).not.toBeInTheDocument();
   });
@@ -632,7 +633,8 @@ describe('PayeeList', () => {
       makePayee({ id: 'p1', name: 'Netflix', notes: 'Streaming' }),
     ];
 
-    render(<PayeeList payees={payees} onEdit={onEdit} onRefresh={onRefresh} density="compact" />);
+    useDensityStore.setState({ densities: { payees: 'compact' } });
+    render(<PayeeList payees={payees} onEdit={onEdit} onRefresh={onRefresh} />);
     expect(screen.queryByText('Notes')).not.toBeInTheDocument();
   });
 
@@ -809,7 +811,8 @@ describe('PayeeList', () => {
       makePayee({ id: 'p1', name: 'Walmart', isActive: true }),
     ];
 
-    render(<PayeeList payees={payees} onEdit={onEdit} onRefresh={onRefresh} onMerge={onMerge} density="dense" />);
+    useDensityStore.setState({ densities: { payees: 'dense' } });
+    render(<PayeeList payees={payees} onEdit={onEdit} onRefresh={onRefresh} onMerge={onMerge} />);
     // Icon-only buttons expose their label via the accessible name, not visible text.
     expect(screen.getByRole('button', { name: 'Merge' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Edit' })).toBeInTheDocument();
@@ -822,7 +825,8 @@ describe('PayeeList', () => {
       makePayee({ id: 'p1', name: 'Walmart', isActive: false }),
     ];
 
-    render(<PayeeList payees={payees} onEdit={onEdit} onRefresh={onRefresh} onReactivate={onReactivate} density="dense" />);
+    useDensityStore.setState({ densities: { payees: 'dense' } });
+    render(<PayeeList payees={payees} onEdit={onEdit} onRefresh={onRefresh} onReactivate={onReactivate} />);
     expect(screen.getByRole('button', { name: 'Reactivate' })).toBeInTheDocument();
   });
 
@@ -840,7 +844,8 @@ describe('PayeeList', () => {
       }),
     ];
 
-    render(<PayeeList payees={payees} onEdit={onEdit} onRefresh={onRefresh} density="dense" />);
+    useDensityStore.setState({ densities: { payees: 'dense' } });
+    render(<PayeeList payees={payees} onEdit={onEdit} onRefresh={onRefresh} />);
     const badge = screen.getByText('Groceries');
     // dense mode applies px-1.5 py-0.5
     expect(badge).toBeInTheDocument();
@@ -860,7 +865,8 @@ describe('PayeeList', () => {
       }),
     ];
 
-    render(<PayeeList payees={payees} onEdit={onEdit} onRefresh={onRefresh} density="normal" />);
+    useDensityStore.setState({ densities: { payees: 'normal' } });
+    render(<PayeeList payees={payees} onEdit={onEdit} onRefresh={onRefresh} />);
     const badge = screen.getByText('Groceries');
     expect(badge.className).toContain('px-2');
   });
@@ -1088,8 +1094,9 @@ describe('PayeeList', () => {
       makePayee({ id: 'p2', name: 'Second' }),
     ];
 
+    useDensityStore.setState({ densities: { payees: 'compact' } });
     const { container } = render(
-      <PayeeList payees={payees} onEdit={onEdit} onRefresh={onRefresh} density="compact" />,
+      <PayeeList payees={payees} onEdit={onEdit} onRefresh={onRefresh} />,
     );
     const rows = container.querySelectorAll('tbody tr');
     // index 1 (second row) should have striped class
@@ -1104,8 +1111,9 @@ describe('PayeeList', () => {
       makePayee({ id: 'p2', name: 'Second' }),
     ];
 
+    useDensityStore.setState({ densities: { payees: 'normal' } });
     const { container } = render(
-      <PayeeList payees={payees} onEdit={onEdit} onRefresh={onRefresh} density="normal" />,
+      <PayeeList payees={payees} onEdit={onEdit} onRefresh={onRefresh} />,
     );
     const rows = container.querySelectorAll('tbody tr');
     // All rows use bg-white in normal density (no stripe)

@@ -30,12 +30,6 @@
       "actions": "Дії"
     },
     "accountCount": "{count, plural, =0 {Немає рахунків} one {# рахунок} other {# рахунків}}",
-    "density": {
-      "title": "Перемкнути щільність рядків",
-      "normal": "Звичайна",
-      "compact": "Компактна",
-      "dense": "Щільна"
-    },
     "statusFilter": {
       "all": "Всі",
       "active": "Активні",

@@ -1,4 +1,5 @@
 import { categoriesApi } from './categories';
+import { delegationApi } from './delegation';
 import { Category } from '@/types/category';
 
 /**
@@ -11,10 +12,11 @@ import { Category } from '@/types/category';
  * became a child of Travel in one field and a single flat category literally
  * named "Travel: Hotels" in another.
  *
- * `createCategoryFromInput` is the only place typed text becomes a category;
- * the guard in `src/test/ui-conventions.test.ts` fails on a second
- * `categoriesApi.create` call site outside the categories page's own full
- * create form.
+ * `createCategoryFromInput` is the only place typed text becomes a category,
+ * on either ledger it can land on -- `categoriesApi.create` for the caller's
+ * own, `delegationApi.createJointCategory` for the owner of a joint account.
+ * The guard in `src/test/ui-conventions.test.ts` fails on a second call site
+ * for either, outside the categories page's own full create form.
  *
  * It lives beside `categories.ts` rather than inside it for two reasons: that
  * module is a typed axios wrapper (`frontend/CLAUDE.md`) and this is
@@ -50,6 +52,16 @@ export interface CreatedCategory {
 export interface CreateCategoryFromInputOptions {
   /** Passed through to the API for the created leaf category. */
   isIncome?: boolean;
+  /**
+   * A joint account whose OWNER's ledger the category belongs on. A joint
+   * transaction is the owner's row and may only carry the owner's category
+   * ids, so text typed into that register's picker cannot go through
+   * `categoriesApi.create` -- that writes to the caller's own ledger, which
+   * put an id the owner does not own on the form. Set this and every create
+   * below (the `Parent: Child` parent included) goes to the owner instead,
+   * gated server-side on the delegation's categories-can-create capability.
+   */
+  jointAccountId?: string;
 }
 
 /**
@@ -65,6 +77,13 @@ export async function createCategoryFromInput(
   options: CreateCategoryFromInputOptions = {},
 ): Promise<CreatedCategory | null> {
   if (!name.trim()) return null;
+
+  // One decision, made once: every create in this call lands on the same
+  // ledger. Choosing per request could put a `Parent: Child` pair astride two.
+  const createCategory = options.jointAccountId
+    ? (data: { name: string; parentId?: string; isIncome?: boolean }) =>
+        delegationApi.createJointCategory(options.jointAccountId!, data)
+    : categoriesApi.create;
 
   let categoryName = toTitleCase(name.trim());
   let parentId: string | undefined;
@@ -85,7 +104,7 @@ export async function createCategoryFromInput(
       );
 
       if (!parentCategory) {
-        parentCategory = await categoriesApi.create({ name: typedParentName });
+        parentCategory = await createCategory({ name: typedParentName });
         created.push(parentCategory);
       }
 
@@ -96,7 +115,7 @@ export async function createCategoryFromInput(
     }
   }
 
-  const category = await categoriesApi.create({
+  const category = await createCategory({
     name: categoryName,
     parentId,
     ...(options.isIncome !== undefined ? { isIncome: options.isIncome } : {}),

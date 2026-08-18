@@ -233,5 +233,11 @@
     "srSuffix": "(totale parziale)",
     "explanation": "Totale parziale: non è stato possibile includere {count, plural, one {# importo} other {# importi}}, quindi la cifra mostrata li esclude. Nessun tasso verso {displayCurrency} è disponibile per {currencies}.",
     "explanationExcluded": "Totale parziale: non è stato possibile calcolare {count, plural, one {# importo} other {# importi}}, quindi la cifra mostrata li esclude."
+  },
+  "density": {
+    "title": "Cambia densità righe",
+    "normal": "Normale",
+    "compact": "Compatto",
+    "dense": "Denso"
   }
 }

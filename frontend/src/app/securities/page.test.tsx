@@ -136,12 +136,10 @@ vi.mock('@/lib/investments', () => ({
 
 // Mock child components
 vi.mock('@/components/securities/SecurityList', () => ({
-  SecurityList: ({ securities, holdings, onEdit, onToggleActive, onToggleFavourite, onDelete, onOpen, sortField, sortDirection, onSort, density, onDensityChange }: any) => (
+  SecurityList: ({ securities, holdings, onEdit, onToggleActive, onToggleFavourite, onDelete, onOpen, sortField, sortDirection, onSort }: any) => (
     <div data-testid="security-list">
       {sortField && <span data-testid="sort-field">{sortField}</span>}
       {sortDirection && <span data-testid="sort-direction">{sortDirection}</span>}
-      {density && <span data-testid="density-info">{density}</span>}
-      <button data-testid="density-btn" onClick={() => onDensityChange('compact')}>Density</button>
       {onSort && <button data-testid="sort-trigger" onClick={() => onSort('name')}>Sort</button>}
       {onSort && <button data-testid="sort-symbol" onClick={() => onSort('symbol')}>SortSymbol</button>}
       {onSort && <button data-testid="sort-type" onClick={() => onSort('type')}>SortType</button>}

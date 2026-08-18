@@ -48,12 +48,6 @@
       "notes": "备注",
       "actions": "操作"
     },
-    "density": {
-      "normal": "正常",
-      "compact": "紧凑",
-      "dense": "密集",
-      "toggle": "切换行密度"
-    },
     "noCategory": "无",
     "statusBadge": {
       "active": "活跃",

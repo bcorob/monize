@@ -42,12 +42,6 @@
       "title": "Tidak ada tag ditemukan",
       "body": "Tidak ada tag yang cocok dengan pencarian Anda saat ini."
     },
-    "density": {
-      "title": "Ubah kepadatan baris",
-      "normal": "Normal",
-      "compact": "Ringkas",
-      "dense": "Padat"
-    },
     "header": {
       "name": "Nama",
       "icon": "Ikon",

@@ -74,11 +74,7 @@
     "badgeExpense": "Расход",
     "systemBadge": "(Система)",
     "inheritedColorTitle": "Унаследован от родителя",
-    "viewTransactionsTitle": "Просмотреть проводки в этой категории",
-    "densityToggleTitle": "Переключить плотность строк",
-    "densityNormal": "Обычная",
-    "densityCompact": "Компактная",
-    "densityDense": "Плотная"
+    "viewTransactionsTitle": "Просмотреть проводки в этой категории"
   },
   "deleteDialog": {
     "title": "Удалить «{name}»?",

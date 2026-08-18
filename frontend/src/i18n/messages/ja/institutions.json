@@ -30,12 +30,6 @@
       "actions": "操作"
     },
     "accountCount": "{count, plural, =0 {勘定科目なし} one {# 件の勘定科目} other {# 件の勘定科目}}",
-    "density": {
-      "title": "行の密度を切り替え",
-      "normal": "標準",
-      "compact": "コンパクト",
-      "dense": "高密度"
-    },
     "statusFilter": {
       "all": "すべて",
       "active": "有効",

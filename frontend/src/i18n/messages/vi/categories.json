@@ -74,11 +74,7 @@
     "badgeExpense": "Chi tiêu",
     "systemBadge": "(Hệ thống)",
     "inheritedColorTitle": "Kế thừa từ cha",
-    "viewTransactionsTitle": "Xem giao dịch trong danh mục này",
-    "densityToggleTitle": "Chuyển đổi mật độ hàng",
-    "densityNormal": "Bình thường",
-    "densityCompact": "Thu gọn",
-    "densityDense": "Dày đặc"
+    "viewTransactionsTitle": "Xem giao dịch trong danh mục này"
   },
   "deleteDialog": {
     "title": "Xóa \"{name}\"?",

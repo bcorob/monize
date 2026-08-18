@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@/test/render';
 import { TagList } from './TagList';
 import { Tag } from '@/types/tag';
+import { useDensityStore } from '@/store/densityStore';
 
 vi.mock('@/components/ui/IconPicker', () => ({
   getIconComponent: (name: string) => <span data-testid={`icon-${name}`}>{name}</span>,
@@ -214,21 +215,18 @@ describe('TagList', () => {
     expect(rows[3]).toHaveTextContent('Urgent');
   });
 
-  it('calls onDensityChange when density is controlled', () => {
-    const onDensityChange = vi.fn();
-
+  it('cycles the shared density preference', () => {
+    useDensityStore.setState({ densities: { tags: 'normal' } });
     render(
       <TagList
         tags={mockTags}
         onEdit={onEdit}
         onDelete={onDelete}
-        density="normal"
-        onDensityChange={onDensityChange}
       />,
     );
 
     fireEvent.click(screen.getByTitle('Toggle row density'));
-    expect(onDensityChange).toHaveBeenCalledWith('compact');
+    expect(useDensityStore.getState().densities.tags).toBe('compact');
   });
 
   it('calls onSort when sort is controlled', () => {

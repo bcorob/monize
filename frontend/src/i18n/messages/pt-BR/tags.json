@@ -42,12 +42,6 @@
       "title": "Nenhuma etiqueta encontrada",
       "body": "Nenhuma etiqueta corresponde à sua pesquisa atual."
     },
-    "density": {
-      "title": "Alternar densidade de linha",
-      "normal": "Normal",
-      "compact": "Compacto",
-      "dense": "Denso"
-    },
     "header": {
       "name": "Nome",
       "icon": "Ícone",

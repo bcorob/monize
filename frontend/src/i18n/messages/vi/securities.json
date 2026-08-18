@@ -57,12 +57,6 @@
       "actions": "Hành động",
       "favourite": "Yêu thích"
     },
-    "density": {
-      "normal": "Bình thường",
-      "compact": "Thu gọn",
-      "dense": "Dày đặc",
-      "toggle": "Chuyển đổi mật độ hàng"
-    },
     "statusBadge": {
       "active": "Hoạt động",
       "activeShort": "HĐ",

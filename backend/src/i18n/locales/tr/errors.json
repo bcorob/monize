@@ -269,6 +269,7 @@
     "jointRequiresRead": "Bir hesabı ortak olarak işaretlemek için OKUMA erişimi gereklidir",
     "jointRequiresFullAccount": "Ortak hesaplar yalnızca kendi Monize hesabı olan kullanıcılarla paylaşılabilir",
     "jointPayeeCreateNotGranted": "Hesap sahibi size alacaklı oluşturma izni vermedi. Bunun yerine mevcut alacaklılardan birini seçin.",
+    "jointCategoryCreateNotGranted": "Hesap sahibi size kategori oluşturma izni vermedi. Bunun yerine mevcut kategorilerden birini seçin.",
     "jointTagsNotAllowed": "Etiketler kişiseldir, bu yüzden paylaşılan hesabın işlemlerine eklenemez.",
     "jointSplitsNotAllowed": "Paylaşılan bir hesaptaki bölünmüş işlemleri yalnızca sahibi yönetebilir.",
     "jointTransferRowLocked": "Bu bir transferdir. Bunun yerine transfer düzenleyicisini kullanın."

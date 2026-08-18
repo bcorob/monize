@@ -269,6 +269,7 @@
     "jointRequiresRead": "口座を共同としてマークするには読み取りアクセスが必要です",
     "jointRequiresFullAccount": "共同口座は、自分のMonizeアカウントを持つユーザーとのみ共有できます",
     "jointPayeeCreateNotGranted": "口座の所有者から支払先を作成する権限が付与されていません。既存の支払先から選択してください。",
+    "jointCategoryCreateNotGranted": "口座の所有者からカテゴリを作成する権限が付与されていません。既存のカテゴリから選択してください。",
     "jointTagsNotAllowed": "タグは個人のものなので、共有口座の取引には設定できません。",
     "jointSplitsNotAllowed": "共有口座の分割取引を管理できるのは所有者のみです。",
     "jointTransferRowLocked": "これは振替です。振替エディターを使用してください。"

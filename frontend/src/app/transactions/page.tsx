@@ -12,7 +12,6 @@ import { TransactionFilterPanel } from '@/components/transactions/TransactionFil
 import { TagKeyBreakdownChart } from '@/components/transactions/TagKeyBreakdownChart';
 import { Pagination } from '@/components/ui/Pagination';
 import { TransactionList } from '@/components/transactions/TransactionList';
-import { type DensityLevel } from '@/hooks/useTableDensity';
 import dynamic from 'next/dynamic';
 
 const TransactionForm = dynamic(() => import('@/components/transactions/TransactionForm').then(m => m.TransactionForm), { ssr: false });
@@ -134,7 +133,6 @@ function TransactionsContent() {
   const [showScheduleForm, setShowScheduleForm] = useState(false);
   const [showPayeeForm, setShowPayeeForm] = useState(false);
   const [editingPayee, setEditingPayee] = useState<Payee | undefined>();
-  const [listDensity, setListDensity] = useLocalStorage<DensityLevel>('monize-transactions-density', 'normal');
   const [accountWidgetCollapsed, setAccountWidgetCollapsed] = useLocalStorage<boolean>('monize-transactions-account-widget-collapsed', false);
   const [payeeWidgetCollapsed, setPayeeWidgetCollapsed] = useLocalStorage<boolean>('monize-transactions-payee-widget-collapsed', false);
   const [categoryWidgetCollapsed, setCategoryWidgetCollapsed] = useLocalStorage<boolean>('monize-transactions-category-widget-collapsed', false);
@@ -1330,8 +1328,6 @@ function TransactionsContent() {
               onDateFilterClick={filters.handleDateFilterClick}
               onAccountFilterClick={filters.handleAccountFilterClick}
               onPayeeFilterClick={filters.handlePayeeFilterClick}
-              density={listDensity}
-              onDensityChange={setListDensity}
               onExport={handleExport}
               isExporting={isExporting}
               isSingleAccountView={filters.filterAccountIds.length === 1}

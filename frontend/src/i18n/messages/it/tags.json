@@ -42,12 +42,6 @@
       "title": "Nessuna etichetta trovata",
       "body": "Nessuna etichetta corrisponde alla ricerca corrente."
     },
-    "density": {
-      "title": "Cambia densità righe",
-      "normal": "Normale",
-      "compact": "Compatto",
-      "dense": "Denso"
-    },
     "header": {
       "name": "Nome",
       "icon": "Icona",

@@ -36,12 +36,6 @@
     },
     "accountCount": "{filtered} z {total} kont",
     "groupCount": "{count, plural, one {# konto} few {# konta} many {# kont} other {# konta}}",
-    "density": {
-      "toggle": "Przełącz gęstość wierszy",
-      "normal": "Normalna",
-      "compact": "Kompaktowa",
-      "dense": "Gęsta"
-    },
     "columns": {
       "accountName": "Nazwa konta",
       "type": "Typ",

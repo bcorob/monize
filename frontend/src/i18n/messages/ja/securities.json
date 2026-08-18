@@ -57,12 +57,6 @@
       "actions": "操作",
       "favourite": "お気に入り"
     },
-    "density": {
-      "normal": "標準",
-      "compact": "コンパクト",
-      "dense": "密集",
-      "toggle": "行の密度を切り替え"
-    },
     "statusBadge": {
       "active": "有効",
       "activeShort": "有効",

@@ -30,12 +30,6 @@
       "actions": "작업"
     },
     "accountCount": "{count, plural, =0 {계정 없음} one {# 계정} other {# 계정}}",
-    "density": {
-      "title": "행 밀도 전환",
-      "normal": "보통",
-      "compact": "컴팩트",
-      "dense": "조밀"
-    },
     "statusFilter": {
       "all": "전체",
       "active": "활성",

@@ -269,6 +269,7 @@
     "jointRequiresRead": "LESE-Zugriff ist erforderlich, um ein Konto als gemeinsam zu markieren",
     "jointRequiresFullAccount": "Gemeinschaftskonten können nur mit Benutzern geteilt werden, die ein eigenes Monize-Konto haben",
     "jointPayeeCreateNotGranted": "Der Kontoinhaber hat Ihnen nicht erlaubt, Zahlungsempfänger zu erstellen. Wählen Sie stattdessen einen vorhandenen Zahlungsempfänger.",
+    "jointCategoryCreateNotGranted": "Der Kontoinhaber hat Ihnen nicht erlaubt, Kategorien zu erstellen. Wählen Sie stattdessen eine vorhandene Kategorie.",
     "jointTagsNotAllowed": "Tags sind persönlich und können nicht für Buchungen eines geteilten Kontos gesetzt werden.",
     "jointSplitsNotAllowed": "Splitbuchungen in einem geteilten Konto kann nur der Eigentümer verwalten.",
     "jointTransferRowLocked": "Dies ist eine Überweisung. Verwenden Sie stattdessen den Überweisungseditor."

@@ -4,7 +4,6 @@
     "subtitle": "財務健全性に関するインサイトを生成する",
     "searchPlaceholder": "名前または説明でレポートを検索...",
     "allReports": "すべてのレポート",
-    "densityTitle": "{nextDensity} ビューに切り替え",
     "removeFavourite": "お気に入りから削除",
     "addFavourite": "お気に入りに追加",
     "tableReport": "レポート",
@@ -27,11 +26,6 @@
       "bills": "支払い",
       "budget": "予算",
       "custom": "カスタム"
-    },
-    "density": {
-      "normal": "標準",
-      "compact": "コンパクト",
-      "dense": "密集"
     },
     "names": {
       "spending-by-category": "カテゴリ別支出",

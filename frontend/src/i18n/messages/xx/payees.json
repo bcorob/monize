@@ -48,12 +48,6 @@
       "notes": "[XX-Notes-XX]",
       "actions": "[XX-Actions-XX]"
     },
-    "density": {
-      "normal": "[XX-Normal-XX]",
-      "compact": "[XX-Compact-XX]",
-      "dense": "[XX-Dense-XX]",
-      "toggle": "[XX-Toggle row density-XX]"
-    },
     "noCategory": "[XX-None-XX]",
     "statusBadge": {
       "active": "[XX-Active-XX]",

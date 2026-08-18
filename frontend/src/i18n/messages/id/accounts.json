@@ -36,12 +36,6 @@
     },
     "accountCount": "{filtered} dari {total} akun",
     "groupCount": "{count, plural, one {# akun} other {# akun}}",
-    "density": {
-      "toggle": "Ubah kepadatan baris",
-      "normal": "Normal",
-      "compact": "Kompak",
-      "dense": "Padat"
-    },
     "columns": {
       "accountName": "Nama Akun",
       "type": "Jenis",

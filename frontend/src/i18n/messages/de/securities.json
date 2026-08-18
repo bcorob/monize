@@ -57,12 +57,6 @@
       "actions": "Aktionen",
       "favourite": "Favorit"
     },
-    "density": {
-      "normal": "Normal",
-      "compact": "Kompakt",
-      "dense": "Dicht",
-      "toggle": "Zeilendichte umschalten"
-    },
     "statusBadge": {
       "active": "Aktiv",
       "activeShort": "Akt",

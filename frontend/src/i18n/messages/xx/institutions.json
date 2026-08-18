@@ -30,12 +30,6 @@
       "actions": "[XX-Actions-XX]"
     },
     "accountCount": "[XX-{count, plural, =0 {No accounts} one {# account} other {# accounts}}-XX]",
-    "density": {
-      "title": "[XX-Toggle row density-XX]",
-      "normal": "[XX-Normal-XX]",
-      "compact": "[XX-Compact-XX]",
-      "dense": "[XX-Dense-XX]"
-    },
     "statusFilter": {
       "all": "[XX-All-XX]",
       "active": "[XX-Active-XX]",

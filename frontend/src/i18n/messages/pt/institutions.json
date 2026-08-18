@@ -30,12 +30,6 @@
       "actions": "Ações"
     },
     "accountCount": "{count, plural, =0 {Sem contas} one {# conta} other {# contas}}",
-    "density": {
-      "title": "Alternar densidade de linha",
-      "normal": "Normal",
-      "compact": "Compacto",
-      "dense": "Denso"
-    },
     "statusFilter": {
       "all": "Todas",
       "active": "Ativas",

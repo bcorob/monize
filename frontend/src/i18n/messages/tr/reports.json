@@ -4,7 +4,6 @@
     "subtitle": "Finansal sağlığınız hakkında bilgiler edinin",
     "searchPlaceholder": "Raporları ad veya açıklamaya göre arayın...",
     "allReports": "Tüm Raporlar",
-    "densityTitle": "{nextDensity} görünümüne geç",
     "removeFavourite": "Favorilerden kaldır",
     "addFavourite": "Favorilere ekle",
     "tableReport": "Rapor",
@@ -27,11 +26,6 @@
       "bills": "Faturalar",
       "budget": "Bütçe",
       "custom": "Özel"
-    },
-    "density": {
-      "normal": "Normal",
-      "compact": "Kompakt",
-      "dense": "Yoğun"
     },
     "names": {
       "spending-by-category": "Kategoriye Göre Harcama",

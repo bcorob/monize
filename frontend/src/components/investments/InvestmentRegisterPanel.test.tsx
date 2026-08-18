@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, act, waitFor } from '@/test/render';
+import { render, screen, fireEvent, act, waitFor, cleanup } from '@/test/render';
 import { NextIntlClientProvider } from 'next-intl';
 import toast from 'react-hot-toast';
 import { InvestmentRegisterPanel } from './InvestmentRegisterPanel';
@@ -488,6 +488,67 @@ describe('InvestmentRegisterPanel', () => {
       });
 
       expect(screen.getByTestId('form-all-accounts')).toHaveTextContent('undefined');
+    });
+  });
+
+  // Issue #1193: this register is the surface the bug was reported against. It
+  // passed no density props, so the list fell through to its own
+  // `useState('normal')` and the level reset on every remount -- which is what
+  // a page refresh, a tab switch, or navigating away and back all are.
+  describe('row density', () => {
+    // The toolbar carrying the toggle only renders once the register has rows.
+    beforeEach(() => {
+      (investmentsApi.getTransactions as ReturnType<typeof vi.fn>).mockResolvedValue({
+        data: [
+          {
+            id: 'tx-1',
+            accountId: 'brok',
+            action: 'BUY',
+            transactionDate: '2026-01-05',
+            quantity: 1,
+            price: 10,
+            totalAmount: 10,
+            security: { symbol: 'VTI', name: 'Vanguard', currencyCode: 'CAD' },
+          },
+        ],
+        pagination: { total: 1, page: 1, limit: 25, totalPages: 1 },
+      });
+    });
+
+    it('keeps the chosen level when the panel is remounted', async () => {
+      await renderPanel(brokerage, cash);
+
+      await act(async () => {
+        fireEvent.click(screen.getByTitle('Toggle row density'));
+      });
+      expect(screen.getByTitle('Toggle row density')).toHaveTextContent('Compact');
+
+      cleanup();
+      await renderPanel(brokerage, cash);
+
+      expect(screen.getByTitle('Toggle row density')).toHaveTextContent('Compact');
+    });
+
+    it('keeps the chosen level across a switch to the cash ledger and back', async () => {
+      // Switching ledgers unmounts the brokerage list outright, so this is the
+      // remount case again, reached without leaving the page.
+      await renderPanel(brokerage, cash);
+
+      await act(async () => {
+        fireEvent.click(screen.getByTitle('Toggle row density'));
+        fireEvent.click(screen.getByTitle('Toggle row density'));
+      });
+      expect(screen.getByTitle('Toggle row density')).toHaveTextContent('Dense');
+
+      await act(async () => {
+        fireEvent.click(screen.getByText('Cash'));
+      });
+      expect(screen.getByText('Cash transactions')).toBeInTheDocument();
+
+      await act(async () => {
+        fireEvent.click(screen.getByText('Brokerage'));
+      });
+      expect(screen.getByTitle('Toggle row density')).toHaveTextContent('Dense');
     });
   });
 });

@@ -74,11 +74,7 @@
     "badgeExpense": "Pengeluaran",
     "systemBadge": "(Sistem)",
     "inheritedColorTitle": "Diwarisi dari induk",
-    "viewTransactionsTitle": "Lihat transaksi dalam kategori ini",
-    "densityToggleTitle": "Ubah kepadatan baris",
-    "densityNormal": "Normal",
-    "densityCompact": "Kompak",
-    "densityDense": "Padat"
+    "viewTransactionsTitle": "Lihat transaksi dalam kategori ini"
   },
   "deleteDialog": {
     "title": "Hapus \"{name}\"?",

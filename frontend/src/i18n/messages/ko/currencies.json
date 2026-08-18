@@ -43,12 +43,6 @@
       "status": "상태",
       "actions": "작업"
     },
-    "density": {
-      "normal": "보통",
-      "compact": "컴팩트",
-      "dense": "조밀",
-      "toggle": "행 밀도 전환"
-    },
     "defaultBadge": "기본",
     "statusBadge": {
       "active": "활성",

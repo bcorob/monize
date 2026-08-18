@@ -4,7 +4,6 @@
     "subtitle": "Twórz analizy swojej kondycji finansowej",
     "searchPlaceholder": "Szukaj raportów po nazwie lub opisie...",
     "allReports": "Wszystkie raporty",
-    "densityTitle": "Przełącz na widok {nextDensity}",
     "removeFavourite": "Usuń z ulubionych",
     "addFavourite": "Dodaj do ulubionych",
     "tableReport": "Raport",
@@ -27,11 +26,6 @@
       "bills": "Rachunki",
       "budget": "Budżet",
       "custom": "Niestandardowy"
-    },
-    "density": {
-      "normal": "Normalna",
-      "compact": "Kompaktowa",
-      "dense": "Gęsta"
     },
     "names": {
       "spending-by-category": "Wydatki według kategorii",

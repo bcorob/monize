@@ -30,12 +30,6 @@
       "actions": "Acties"
     },
     "accountCount": "{count, plural, =0 {Geen rekeningen} one {# rekening} other {# rekeningen}}",
-    "density": {
-      "title": "Rijdichtheid wisselen",
-      "normal": "Normaal",
-      "compact": "Compact",
-      "dense": "Dicht"
-    },
     "statusFilter": {
       "all": "Alle",
       "active": "Actief",

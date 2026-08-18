@@ -19,7 +19,6 @@ import { Security, CreateSecurityData, Holding } from '@/types/investment';
 const SecurityForm = dynamic(() => import('@/components/securities/SecurityForm').then(m => m.SecurityForm), { ssr: false });
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { SecurityList, type SecurityHoldings, type SecurityTransactions, type SecuritySortField, type SortDirection } from '@/components/securities/SecurityList';
-import { type DensityLevel } from '@/hooks/useTableDensity';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { createLogger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/errors';
@@ -60,7 +59,6 @@ function SecuritiesContent() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('active');
   const [currentPage, setCurrentPage] = useState(1);
-  const [listDensity, setListDensity] = useLocalStorage<DensityLevel>('monize-securities-density', 'normal');
   const [sortField, setSortField] = useLocalStorage<SecuritySortField>('monize-securities-sort-field', 'symbol');
   const [sortDirection, setSortDirection] = useLocalStorage<SortDirection>('monize-securities-sort-dir', 'asc');
 
@@ -373,8 +371,6 @@ function SecuritiesContent() {
               onToggleFavourite={handleToggleFavourite}
               onDelete={handleDeleteClick}
               onOpen={handleOpen}
-              density={listDensity}
-              onDensityChange={setListDensity}
               sortField={sortField}
               sortDirection={sortDirection}
               onSort={handleSort}

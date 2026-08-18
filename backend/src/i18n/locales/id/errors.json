@@ -269,6 +269,7 @@
     "jointRequiresRead": "Akses BACA diperlukan untuk menandai akun sebagai akun bersama",
     "jointRequiresFullAccount": "Akun bersama hanya dapat dibagikan dengan pengguna yang memiliki akun Monize sendiri",
     "jointPayeeCreateNotGranted": "Pemilik akun belum memberi Anda izin membuat penerima. Pilih salah satu penerima yang sudah ada.",
+    "jointCategoryCreateNotGranted": "Pemilik akun belum memberi Anda izin membuat kategori. Pilih salah satu kategori yang sudah ada.",
     "jointTagsNotAllowed": "Tag bersifat pribadi, jadi tidak dapat dipasang pada transaksi akun bersama.",
     "jointSplitsNotAllowed": "Transaksi split di akun bersama hanya dapat dikelola oleh pemilik.",
     "jointTransferRowLocked": "Ini adalah transfer. Gunakan editor transfer."

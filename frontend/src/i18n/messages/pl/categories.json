@@ -74,11 +74,7 @@
     "badgeExpense": "Wydatek",
     "systemBadge": "(Systemowa)",
     "inheritedColorTitle": "Dziedziczony z kategorii nadrzednej",
-    "viewTransactionsTitle": "Wyswietl transakcje w tej kategorii",
-    "densityToggleTitle": "Przełącz gęstość wierszy",
-    "densityNormal": "Normalna",
-    "densityCompact": "Kompaktowa",
-    "densityDense": "Gęsta"
+    "viewTransactionsTitle": "Wyswietl transakcje w tej kategorii"
   },
   "deleteDialog": {
     "title": "Usunąć \"{name}\"?",

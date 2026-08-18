@@ -15,7 +15,6 @@ import dynamic from 'next/dynamic';
 import { exchangeRatesApi, CurrencyInfo, CreateCurrencyData, CurrencyUsage } from '@/lib/exchange-rates';
 const CurrencyForm = dynamic(() => import('@/components/currencies/CurrencyForm').then(m => m.CurrencyForm), { ssr: false });
 import { CurrencyList, type CurrencySortField, type SortDirection } from '@/components/currencies/CurrencyList';
-import { type DensityLevel } from '@/hooks/useTableDensity';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useExchangeRates } from '@/hooks/useExchangeRates';
 import { createLogger } from '@/lib/logger';
@@ -46,7 +45,6 @@ function CurrenciesContent() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('active');
   const [currentPage, setCurrentPage] = useState(1);
-  const [listDensity, setListDensity] = useLocalStorage<DensityLevel>('monize-currencies-density', 'normal');
   const [sortField, setSortField] = useLocalStorage<CurrencySortField>('monize-currencies-sort-field', 'code');
   const [sortDirection, setSortDirection] = useLocalStorage<SortDirection>('monize-currencies-sort-dir', 'asc');
 
@@ -311,8 +309,6 @@ function CurrenciesContent() {
               onEdit={handleEdit}
               onToggleActive={handleToggleActive}
               onRefresh={loadData}
-              density={listDensity}
-              onDensityChange={setListDensity}
               sortField={sortField}
               sortDirection={sortDirection}
               onSort={handleSort}

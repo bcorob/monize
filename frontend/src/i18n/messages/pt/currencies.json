@@ -43,12 +43,6 @@
       "status": "Estado",
       "actions": "Ações"
     },
-    "density": {
-      "normal": "Normal",
-      "compact": "Compacto",
-      "dense": "Denso",
-      "toggle": "Alternar densidade de linha"
-    },
     "defaultBadge": "Predefinida",
     "statusBadge": {
       "active": "Ativa",

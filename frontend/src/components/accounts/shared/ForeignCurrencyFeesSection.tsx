@@ -298,6 +298,7 @@ export function ForeignCurrencyFeesSection({ account }: ForeignCurrencyFeesSecti
           )}
           {listLoaded && (
             <TransactionList
+              densityView="accountFxFees"
               transactions={transactions}
               onEdit={handleEdit}
               onRefresh={refresh}

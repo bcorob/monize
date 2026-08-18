@@ -30,12 +30,6 @@
       "actions": "Aktionen"
     },
     "accountCount": "{count, plural, =0 {Keine Konten} one {# Konto} other {# Konten}}",
-    "density": {
-      "title": "Zeilendichte umschalten",
-      "normal": "Normal",
-      "compact": "Kompakt",
-      "dense": "Dicht"
-    },
     "statusFilter": {
       "all": "Alle",
       "active": "Aktiv",

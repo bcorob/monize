@@ -233,5 +233,11 @@
     "srSuffix": "(Teilsumme)",
     "explanation": "Teilsumme: {count, plural, one {# Betrag} other {# Beträge}} konnten nicht einbezogen werden, daher schließt der angezeigte Wert sie aus. Für {currencies} ist kein Kurs zu {displayCurrency} verfügbar.",
     "explanationExcluded": "Teilsumme: {count, plural, one {# Betrag} other {# Beträge}} konnten nicht ermittelt werden, daher schließt der angezeigte Wert sie aus."
+  },
+  "density": {
+    "title": "Zeilendichte umschalten",
+    "normal": "Normal",
+    "compact": "Kompakt",
+    "dense": "Dicht"
   }
 }

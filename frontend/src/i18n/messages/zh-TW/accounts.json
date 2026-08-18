@@ -36,12 +36,6 @@
     },
     "accountCount": "{filtered} / {total} 個科目",
     "groupCount": "{count, plural, one {# 個科目} other {# 個科目}}",
-    "density": {
-      "toggle": "切換列密度",
-      "normal": "正常",
-      "compact": "緊湊",
-      "dense": "密集"
-    },
     "columns": {
       "accountName": "科目名稱",
       "type": "類型",

@@ -42,12 +42,6 @@
       "title": "[XX-No tags found-XX]",
       "body": "[XX-No tags match your current search.-XX]"
     },
-    "density": {
-      "title": "[XX-Toggle row density-XX]",
-      "normal": "[XX-Normal-XX]",
-      "compact": "[XX-Compact-XX]",
-      "dense": "[XX-Dense-XX]"
-    },
     "header": {
       "name": "[XX-Name-XX]",
       "icon": "[XX-Icon-XX]",

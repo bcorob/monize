@@ -4,7 +4,6 @@
     "subtitle": "Genereer inzichten over jouw financiële gezondheid",
     "searchPlaceholder": "Zoek rapporten op naam of omschrijving...",
     "allReports": "Alle rapporten",
-    "densityTitle": "Overschakelen naar {nextDensity}-weergave",
     "removeFavourite": "Verwijderen uit favorieten",
     "addFavourite": "Toevoegen aan favorieten",
     "tableReport": "Rapport",
@@ -27,11 +26,6 @@
       "bills": "Rekeningen",
       "budget": "Budget",
       "custom": "Aangepast"
-    },
-    "density": {
-      "normal": "Normaal",
-      "compact": "Compact",
-      "dense": "Dicht"
     },
     "names": {
       "spending-by-category": "Uitgaven per categorie",

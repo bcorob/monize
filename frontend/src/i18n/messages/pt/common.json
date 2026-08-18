@@ -233,5 +233,11 @@
     "srSuffix": "(total parcial)",
     "explanation": "Total parcial: não foi possível incluir {count, plural, one {# montante} other {# montantes}}, pelo que o valor apresentado os exclui. Não há taxa para {displayCurrency} disponível para {currencies}.",
     "explanationExcluded": "Total parcial: não foi possível apurar {count, plural, one {# montante} other {# montantes}}, pelo que o valor apresentado os exclui."
+  },
+  "density": {
+    "title": "Alternar densidade das linhas",
+    "normal": "Normal",
+    "compact": "Compacto",
+    "dense": "Denso"
   }
 }

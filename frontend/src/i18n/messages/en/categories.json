@@ -74,11 +74,7 @@
     "badgeExpense": "Expense",
     "systemBadge": "(System)",
     "inheritedColorTitle": "Inherited from parent",
-    "viewTransactionsTitle": "View transactions in this category",
-    "densityToggleTitle": "Toggle row density",
-    "densityNormal": "Normal",
-    "densityCompact": "Compact",
-    "densityDense": "Dense"
+    "viewTransactionsTitle": "View transactions in this category"
   },
   "deleteDialog": {
     "title": "Delete \"{name}\"?",

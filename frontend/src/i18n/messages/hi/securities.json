@@ -57,12 +57,6 @@
       "actions": "क्रियाएं",
       "favourite": "पसंदीदा"
     },
-    "density": {
-      "normal": "सामान्य",
-      "compact": "संक्षिप्त",
-      "dense": "सघन",
-      "toggle": "पंक्ति घनत्व टॉगल करें"
-    },
     "statusBadge": {
       "active": "सक्रिय",
       "activeShort": "स.",

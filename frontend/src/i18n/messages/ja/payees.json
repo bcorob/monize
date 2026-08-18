@@ -48,12 +48,6 @@
       "notes": "メモ",
       "actions": "操作"
     },
-    "density": {
-      "normal": "標準",
-      "compact": "コンパクト",
-      "dense": "密集",
-      "toggle": "行の密度を切り替え"
-    },
     "noCategory": "なし",
     "statusBadge": {
       "active": "有効",

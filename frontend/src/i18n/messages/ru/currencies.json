@@ -43,12 +43,6 @@
       "status": "Статус",
       "actions": "Действия"
     },
-    "density": {
-      "normal": "Обычная",
-      "compact": "Компактная",
-      "dense": "Плотная",
-      "toggle": "Переключить плотность строк"
-    },
     "defaultBadge": "По умолчанию",
     "statusBadge": {
       "active": "Активная",

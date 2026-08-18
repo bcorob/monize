@@ -26,7 +26,8 @@ import {
   categoryColors,
 } from '@/components/reports/report-definitions';
 
-import { DensityLevel, nextDensity } from '@/hooks/useTableDensity';
+import { useDensityPreference } from '@/store/densityStore';
+import { DensityToggle } from '@/components/ui/DensityToggle';
 
 const logger = createLogger('Reports');
 
@@ -41,7 +42,7 @@ export default function ReportsPage() {
 function ReportsContent() {
   const t = useTranslations('reports');
   const router = useRouter();
-  const [density, setDensity] = useLocalStorage<DensityLevel>('monize-reports-density', 'normal');
+  const { density } = useDensityPreference('reports');
   const [categoryFilter, setCategoryFilter] = useLocalStorage<ReportCategory | 'all'>('monize-reports-category', 'all');
   // `?category=` overrides the remembered filter for this visit, so a link can
   // guarantee a given report is on screen whatever the user last filtered by
@@ -137,8 +138,6 @@ function ReportsContent() {
     loadInvestmentReports();
   }, []);
 
-  const cycleDensity = () => setDensity(nextDensity(density));
-
   const managedBackgroundColor = (report: Report): string => {
     if (report.isCustom) {
       return (
@@ -204,12 +203,6 @@ function ReportsContent() {
         updateStorePreferences({ favouriteReportIds: favouriteReportIds });
       }
     }
-  };
-
-  const densityLabels: Record<DensityLevel, string> = {
-    normal: t('page.density.normal'),
-    compact: t('page.density.compact'),
-    dense: t('page.density.dense'),
   };
 
   // Convert custom reports to the Report interface. Memoized so the SVG icon
@@ -365,16 +358,7 @@ function ReportsContent() {
               {t(`page.categories.${cat}` as Parameters<typeof t>[0])}
             </button>
           ))}
-          <button
-            onClick={cycleDensity}
-            className="ml-auto inline-flex items-center justify-center gap-2 px-3 py-1.5 text-sm font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-            title={t('page.densityTitle', { nextDensity: densityLabels[nextDensity(density)] })}
-          >
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
-            </svg>
-            {densityLabels[density]}
-          </button>
+          <DensityToggle view="reports" size="chip" className="ml-auto justify-center" />
         </div>
 
         {/* Reports Grid */}

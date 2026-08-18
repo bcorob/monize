@@ -133,12 +133,6 @@
       "noData": "無交易可匯出",
       "error": "匯出交易失敗"
     },
-    "density": {
-      "title": "切換列間距",
-      "normal": "一般",
-      "compact": "緊密",
-      "dense": "密集"
-    },
     "delete": {
       "transferTitle": "刪除轉帳",
       "transactionTitle": "刪除交易",

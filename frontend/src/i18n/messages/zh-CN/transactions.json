@@ -133,12 +133,6 @@
       "noData": "无交易可导出",
       "error": "导出交易失败"
     },
-    "density": {
-      "title": "切换行密度",
-      "normal": "正常",
-      "compact": "紧凑",
-      "dense": "密集"
-    },
     "delete": {
       "transferTitle": "删除转账",
       "transactionTitle": "删除交易",

@@ -133,12 +133,6 @@
       "noData": "Dışa aktarılacak işlem yok",
       "error": "İşlemler dışa aktarılamadı"
     },
-    "density": {
-      "title": "Satır yoğunluğunu değiştir",
-      "normal": "Normal",
-      "compact": "Kompakt",
-      "dense": "Yoğun"
-    },
     "delete": {
       "transferTitle": "Transferi Sil",
       "transactionTitle": "İşlemi Sil",

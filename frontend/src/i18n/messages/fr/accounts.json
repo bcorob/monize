@@ -36,12 +36,6 @@
     },
     "accountCount": "{filtered} sur {total} comptes",
     "groupCount": "{count, plural, one {# compte} other {# comptes}}",
-    "density": {
-      "toggle": "Changer la densité des lignes",
-      "normal": "Normal",
-      "compact": "Compact",
-      "dense": "Dense"
-    },
     "columns": {
       "accountName": "Nom du compte",
       "type": "Type",

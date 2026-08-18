@@ -133,12 +133,6 @@
       "noData": "Brak transakcji do wyeksportowania",
       "error": "Nie udało się wyeksportować transakcji"
     },
-    "density": {
-      "title": "Przełącz gęstość wierszy",
-      "normal": "Normalna",
-      "compact": "Kompaktowa",
-      "dense": "Gęsta"
-    },
     "delete": {
       "transferTitle": "Usuń przelew",
       "transactionTitle": "Usuń transakcję",

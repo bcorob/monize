@@ -295,6 +295,7 @@ function TransactionFormFields({ transaction, duplicateFrom, defaultAccountId, d
     handleSubmit,
     setValue,
     watch,
+    getValues,
     formState: { errors, isDirty },
   } = useForm<TransactionFormData>({
     resolver: zodResolver(buildTransactionSchema(t)) as Resolver<TransactionFormData>,
@@ -953,13 +954,60 @@ function TransactionFormFields({ transaction, duplicateFrom, defaultAccountId, d
   // Create a category from text typed into any of this form's category
   // pickers -- the Category field, and each split line's own picker. Returns
   // the created category so a split line can assign it to the row that asked;
-  // null means nothing was created (blank input, or the request failed).
+  // null means nothing was created (blank input, the request failed, or the
+  // account moved out from under it).
+  //
+  // A joint row belongs to the sharing owner and may only carry the OWNER's
+  // category ids, so on a joint account this creates on the owner's ledger
+  // through the capability-gated endpoint -- `categoriesApi.create` writes to
+  // the CALLER's, which put an id the owner does not own on the form. Parents
+  // are matched against whichever list the pickers are showing, so a
+  // `Parent: Child` typed on a joint account reuses the owner's parent.
   const createCategoryFromTypedName = async (name: string): Promise<Category | null> => {
+    // The request's own account, kept beside its response: which ledger the
+    // create lands on is decided here, and nothing later may read it off a
+    // selection that has since moved.
+    const originAccountId = watchedAccountId;
+    const jointAccountId = selectedIsJoint ? originAccountId : undefined;
     try {
-      const result = await createCategoryFromInput(name, categories);
+      const result = await createCategoryFromInput(
+        name,
+        effectiveCategories,
+        jointAccountId ? { jointAccountId } : {},
+      );
       if (!result) return null;
-      setCategories(prev => [...prev, ...result.created]);
+      if (jointAccountId) {
+        setJointRef(prev =>
+          prev?.accountId === jointAccountId
+            ? {
+                ...prev,
+                data: {
+                  ...prev.data,
+                  categories: [
+                    ...prev.data.categories,
+                    ...result.created.map(c => ({
+                      id: c.id,
+                      name: c.name,
+                      parentId: c.parentId,
+                      icon: c.icon,
+                      color: c.color,
+                      isIncome: c.isIncome,
+                      isSystem: c.isSystem,
+                    })),
+                  ],
+                },
+              }
+            : prev,
+        );
+      } else {
+        setCategories(prev => [...prev, ...result.created]);
+      }
       toast.success(t('form.toasts.categoryCreated', { name: result.displayName }));
+      // The category exists either way and is recorded on its own ledger's
+      // list above -- but only the account that asked may adopt the id. A
+      // create that lands after the user picked another account would put an
+      // id from one ledger onto a row in another.
+      if (getValues('accountId') !== originAccountId) return null;
       return result.category;
     } catch (error) {
       logger.error('Failed to create category:', error);
@@ -970,22 +1018,28 @@ function TransactionFormFields({ transaction, duplicateFrom, defaultAccountId, d
 
   // Handle creating a new category - called when user clicks "Create" in dropdown
   // Supports "Parent: Child" format to create subcategories
-  // A joint row belongs to the sharing owner and may only carry the owner's
-  // category ids, but `categoriesApi.create` writes to the CALLER's ledger --
-  // there is no client path that creates a category on someone else's, so the
-  // delegation's `categoriesCanCreate` capability has nothing to drive here
-  // yet. Offering "+ Create" on a joint account therefore created the category
-  // in the wrong place and put an id the owner does not own on the form. Until
-  // an owner-scoped create exists, joint accounts select from the owner's list
-  // and nothing more; withholding the creator is what removes the option from
-  // every one of this form's category pickers at once.
-  const jointSafeCategoryCreator = selectedIsJoint
-    ? undefined
-    : createCategoryFromTypedName;
+  // On a joint account the option is offered only when the owner granted the
+  // delegation's categories-can-create capability (the same flag the server
+  // re-checks on the owner-ledger endpoint); withholding the creator is what
+  // removes "+ Create" from every one of this form's category pickers at once.
+  // While the reference data is still loading the flag is unknown, so the
+  // option stays out rather than being offered and then refused.
+  //
+  // "Not joint" is also the shape of "the account list has not arrived yet",
+  // and the two must not be confused: offering the creator while the selected
+  // id is still unresolved flashed "+ Create" onto a joint account and pointed
+  // it at the CALLER's ledger for as long as it took to find out. An unknown
+  // answer withholds, exactly as a refused one does.
+  const categoryCreationAllowed = selectedIsJoint
+    ? !!jointRefData?.categoriesCanCreate
+    : !watchedAccountId || !!selectedAccount;
+  const jointSafeCategoryCreator = categoryCreationAllowed
+    ? createCategoryFromTypedName
+    : undefined;
 
-  // Undefined on a joint account, for the reason above -- which is what takes
-  // "+ Create" out of the Category field and the transfer form's, exactly as it
-  // does out of the split lines.
+  // Undefined when the capability is absent, for the reason above -- which is
+  // what takes "+ Create" out of the Category field and the transfer form's,
+  // exactly as it does out of the split lines.
   const handleCategoryCreate = jointSafeCategoryCreator
     ? async (name: string) => {
         const newCategory = await jointSafeCategoryCreator(name);

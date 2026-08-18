@@ -133,12 +133,6 @@
       "noData": "Geen transacties om te exporteren",
       "error": "Exporteren van transacties mislukt"
     },
-    "density": {
-      "title": "Rijdichtheid instellen",
-      "normal": "Normaal",
-      "compact": "Compact",
-      "dense": "Dicht"
-    },
     "delete": {
       "transferTitle": "Overboeking verwijderen",
       "transactionTitle": "Transactie verwijderen",

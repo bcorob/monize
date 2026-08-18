@@ -233,5 +233,11 @@
     "srSuffix": "(suma częściowa)",
     "explanation": "Suma częściowa: {count, plural, one {# kwoty} few {# kwot} many {# kwot} other {# kwoty}} nie udało się uwzględnić, więc pokazana wartość ich nie obejmuje. Brak kursu do {displayCurrency} dla {currencies}.",
     "explanationExcluded": "Suma częściowa: {count, plural, one {# kwoty} few {# kwot} many {# kwot} other {# kwoty}} nie udało się ustalić, więc pokazana liczba ich nie obejmuje."
+  },
+  "density": {
+    "title": "Przełącz gęstość wierszy",
+    "normal": "Normalna",
+    "compact": "Kompaktowa",
+    "dense": "Gęsta"
   }
 }

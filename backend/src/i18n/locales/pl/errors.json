@@ -269,6 +269,7 @@
     "jointRequiresRead": "Do oznaczenia konta jako wspólnego wymagany jest dostęp do ODCZYTU",
     "jointRequiresFullAccount": "Wspólne konta można udostępniać tylko użytkownikom, którzy mają własne konto Monize",
     "jointPayeeCreateNotGranted": "Właściciel konta nie przyznał Ci uprawnień do tworzenia odbiorców. Wybierz jednego z istniejących odbiorców.",
+    "jointCategoryCreateNotGranted": "Właściciel konta nie przyznał Ci uprawnień do tworzenia kategorii. Wybierz jedną z istniejących kategorii.",
     "jointTagsNotAllowed": "Tagi są osobiste, więc nie można ich ustawiać na transakcjach wspólnego konta.",
     "jointSplitsNotAllowed": "Transakcjami podzielonymi na wspólnym koncie może zarządzać tylko właściciel.",
     "jointTransferRowLocked": "To jest przelew. Użyj edytora przelewów."

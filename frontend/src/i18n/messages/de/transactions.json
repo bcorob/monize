@@ -133,12 +133,6 @@
       "noData": "Keine Buchungen zum Exportieren",
       "error": "Buchungen konnten nicht exportiert werden"
     },
-    "density": {
-      "title": "Zeilendichte umschalten",
-      "normal": "Normal",
-      "compact": "Kompakt",
-      "dense": "Dicht"
-    },
     "delete": {
       "transferTitle": "Überweisung löschen",
       "transactionTitle": "Buchung löschen",

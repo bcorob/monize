@@ -233,5 +233,11 @@
     "srSuffix": "（部分合計）",
     "explanation": "部分的な合計: {count, plural, other {# 件の金額}}を含めることができなかったため、表示されている金額はこれらを除外しています。{currencies} の {displayCurrency} への為替レートがありません。",
     "explanationExcluded": "部分的な合計: {count, plural, other {# 件の金額}}を算出できなかったため、表示されている金額はこれらを除外しています。"
+  },
+  "density": {
+    "title": "行の密度を切り替え",
+    "normal": "標準",
+    "compact": "コンパクト",
+    "dense": "密集"
   }
 }

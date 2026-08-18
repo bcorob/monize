@@ -133,12 +133,6 @@
       "noData": "Aucune transaction à exporter",
       "error": "Échec de l'exportation des transactions"
     },
-    "density": {
-      "title": "Changer la densité des lignes",
-      "normal": "Normal",
-      "compact": "Compact",
-      "dense": "Dense"
-    },
     "delete": {
       "transferTitle": "Supprimer le virement",
       "transactionTitle": "Supprimer la transaction",

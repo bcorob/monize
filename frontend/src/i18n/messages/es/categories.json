@@ -74,11 +74,7 @@
     "badgeExpense": "Gasto",
     "systemBadge": "(Sistema)",
     "inheritedColorTitle": "Heredado de la principal",
-    "viewTransactionsTitle": "Ver transacciones en esta categoría",
-    "densityToggleTitle": "Cambiar densidad de filas",
-    "densityNormal": "Normal",
-    "densityCompact": "Compacto",
-    "densityDense": "Denso"
+    "viewTransactionsTitle": "Ver transacciones en esta categoría"
   },
   "deleteDialog": {
     "title": "¿Eliminar \"{name}\"?",

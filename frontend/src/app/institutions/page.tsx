@@ -25,8 +25,6 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { SummaryCard, SummaryIcons } from '@/components/ui/SummaryCard';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { useFormModal } from '@/hooks/useFormModal';
-import { useLocalStorage } from '@/hooks/useLocalStorage';
-import { DensityLevel } from '@/hooks/useTableDensity';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { createLogger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/errors';
@@ -53,10 +51,6 @@ function InstitutionsContent() {
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [currentPage, setCurrentPage] = useState(1);
   const [managing, setManaging] = useState<Institution | null>(null);
-  const [listDensity, setListDensity] = useLocalStorage<DensityLevel>(
-    'monize-institutions-density',
-    'normal',
-  );
   const {
     showForm,
     editingItem,
@@ -329,8 +323,6 @@ function InstitutionsContent() {
                 setInstitutions((prev) => prev.filter((i) => i.id !== deletedId))
               }
               onManageAccounts={setManaging}
-              density={listDensity}
-              onDensityChange={setListDensity}
               sortField={sortField}
               sortDirection={sortDirection}
               onSort={handleSort}

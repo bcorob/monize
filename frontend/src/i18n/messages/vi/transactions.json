@@ -133,12 +133,6 @@
       "noData": "Không có giao tác để xuất",
       "error": "Không thể xuất giao tác"
     },
-    "density": {
-      "title": "Chuyển đổi mật độ hàng",
-      "normal": "Bình thường",
-      "compact": "Thu gọn",
-      "dense": "Dày đặc"
-    },
     "delete": {
       "transferTitle": "Xóa chuyển khoản",
       "transactionTitle": "Xóa giao tác",

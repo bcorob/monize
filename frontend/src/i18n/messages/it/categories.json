@@ -74,11 +74,7 @@
     "badgeExpense": "Uscita",
     "systemBadge": "(Sistema)",
     "inheritedColorTitle": "Ereditato dal genitore",
-    "viewTransactionsTitle": "Visualizza transazioni in questa categoria",
-    "densityToggleTitle": "Cambia densità righe",
-    "densityNormal": "Normale",
-    "densityCompact": "Compatto",
-    "densityDense": "Denso"
+    "viewTransactionsTitle": "Visualizza transazioni in questa categoria"
   },
   "deleteDialog": {
     "title": "Eliminare \"{name}\"?",

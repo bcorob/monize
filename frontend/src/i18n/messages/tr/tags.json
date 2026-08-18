@@ -42,12 +42,6 @@
       "title": "Etiket bulunamadı",
       "body": "Mevcut aramanızla eşleşen etiket yok."
     },
-    "density": {
-      "title": "Satır yoğunluğunu değiştir",
-      "normal": "Normal",
-      "compact": "Kompakt",
-      "dense": "Yoğun"
-    },
     "header": {
       "name": "Ad",
       "icon": "Simge",

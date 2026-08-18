@@ -9,7 +9,8 @@ import { payeesApi } from '@/lib/payees';
 import toast from 'react-hot-toast';
 import { createLogger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/errors';
-import { useTableDensity, nextDensity, type DensityLevel } from '@/hooks/useTableDensity';
+import { useTableDensity, type DensityLevel } from '@/hooks/useTableDensity';
+import { useDensityPreference } from '@/store/densityStore';
 import { HIGHLIGHT_FLASH, HIGHLIGHT_FLASH_CELL, useScrollIntoViewWhen } from '@/hooks/useHighlightTarget';
 import { SortIcon } from '@/components/ui/SortIcon';
 import { useDateFormat } from '@/hooks/useDateFormat';
@@ -17,6 +18,7 @@ import { useLongPress, type LongPressRowHandlers } from '@/hooks/useLongPress';
 import { RowActions } from '@/components/ui/row-actions/RowActions';
 import { RowActionSheet } from '@/components/ui/row-actions/RowActionSheet';
 import type { RowAction } from '@/components/ui/row-actions/rowAction';
+import { DensityToggleBar } from '@/components/ui/DensityToggle';
 
 const logger = createLogger('PayeeList');
 
@@ -90,8 +92,6 @@ interface PayeeListProps {
   onReactivate?: (payeeId: string) => void;
   onMerge?: (payee: Payee) => void;
   showStatusColumn?: boolean;
-  density?: DensityLevel;
-  onDensityChange?: (density: DensityLevel) => void;
   sortField?: SortField;
   sortDirection?: SortDirection;
   onSort?: (field: SortField) => void;
@@ -245,8 +245,6 @@ export function PayeeList({
   onReactivate,
   onMerge,
   showStatusColumn = false,
-  density: propDensity,
-  onDensityChange,
   sortField: propSortField,
   sortDirection: propSortDirection,
   onSort,
@@ -260,7 +258,7 @@ export function PayeeList({
   const { formatDate } = useDateFormat();
   const [deletePayee, setDeletePayee] = useState<Payee | null>(null);
   const [actionSheet, setActionSheet] = useState<{ open: boolean; payee: Payee | null }>({ open: false, payee: null });
-  const [localDensity, setLocalDensity] = useState<DensityLevel>('normal');
+  const { density } = useDensityPreference('payees');
   const [localSortField, setLocalSortField] = useState<SortField>('name');
   const [localSortDirection, setLocalSortDirection] = useState<SortDirection>('asc');
 
@@ -268,19 +266,8 @@ export function PayeeList({
   const sortField = propSortField ?? localSortField;
   const sortDirection = propSortDirection ?? localSortDirection;
 
-  // Use prop density if provided, otherwise use local state
-  const density = propDensity ?? localDensity;
 
   const { cellPadding, headerPadding } = useTableDensity(density);
-
-  const cycleDensity = useCallback(() => {
-    const next = nextDensity(density);
-    if (onDensityChange) {
-      onDensityChange(next);
-    } else {
-      setLocalDensity(next);
-    }
-  }, [density, onDensityChange]);
 
   const handleSort = useCallback((field: SortField) => {
     if (onSort) {
@@ -379,18 +366,7 @@ export function PayeeList({
 
   return (
     <div>
-      <div className="flex justify-end p-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
-        <button
-          onClick={cycleDensity}
-          className="inline-flex items-center px-2 py-1 text-xs font-medium text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
-          title={t('list.density.toggle')}
-        >
-          <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-          </svg>
-          {density === 'normal' ? t('list.density.normal') : density === 'compact' ? t('list.density.compact') : t('list.density.dense')}
-        </button>
-      </div>
+      <DensityToggleBar view="payees" />
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
           <thead className="bg-gray-50 dark:bg-gray-800">

@@ -64,7 +64,14 @@ are the grant flags AND-ed with this policy, so the UI and the service can never
 2. The grantee picks category and payee from the owner's lists, served by
    `GET /delegation/joint-accounts/:accountId/reference-data` (gated on the joint read grant).
 3. Free-text `payeeName` auto-creates a payee on the owner's ledger only when the delegation has
-   `payees_can_create`; otherwise 403. No category creation from the native context in v1.
+   `payees_can_create`; otherwise 403. Category creation is the same rule on its own capability:
+   `POST /categories/joint/:accountId` (`backend/src/categories/joint-categories.service.ts`)
+   creates on the owner's ledger only when the delegation has `categories_can_create`, otherwise
+   403. It gates the account on READ, like the reference data it feeds -- the capability is what
+   authorizes the write, exactly as it is on the acting-as `POST /categories`, which consults no
+   account grant at all. Until that endpoint existed the flag drove nothing from the native
+   context: the client's only create wrote to the caller's own ledger, so the form withheld the
+   option whatever the owner had granted.
 4. Tags are per-user: the grantee cannot set `tagIds` on joint rows (400). The owner's existing
    tags on those rows display read-only.
 

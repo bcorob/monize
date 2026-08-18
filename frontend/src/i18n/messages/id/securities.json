@@ -57,12 +57,6 @@
       "actions": "Tindakan",
       "favourite": "Favorit"
     },
-    "density": {
-      "normal": "Normal",
-      "compact": "Kompak",
-      "dense": "Padat",
-      "toggle": "Ubah kepadatan baris"
-    },
     "statusBadge": {
       "active": "Aktif",
       "activeShort": "Akt",

@@ -42,12 +42,6 @@
       "title": "Geen labels gevonden",
       "body": "Geen labels komen overeen met je huidige zoekopdracht."
     },
-    "density": {
-      "title": "Rijdichtheid wisselen",
-      "normal": "Normaal",
-      "compact": "Compact",
-      "dense": "Dicht"
-    },
     "header": {
       "name": "Naam",
       "icon": "Pictogram",

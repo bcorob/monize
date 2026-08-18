@@ -43,12 +43,6 @@
       "status": "ステータス",
       "actions": "操作"
     },
-    "density": {
-      "normal": "通常",
-      "compact": "コンパクト",
-      "dense": "密集",
-      "toggle": "行の密度を切り替え"
-    },
     "defaultBadge": "デフォルト",
     "statusBadge": {
       "active": "有効",

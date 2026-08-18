@@ -753,7 +753,12 @@ describe("a category typed into a picker is created by one helper", () => {
    * to parse and no `Parent: Child` shorthand to honour.
    */
   const FULL_FORM = "/src/app/categories/page.tsx";
-  const CREATE_CALL = /categoriesApi\.create\(/;
+  /**
+   * Both doors: the caller's own ledger, and the owner's ledger behind a joint
+   * account. A second call site for either is a second set of rules.
+   */
+  const CREATE_CALL =
+    /categoriesApi\.create\(|delegationApi\.createJointCategory\(/;
 
   it("has no second inline category-creation path", () => {
     const offenders = productionSources()
@@ -773,6 +778,15 @@ describe("a category typed into a picker is created by one helper", () => {
     const helper = sources[HELPER];
     expect(helper, `${HELPER} not found -- update HELPER in this test`).toBeTruthy();
     expect(/export async function createCategoryFromInput\(/.test(helper)).toBe(true);
+  });
+
+  it("the helper itself holds both ledgers' create calls", () => {
+    // A joint account's picker creates on the OWNER's ledger, so the helper
+    // owns that call too -- if it moves out, the rule above is scanning for a
+    // string nothing writes any more and passes for the wrong reason.
+    const helper = sources[HELPER];
+    expect(/categoriesApi\.create/.test(helper)).toBe(true);
+    expect(/delegationApi\.createJointCategory\(/.test(helper)).toBe(true);
   });
 });
 

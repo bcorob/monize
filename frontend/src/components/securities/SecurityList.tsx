@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useMemo, useCallback, memo } from 'react';
+import { useState, useCallback, memo } from 'react';
 import { useTranslations, useMessages } from 'next-intl';
 import { Security } from '@/types/investment';
-import { DensityLevel, nextDensity } from '@/hooks/useTableDensity';
+import { DensityLevel, useTableDensity } from '@/hooks/useTableDensity';
+import { useDensityPreference } from '@/store/densityStore';
 import { HIGHLIGHT_FLASH, HIGHLIGHT_FLASH_CELL, useScrollIntoViewWhen } from '@/hooks/useHighlightTarget';
 import { SortIcon } from '@/components/ui/SortIcon';
 import { usePreferencesStore } from '@/store/preferencesStore';
@@ -12,6 +13,7 @@ import { useLongPress, type LongPressRowHandlers } from '@/hooks/useLongPress';
 import { RowActions } from '@/components/ui/row-actions/RowActions';
 import { RowActionSheet } from '@/components/ui/row-actions/RowActionSheet';
 import type { RowAction } from '@/components/ui/row-actions/rowAction';
+import { DensityToggleBar } from '@/components/ui/DensityToggle';
 
 interface SecurityActionLabels {
   edit: string;
@@ -129,8 +131,6 @@ interface SecurityListProps {
   onDelete?: (security: Security) => void;
   /** Opens the security's detail page; a click anywhere on the row calls it. */
   onOpen: (security: Security) => void;
-  density?: DensityLevel;
-  onDensityChange?: (density: DensityLevel) => void;
   sortField?: SecuritySortField;
   sortDirection?: SortDirection;
   onSort?: (field: SecuritySortField) => void;
@@ -358,15 +358,13 @@ export function SecurityList({
   onToggleFavourite,
   onDelete,
   onOpen,
-  density: propDensity,
-  onDensityChange,
   sortField: propSortField,
   sortDirection: propSortDirection,
   onSort,
   highlightId,
 }: SecurityListProps) {
   const t = useTranslations('securities');
-  const [localDensity, setLocalDensity] = useState<DensityLevel>('normal');
+  const { density } = useDensityPreference('securities');
   const [localSortField, setLocalSortField] = useState<SecuritySortField>('symbol');
   const [localSortDirection, setLocalSortDirection] = useState<SortDirection>('asc');
 
@@ -377,8 +375,6 @@ export function SecurityList({
   const sortField = propSortField ?? localSortField;
   const sortDirection = propSortDirection ?? localSortDirection;
 
-  // Use prop density if provided, otherwise use local state
-  const density = propDensity ?? localDensity;
 
   const handleSort = useCallback((field: SecuritySortField) => {
     if (onSort) {
@@ -404,31 +400,8 @@ export function SecurityList({
     onClick: onOpen,
   });
 
-  // Memoize padding classes based on density
-  const cellPadding = useMemo(() => {
-    switch (density) {
-      case 'dense': return 'px-3 py-1';
-      case 'compact': return 'px-4 py-2';
-      default: return 'px-6 py-4';
-    }
-  }, [density]);
 
-  const headerPadding = useMemo(() => {
-    switch (density) {
-      case 'dense': return 'px-3 py-2';
-      case 'compact': return 'px-4 py-2';
-      default: return 'px-6 py-3';
-    }
-  }, [density]);
-
-  const cycleDensity = useCallback(() => {
-    const next = nextDensity(density);
-    if (onDensityChange) {
-      onDensityChange(next);
-    } else {
-      setLocalDensity(next);
-    }
-  }, [density, onDensityChange]);
+  const { cellPadding, headerPadding } = useTableDensity(density);
 
   if (securities.length === 0) {
     return (
@@ -459,18 +432,7 @@ export function SecurityList({
   return (
     <div>
       {/* Density toggle */}
-      <div className="flex justify-end p-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
-        <button
-          onClick={cycleDensity}
-          className="inline-flex items-center px-2 py-1 text-xs font-medium text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
-          title={t('list.density.toggle')}
-        >
-          <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-          </svg>
-          {density === 'normal' ? t('list.density.normal') : density === 'compact' ? t('list.density.compact') : t('list.density.dense')}
-        </button>
-      </div>
+      <DensityToggleBar view="securities" />
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
           <thead className="bg-gray-50 dark:bg-gray-800">

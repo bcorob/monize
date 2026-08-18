@@ -269,6 +269,7 @@
     "jointRequiresRead": "L'accès en LECTURE est requis pour marquer un compte comme joint",
     "jointRequiresFullAccount": "Les comptes joints ne peuvent être partagés qu'avec des utilisateurs disposant de leur propre compte Monize",
     "jointPayeeCreateNotGranted": "Le propriétaire du compte ne vous a pas autorisé à créer des bénéficiaires. Choisissez plutôt un de ses bénéficiaires existants.",
+    "jointCategoryCreateNotGranted": "Le propriétaire du compte ne vous a pas autorisé à créer des catégories. Choisissez plutôt une de ses catégories existantes.",
     "jointTagsNotAllowed": "Les étiquettes sont personnelles ; elles ne peuvent pas être définies sur les transactions d'un compte partagé.",
     "jointSplitsNotAllowed": "Seul le propriétaire peut gérer les transactions ventilées d'un compte partagé.",
     "jointTransferRowLocked": "Ceci est un virement. Utilisez plutôt l'éditeur de virements."

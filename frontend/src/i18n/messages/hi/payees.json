@@ -48,12 +48,6 @@
       "notes": "नोट्स",
       "actions": "क्रियाएं"
     },
-    "density": {
-      "normal": "सामान्य",
-      "compact": "संक्षिप्त",
-      "dense": "घना",
-      "toggle": "पंक्ति घनत्व टॉगल करें"
-    },
     "noCategory": "कोई नहीं",
     "statusBadge": {
       "active": "सक्रिय",

@@ -269,6 +269,7 @@
     "jointRequiresRead": "L'accesso in LETTURA è necessario per contrassegnare un conto come cointestato",
     "jointRequiresFullAccount": "I conti cointestati possono essere condivisi solo con utenti che hanno un proprio account Monize",
     "jointPayeeCreateNotGranted": "Il proprietario del conto non ti ha concesso il permesso di creare beneficiari. Scegli uno dei suoi beneficiari esistenti.",
+    "jointCategoryCreateNotGranted": "Il proprietario del conto non ti ha concesso il permesso di creare categorie. Scegli una delle sue categorie esistenti.",
     "jointTagsNotAllowed": "I tag sono personali, quindi non possono essere impostati sulle transazioni di un conto condiviso.",
     "jointSplitsNotAllowed": "Le transazioni suddivise in un conto condiviso possono essere gestite solo dal proprietario.",
     "jointTransferRowLocked": "Questo è un trasferimento. Usa l'editor dei trasferimenti."

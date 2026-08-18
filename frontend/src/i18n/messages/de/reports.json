@@ -4,7 +4,6 @@
     "subtitle": "Einblicke in Ihre finanzielle Situation gewinnen",
     "searchPlaceholder": "Berichte nach Name oder Beschreibung suchen...",
     "allReports": "Alle Berichte",
-    "densityTitle": "Zur {nextDensity}-Ansicht wechseln",
     "removeFavourite": "Aus Favoriten entfernen",
     "addFavourite": "Zu Favoriten hinzufügen",
     "tableReport": "Bericht",
@@ -27,11 +26,6 @@
       "bills": "Rechnungen",
       "budget": "Budget",
       "custom": "Benutzerdefiniert"
-    },
-    "density": {
-      "normal": "Normal",
-      "compact": "Kompakt",
-      "dense": "Dicht"
     },
     "names": {
       "spending-by-category": "Ausgaben nach Kategorie",

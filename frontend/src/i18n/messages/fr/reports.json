@@ -4,7 +4,6 @@
     "subtitle": "Générez des analyses sur votre santé financière",
     "searchPlaceholder": "Rechercher des rapports par nom ou description...",
     "allReports": "Tous les rapports",
-    "densityTitle": "Passer à la vue {nextDensity}",
     "removeFavourite": "Retirer des favoris",
     "addFavourite": "Ajouter aux favoris",
     "tableReport": "Rapport",
@@ -27,11 +26,6 @@
       "bills": "Factures",
       "budget": "Budget",
       "custom": "Personnalisé"
-    },
-    "density": {
-      "normal": "Normal",
-      "compact": "Compact",
-      "dense": "Dense"
     },
     "names": {
       "spending-by-category": "Dépenses par catégorie",

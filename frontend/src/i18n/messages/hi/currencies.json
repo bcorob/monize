@@ -43,12 +43,6 @@
       "status": "स्थिति",
       "actions": "क्रियाएं"
     },
-    "density": {
-      "normal": "सामान्य",
-      "compact": "संक्षिप्त",
-      "dense": "घना",
-      "toggle": "पंक्ति घनत्व टॉगल करें"
-    },
     "defaultBadge": "डिफ़ॉल्ट",
     "statusBadge": {
       "active": "सक्रिय",

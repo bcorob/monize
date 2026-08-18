@@ -30,12 +30,6 @@
       "actions": "操作"
     },
     "accountCount": "{count, plural, =0 {无账户} one {# 个账户} other {# 个账户}}",
-    "density": {
-      "title": "切换行密度",
-      "normal": "正常",
-      "compact": "紧凑",
-      "dense": "密集"
-    },
     "statusFilter": {
       "all": "全部",
       "active": "活跃",

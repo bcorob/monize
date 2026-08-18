@@ -233,5 +233,11 @@
     "srSuffix": "(kısmi toplam)",
     "explanation": "Kısmi toplam: {count, plural, other {# tutar}} dahil edilemedi, bu nedenle gösterilen rakam bunları hariç tutuyor. {currencies} için {displayCurrency} kuru mevcut değil.",
     "explanationExcluded": "Kısmi toplam: {count, plural, other {# tutar}} hesaplanamadı, bu nedenle gösterilen rakam bunları hariç tutuyor."
+  },
+  "density": {
+    "title": "Satır yoğunluğunu değiştir",
+    "normal": "Normal",
+    "compact": "Kompakt",
+    "dense": "Yoğun"
   }
 }

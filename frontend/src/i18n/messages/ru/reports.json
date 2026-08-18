@@ -4,7 +4,6 @@
     "subtitle": "Получайте аналитику о вашем финансовом состоянии",
     "searchPlaceholder": "Поиск отчётов по названию или описанию...",
     "allReports": "Все отчёты",
-    "densityTitle": "Переключить на вид {nextDensity}",
     "removeFavourite": "Убрать из избранного",
     "addFavourite": "Добавить в избранное",
     "tableReport": "Отчёт",
@@ -27,11 +26,6 @@
       "bills": "Счета",
       "budget": "Бюджет",
       "custom": "Пользовательский"
-    },
-    "density": {
-      "normal": "Обычный",
-      "compact": "Компактный",
-      "dense": "Плотный"
     },
     "names": {
       "spending-by-category": "Расходы по категориям",

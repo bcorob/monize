@@ -2,12 +2,25 @@ import '@testing-library/jest-dom/vitest';
 import { cleanup } from '@testing-library/react';
 import { afterEach, vi } from 'vitest';
 
-afterEach(() => {
+afterEach(async () => {
   cleanup();
   // Persisted UI preferences must not leak between tests: e.g. an account
   // filter a test selects is written to localStorage, and without this the
   // next test in the file would start with that filter still applied.
   window.localStorage?.clear();
+  // Row density is one store for every view, so clearing its localStorage
+  // entry is not enough -- the module-level state outlives it. Reset after `cleanup()`,
+  // never before: writing to a store while the tree is still mounted
+  // re-renders it outside act() (see frontend/CLAUDE.md).
+  //
+  // Imported here rather than at the top of this file, and that is not a
+  // style choice. `createJSONStorage(() => localStorage)` resolves the storage
+  // object once, when the store module is evaluated -- and a top-level import
+  // is hoisted above the `Object.defineProperty(window, 'localStorage', ...)`
+  // below, so the store would bind jsdom's native storage while every
+  // assertion read the mock. The two would never see each other's writes.
+  const { useDensityStore } = await import('@/store/densityStore');
+  useDensityStore.setState({ densities: {} });
 });
 
 // Suppress known-harmless jsdom warnings for SVG elements used by Recharts.

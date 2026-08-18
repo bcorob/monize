@@ -36,12 +36,6 @@
     },
     "accountCount": "{total} 个账户中的 {filtered} 个",
     "groupCount": "{count, plural, one {# 个账户} other {# 个账户}}",
-    "density": {
-      "toggle": "切换行密度",
-      "normal": "正常",
-      "compact": "紧凑",
-      "dense": "密集"
-    },
     "columns": {
       "accountName": "账户名称",
       "type": "类型",

@@ -30,12 +30,6 @@
       "actions": "Действия"
     },
     "accountCount": "{count, plural, =0 {Нет счетов} one {# счёт} other {# счетов}}",
-    "density": {
-      "title": "Переключить плотность строк",
-      "normal": "Обычная",
-      "compact": "Компактная",
-      "dense": "Плотная"
-    },
     "statusFilter": {
       "all": "Все",
       "active": "Активные",

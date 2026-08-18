@@ -225,10 +225,12 @@ vi.mock('@/lib/categories', () => ({
 }));
 
 const mockGetJointReferenceData = vi.fn();
+const mockCreateJointCategory = vi.fn();
 
 vi.mock('@/lib/delegation', () => ({
   delegationApi: {
     getJointReferenceData: (...args: any[]) => mockGetJointReferenceData(...args),
+    createJointCategory: (...args: any[]) => mockCreateJointCategory(...args),
   },
 }));
 
@@ -321,6 +323,14 @@ vi.mock('./SplitEditor', () => ({
       <span data-testid="split-editor-can-create">
         {onCreateCategory ? 'yes' : 'no'}
       </span>
+      {onCreateCategory && (
+        <button
+          data-testid="split-editor-create"
+          onClick={() => onCreateCategory('New Item')}
+        >
+          Create
+        </button>
+      )}
     </div>
   ),
   createEmptySplits: () => [
@@ -342,9 +352,10 @@ vi.mock('./SplitEditor', () => ({
 }));
 
 vi.mock('@/components/ui/Combobox', () => ({
-  Combobox: ({ label, placeholder, options, value: _value, onChange, onCreateNew, allowCustomValue }: any) => (
+  Combobox: ({ label, placeholder, options, value, onChange, onCreateNew, allowCustomValue }: any) => (
     <div data-testid={`combobox-${label}`}>
       {label && <label>{label}</label>}
+      <span data-testid={`combobox-value-${label}`}>{value ?? ''}</span>
       <input
         placeholder={placeholder}
         data-testid={`combobox-input-${label}`}
@@ -544,7 +555,7 @@ describe('TransactionForm', () => {
       );
     });
 
-    it('offers no category creation from a joint split line', async () => {
+    it('offers no category creation from a joint split line without the capability', async () => {
       render(
         <TransactionForm
           transaction={jointSplitTransaction()}
@@ -561,8 +572,9 @@ describe('TransactionForm', () => {
 
     // `categoriesApi.create` writes to the caller's own ledger, so offering
     // "+ Create" here created the category in the wrong place and put an id the
-    // owner does not own on the form.
-    it('offers no category creation on the joint Category field', async () => {
+    // owner does not own on the form. Without the owner's capability there is
+    // still nothing to offer -- the server refuses the owner-ledger create.
+    it('offers no category creation on the joint Category field without the capability', async () => {
       render(
         <TransactionForm
           defaultAccountId="acc-joint"
@@ -576,6 +588,193 @@ describe('TransactionForm', () => {
       });
       await waitFor(() => {
         expect(screen.queryByTestId('combobox-create-Category')).not.toBeInTheDocument();
+      });
+    });
+
+    // ── categoriesCanCreate granted ──
+    // The flag exists on both sides and drove nothing: there was no endpoint
+    // that created a category on the owner's ledger, so the option stayed
+    // withheld whatever the owner had granted.
+    describe('with categoriesCanCreate granted', () => {
+      const createdOwnerCategory = {
+        id: 'own-cat-new',
+        userId: 'owner-1',
+        parentId: null,
+        parent: null,
+        children: [],
+        name: 'New Item',
+        description: null,
+        icon: null,
+        color: null,
+        effectiveColor: null,
+        isIncome: false,
+        isSystem: false,
+        createdAt: '2024-01-01T00:00:00Z',
+      };
+
+      beforeEach(() => {
+        mockGetJointReferenceData.mockResolvedValue({
+          categories: ownerCategories,
+          payees: [],
+          payeesCanCreate: false,
+          categoriesCanCreate: true,
+        });
+        mockCreateJointCategory.mockResolvedValue(createdOwnerCategory);
+      });
+
+      // "Not joint" and "the account list has not arrived" are the same shape,
+      // and only one of them is permission. Reading the second as the first
+      // offered "+ Create" pointed at the CALLER's ledger until the accounts
+      // resolved -- on the very account whose rows may not carry the caller's
+      // category ids.
+      it('withholds creation while the selected account is still unresolved', async () => {
+        let releaseAccounts: (v: unknown) => void = () => {};
+        mockAccountsGetAll.mockReturnValue(
+          new Promise(resolve => {
+            releaseAccounts = resolve;
+          })
+        );
+
+        render(
+          <TransactionForm
+            defaultAccountId="acc-joint"
+            onSuccess={mockOnSuccess}
+            onCancel={mockOnCancel}
+          />
+        );
+
+        await waitFor(() => {
+          expect(screen.getByTestId('combobox-Category')).toBeInTheDocument();
+        });
+        expect(screen.queryByTestId('combobox-create-Category')).not.toBeInTheDocument();
+        expect(mockGetJointReferenceData).not.toHaveBeenCalled();
+
+        await act(async () => {
+          releaseAccounts([...mockAccounts, jointAccount]);
+        });
+
+        // ...and once both answers are in, it is offered for the owner.
+        await waitFor(() => {
+          expect(screen.getByTestId('combobox-create-Category')).toBeInTheDocument();
+        });
+      });
+
+      // Asynchronous data belongs to the request that produced it: the ledger a
+      // category lands on is decided when the create is sent, so a response
+      // that arrives after the user picked another account may not be adopted
+      // -- that id belongs to the owner, and the row now being edited does not.
+      it('does not select a category whose account the user has left', async () => {
+        let releaseCreate: (v: unknown) => void = () => {};
+        mockCreateJointCategory.mockReturnValue(
+          new Promise(resolve => {
+            releaseCreate = resolve;
+          })
+        );
+
+        render(
+          <TransactionForm
+            defaultAccountId="acc-joint"
+            onSuccess={mockOnSuccess}
+            onCancel={mockOnCancel}
+          />
+        );
+
+        await waitFor(() => {
+          expect(screen.getByTestId('combobox-create-Category')).toBeInTheDocument();
+        });
+        fireEvent.click(screen.getByTestId('combobox-create-Category'));
+        await waitFor(() => {
+          expect(mockCreateJointCategory).toHaveBeenCalled();
+        });
+
+        // The user moves to their own account while the create is in flight.
+        await act(async () => {
+          fireEvent.change(screen.getByLabelText('Account'), {
+            target: { value: 'acc-1' },
+          });
+        });
+        await act(async () => {
+          releaseCreate(createdOwnerCategory);
+        });
+
+        expect(screen.getByTestId('combobox-value-Category')).toHaveTextContent('');
+      });
+
+      it('offers category creation on the joint Category field', async () => {
+        render(
+          <TransactionForm
+            defaultAccountId="acc-joint"
+            onSuccess={mockOnSuccess}
+            onCancel={mockOnCancel}
+          />
+        );
+
+        await waitFor(() => {
+          expect(screen.getByTestId('combobox-create-Category')).toBeInTheDocument();
+        });
+      });
+
+      it("creates on the OWNER's ledger, never the caller's", async () => {
+        render(
+          <TransactionForm
+            defaultAccountId="acc-joint"
+            onSuccess={mockOnSuccess}
+            onCancel={mockOnCancel}
+          />
+        );
+
+        await waitFor(() => {
+          expect(screen.getByTestId('combobox-create-Category')).toBeInTheDocument();
+        });
+        fireEvent.click(screen.getByTestId('combobox-create-Category'));
+
+        await waitFor(() => {
+          expect(mockCreateJointCategory).toHaveBeenCalledWith('acc-joint', {
+            name: 'New Item',
+          });
+        });
+        // The caller-scoped create would have put an id the owner does not own
+        // on the owner's row.
+        expect(mockCategoryCreate).not.toHaveBeenCalled();
+      });
+
+      it("adds the new category to the owner's picker list", async () => {
+        render(
+          <TransactionForm
+            transaction={jointSplitTransaction()}
+            onSuccess={mockOnSuccess}
+            onCancel={mockOnCancel}
+          />
+        );
+
+        await waitFor(() => {
+          expect(screen.getByTestId('split-editor-categories')).toHaveTextContent(
+            'Owner Groceries'
+          );
+        });
+        fireEvent.click(screen.getByTestId('split-editor-create'));
+
+        await waitFor(() => {
+          expect(screen.getByTestId('split-editor-categories')).toHaveTextContent(
+            'New Item'
+          );
+        });
+      });
+
+      it('offers category creation from a joint split line', async () => {
+        render(
+          <TransactionForm
+            transaction={jointSplitTransaction()}
+            onSuccess={mockOnSuccess}
+            onCancel={mockOnCancel}
+          />
+        );
+
+        await waitFor(() => {
+          expect(screen.getByTestId('split-editor-can-create')).toHaveTextContent(
+            'yes'
+          );
+        });
       });
     });
 

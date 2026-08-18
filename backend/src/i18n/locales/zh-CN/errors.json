@@ -269,6 +269,7 @@
     "jointRequiresRead": "将账户标记为联名需要读取权限",
     "jointRequiresFullAccount": "联名账户只能与拥有自己 Monize 账户的用户共享",
     "jointPayeeCreateNotGranted": "账户所有者未授予您创建收款人的权限。请从其现有收款人中选择。",
+    "jointCategoryCreateNotGranted": "账户所有者未授予您创建分类的权限。请从其现有分类中选择。",
     "jointTagsNotAllowed": "标签是个人数据，无法设置在共享账户的交易上。",
     "jointSplitsNotAllowed": "共享账户中的拆分交易只能由所有者管理。",
     "jointTransferRowLocked": "这是一笔转账。请使用转账编辑器。"

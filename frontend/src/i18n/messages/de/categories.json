@@ -74,11 +74,7 @@
     "badgeExpense": "Ausgabe",
     "systemBadge": "(System)",
     "inheritedColorTitle": "Von übergeordneter Kategorie übernommen",
-    "viewTransactionsTitle": "Buchungen in dieser Kategorie anzeigen",
-    "densityToggleTitle": "Zeilendichte umschalten",
-    "densityNormal": "Normal",
-    "densityCompact": "Kompakt",
-    "densityDense": "Dicht"
+    "viewTransactionsTitle": "Buchungen in dieser Kategorie anzeigen"
   },
   "deleteDialog": {
     "title": "\"{name}\" löschen?",

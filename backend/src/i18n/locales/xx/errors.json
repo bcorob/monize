@@ -278,6 +278,7 @@
     "jointRequiresRead": "[XX-READ access is required to mark an account as joint-XX]",
     "jointRequiresFullAccount": "[XX-Joint accounts can only be shared with users who have their own Monize account-XX]",
     "jointPayeeCreateNotGranted": "[XX-The account owner has not granted you permission to create payees. Pick one of their existing payees instead.-XX]",
+    "jointCategoryCreateNotGranted": "[XX-The account owner has not granted you permission to create categories. Pick one of their existing categories instead.-XX]",
     "jointTagsNotAllowed": "[XX-Tags are personal, so they cannot be set on a shared account's transactions.-XX]",
     "jointSplitsNotAllowed": "[XX-Split transactions in a shared account can only be managed by the owner.-XX]",
     "jointTransferRowLocked": "[XX-This is a transfer. Use the transfer editor instead.-XX]"

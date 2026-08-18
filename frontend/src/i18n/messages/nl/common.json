@@ -233,5 +233,11 @@
     "srSuffix": "(deeltotaal)",
     "explanation": "Deeltotaal: {count, plural, one {# bedrag} other {# bedragen}} konden niet worden meegeteld, dus het weergegeven bedrag sluit ze uit. Er is geen koers naar {displayCurrency} beschikbaar voor {currencies}.",
     "explanationExcluded": "Deeltotaal: {count, plural, one {# bedrag} other {# bedragen}} konden niet worden berekend, dus het weergegeven bedrag sluit ze uit."
+  },
+  "density": {
+    "title": "Rijdichtheid wisselen",
+    "normal": "Normaal",
+    "compact": "Compact",
+    "dense": "Dicht"
   }
 }

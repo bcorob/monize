@@ -57,12 +57,6 @@
       "actions": "[XX-Actions-XX]",
       "favourite": "[XX-Favourite-XX]"
     },
-    "density": {
-      "normal": "[XX-Normal-XX]",
-      "compact": "[XX-Compact-XX]",
-      "dense": "[XX-Dense-XX]",
-      "toggle": "[XX-Toggle row density-XX]"
-    },
     "statusBadge": {
       "active": "[XX-Active-XX]",
       "activeShort": "[XX-Act-XX]",

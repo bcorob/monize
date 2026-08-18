@@ -43,12 +43,6 @@
       "status": "Status",
       "actions": "Akcje"
     },
-    "density": {
-      "normal": "Normalna",
-      "compact": "Kompaktowa",
-      "dense": "Gęsta",
-      "toggle": "Przełącz gęstość wierszy"
-    },
     "defaultBadge": "Domyślna",
     "statusBadge": {
       "active": "Aktywny",

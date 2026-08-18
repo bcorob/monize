@@ -36,12 +36,6 @@
     },
     "accountCount": "{total} में से {filtered} खाते",
     "groupCount": "{count, plural, one {# खाता} other {# खाते}}",
-    "density": {
-      "toggle": "पंक्ति घनत्व टॉगल करें",
-      "normal": "सामान्य",
-      "compact": "संक्षिप्त",
-      "dense": "घना"
-    },
     "columns": {
       "accountName": "खाते का नाम",
       "type": "प्रकार",

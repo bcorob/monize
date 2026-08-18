@@ -7,12 +7,10 @@ import { Modal } from '@/components/ui/Modal';
 import { Skeleton } from '@/components/ui/LoadingSkeleton';
 import { TransactionList } from '@/components/transactions/TransactionList';
 import { useFormModal } from '@/hooks/useFormModal';
-import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { UnsavedChangesDialog } from '@/components/ui/UnsavedChangesDialog';
 import { transactionsApi } from '@/lib/transactions';
 import { createLogger } from '@/lib/logger';
 import { PAGE_SIZE } from '@/lib/constants';
-import type { DensityLevel } from '@/hooks/useTableDensity';
 import type { PaginationInfo, Transaction } from '@/types/transaction';
 
 const logger = createLogger('PayeeTransactionsTab');
@@ -70,11 +68,6 @@ export function PayeeTransactionsTab({
   const [page, setPage] = useState(1);
   const [loadedKey, setLoadedKey] = useState<string | null>(null);
   const [error, setError] = useState(false);
-  const [density, setDensity] = useLocalStorage<DensityLevel>(
-    'monize-payee-detail-density',
-    'normal',
-  );
-
   const {
     showForm,
     editingItem,
@@ -179,13 +172,12 @@ export function PayeeTransactionsTab({
         </p>
       ) : (
         <TransactionList
+          densityView="payeeDetail"
           transactions={transactions}
           onEdit={openEdit}
           onRefresh={handleChanged}
           onTransactionUpdate={handleTransactionUpdate}
           onDateFilterClick={onSelectDate}
-          density={density}
-          onDensityChange={setDensity}
           currentPage={page}
           totalPages={totalPages}
           totalItems={pagination?.total ?? 0}

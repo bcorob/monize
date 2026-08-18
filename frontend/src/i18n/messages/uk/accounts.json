@@ -36,12 +36,6 @@
     },
     "accountCount": "{filtered} з {total} рахунків",
     "groupCount": "{count, plural, one {# рахунок} other {# рахунків}}",
-    "density": {
-      "toggle": "Змінити щільність рядків",
-      "normal": "Звичайна",
-      "compact": "Компактна",
-      "dense": "Щільна"
-    },
     "columns": {
       "accountName": "Назва рахунку",
       "type": "Тип",

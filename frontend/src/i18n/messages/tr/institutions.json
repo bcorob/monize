@@ -30,12 +30,6 @@
       "actions": "İşlemler"
     },
     "accountCount": "{count, plural, =0 {Hesap yok} one {# hesap} other {# hesap}}",
-    "density": {
-      "title": "Satır yoğunluğunu değiştir",
-      "normal": "Normal",
-      "compact": "Kompakt",
-      "dense": "Yoğun"
-    },
     "statusFilter": {
       "all": "Tümü",
       "active": "Aktif",

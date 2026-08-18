@@ -48,12 +48,6 @@
       "notes": "Notlar",
       "actions": "İşlemler"
     },
-    "density": {
-      "normal": "Normal",
-      "compact": "Kompakt",
-      "dense": "Yoğun",
-      "toggle": "Satır yoğunluğunu değiştir"
-    },
     "noCategory": "Yok",
     "statusBadge": {
       "active": "Aktif",

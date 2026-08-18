@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useCallback, memo } from 'react';
+import { useState, useCallback, memo } from 'react';
 import { useTranslations } from 'next-intl';
 import { CurrencyInfo, CurrencyUsage } from '@/lib/exchange-rates';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -10,12 +10,14 @@ import { createLogger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/errors';
 import { FX_RATE_DISPLAY_DECIMALS } from '@/lib/format';
 
-import { DensityLevel, nextDensity } from '@/hooks/useTableDensity';
+import { DensityLevel, useTableDensity } from '@/hooks/useTableDensity';
+import { useDensityPreference } from '@/store/densityStore';
 import { SortIcon } from '@/components/ui/SortIcon';
 import { useLongPress, type LongPressRowHandlers } from '@/hooks/useLongPress';
 import { RowActions } from '@/components/ui/row-actions/RowActions';
 import { RowActionSheet } from '@/components/ui/row-actions/RowActionSheet';
 import type { RowAction } from '@/components/ui/row-actions/rowAction';
+import { DensityToggleBar } from '@/components/ui/DensityToggle';
 
 export type CurrencySortField = 'code' | 'name' | 'symbol' | 'decimals' | 'rate';
 export type SortDirection = 'asc' | 'desc';
@@ -95,8 +97,6 @@ interface CurrencyListProps {
   onEdit: (currency: CurrencyInfo) => void;
   onToggleActive: (currency: CurrencyInfo) => void;
   onRefresh: () => void;
-  density?: DensityLevel;
-  onDensityChange?: (density: DensityLevel) => void;
   sortField?: CurrencySortField;
   sortDirection?: SortDirection;
   onSort?: (field: CurrencySortField) => void;
@@ -230,15 +230,13 @@ export function CurrencyList({
   onEdit,
   onToggleActive,
   onRefresh,
-  density: propDensity,
-  onDensityChange,
   sortField: propSortField,
   sortDirection: propSortDirection,
   onSort,
 }: CurrencyListProps) {
   const t = useTranslations('currencies');
   const [deleteCurrency, setDeleteCurrency] = useState<CurrencyInfo | null>(null);
-  const [localDensity, setLocalDensity] = useState<DensityLevel>('normal');
+  const { density } = useDensityPreference('currencies');
   const [localSortField, setLocalSortField] = useState<CurrencySortField>('code');
   const [localSortDirection, setLocalSortDirection] = useState<SortDirection>('asc');
 
@@ -246,7 +244,6 @@ export function CurrencyList({
   const sortField = propSortField ?? localSortField;
   const sortDirection = propSortDirection ?? localSortDirection;
 
-  const density = propDensity ?? localDensity;
 
   const handleSort = useCallback((field: CurrencySortField) => {
     if (onSort) {
@@ -268,30 +265,7 @@ export function CurrencyList({
     onLongPress: setContextCurrency,
   });
 
-  const cellPadding = useMemo(() => {
-    switch (density) {
-      case 'dense': return 'px-3 py-1';
-      case 'compact': return 'px-4 py-2';
-      default: return 'px-6 py-4';
-    }
-  }, [density]);
-
-  const headerPadding = useMemo(() => {
-    switch (density) {
-      case 'dense': return 'px-3 py-2';
-      case 'compact': return 'px-4 py-2';
-      default: return 'px-6 py-3';
-    }
-  }, [density]);
-
-  const cycleDensity = useCallback(() => {
-    const next = nextDensity(density);
-    if (onDensityChange) {
-      onDensityChange(next);
-    } else {
-      setLocalDensity(next);
-    }
-  }, [density, onDensityChange]);
+  const { cellPadding, headerPadding } = useTableDensity(density);
 
   const handleConfirmDelete = async () => {
     if (!deleteCurrency) return;
@@ -332,18 +306,7 @@ export function CurrencyList({
   return (
     <div>
       {/* Density toggle */}
-      <div className="flex justify-end p-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
-        <button
-          onClick={cycleDensity}
-          className="inline-flex items-center px-2 py-1 text-xs font-medium text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
-          title={t('list.density.toggle')}
-        >
-          <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-          </svg>
-          {density === 'normal' ? t('list.density.normal') : density === 'compact' ? t('list.density.compact') : t('list.density.dense')}
-        </button>
-      </div>
+      <DensityToggleBar view="currencies" />
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
           <thead className="bg-gray-50 dark:bg-gray-800">

@@ -48,12 +48,6 @@
       "notes": "Catatan",
       "actions": "Tindakan"
     },
-    "density": {
-      "normal": "Normal",
-      "compact": "Ringkas",
-      "dense": "Padat",
-      "toggle": "Ubah kepadatan baris"
-    },
     "noCategory": "Tidak Ada",
     "statusBadge": {
       "active": "Aktif",

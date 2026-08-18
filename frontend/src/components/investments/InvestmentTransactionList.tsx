@@ -14,13 +14,15 @@ import toast from 'react-hot-toast';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
 import { useExchangeRates } from '@/hooks/useExchangeRates';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { DensityLevel, nextDensity } from '@/hooks/useTableDensity';
+import { DensityLevel, useTableDensity } from '@/hooks/useTableDensity';
+import { useDensityPreference, type DensityView } from '@/store/densityStore';
 import { Account } from '@/types/account';
 import { getLocalDateString } from '@/lib/utils';
 import { useLongPress, type LongPressRowHandlers } from '@/hooks/useLongPress';
 import { RowActions } from '@/components/ui/row-actions/RowActions';
 import { RowActionSheet } from '@/components/ui/row-actions/RowActionSheet';
 import type { RowAction } from '@/components/ui/row-actions/rowAction';
+import { DensityToggle } from '@/components/ui/DensityToggle';
 
 /**
  * Builds the standard row actions for an investment transaction. Shared by the
@@ -71,11 +73,11 @@ interface InvestmentTransactionListProps {
    * the row locally.
    */
   onStatusChanged?: () => void;
-  density?: DensityLevel;
-  onDensityChange?: (density: DensityLevel) => void;
   filters?: TransactionFilters;
   onFiltersChange?: (filters: TransactionFilters) => void;
   availableSymbols?: string[];
+  /** Which surface's remembered row density this register reads. */
+  densityView?: DensityView;
   viewToggle?: React.ReactNode;
 }
 
@@ -284,11 +286,10 @@ export function InvestmentTransactionList({
   onEdit,
   onNewTransaction,
   onStatusChanged,
-  density: propDensity,
-  onDensityChange,
   filters,
   onFiltersChange,
   availableSymbols = [],
+  densityView = 'investments',
   viewToggle,
 }: InvestmentTransactionListProps) {
   const t = useTranslations('investments');
@@ -330,7 +331,7 @@ export function InvestmentTransactionList({
     }
     return transactions.length;
   }, [transactions]);
-  const [localDensity, setLocalDensity] = useState<DensityLevel>('normal');
+  const { density } = useDensityPreference(densityView);
   const [showFilters, setShowFilters] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; transaction: InvestmentTransaction | null }>({ isOpen: false, transaction: null });
 
@@ -388,34 +389,8 @@ export function InvestmentTransactionList({
   // Check if any filters are active
   const hasActiveFilters = filters && (filters.symbol || filters.action || filters.startDate || filters.endDate);
 
-  // Use prop density if provided, otherwise use local state
-  const density = propDensity ?? localDensity;
-
-  // Memoize padding classes based on density
-  const cellPadding = useMemo(() => {
-    switch (density) {
-      case 'dense': return 'px-1.5 sm:px-3 py-1';
-      case 'compact': return 'px-2 sm:px-4 py-2';
-      default: return 'px-2 sm:px-6 py-3 sm:py-4';
-    }
-  }, [density]);
-
-  const headerPadding = useMemo(() => {
-    switch (density) {
-      case 'dense': return 'px-1.5 sm:px-3 py-2';
-      case 'compact': return 'px-2 sm:px-4 py-2';
-      default: return 'px-2 sm:px-6 py-2 sm:py-3';
-    }
-  }, [density]);
-
-  const cycleDensity = useCallback(() => {
-    const next = nextDensity(density);
-    if (onDensityChange) {
-      onDensityChange(next);
-    } else {
-      setLocalDensity(next);
-    }
-  }, [density, onDensityChange]);
+  // Wide scale: this register carries more columns than any other table.
+  const { cellPadding, headerPadding } = useTableDensity(density, 'wide');
 
   if (isLoading) {
     return (
@@ -543,16 +518,7 @@ export function InvestmentTransactionList({
             )}
           </button>
         )}
-        <button
-          onClick={cycleDensity}
-          className="ml-auto inline-flex items-center px-2 py-1.5 text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
-          title={t('transactionList.densityToggleTitle')}
-        >
-          <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-          </svg>
-          {density === 'normal' ? t('transactionList.densityNormal') : density === 'compact' ? t('transactionList.densityCompact') : t('transactionList.densityDense')}
-        </button>
+        <DensityToggle view={densityView} size="md" className="ml-auto" />
         </div>
       </div>
 

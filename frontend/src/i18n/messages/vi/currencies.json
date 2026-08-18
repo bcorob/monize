@@ -43,12 +43,6 @@
       "status": "Trạng thái",
       "actions": "Hành động"
     },
-    "density": {
-      "normal": "Bình thường",
-      "compact": "Thu gọn",
-      "dense": "Dày đặc",
-      "toggle": "Chuyển đổi mật độ hàng"
-    },
     "defaultBadge": "Mặc định",
     "statusBadge": {
       "active": "Đang hoạt động",

@@ -30,12 +30,6 @@
       "actions": "क्रियाएं"
     },
     "accountCount": "{count, plural, =0 {कोई खाता नहीं} one {# खाता} other {# खाते}}",
-    "density": {
-      "title": "पंक्ति घनत्व टॉगल करें",
-      "normal": "सामान्य",
-      "compact": "संक्षिप्त",
-      "dense": "घना"
-    },
     "statusFilter": {
       "all": "सभी",
       "active": "सक्रिय",

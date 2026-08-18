@@ -74,11 +74,7 @@
     "badgeExpense": "支出",
     "systemBadge": "（系統）",
     "inheritedColorTitle": "繼承自上層",
-    "viewTransactionsTitle": "檢視此類別的交易",
-    "densityToggleTitle": "切換列密度",
-    "densityNormal": "正常",
-    "densityCompact": "緊湊",
-    "densityDense": "密集"
+    "viewTransactionsTitle": "檢視此類別的交易"
   },
   "deleteDialog": {
     "title": "刪除「{name}」？",

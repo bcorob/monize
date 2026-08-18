@@ -74,11 +74,7 @@
     "badgeExpense": "व्यय",
     "systemBadge": "(सिस्टम)",
     "inheritedColorTitle": "मूल से विरासत में मिला",
-    "viewTransactionsTitle": "इस श्रेणी के लेनदेन देखें",
-    "densityToggleTitle": "पंक्ति घनत्व टॉगल करें",
-    "densityNormal": "सामान्य",
-    "densityCompact": "संक्षिप्त",
-    "densityDense": "घना"
+    "viewTransactionsTitle": "इस श्रेणी के लेनदेन देखें"
   },
   "deleteDialog": {
     "title": "\"{name}\" हटाएं?",

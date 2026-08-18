@@ -4,7 +4,6 @@
     "subtitle": "Hasilkan wawasan tentang kesehatan keuangan Anda",
     "searchPlaceholder": "Cari laporan berdasarkan nama atau keterangan...",
     "allReports": "Semua Laporan",
-    "densityTitle": "Beralih ke tampilan {nextDensity}",
     "removeFavourite": "Hapus dari favorit",
     "addFavourite": "Tambah ke favorit",
     "tableReport": "Laporan",
@@ -27,11 +26,6 @@
       "bills": "Tagihan",
       "budget": "Anggaran",
       "custom": "Kustom"
-    },
-    "density": {
-      "normal": "Normal",
-      "compact": "Kompak",
-      "dense": "Padat"
     },
     "names": {
       "spending-by-category": "Pengeluaran per Kategori",

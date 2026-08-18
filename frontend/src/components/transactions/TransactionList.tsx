@@ -15,7 +15,9 @@ import { TransactionActionSheet } from './TransactionActionSheet';
 import { useDateFormat } from '@/hooks/useDateFormat';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
 import { getLocalDateString } from '@/lib/utils';
-import { DensityLevel, nextDensity } from '@/hooks/useTableDensity';
+import { useTableDensity } from '@/hooks/useTableDensity';
+import { useDensityPreference, type DensityView } from '@/store/densityStore';
+import { DensityToggle } from '@/components/ui/DensityToggle';
 
 interface TransactionListProps {
   transactions: Transaction[];
@@ -42,8 +44,6 @@ interface TransactionListProps {
   onDateFilterClick?: (date: string) => void;
   onAccountFilterClick?: (accountId: string) => void;
   onPayeeFilterClick?: (payeeId: string) => void;
-  density?: DensityLevel;
-  onDensityChange?: (density: DensityLevel) => void;
   onExport?: () => void;
   isExporting?: boolean;
   startingBalance?: number;
@@ -63,6 +63,13 @@ interface TransactionListProps {
   categoryColorMap?: Map<string, string | null>;
   categoryLabelMap?: Map<string, string>;
   budgetStatusMap?: Record<string, CategoryBudgetStatus>;
+  /**
+   * Which surface's remembered row density this list reads. Six places render
+   * this component and each remembers its own level, so a caller that is not
+   * the transactions register must say so -- `density-preference.guard.test.ts`
+   * fails on one that does not.
+   */
+  densityView?: DensityView;
   showToolbar?: boolean;
   /** Transaction id to flash and scroll to (e.g. arriving from a deep link). */
   highlightTransactionId?: string | null;
@@ -97,8 +104,6 @@ export function TransactionList({
   onDateFilterClick,
   onAccountFilterClick,
   onPayeeFilterClick,
-  density: propDensity,
-  onDensityChange,
   onExport,
   isExporting,
   startingBalance,
@@ -118,6 +123,7 @@ export function TransactionList({
   categoryColorMap,
   categoryLabelMap,
   budgetStatusMap,
+  densityView = 'transactions',
   showToolbar = true,
   highlightTransactionId,
   showFxColumns = false,
@@ -128,7 +134,7 @@ export function TransactionList({
   const { formatDate } = useDateFormat();
   const { formatCurrency } = useNumberFormat();
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [localDensity, setLocalDensity] = useState<DensityLevel>('normal');
+  const { density } = useDensityPreference(densityView);
   const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; transaction: Transaction | null }>({
     isOpen: false,
     transaction: null,
@@ -207,33 +213,7 @@ export function TransactionList({
     onEdit?.(transaction);
   }, [onEdit]);
 
-  const density = propDensity ?? localDensity;
-
-  const cellPadding = useMemo(() => {
-    switch (density) {
-      case 'dense': return 'px-3 py-1';
-      case 'compact': return 'px-4 py-2';
-      default: return 'px-4 py-4';
-    }
-  }, [density]);
-
-  const headerPadding = useMemo(() => {
-    switch (density) {
-      case 'dense': return 'px-3 py-2';
-      case 'compact': return 'px-4 py-2';
-      default: return 'px-4 py-3';
-    }
-  }, [density]);
-
-
-  const cycleDensity = useCallback(() => {
-    const next = nextDensity(density);
-    if (onDensityChange) {
-      onDensityChange(next);
-    } else {
-      setLocalDensity(next);
-    }
-  }, [density, onDensityChange]);
+  const { cellPadding, headerPadding } = useTableDensity(density);
 
   const handleActionSheetClose = useCallback(() => {
     setActionSheet({ isOpen: false, transaction: null });
@@ -434,16 +414,7 @@ export function TransactionList({
                 <span className="hidden sm:inline">{isExporting ? t('list.export.exporting') : t('list.export.button')}</span>
               </button>
             )}
-            <button
-              onClick={cycleDensity}
-              className="inline-flex items-center px-2 py-1 text-xs font-medium text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 rounded flex-shrink-0"
-              title={t('list.density.title')}
-            >
-              <svg className="w-4 h-4 sm:mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
-              <span className="hidden sm:inline">{density === 'normal' ? t('list.density.normal') : density === 'compact' ? t('list.density.compact') : t('list.density.dense')}</span>
-            </button>
+            <DensityToggle view={densityView} hideLabelOnMobile className="flex-shrink-0" />
           </div>
         );
         const showPagination = currentPage !== undefined && totalPages !== undefined && totalPages > 1 && totalItems !== undefined && pageSize !== undefined && onPageChange;

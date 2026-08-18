@@ -269,6 +269,7 @@
     "jointRequiresRead": "Cần quyền ĐỌC để đánh dấu tài khoản là tài khoản chung",
     "jointRequiresFullAccount": "Tài khoản chung chỉ có thể được chia sẻ với người dùng có tài khoản Monize riêng",
     "jointPayeeCreateNotGranted": "Chủ tài khoản chưa cấp cho bạn quyền tạo người nhận. Hãy chọn một người nhận hiện có.",
+    "jointCategoryCreateNotGranted": "Chủ tài khoản chưa cấp cho bạn quyền tạo danh mục. Hãy chọn một danh mục hiện có.",
     "jointTagsNotAllowed": "Thẻ là của cá nhân nên không thể gắn vào giao dịch của tài khoản được chia sẻ.",
     "jointSplitsNotAllowed": "Chỉ chủ sở hữu mới có thể quản lý giao dịch tách trong tài khoản được chia sẻ.",
     "jointTransferRowLocked": "Đây là một giao dịch chuyển khoản. Hãy dùng trình chỉnh sửa chuyển khoản."

@@ -121,4 +121,69 @@ describe('createCategoryFromInput', () => {
     vi.mocked(apiClient.post).mockRejectedValue(new Error('boom'));
     await expect(createCategoryFromInput('Boat', [])).rejects.toThrow('boom');
   });
+
+  // A joint transaction is the sharing owner's row and may only carry the
+  // OWNER's category ids, so a category typed into that register's picker has
+  // to be created on the owner's ledger. `/categories` creates on the
+  // caller's, which is the id the owner does not own.
+  describe('jointAccountId', () => {
+    it("creates on the owner's ledger instead of the caller's", async () => {
+      vi.mocked(apiClient.post).mockResolvedValue({
+        data: cat({ id: 'owner-cat', name: 'Daycare' }),
+      });
+
+      const result = await createCategoryFromInput('daycare', [], {
+        jointAccountId: 'acc-joint',
+      });
+
+      expect(apiClient.post).toHaveBeenCalledTimes(1);
+      expect(apiClient.post).toHaveBeenCalledWith('/categories/joint/acc-joint', {
+        name: 'Daycare',
+        parentId: undefined,
+      });
+      expect(result?.category.id).toBe('owner-cat');
+    });
+
+    it("puts BOTH halves of a Parent: Child on the owner's ledger", async () => {
+      vi.mocked(apiClient.post)
+        .mockResolvedValueOnce({ data: cat({ id: 'owner-parent', name: 'Travel' }) })
+        .mockResolvedValueOnce({
+          data: cat({ id: 'owner-child', name: 'Hotels', parentId: 'owner-parent' }),
+        });
+
+      // A parent created on one ledger and a child on the other would leave the
+      // pair astride two users' charts of accounts.
+      const result = await createCategoryFromInput('travel: hotels', [], {
+        jointAccountId: 'acc-joint',
+      });
+
+      expect(apiClient.post).toHaveBeenNthCalledWith(1, '/categories/joint/acc-joint', {
+        name: 'Travel',
+      });
+      expect(apiClient.post).toHaveBeenNthCalledWith(2, '/categories/joint/acc-joint', {
+        name: 'Hotels',
+        parentId: 'owner-parent',
+      });
+      expect(result?.created.map((c) => c.id)).toEqual(['owner-parent', 'owner-child']);
+    });
+
+    it("reuses an existing OWNER parent rather than creating one", async () => {
+      vi.mocked(apiClient.post).mockResolvedValue({
+        data: cat({ id: 'owner-child', name: 'Hotels', parentId: 'owner-travel' }),
+      });
+
+      const result = await createCategoryFromInput(
+        'travel: hotels',
+        [cat({ id: 'owner-travel', name: 'Travel' })],
+        { jointAccountId: 'acc-joint' },
+      );
+
+      expect(apiClient.post).toHaveBeenCalledTimes(1);
+      expect(apiClient.post).toHaveBeenCalledWith('/categories/joint/acc-joint', {
+        name: 'Hotels',
+        parentId: 'owner-travel',
+      });
+      expect(result?.parentName).toBe('Travel');
+    });
+  });
 });

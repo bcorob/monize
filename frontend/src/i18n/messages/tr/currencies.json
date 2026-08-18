@@ -43,12 +43,6 @@
       "status": "Durum",
       "actions": "İşlemler"
     },
-    "density": {
-      "normal": "Normal",
-      "compact": "Kompakt",
-      "dense": "Yoğun",
-      "toggle": "Satır yoğunluğunu değiştir"
-    },
     "defaultBadge": "Varsayılan",
     "statusBadge": {
       "active": "Aktif",

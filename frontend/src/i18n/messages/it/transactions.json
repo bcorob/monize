@@ -133,12 +133,6 @@
       "noData": "Nessuna transazione da esportare",
       "error": "Esportazione transazioni non riuscita"
     },
-    "density": {
-      "title": "Cambia densità righe",
-      "normal": "Normale",
-      "compact": "Compatta",
-      "dense": "Densa"
-    },
     "delete": {
       "transferTitle": "Elimina trasferimento",
       "transactionTitle": "Elimina transazione",

@@ -36,12 +36,6 @@
     },
     "accountCount": "{filtered} van {total} rekeningen",
     "groupCount": "{count, plural, one {# rekening} other {# rekeningen}}",
-    "density": {
-      "toggle": "Rijdichtheid instellen",
-      "normal": "Normaal",
-      "compact": "Compact",
-      "dense": "Dicht"
-    },
     "columns": {
       "accountName": "Rekeningnaam",
       "type": "Type",

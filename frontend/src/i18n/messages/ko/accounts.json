@@ -36,12 +36,6 @@
     },
     "accountCount": "{total}개 중 {filtered}개 계정",
     "groupCount": "{count, plural, one {계정 #개} other {계정 #개}}",
-    "density": {
-      "toggle": "행 밀도 전환",
-      "normal": "보통",
-      "compact": "작게",
-      "dense": "촘촘히"
-    },
     "columns": {
       "accountName": "계정명",
       "type": "유형",

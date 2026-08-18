@@ -233,5 +233,11 @@
     "srSuffix": "(부분 합계)",
     "explanation": "부분 합계: {count, plural, other {# 개의 금액}}을(를) 포함할 수 없어 표시된 수치에서 제외했습니다. {currencies}에 대한 {displayCurrency} 환율이 없습니다.",
     "explanationExcluded": "부분 합계: {count, plural, other {# 개의 금액}}을(를) 계산할 수 없어 표시된 수치에서 제외했습니다."
+  },
+  "density": {
+    "title": "행 밀도 전환",
+    "normal": "보통",
+    "compact": "컴팩트",
+    "dense": "조밀"
   }
 }

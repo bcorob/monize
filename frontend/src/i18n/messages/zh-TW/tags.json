@@ -42,12 +42,6 @@
       "title": "找不到標籤",
       "body": "沒有符合您目前搜尋條件的標籤。"
     },
-    "density": {
-      "title": "切換列間距",
-      "normal": "一般",
-      "compact": "緊密",
-      "dense": "密集"
-    },
     "header": {
       "name": "名稱",
       "icon": "圖示",

@@ -43,12 +43,6 @@
       "status": "Status",
       "actions": "Acties"
     },
-    "density": {
-      "normal": "Normaal",
-      "compact": "Compact",
-      "dense": "Dicht",
-      "toggle": "Rijdichtheid wisselen"
-    },
     "defaultBadge": "Standaard",
     "statusBadge": {
       "active": "Actief",

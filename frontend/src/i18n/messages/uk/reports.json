@@ -4,7 +4,6 @@
     "subtitle": "Отримайте інформацію про стан свого фінансового здоров'я",
     "searchPlaceholder": "Пошук звітів за назвою або описом...",
     "allReports": "Усі звіти",
-    "densityTitle": "Перейти до вигляду {nextDensity}",
     "removeFavourite": "Видалити з вибраного",
     "addFavourite": "Додати до вибраного",
     "tableReport": "Звіт",
@@ -27,11 +26,6 @@
       "bills": "Рахунки",
       "budget": "Бюджет",
       "custom": "Власні"
-    },
-    "density": {
-      "normal": "Звичайний",
-      "compact": "Компактний",
-      "dense": "Щільний"
     },
     "names": {
       "spending-by-category": "Витрати за категоріями",

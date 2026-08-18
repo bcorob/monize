@@ -48,12 +48,6 @@
       "notes": "Notizen",
       "actions": "Aktionen"
     },
-    "density": {
-      "normal": "Normal",
-      "compact": "Kompakt",
-      "dense": "Dicht",
-      "toggle": "Zeilendichte umschalten"
-    },
     "noCategory": "Keine",
     "statusBadge": {
       "active": "Aktiv",

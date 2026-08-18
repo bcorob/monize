@@ -133,12 +133,6 @@
       "noData": "Tidak ada transaksi untuk diekspor",
       "error": "Gagal mengekspor transaksi"
     },
-    "density": {
-      "title": "Ganti kepadatan baris",
-      "normal": "Normal",
-      "compact": "Kompak",
-      "dense": "Padat"
-    },
     "delete": {
       "transferTitle": "Hapus Transfer",
       "transactionTitle": "Hapus Transaksi",

@@ -22,6 +22,40 @@ describe('useTableDensity', () => {
   });
 });
 
+describe('useTableDensity wide scale', () => {
+  // The investment register's values. They lived in that component until three
+  // -- in fact five -- copies of this table had drifted apart; pinned here so a
+  // change to them is a change to a named table rather than to one file's
+  // `switch` that nobody compares against the others.
+  it('halves the phone inset at every level', () => {
+    const dense = renderHook(() => useTableDensity('dense', 'wide'));
+    expect(dense.result.current.cellPadding).toBe('px-1.5 sm:px-3 py-1');
+    expect(dense.result.current.headerPadding).toBe('px-1.5 sm:px-3 py-2');
+
+    const compact = renderHook(() => useTableDensity('compact', 'wide'));
+    expect(compact.result.current.cellPadding).toBe('px-2 sm:px-4 py-2');
+    expect(compact.result.current.headerPadding).toBe('px-2 sm:px-4 py-2');
+
+    const normal = renderHook(() => useTableDensity('normal', 'wide'));
+    expect(normal.result.current.cellPadding).toBe('px-2 sm:px-6 py-3 sm:py-4');
+    expect(normal.result.current.headerPadding).toBe('px-2 sm:px-6 py-2 sm:py-3');
+  });
+
+  it('differs from the default scale at every level, so naming one matters', () => {
+    for (const level of ['normal', 'compact', 'dense'] as const) {
+      const def = renderHook(() => useTableDensity(level));
+      const wide = renderHook(() => useTableDensity(level, 'wide'));
+      expect(wide.result.current.cellPadding, level).not.toBe(def.result.current.cellPadding);
+    }
+  });
+
+  it('defaults to the default scale when none is named', () => {
+    const implicit = renderHook(() => useTableDensity('normal'));
+    const explicit = renderHook(() => useTableDensity('normal', 'default'));
+    expect(implicit.result.current).toEqual(explicit.result.current);
+  });
+});
+
 describe('nextDensity', () => {
   it('cycles normal → compact', () => {
     expect(nextDensity('normal')).toBe('compact');

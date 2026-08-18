@@ -48,12 +48,6 @@
       "notes": "Note",
       "actions": "Azioni"
     },
-    "density": {
-      "normal": "Normale",
-      "compact": "Compatto",
-      "dense": "Denso",
-      "toggle": "Alterna densità righe"
-    },
     "noCategory": "Nessuna",
     "statusBadge": {
       "active": "Attivo",

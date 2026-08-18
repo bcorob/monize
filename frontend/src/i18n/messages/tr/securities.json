@@ -57,12 +57,6 @@
       "actions": "İşlemler",
       "favourite": "Favori"
     },
-    "density": {
-      "normal": "Normal",
-      "compact": "Kompakt",
-      "dense": "Yoğun",
-      "toggle": "Satır yoğunluğunu değiştir"
-    },
     "statusBadge": {
       "active": "Aktif",
       "activeShort": "Akt",

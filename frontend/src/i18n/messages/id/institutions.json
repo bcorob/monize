@@ -30,12 +30,6 @@
       "actions": "Tindakan"
     },
     "accountCount": "{count, plural, =0 {Tidak ada akun} one {# akun} other {# akun}}",
-    "density": {
-      "title": "Ubah kepadatan baris",
-      "normal": "Normal",
-      "compact": "Ringkas",
-      "dense": "Padat"
-    },
     "statusFilter": {
       "all": "Semua",
       "active": "Aktif",

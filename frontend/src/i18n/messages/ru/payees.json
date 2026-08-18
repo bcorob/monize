@@ -48,12 +48,6 @@
       "notes": "Примечания",
       "actions": "Действия"
     },
-    "density": {
-      "normal": "Обычная",
-      "compact": "Компактная",
-      "dense": "Плотная",
-      "toggle": "Изменить плотность строк"
-    },
     "noCategory": "Нет",
     "statusBadge": {
       "active": "Активный",

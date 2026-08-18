@@ -122,11 +122,9 @@ vi.mock('@/components/categories/CategoryForm', () => ({
 }));
 
 vi.mock('@/components/categories/CategoryList', () => ({
-  CategoryList: ({ categories, onEdit, onRefresh, onDelete, sortField, sortDirection, onSort, density, onDensityChange }: any) => (
+  CategoryList: ({ categories, onEdit, onRefresh, onDelete, sortField, sortDirection, onSort }: any) => (
     <div data-testid="category-list">
       <span data-testid="sort-info">{sortField} {sortDirection}</span>
-      <span data-testid="density-info">{density}</span>
-      <button data-testid="density-btn" onClick={() => onDensityChange('compact')}>Density</button>
       <button data-testid="sort-name" onClick={() => onSort('name')}>SortByName</button>
       <button data-testid="sort-count" onClick={() => onSort('count')}>SortByCount</button>
       <button data-testid="refresh" onClick={() => onRefresh()}>Refresh</button>
@@ -635,17 +633,6 @@ describe('CategoriesPage', () => {
       // cat-2 and cat-4 (its child) are removed
       expect(screen.queryByTestId('category-cat-2')).not.toBeInTheDocument();
       expect(screen.queryByTestId('category-cat-4')).not.toBeInTheDocument();
-    });
-  });
-
-  it('updates list density when changed', async () => {
-    mockGetAll.mockResolvedValue(mockCategories);
-    render(<CategoriesPage />);
-    await waitFor(() => expect(screen.getByTestId('category-list')).toBeInTheDocument());
-    expect(screen.getByTestId('density-info')).toHaveTextContent('normal');
-    fireEvent.click(screen.getByTestId('density-btn'));
-    await waitFor(() => {
-      expect(screen.getByTestId('density-info')).toHaveTextContent('compact');
     });
   });
 });

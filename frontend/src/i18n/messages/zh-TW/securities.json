@@ -57,12 +57,6 @@
       "actions": "動作",
       "favourite": "最愛"
     },
-    "density": {
-      "normal": "一般",
-      "compact": "緊密",
-      "dense": "密集",
-      "toggle": "切換列間距"
-    },
     "statusBadge": {
       "active": "活躍",
       "activeShort": "活",

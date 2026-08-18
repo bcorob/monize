@@ -213,6 +213,7 @@ export function InvestmentRegisterPanel({
       {activeView === 'brokerage' ? (
         <>
           <InvestmentTransactionList
+            densityView="accountRegister"
             transactions={brokerageTx}
             accounts={accountsForForm}
             isLoading={isLoading}
@@ -250,6 +251,7 @@ export function InvestmentRegisterPanel({
             </button>
           </div>
           <TransactionList
+            densityView="accountRegister"
             transactions={cashTx}
             onEdit={cashForm.openEdit}
             onRefresh={afterWrite}

@@ -42,12 +42,6 @@
       "title": "Keine Etiketten gefunden",
       "body": "Keine Etiketten entsprechen Ihrer aktuellen Suche."
     },
-    "density": {
-      "title": "Zeilendichte umschalten",
-      "normal": "Normal",
-      "compact": "Kompakt",
-      "dense": "Dicht"
-    },
     "header": {
       "name": "Name",
       "icon": "Symbol",

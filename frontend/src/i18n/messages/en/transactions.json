@@ -133,12 +133,6 @@
       "noData": "No transactions to export",
       "error": "Failed to export transactions"
     },
-    "density": {
-      "title": "Toggle row density",
-      "normal": "Normal",
-      "compact": "Compact",
-      "dense": "Dense"
-    },
     "delete": {
       "transferTitle": "Delete Transfer",
       "transactionTitle": "Delete Transaction",

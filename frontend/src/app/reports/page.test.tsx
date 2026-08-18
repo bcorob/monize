@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@/test/render';
+import { useDensityStore } from '@/store/densityStore';
+import type { DensityLevel } from '@/hooks/useTableDensity';
 import ReportsPage from './page';
 
 // Mock next/image
@@ -99,16 +101,11 @@ vi.mock('@/components/layout/AppHeader', () => ({
   AppHeader: () => <div data-testid="app-header">AppHeader</div>,
 }));
 
-const mockSetDensity = vi.fn();
 const mockSetCategoryFilter = vi.fn();
-let currentDensity = 'normal';
 let currentCategoryFilter = 'all';
 
 vi.mock('@/hooks/useLocalStorage', () => ({
   useLocalStorage: (key: string, defaultValue: any) => {
-    if (key === 'monize-reports-density') {
-      return [currentDensity, mockSetDensity];
-    }
     if (key === 'monize-reports-category') {
       return [currentCategoryFilter, mockSetCategoryFilter];
     }
@@ -149,7 +146,7 @@ describe('ReportsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     currentSearchParams = new URLSearchParams();
-    currentDensity = 'normal';
+    useDensityStore.setState({ densities: { reports: 'normal' } });
     currentCategoryFilter = 'all';
     currentFavouriteReportIds = [];
     mockGetAllReports.mockResolvedValue([]);
@@ -196,7 +193,7 @@ describe('ReportsPage', () => {
     it.each(['normal', 'compact', 'dense'])(
       'marks the GEM Strategy card in %s density',
       async (density) => {
-        currentDensity = density;
+        useDensityStore.setState({ densities: { reports: density as DensityLevel } });
         render(<ReportsPage />);
         await waitFor(() => {
           expect(
@@ -355,11 +352,11 @@ describe('ReportsPage', () => {
       expect(screen.getByText('Normal')).toBeInTheDocument();
     });
     fireEvent.click(screen.getByText('Normal'));
-    expect(mockSetDensity).toHaveBeenCalled();
+    expect(useDensityStore.getState().densities.reports).toBe('compact');
   });
 
   it('renders compact density view', async () => {
-    currentDensity = 'compact';
+    useDensityStore.setState({ densities: { reports: 'compact' } });
     render(<ReportsPage />);
     await waitFor(() => {
       // In compact view, reports still render with names
@@ -368,7 +365,7 @@ describe('ReportsPage', () => {
   });
 
   it('renders dense density view as table', async () => {
-    currentDensity = 'dense';
+    useDensityStore.setState({ densities: { reports: 'dense' } });
     render(<ReportsPage />);
     await waitFor(() => {
       // Dense view renders as a table with Report / Category / Description columns
@@ -605,7 +602,7 @@ describe('ReportsPage', () => {
   });
 
   it('renders favourite stars in compact view', async () => {
-    currentDensity = 'compact';
+    useDensityStore.setState({ densities: { reports: 'compact' } });
     render(<ReportsPage />);
     await waitFor(() => {
       expect(screen.getByText('Spending by Category')).toBeInTheDocument();
@@ -615,7 +612,7 @@ describe('ReportsPage', () => {
   });
 
   it('renders favourite stars in dense view', async () => {
-    currentDensity = 'dense';
+    useDensityStore.setState({ densities: { reports: 'dense' } });
     render(<ReportsPage />);
     await waitFor(() => {
       expect(screen.getByText('Spending by Category')).toBeInTheDocument();
@@ -949,7 +946,7 @@ describe('ReportsPage', () => {
   });
 
   it('navigates to report in compact density view when card is clicked', async () => {
-    currentDensity = 'compact';
+    useDensityStore.setState({ densities: { reports: 'compact' } });
     render(<ReportsPage />);
     await waitFor(() => expect(screen.getByText('Spending by Category')).toBeInTheDocument());
     const reportCard = screen.getByText('Spending by Category').closest('button');
@@ -958,7 +955,7 @@ describe('ReportsPage', () => {
   });
 
   it('navigates to report in dense density view when row is clicked', async () => {
-    currentDensity = 'dense';
+    useDensityStore.setState({ densities: { reports: 'dense' } });
     render(<ReportsPage />);
     await waitFor(() => expect(screen.getByText('Tax Summary')).toBeInTheDocument());
     const row = screen.getByText('Tax Summary').closest('tr');
@@ -1129,7 +1126,7 @@ describe('ReportsPage', () => {
   });
 
   it('handles keydown Enter on favourite star in compact view', async () => {
-    currentDensity = 'compact';
+    useDensityStore.setState({ densities: { reports: 'compact' } });
     render(<ReportsPage />);
     await waitFor(() => expect(screen.getByText('Spending by Category')).toBeInTheDocument());
     const stars = screen.getAllByTitle('Add to favourites');
@@ -1219,7 +1216,7 @@ describe('ReportsPage', () => {
   });
 
   it('compact view: clicking star does not navigate', async () => {
-    currentDensity = 'compact';
+    useDensityStore.setState({ densities: { reports: 'compact' } });
     render(<ReportsPage />);
     await waitFor(() => expect(screen.getByText('Spending by Category')).toBeInTheDocument());
     const stars = screen.getAllByTitle('Add to favourites');
@@ -1228,7 +1225,7 @@ describe('ReportsPage', () => {
   });
 
   it('dense view: clicking favourite star does not navigate', async () => {
-    currentDensity = 'dense';
+    useDensityStore.setState({ densities: { reports: 'dense' } });
     render(<ReportsPage />);
     await waitFor(() => expect(screen.getByText('Spending by Category')).toBeInTheDocument());
     const starButtons = screen.getAllByTitle('Add to favourites');
@@ -1237,7 +1234,7 @@ describe('ReportsPage', () => {
   });
 
   it('dense view: correctly shows filled star for a favourited report', async () => {
-    currentDensity = 'dense';
+    useDensityStore.setState({ densities: { reports: 'dense' } });
     currentFavouriteReportIds = ['tax-summary'];
     render(<ReportsPage />);
     await waitFor(() => expect(screen.getByText('Tax Summary')).toBeInTheDocument());
@@ -1246,7 +1243,7 @@ describe('ReportsPage', () => {
   });
 
   it('compact view: correctly shows filled star for a favourited report', async () => {
-    currentDensity = 'compact';
+    useDensityStore.setState({ densities: { reports: 'compact' } });
     currentFavouriteReportIds = ['income-vs-expenses'];
     render(<ReportsPage />);
     await waitFor(() => expect(screen.getByText('Income vs Expenses')).toBeInTheDocument());
@@ -1255,7 +1252,7 @@ describe('ReportsPage', () => {
   });
 
   it('shows density label as "Compact" when density is compact', async () => {
-    currentDensity = 'compact';
+    useDensityStore.setState({ densities: { reports: 'compact' } });
     render(<ReportsPage />);
     await waitFor(() => {
       expect(screen.getByText('Compact')).toBeInTheDocument();
@@ -1263,7 +1260,7 @@ describe('ReportsPage', () => {
   });
 
   it('shows density label as "Dense" when density is dense', async () => {
-    currentDensity = 'dense';
+    useDensityStore.setState({ densities: { reports: 'dense' } });
     render(<ReportsPage />);
     await waitFor(() => {
       expect(screen.getByText('Dense')).toBeInTheDocument();

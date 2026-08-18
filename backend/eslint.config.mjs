@@ -44,6 +44,10 @@ const WITH_CONTEXT_ALLOWLIST = [
   // claims table that belongs to no single user, from cron entry points with no
   // request to inherit an identity from -- system context by construction.
   "src/common/jobs/job-claim.service.ts",
+  // Joint category creation: the owner-scoped write window for a grantee who
+  // holds the delegation's categories-can-create capability, opened only after
+  // JointCategoriesService has decided authorization in full.
+  "src/categories/joint-categories.service.ts",
   "src/currencies/currencies.service.ts",
   "src/currencies/exchange-rate.service.ts",
   "src/database/demo-reset.service.ts",

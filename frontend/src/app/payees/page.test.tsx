@@ -184,7 +184,7 @@ vi.mock('@/components/payees/PayeeForm', () => ({
 }));
 
 vi.mock('@/components/payees/PayeeList', () => ({
-  PayeeList: ({ payees, sortField, sortDirection, onSort, onEdit, onDelete, onReactivate, onMerge, density, onDensityChange }: any) => (
+  PayeeList: ({ payees, sortField, sortDirection, onSort, onEdit, onDelete, onReactivate, onMerge }: any) => (
     <div data-testid="payee-list">
       {payees.map((p: any) => (
         <div key={p.id} data-testid={`payee-${p.id}`}>
@@ -196,8 +196,6 @@ vi.mock('@/components/payees/PayeeList', () => ({
         </div>
       ))}
       <span data-testid="sort-info">{sortField} {sortDirection}</span>
-      <span data-testid="density-info">{density}</span>
-      <button data-testid="density-btn" onClick={() => onDensityChange('compact')}>Density</button>
       <button data-testid="sort-by-name" onClick={() => onSort('name')}>Sort Name</button>
       <button data-testid="sort-by-count" onClick={() => onSort('count')}>Sort Count</button>
       <button data-testid="sort-by-category" onClick={() => onSort('category')}>Sort Category</button>
@@ -833,18 +831,6 @@ describe('PayeesPage', () => {
       await act(async () => { fireEvent.click(screen.getByTestId('auto-assign-success')); });
       await waitFor(() => {
         expect(mockGetAllPayees).toHaveBeenCalled();
-      });
-    });
-  });
-
-  describe('Density', () => {
-    it('updates list density when changed', async () => {
-      render(<PayeesPage />);
-      await waitFor(() => expect(screen.getByTestId('payee-list')).toBeInTheDocument());
-      expect(screen.getByTestId('density-info')).toHaveTextContent('normal');
-      fireEvent.click(screen.getByTestId('density-btn'));
-      await waitFor(() => {
-        expect(screen.getByTestId('density-info')).toHaveTextContent('compact');
       });
     });
   });

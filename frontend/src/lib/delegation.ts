@@ -1,4 +1,5 @@
 import apiClient from './api';
+import { Category } from '@/types/category';
 
 export interface DelegateContext {
   userId: string;
@@ -162,6 +163,25 @@ export const delegationApi = {
   ): Promise<JointReferenceData> => {
     const res = await apiClient.get<JointReferenceData>(
       `/delegation/joint-accounts/${accountId}/reference-data`,
+    );
+    return res.data;
+  },
+
+  /**
+   * Create a category on the ledger of the owner who shares `accountId`
+   * jointly with the caller, gated server-side on the delegation's
+   * categories-can-create capability (the same flag `getJointReferenceData`
+   * reports). A joint row may only carry the OWNER's category ids, so
+   * `categoriesApi.create` -- which writes to the caller's own ledger -- is
+   * the wrong door here, and there was no other until this endpoint existed.
+   */
+  createJointCategory: async (
+    accountId: string,
+    data: { name: string; parentId?: string; isIncome?: boolean },
+  ): Promise<Category> => {
+    const res = await apiClient.post<Category>(
+      `/categories/joint/${accountId}`,
+      data,
     );
     return res.data;
   },

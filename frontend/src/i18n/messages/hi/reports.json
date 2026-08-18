@@ -4,7 +4,6 @@
     "subtitle": "अपने वित्तीय स्वास्थ्य के बारे में अंतर्दृष्टि प्राप्त करें",
     "searchPlaceholder": "नाम या विवरण द्वारा रिपोर्ट खोजें...",
     "allReports": "सभी रिपोर्ट",
-    "densityTitle": "{nextDensity} दृश्य पर स्विच करें",
     "removeFavourite": "पसंदीदा से हटाएँ",
     "addFavourite": "पसंदीदा में जोड़ें",
     "tableReport": "रिपोर्ट",
@@ -27,11 +26,6 @@
       "bills": "बिल",
       "budget": "बजट",
       "custom": "कस्टम"
-    },
-    "density": {
-      "normal": "सामान्य",
-      "compact": "संक्षिप्त",
-      "dense": "सघन"
     },
     "names": {
       "spending-by-category": "श्रेणी के अनुसार व्यय",

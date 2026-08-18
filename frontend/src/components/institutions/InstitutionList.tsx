@@ -8,7 +8,8 @@ import { Institution } from '@/types/institution';
 import { institutionsApi } from '@/lib/institutions';
 import { getErrorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/logger';
-import { useTableDensity, nextDensity, DensityLevel } from '@/hooks/useTableDensity';
+import { useTableDensity } from '@/hooks/useTableDensity';
+import { useDensityPreference } from '@/store/densityStore';
 import { SortIcon } from '@/components/ui/SortIcon';
 import { safeHttpUrl } from '@/lib/safe-url';
 import { InstitutionLogo } from './InstitutionLogo';
@@ -16,6 +17,7 @@ import { useLongPress } from '@/hooks/useLongPress';
 import { RowActions } from '@/components/ui/row-actions/RowActions';
 import { RowActionSheet } from '@/components/ui/row-actions/RowActionSheet';
 import type { RowAction } from '@/components/ui/row-actions/rowAction';
+import { DensityToggleBar } from '@/components/ui/DensityToggle';
 
 const logger = createLogger('InstitutionList');
 
@@ -41,8 +43,6 @@ interface InstitutionListProps {
   onEdit: (institution: Institution) => void;
   onDelete: (id: string) => void;
   onManageAccounts: (institution: Institution) => void;
-  density?: DensityLevel;
-  onDensityChange?: (density: DensityLevel) => void;
   sortField?: InstitutionSortField;
   sortDirection?: 'asc' | 'desc';
   onSort?: (field: InstitutionSortField) => void;
@@ -53,14 +53,13 @@ export function InstitutionList({
   onEdit,
   onDelete,
   onManageAccounts,
-  density = 'normal',
-  onDensityChange,
   sortField = 'name',
   sortDirection = 'asc',
   onSort,
 }: InstitutionListProps) {
   const t = useTranslations('institutions');
   const tc = useTranslations('common');
+  const { density } = useDensityPreference('institutions');
   const { cellPadding, headerPadding } = useTableDensity(density);
   const [toDelete, setToDelete] = useState<Institution | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -96,24 +95,7 @@ export function InstitutionList({
 
   return (
     <div>
-      {onDensityChange && (
-        <div className="flex justify-end p-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
-          <button
-            onClick={() => onDensityChange(nextDensity(density))}
-            className="inline-flex items-center px-2 py-1 text-xs font-medium text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
-            title={t('list.density.title')}
-          >
-            <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-            {density === 'normal'
-              ? t('list.density.normal')
-              : density === 'compact'
-                ? t('list.density.compact')
-                : t('list.density.dense')}
-          </button>
-        </div>
-      )}
+      <DensityToggleBar view="institutions" />
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
         <thead className="bg-gray-50 dark:bg-gray-800">

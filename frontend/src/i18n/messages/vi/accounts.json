@@ -36,12 +36,6 @@
     },
     "accountCount": "{filtered} trong {total} tài khoản",
     "groupCount": "{count, plural, one {# tài khoản} other {# tài khoản}}",
-    "density": {
-      "toggle": "Chuyển đổi mật độ hàng",
-      "normal": "Bình thường",
-      "compact": "Thu gọn",
-      "dense": "Dày đặc"
-    },
     "columns": {
       "accountName": "Tên tài khoản",
       "type": "Loại",

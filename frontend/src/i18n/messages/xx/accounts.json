@@ -36,12 +36,6 @@
     },
     "accountCount": "[XX-{filtered} of {total} accounts-XX]",
     "groupCount": "[XX-{count, plural, one {# account} other {# accounts}}-XX]",
-    "density": {
-      "toggle": "[XX-Toggle row density-XX]",
-      "normal": "[XX-Normal-XX]",
-      "compact": "[XX-Compact-XX]",
-      "dense": "[XX-Dense-XX]"
-    },
     "columns": {
       "accountName": "[XX-Account Name-XX]",
       "type": "[XX-Type-XX]",

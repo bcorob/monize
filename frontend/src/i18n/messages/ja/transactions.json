@@ -133,12 +133,6 @@
       "noData": "エクスポートする取引がありません",
       "error": "取引のエクスポートに失敗しました"
     },
-    "density": {
-      "title": "行の密度を切り替え",
-      "normal": "通常",
-      "compact": "コンパクト",
-      "dense": "密集"
-    },
     "delete": {
       "transferTitle": "振替を削除",
       "transactionTitle": "取引を削除",

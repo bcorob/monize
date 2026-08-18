@@ -17,13 +17,15 @@ import { getErrorMessage } from '@/lib/errors';
 import { AccountRow, buildAccountActions, type AccountActionLabels } from './AccountRow';
 import { useLongPress } from '@/hooks/useLongPress';
 import { RowActionSheet } from '@/components/ui/row-actions/RowActionSheet';
-import { useTableDensity, nextDensity, type DensityLevel } from '@/hooks/useTableDensity';
+import { useTableDensity } from '@/hooks/useTableDensity';
+import { useDensityPreference } from '@/store/densityStore';
 import { SortIcon } from '@/components/ui/SortIcon';
 import { MultiSelect, MultiSelectOption } from '@/components/ui/MultiSelect';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
 import { formatAccountType } from '@/lib/account-utils';
 import { buildLogicalAccounts, type LogicalAccount } from '@/lib/logical-accounts';
 import { useMainAccountName } from '@/hooks/useMainAccountName';
+import { DensityToggleBar } from '@/components/ui/DensityToggle';
 
 type SortField = 'name' | 'type' | 'balance' | 'status';
 type SortDirection = 'asc' | 'desc';
@@ -38,7 +40,6 @@ const STORAGE_KEYS = {
   search: 'accounts.filter.search',
   sortField: 'accounts.filter.sortField',
   sortDirection: 'accounts.filter.sortDirection',
-  density: 'accounts.filter.density',
   collapsedGroups: 'accounts.filter.collapsedGroups',
 };
 
@@ -178,11 +179,6 @@ export function AccountList({ accounts, institutions, brokerageMarketValues, unp
     getStoredValue<string>(STORAGE_KEYS.search, '')
   );
 
-  // Density state - initialize from localStorage
-  const [density, setDensity] = useState<DensityLevel>(() =>
-    getStoredValue<DensityLevel>(STORAGE_KEYS.density, 'normal')
-  );
-
   // Collapsed account-type groups - initialize from localStorage
   const [collapsedGroups, setCollapsedGroups] = useState<Set<AccountType>>(() => {
     const stored = getStoredValue<AccountType[]>(STORAGE_KEYS.collapsedGroups, []);
@@ -235,10 +231,6 @@ export function AccountList({ accounts, institutions, brokerageMarketValues, unp
   }, [sortDirection]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.density, JSON.stringify(density));
-  }, [density]);
-
-  useEffect(() => {
     localStorage.setItem(
       STORAGE_KEYS.collapsedGroups,
       JSON.stringify(Array.from(collapsedGroups)),
@@ -284,11 +276,8 @@ export function AccountList({ accounts, institutions, brokerageMarketValues, unp
     includeInNetWorth: t('row.includeInNetWorth'),
     excludeFromNetWorth: t('row.excludeFromNetWorth'),
   }), [t, tc]);
+  const { density } = useDensityPreference('accounts');
   const { cellPadding, headerPadding } = useTableDensity(density);
-
-  const cycleDensity = useCallback(() => {
-    setDensity(prev => nextDensity(prev));
-  }, []);
 
   // Every account as the user thinks of it: a linked brokerage/cash pair is one
   // entry, so it filters, sorts, counts and renders as a single account.
@@ -827,18 +816,7 @@ export function AccountList({ accounts, institutions, brokerageMarketValues, unp
       ) : (
       <div>
         {/* Density toggle */}
-        <div className="flex justify-end p-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
-          <button
-            onClick={cycleDensity}
-            className="inline-flex items-center px-2 py-1 text-xs font-medium text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
-            title={t('list.density.toggle')}
-          >
-            <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-            {density === 'normal' ? t('list.density.normal') : density === 'compact' ? t('list.density.compact') : t('list.density.dense')}
-          </button>
-        </div>
+        <DensityToggleBar view="accounts" />
         <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
           <thead className="bg-gray-50 dark:bg-gray-800">

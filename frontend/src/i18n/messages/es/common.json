@@ -233,5 +233,11 @@
     "srSuffix": "(total parcial)",
     "explanation": "Total parcial: {count, plural, one {# importe} other {# importes}} no se pudieron incluir, por lo que la cifra mostrada los excluye. No hay tipo de cambio a {displayCurrency} para {currencies}.",
     "explanationExcluded": "Total parcial: {count, plural, one {# importe} other {# importes}} no se pudieron calcular, por lo que la cifra mostrada los excluye."
+  },
+  "density": {
+    "title": "Cambiar densidad de filas",
+    "normal": "Normal",
+    "compact": "Compacto",
+    "dense": "Denso"
   }
 }

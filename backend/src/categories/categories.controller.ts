@@ -22,6 +22,7 @@ import {
 } from "@nestjs/swagger";
 import { AuthGuard } from "@nestjs/passport";
 import { CategoriesService } from "./categories.service";
+import { JointCategoriesService } from "./joint-categories.service";
 import { CategoryDetailService } from "./category-detail.service";
 import { CategoryDetailDto } from "./dto/category-detail.dto";
 import { CreateCategoryDto } from "./dto/create-category.dto";
@@ -42,6 +43,7 @@ export class CategoriesController {
   constructor(
     private readonly categoriesService: CategoriesService,
     private readonly categoryDetailService: CategoryDetailService,
+    private readonly jointCategories: JointCategoriesService,
   ) {}
 
   @Post()
@@ -53,6 +55,40 @@ export class CategoriesController {
   @DelegateRequiresCapability("categories", "create")
   create(@Request() req, @Body() createCategoryDto: CreateCategoryDto) {
     return this.categoriesService.create(req.user.id, createCategoryDto);
+  }
+
+  /**
+   * Grantee-facing (own context, not @AllowDelegate): create a category on the
+   * ledger of the owner who shares `accountId` jointly with the caller. A
+   * joint row belongs to the owner and may only carry the owner's category
+   * ids, so text typed into that register's picker has nowhere else to go --
+   * `POST /categories` above writes to the caller's own ledger. Authorized by
+   * the delegation's categories-can-create capability; see
+   * JointCategoriesService for why the account gate is READ.
+   */
+  @Post("joint/:accountId")
+  @ApiOperation({
+    summary: "Create a category on the owner ledger of a joint account",
+  })
+  @ApiParam({ name: "accountId", description: "Joint account UUID" })
+  @ApiResponse({ status: 201, description: "Category created successfully" })
+  @ApiResponse({ status: 400, description: "Bad request" })
+  @ApiResponse({ status: 401, description: "Unauthorized" })
+  @ApiResponse({
+    status: 403,
+    description: "Forbidden - the owner has not granted category creation",
+  })
+  @ApiResponse({ status: 404, description: "Account not shared jointly" })
+  createForJointAccount(
+    @Request() req,
+    @Param("accountId", ParseUUIDPipe) accountId: string,
+    @Body() createCategoryDto: CreateCategoryDto,
+  ) {
+    return this.jointCategories.create(
+      req.user.realUserId ?? req.user.id,
+      accountId,
+      createCategoryDto,
+    );
   }
 
   @Get()

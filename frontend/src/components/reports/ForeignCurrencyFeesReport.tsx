@@ -385,6 +385,7 @@ export function ForeignCurrencyFeesReport() {
           {t('list.title')}
         </h3>
         <TransactionList
+          densityView="fxFeesReport"
           transactions={transactions}
           onEdit={handleEdit}
           onRefresh={refresh}

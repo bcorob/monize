@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act, waitFor } from '@/test/render';
 import { CurrencyList } from './CurrencyList';
 import { exchangeRatesApi } from '@/lib/exchange-rates';
+import { useDensityStore } from '@/store/densityStore';
 
 vi.mock('@/lib/exchange-rates', () => ({
   exchangeRatesApi: {
@@ -219,13 +220,13 @@ describe('CurrencyList', () => {
     expect(screen.getByText('2 accts, 3 secs')).toBeInTheDocument();
   });
 
-  it('calls onDensityChange when provided', () => {
-    const onDensityChange = vi.fn();
+  it('cycles the shared density preference', () => {
     const currencies = [makeCurrency({ code: 'CAD', name: 'Canadian Dollar' })];
 
-    render(<CurrencyList currencies={currencies} {...defaultProps} density="normal" onDensityChange={onDensityChange} />);
+    useDensityStore.setState({ densities: { currencies: 'normal' } });
+    render(<CurrencyList currencies={currencies} {...defaultProps} />);
     fireEvent.click(screen.getByText('Normal'));
-    expect(onDensityChange).toHaveBeenCalledWith('compact');
+    expect(useDensityStore.getState().densities.currencies).toBe('compact');
   });
 
   describe('sorting', () => {
@@ -629,7 +630,8 @@ describe('CurrencyList', () => {
         makeCurrency({ code: 'JPY', name: 'Japanese Yen', symbol: '¥', isActive: false }),
       ];
 
-      render(<CurrencyList currencies={currencies} {...defaultProps} density="dense" />);
+      useDensityStore.setState({ densities: { currencies: 'dense' } });
+      render(<CurrencyList currencies={currencies} {...defaultProps} />);
       expect(screen.getByText('Act')).toBeInTheDocument();
       expect(screen.getByText('Ina')).toBeInTheDocument();
     });
@@ -637,35 +639,40 @@ describe('CurrencyList', () => {
     it('shows the edit icon button in dense mode', () => {
       const currencies = [makeCurrency({ code: 'USD' })];
 
-      render(<CurrencyList currencies={currencies} {...defaultProps} density="dense" />);
+      useDensityStore.setState({ densities: { currencies: 'dense' } });
+      render(<CurrencyList currencies={currencies} {...defaultProps} />);
       expect(screen.getByRole('button', { name: 'Edit' })).toBeInTheDocument();
     });
 
     it('shows the deactivate icon button in dense mode', () => {
       const currencies = [makeCurrency({ code: 'USD', isActive: true })];
 
-      render(<CurrencyList currencies={currencies} {...defaultProps} density="dense" />);
+      useDensityStore.setState({ densities: { currencies: 'dense' } });
+      render(<CurrencyList currencies={currencies} {...defaultProps} />);
       expect(screen.getByRole('button', { name: 'Deactivate' })).toBeInTheDocument();
     });
 
     it('shows the activate icon button for inactive currency in dense mode', () => {
       const currencies = [makeCurrency({ code: 'USD', isActive: false })];
 
-      render(<CurrencyList currencies={currencies} {...defaultProps} density="dense" />);
+      useDensityStore.setState({ densities: { currencies: 'dense' } });
+      render(<CurrencyList currencies={currencies} {...defaultProps} />);
       expect(screen.getByRole('button', { name: 'Activate' })).toBeInTheDocument();
     });
 
     it('hides Decimals column in compact mode', () => {
       const currencies = [makeCurrency({ code: 'USD' })];
 
-      render(<CurrencyList currencies={currencies} {...defaultProps} density="compact" />);
+      useDensityStore.setState({ densities: { currencies: 'compact' } });
+      render(<CurrencyList currencies={currencies} {...defaultProps} />);
       expect(screen.queryByText('Decimals')).not.toBeInTheDocument();
     });
 
     it('shows Decimals column in normal mode', () => {
       const currencies = [makeCurrency({ code: 'USD' })];
 
-      render(<CurrencyList currencies={currencies} {...defaultProps} density="normal" />);
+      useDensityStore.setState({ densities: { currencies: 'normal' } });
+      render(<CurrencyList currencies={currencies} {...defaultProps} />);
       expect(screen.getByText('Decimals')).toBeInTheDocument();
     });
 
@@ -675,8 +682,9 @@ describe('CurrencyList', () => {
         makeCurrency({ code: 'EUR', name: 'Euro', symbol: '€' }),
       ];
 
+      useDensityStore.setState({ densities: { currencies: 'dense' } });
       const { container } = render(
-        <CurrencyList currencies={currencies} {...defaultProps} density="dense" />,
+        <CurrencyList currencies={currencies} {...defaultProps} />,
       );
       const rows = container.querySelectorAll('tbody tr');
       // Index 0: even -> bg-white, Index 1: odd -> bg-gray-50
@@ -712,7 +720,8 @@ describe('CurrencyList', () => {
     it('sorts by decimals column when density is normal', () => {
       const currencies = [makeCurrency({ code: 'CAD', name: 'Canadian Dollar' })];
 
-      render(<CurrencyList currencies={currencies} {...defaultProps} density="normal" />);
+      useDensityStore.setState({ densities: { currencies: 'normal' } });
+      render(<CurrencyList currencies={currencies} {...defaultProps} />);
       fireEvent.click(screen.getByText('Decimals'));
     });
   });

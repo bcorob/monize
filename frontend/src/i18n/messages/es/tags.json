@@ -42,12 +42,6 @@
       "title": "No se encontraron etiquetas",
       "body": "Ninguna etiqueta coincide con tu búsqueda actual."
     },
-    "density": {
-      "title": "Cambiar densidad de filas",
-      "normal": "Normal",
-      "compact": "Compacto",
-      "dense": "Denso"
-    },
     "header": {
       "name": "Nombre",
       "icon": "Icono",

@@ -74,11 +74,7 @@
     "badgeExpense": "Gider",
     "systemBadge": "(Sistem)",
     "inheritedColorTitle": "Üst kategoriden devralındı",
-    "viewTransactionsTitle": "Bu kategorideki işlemleri görüntüle",
-    "densityToggleTitle": "Satır yoğunluğunu değiştir",
-    "densityNormal": "Normal",
-    "densityCompact": "Kompakt",
-    "densityDense": "Yoğun"
+    "viewTransactionsTitle": "Bu kategorideki işlemleri görüntüle"
   },
   "deleteDialog": {
     "title": "\"{name}\" silinsin mi?",

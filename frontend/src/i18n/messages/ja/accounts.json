@@ -36,12 +36,6 @@
     },
     "accountCount": "{total} 件中 {filtered} 件の勘定科目",
     "groupCount": "{count, plural, one {# 件の勘定科目} other {# 件の勘定科目}}",
-    "density": {
-      "toggle": "行の密度を切り替え",
-      "normal": "標準",
-      "compact": "コンパクト",
-      "dense": "詳細"
-    },
     "columns": {
       "accountName": "勘定科目名",
       "type": "種類",

@@ -36,12 +36,6 @@
     },
     "accountCount": "{total} hesaptan {filtered} tanesi",
     "groupCount": "{count, plural, one {# hesap} other {# hesap}}",
-    "density": {
-      "toggle": "Satır yoğunluğunu değiştir",
-      "normal": "Normal",
-      "compact": "Kompakt",
-      "dense": "Yoğun"
-    },
     "columns": {
       "accountName": "Hesap Adı",
       "type": "Tür",

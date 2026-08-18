@@ -74,11 +74,7 @@
     "badgeExpense": "지출",
     "systemBadge": "(시스템)",
     "inheritedColorTitle": "상위에서 상속됨",
-    "viewTransactionsTitle": "이 카테고리의 거래 보기",
-    "densityToggleTitle": "행 밀도 전환",
-    "densityNormal": "보통",
-    "densityCompact": "좁게",
-    "densityDense": "조밀하게"
+    "viewTransactionsTitle": "이 카테고리의 거래 보기"
   },
   "deleteDialog": {
     "title": "\"{name}\" 삭제?",

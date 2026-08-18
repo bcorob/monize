@@ -103,6 +103,11 @@ scope and widens it by the authorized joint ids. Any new own-context endpoint th
 `GET /delegation/joint-accounts/:accountId/reference-data`: owner's categories + payees (picker
 fields only) + `payeesCanCreate` / `categoriesCanCreate`, after `jointAccessFor(..., "read")`.
 
+Its write half is `POST /categories/joint/:accountId`
+(`backend/src/categories/joint-categories.service.ts`), the one path that creates a category on
+the owner's ledger from the native context -- without it `categoriesCanCreate` was reported to the
+client and reachable by nothing.
+
 ### W1 -- JointRegisterService
 
 `backend/src/transactions/joint-register.service.ts`: own-context create/update/delete whose

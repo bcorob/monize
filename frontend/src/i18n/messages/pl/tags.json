@@ -42,12 +42,6 @@
       "title": "Nie znaleziono tagów",
       "body": "Żaden tag nie pasuje do bieżącego wyszukiwania."
     },
-    "density": {
-      "title": "Przełącz gęstość wierszy",
-      "normal": "Normalna",
-      "compact": "Kompaktowa",
-      "dense": "Gęsta"
-    },
     "header": {
       "name": "Nazwa",
       "icon": "Ikona",

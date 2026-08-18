@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor, act } from '@/test/render';
 import { InstitutionList } from './InstitutionList';
 import { Institution } from '@/types/institution';
 import { institutionsApi } from '@/lib/institutions';
+import { useDensityStore } from '@/store/densityStore';
 
 vi.mock('@/lib/institutions', () => ({
   institutionsApi: { delete: vi.fn() },
@@ -69,13 +70,13 @@ describe('InstitutionList', () => {
   });
 
   it('applies dense row padding when density is dense', () => {
+    useDensityStore.setState({ densities: { institutions: 'dense' } });
     render(
       <InstitutionList
         institutions={[makeInstitution()]}
         onEdit={vi.fn()}
         onDelete={vi.fn()}
         onManageAccounts={vi.fn()}
-        density="dense"
       />,
     );
     // The name cell uses the dense padding (py-1) rather than the default.
@@ -136,13 +137,13 @@ describe('InstitutionList', () => {
   });
 
   it('renders edit/delete as icon buttons in dense view', () => {
+    useDensityStore.setState({ densities: { institutions: 'dense' } });
     render(
       <InstitutionList
         institutions={[makeInstitution()]}
         onEdit={vi.fn()}
         onDelete={vi.fn()}
         onManageAccounts={vi.fn()}
-        density="dense"
       />,
     );
     // Icon buttons expose their action via aria-label, with no text content.

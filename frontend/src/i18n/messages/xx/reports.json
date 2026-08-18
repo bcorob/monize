@@ -4,7 +4,6 @@
     "subtitle": "[XX-Generate insights about your financial health-XX]",
     "searchPlaceholder": "[XX-Search reports by name or description...-XX]",
     "allReports": "[XX-All Reports-XX]",
-    "densityTitle": "[XX-Switch to {nextDensity} view-XX]",
     "removeFavourite": "[XX-Remove from favourites-XX]",
     "addFavourite": "[XX-Add to favourites-XX]",
     "tableReport": "[XX-Report-XX]",
@@ -27,11 +26,6 @@
       "bills": "[XX-Bills-XX]",
       "budget": "[XX-Budget-XX]",
       "custom": "[XX-Custom-XX]"
-    },
-    "density": {
-      "normal": "[XX-Normal-XX]",
-      "compact": "[XX-Compact-XX]",
-      "dense": "[XX-Dense-XX]"
     },
     "names": {
       "spending-by-category": "[XX-Spending by Category-XX]",

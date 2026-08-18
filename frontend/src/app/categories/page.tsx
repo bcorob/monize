@@ -10,7 +10,7 @@ import dynamic from 'next/dynamic';
 import { Button } from '@/components/ui/Button';
 const CategoryForm = dynamic(() => import('@/components/categories/CategoryForm').then(m => m.CategoryForm), { ssr: false });
 import { ImportDefaultCategoriesDialog } from '@/components/categories/ImportDefaultCategoriesDialog';
-import { CategoryList, type DensityLevel, type SortField, type SortDirection } from '@/components/categories/CategoryList';
+import { CategoryList, type SortField, type SortDirection } from '@/components/categories/CategoryList';
 import { Modal } from '@/components/ui/Modal';
 import { UnsavedChangesDialog } from '@/components/ui/UnsavedChangesDialog';
 import { categoriesApi, type ImportDefaultsOptions } from '@/lib/categories';
@@ -46,7 +46,6 @@ function CategoriesContent() {
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [filterType, setFilterType] = useState<'all' | 'income' | 'expense'>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [listDensity, setListDensity] = useLocalStorage<DensityLevel>('monize-categories-density', 'normal');
   const [sortField, setSortField] = useLocalStorage<SortField>('monize-categories-sort-field', 'name');
   const [sortDirection, setSortDirection] = useLocalStorage<SortDirection>('monize-categories-sort-dir', 'asc');
   const { showForm, editingItem, openCreate, openEdit, close, isEditing, modalProps, setFormDirty, unsavedChangesDialog, formSubmitRef } = useFormModal<Category>();
@@ -309,8 +308,6 @@ function CategoriesContent() {
               onEdit={openEdit}
               onRefresh={refreshCategories}
               onDelete={(deletedId) => setCategories(prev => prev.filter(c => c.id !== deletedId && c.parentId !== deletedId))}
-              density={listDensity}
-              onDensityChange={setListDensity}
               sortField={sortField}
               sortDirection={sortDirection}
               onSort={handleSort}

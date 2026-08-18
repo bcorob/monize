@@ -48,12 +48,6 @@
       "notes": "Notities",
       "actions": "Acties"
     },
-    "density": {
-      "normal": "Normaal",
-      "compact": "Compact",
-      "dense": "Dicht",
-      "toggle": "Rijdichtheid wisselen"
-    },
     "noCategory": "Geen",
     "statusBadge": {
       "active": "Actief",

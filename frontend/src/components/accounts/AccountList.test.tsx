@@ -4,6 +4,7 @@ import * as nextNavigation from 'next/navigation';
 import { AccountList } from './AccountList';
 import { Account } from '@/types/account';
 import { accountsApi } from '@/lib/accounts';
+import { useDensityStore } from '@/store/densityStore';
 
 vi.mock('@/lib/accounts', () => ({
   accountsApi: {
@@ -2794,7 +2795,10 @@ describe('AccountList', () => {
       localStorage.setItem('accounts.filter.status', JSON.stringify('active'));
       localStorage.setItem('accounts.filter.sortField', JSON.stringify('balance'));
       localStorage.setItem('accounts.filter.sortDirection', JSON.stringify('desc'));
-      localStorage.setItem('accounts.filter.density', JSON.stringify('compact'));
+      // Density is no longer one of this list's own filter keys -- it is the
+      // app-wide preference, so it is set through the store rather than under
+      // an `accounts.filter.*` entry.
+      useDensityStore.setState({ densities: { accounts: 'compact' } });
 
       const accounts = [
         createAccount({ id: 'a1', name: 'Active One', isClosed: false }),

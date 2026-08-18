@@ -9,7 +9,7 @@ import { useOnAiAction } from '@/hooks/useOnAiAction';
 import dynamic from 'next/dynamic';
 import { Button } from '@/components/ui/Button';
 const TagForm = dynamic(() => import('@/components/tags/TagForm').then(m => m.TagForm), { ssr: false });
-import { TagList, type DensityLevel, type SortField, type SortDirection } from '@/components/tags/TagList';
+import { TagList, type SortField, type SortDirection } from '@/components/tags/TagList';
 import { Modal } from '@/components/ui/Modal';
 import { UnsavedChangesDialog } from '@/components/ui/UnsavedChangesDialog';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -43,7 +43,6 @@ function TagsContent() {
   const [transactionCounts, setTransactionCounts] = useState<Record<string, number>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [listDensity, setListDensity] = useLocalStorage<DensityLevel>('monize-tags-density', 'normal');
   const [sortField, setSortField] = useLocalStorage<SortField>('monize-tags-sort-field', 'name');
   const [sortDirection, setSortDirection] = useLocalStorage<SortDirection>('monize-tags-sort-dir', 'asc');
   const [deleteTag, setDeleteTag] = useState<Tag | null>(null);
@@ -256,8 +255,6 @@ function TagsContent() {
               onEdit={openEdit}
               onDelete={handleDeleteClick}
               onTagClick={handleTagClick}
-              density={listDensity}
-              onDensityChange={setListDensity}
               sortField={sortField}
               sortDirection={sortDirection}
               onSort={handleSort}

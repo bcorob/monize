@@ -36,12 +36,6 @@
     },
     "accountCount": "{filtered} из {total} счетов",
     "groupCount": "{count, plural, one {# счёт} other {# счетов}}",
-    "density": {
-      "toggle": "Переключить плотность строк",
-      "normal": "Обычная",
-      "compact": "Компактная",
-      "dense": "Плотная"
-    },
     "columns": {
       "accountName": "Название счёта",
       "type": "Тип",

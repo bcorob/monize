@@ -57,12 +57,6 @@
       "actions": "Дії",
       "favourite": "Вибране"
     },
-    "density": {
-      "normal": "Звичайна",
-      "compact": "Компактна",
-      "dense": "Щільна",
-      "toggle": "Перемкнути щільність рядків"
-    },
     "statusBadge": {
       "active": "Активний",
       "activeShort": "Акт",

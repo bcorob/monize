@@ -4,7 +4,6 @@
     "subtitle": "Generate insights about your financial health",
     "searchPlaceholder": "Search reports by name or description...",
     "allReports": "All Reports",
-    "densityTitle": "Switch to {nextDensity} view",
     "removeFavourite": "Remove from favourites",
     "addFavourite": "Add to favourites",
     "tableReport": "Report",
@@ -27,11 +26,6 @@
       "bills": "Bills",
       "budget": "Budget",
       "custom": "Custom"
-    },
-    "density": {
-      "normal": "Normal",
-      "compact": "Compact",
-      "dense": "Dense"
     },
     "names": {
       "spending-by-category": "Spending by Category",

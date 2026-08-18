@@ -17,7 +17,6 @@ import { AssetAllocationChart } from '@/components/investments/AssetAllocationCh
 import { InvestmentTransactionList } from '@/components/investments/InvestmentTransactionList';
 import { NewTransactionButton } from '@/components/investments/NewTransactionButton';
 import { RefreshPricesButton } from '@/components/investments/RefreshPricesButton';
-import { DensityLevel, nextDensity } from '@/hooks/useTableDensity';
 import { InvestmentTransactionForm } from '@/components/investments/InvestmentTransactionForm';
 import {
   InvestmentValueChart,
@@ -37,6 +36,7 @@ import {
   type InvestmentTransactionView,
 } from '@/components/investments/InvestmentViewToggle';
 import { PAGE_SIZE } from '@/lib/constants';
+import { DensityToggle } from '@/components/ui/DensityToggle';
 
 const TransactionForm = dynamic(() => import('@/components/transactions/TransactionForm').then(m => m.TransactionForm), { ssr: false });
 
@@ -62,7 +62,6 @@ function InvestmentsContent() {
   // An AI write (e.g. an investment transaction from the chat bubble) mutates
   // the same data as an undo/redo, so refresh the same way.
   useOnAiAction(handleUndoRedo);
-  const [listDensity, setListDensity] = useLocalStorage<DensityLevel>('monize-investments-density', 'normal');
   const [transactionView, setTransactionView] = useLocalStorage<InvestmentTransactionView>('monize-investments-transaction-view', 'brokerage');
   // Tracks whether the investment transaction form currently shows a currency
   // conversion section so the modal can be widened to fit it without scrolling.
@@ -146,10 +145,6 @@ function InvestmentsContent() {
       .sort((a, b) => a.name.localeCompare(b.name))
       .map(payee => ({ value: payee.id, label: payee.name }));
   }, [data.cashPayees]);
-
-  const cycleDensity = useCallback(() => {
-    setListDensity(d => nextDensity(d));
-  }, [setListDensity]);
 
   const { handleDeleteTransaction: deleteTransaction } = data;
   const handleDeleteTransaction = useCallback((id: string) => {
@@ -276,8 +271,6 @@ function InvestmentsContent() {
                   onEdit={data.handleEditTransaction}
                   onNewTransaction={data.handleNewTransaction}
                   onStatusChanged={data.handleFormCreateAndNew}
-                  density={listDensity}
-                  onDensityChange={setListDensity}
                   filters={data.transactionFilters}
                   onFiltersChange={data.handleFiltersChange}
                   availableSymbols={[...new Set(data.portfolioSummary?.holdings.map(h => h.symbol) || [])].sort()}
@@ -348,12 +341,7 @@ function InvestmentsContent() {
                       <span className="ml-1.5 inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-blue-600 rounded-full">{data.activeCashFilterCount}</span>
                     )}
                   </button>
-                  <button onClick={cycleDensity} className="ml-auto inline-flex items-center px-2 py-1.5 text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md" title={t('page.densityToggleTitle')}>
-                    <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                    </svg>
-                    {listDensity === 'normal' ? t('page.densityNormal') : listDensity === 'compact' ? t('page.densityCompact') : t('page.densityDense')}
-                  </button>
+                  <DensityToggle view="investments" size="md" className="ml-auto" />
                 </div>
               </div>
 
@@ -389,12 +377,11 @@ function InvestmentsContent() {
                 <LoadingSpinner text={t('page.loadingCashTransactions')} />
               ) : (
                 <TransactionList
+                  densityView="investments"
                   transactions={data.cashTransactions}
                   onEdit={data.handleEditCashTransaction}
                   onRefresh={data.refreshCashTransactions}
                   onTransactionUpdate={data.handleCashTransactionUpdate}
-                  density={listDensity}
-                  onDensityChange={setListDensity}
                   currentPage={data.cashCurrentPage}
                   totalPages={data.cashPagination?.totalPages ?? 1}
                   totalItems={data.cashPagination?.total ?? 0}

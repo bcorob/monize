@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { ActionMenu } from '@/components/ui/ActionMenu';
 import { Pagination } from '@/components/ui/Pagination';
 import { PayeeForm } from '@/components/payees/PayeeForm';
-import { PayeeList, type DensityLevel, type SortField, type SortDirection } from '@/components/payees/PayeeList';
+import { PayeeList, type SortField, type SortDirection } from '@/components/payees/PayeeList';
 import { CategoryAutoAssignDialog } from '@/components/payees/CategoryAutoAssignDialog';
 import { DeactivateUnusedPayeesDialog } from '@/components/payees/DeactivateUnusedPayeesDialog';
 import { AutoMergePayeesDialog } from '@/components/payees/AutoMergePayeesDialog';
@@ -57,7 +57,6 @@ function PayeesContent() {
   const [statusFilter, setStatusFilter] = useState<PayeeStatusFilter>('active');
   const [categoryFilter, setCategoryFilter] = useState<PayeeCategoryFilter>('all');
   const [currentPage, setCurrentPage] = useState(1);
-  const [listDensity, setListDensity] = useLocalStorage<DensityLevel>('monize-payees-density', 'normal');
   const [sortField, setSortField] = useLocalStorage<SortField>('monize-payees-sort-field', 'name');
   const [sortDirection, setSortDirection] = useLocalStorage<SortDirection>('monize-payees-sort-dir', 'asc');
   const [mergePayee, setMergePayee] = useState<Payee | null>(null);
@@ -439,8 +438,6 @@ function PayeesContent() {
               onReactivate={handleReactivate}
               onMerge={setMergePayee}
               showStatusColumn={statusFilter === 'all' || statusFilter === 'inactive'}
-              density={listDensity}
-              onDensityChange={setListDensity}
               sortField={sortField}
               sortDirection={sortDirection}
               onSort={handleSort}

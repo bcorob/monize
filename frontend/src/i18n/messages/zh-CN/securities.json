@@ -57,12 +57,6 @@
       "actions": "操作",
       "favourite": "收藏"
     },
-    "density": {
-      "normal": "正常",
-      "compact": "紧凑",
-      "dense": "密集",
-      "toggle": "切换行密度"
-    },
     "statusBadge": {
       "active": "活跃",
       "activeShort": "活",

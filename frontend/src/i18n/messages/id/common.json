@@ -233,5 +233,11 @@
     "srSuffix": "(total sebagian)",
     "explanation": "Total sebagian: {count, plural, other {# jumlah}} tidak dapat disertakan, sehingga angka yang ditampilkan mengecualikannya. Tidak ada kurs ke {displayCurrency} untuk {currencies}.",
     "explanationExcluded": "Total sebagian: {count, plural, other {# jumlah}} tidak dapat dihitung, sehingga angka yang ditampilkan mengecualikannya."
+  },
+  "density": {
+    "title": "Ubah kepadatan baris",
+    "normal": "Normal",
+    "compact": "Kompak",
+    "dense": "Padat"
   }
 }

@@ -8,6 +8,9 @@ import {
 import { TransactionsService } from "@/transactions/transactions.service";
 import { TransactionsModule } from "@/transactions/transactions.module";
 import { JointRegisterService } from "@/transactions/joint-register.service";
+import { JointCategoriesService } from "@/categories/joint-categories.service";
+import { CategoriesModule } from "@/categories/categories.module";
+import { Category } from "@/categories/entities/category.entity";
 import { JointAccountsService } from "@/delegation/joint-accounts.service";
 import { DelegationService } from "@/delegation/delegation.service";
 import { NetWorthService } from "@/net-worth/net-worth.service";
@@ -37,6 +40,7 @@ describe("Joint accounts (integration)", () => {
   let module: TestingModule;
   let transactions: TransactionsService;
   let jointRegister: JointRegisterService;
+  let jointCategories: JointCategoriesService;
   let jointAccounts: JointAccountsService;
   let delegationService: DelegationService;
   let netWorth: NetWorthService;
@@ -83,6 +87,14 @@ describe("Joint accounts (integration)", () => {
     );
   }
 
+  /** The per-delegation manage capability, independent of the account grants. */
+  async function setCategoryCapability(granted: boolean): Promise<void> {
+    await dataSource.query(
+      `UPDATE account_delegates SET categories_can_create = $2 WHERE id = $1`,
+      [delegationId, granted],
+    );
+  }
+
   /** Hard-delete the delegation, exactly like revoke does (FK removes grants). */
   async function unshare(): Promise<void> {
     await dataSource.query(`DELETE FROM account_delegates WHERE id = $1`, [
@@ -120,9 +132,13 @@ describe("Joint accounts (integration)", () => {
   }
 
   beforeAll(async () => {
-    module = await createIntegrationModule([TransactionsModule]);
+    module = await createIntegrationModule([
+      TransactionsModule,
+      CategoriesModule,
+    ]);
     transactions = module.get(TransactionsService);
     jointRegister = module.get(JointRegisterService);
+    jointCategories = module.get(JointCategoriesService);
     jointAccounts = module.get(JointAccountsService);
     delegationService = module.get(DelegationService);
     netWorth = module.get(NetWorthService);
@@ -350,6 +366,140 @@ describe("Joint accounts (integration)", () => {
       expect(
         await dataSource.manager.count(Transaction, {
           where: { accountId: jointAccountId },
+        }),
+      ).toBe(0);
+    });
+  });
+
+  // The capability existed on both sides -- stored, editable by the owner,
+  // reported in the joint reference data -- and reached no endpoint, so a
+  // grantee holding it still could not create a category.
+  describe("native category creation (owner's ledger)", () => {
+    it("creates the category AS THE OWNER, usable on the joint row", async () => {
+      await grantJoint({ create: true });
+      await setCategoryCapability(true);
+
+      const created = await withUserContext(granteeId, () =>
+        jointCategories.create(granteeId, jointAccountId, {
+          name: "Daycare",
+        } as never),
+      );
+
+      const row = (await dataSource.manager.findOne(Category, {
+        where: { id: created.id },
+      }))!;
+      expect(row.userId).toBe(ownerId);
+      expect(row.name).toBe("Daycare");
+
+      // The loop closes: the id the grantee just made is the owner's, so the
+      // owner-row category check accepts it where their own id is refused.
+      const tx = await withUserContext(granteeId, () =>
+        jointRegister.create(granteeId, {
+          accountId: jointAccountId,
+          amount: -60,
+          transactionDate: "2026-01-12",
+          currencyCode: "USD",
+          categoryId: created.id,
+        } as never),
+      );
+      expect(
+        (await dataSource.manager.findOne(Transaction, {
+          where: { id: tx.id },
+        }))!.categoryId,
+      ).toBe(created.id);
+    });
+
+    it("nests under the OWNER's parent for a Parent: Child pair", async () => {
+      await grantJoint({ create: true });
+      await setCategoryCapability(true);
+      const parentId = await ownerCategory("Travel");
+
+      const child = await withUserContext(granteeId, () =>
+        jointCategories.create(granteeId, jointAccountId, {
+          name: "Hotels",
+          parentId,
+        } as never),
+      );
+
+      const row = (await dataSource.manager.findOne(Category, {
+        where: { id: child.id },
+      }))!;
+      expect(row.userId).toBe(ownerId);
+      expect(row.parentId).toBe(parentId);
+    });
+
+    it("refuses without the capability and writes NOTHING", async () => {
+      await grantJoint({ create: true });
+      await setCategoryCapability(false);
+
+      await expect(
+        withUserContext(granteeId, () =>
+          jointCategories.create(granteeId, jointAccountId, {
+            name: "Daycare",
+          } as never),
+        ),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(
+        await dataSource.manager.count(Category, {
+          where: { name: "Daycare" },
+        }),
+      ).toBe(0);
+    });
+
+    it("allows it on a read-only joint grant -- the capability is the write gate", async () => {
+      // The account names WHICH owner's ledger is meant; it is not what
+      // authorizes the write, exactly as on the acting-as POST /categories,
+      // which consults no account grant at all. Keying this on the account's
+      // write flags would refuse a create the owner plainly granted.
+      await grantJoint({});
+      await setCategoryCapability(true);
+
+      const created = await withUserContext(granteeId, () =>
+        jointCategories.create(granteeId, jointAccountId, {
+          name: "Daycare",
+        } as never),
+      );
+
+      expect(
+        (await dataSource.manager.findOne(Category, {
+          where: { id: created.id },
+        }))!.userId,
+      ).toBe(ownerId);
+    });
+
+    it("refuses an account that is not shared jointly, capability or not", async () => {
+      await grantJoint({ create: true, joint: false });
+      await setCategoryCapability(true);
+
+      await expect(
+        withUserContext(granteeId, () =>
+          jointCategories.create(granteeId, jointAccountId, {
+            name: "Daycare",
+          } as never),
+        ),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(
+        await dataSource.manager.count(Category, {
+          where: { name: "Daycare" },
+        }),
+      ).toBe(0);
+    });
+
+    it("stops at revoke, leaving nothing written", async () => {
+      await grantJoint({ create: true });
+      await setCategoryCapability(true);
+      await unshare();
+
+      await expect(
+        withUserContext(granteeId, () =>
+          jointCategories.create(granteeId, jointAccountId, {
+            name: "Daycare",
+          } as never),
+        ),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(
+        await dataSource.manager.count(Category, {
+          where: { name: "Daycare" },
         }),
       ).toBe(0);
     });
