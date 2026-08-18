@@ -33,6 +33,24 @@ export interface AccountBalanceAsOf {
   pricesComplete: boolean;
   fxComplete: boolean;
   valuationComplete: boolean;
+  /**
+   * Whether the account existed at `asOfDate`.
+   *
+   * An account's inception is the first date it has anything to report: an
+   * asset's `date_acquired` when it has one, otherwise its earliest non-VOID
+   * ledger or investment movement. Before that date the account is not a thing
+   * with a balance -- an asset bought in 2024 was not worth its purchase price
+   * in 2019, and an opening balance is the sum the account *started* at, not a
+   * figure it carried backwards forever.
+   *
+   * `false` therefore means "did not exist yet", and `balance` is 0 rather than
+   * the opening balance the ledger sum would otherwise carry. An account with
+   * no acquisition date and no transactions at all has nothing dating its
+   * inception, so it is `true` at every date: nothing here guesses one from
+   * `created_at`, which records when the row was typed in rather than when the
+   * account came to exist.
+   */
+  existsAsOf: boolean;
 }
 
 export interface AccountBalancesAsOfResponse {
@@ -134,8 +152,10 @@ export class AccountBalancesReportService {
       currency_code: string;
       account_type: string;
       account_sub_type: string | null;
+      date_acquired: string | null;
     }> = await this.scopedQuery(
-      `SELECT id, currency_code, account_type, account_sub_type
+      `SELECT id, currency_code, account_type, account_sub_type,
+              date_acquired::text AS date_acquired
          FROM accounts
         WHERE (user_id = $1 OR id = ANY($2::UUID[]))
           AND ($3::UUID[] IS NULL OR id = ANY($3::UUID[]))`,
@@ -144,12 +164,10 @@ export class AccountBalancesReportService {
 
     if (accounts.length === 0) return empty;
 
-    const ledgerBalances = await this.ledgerBalances(
-      userId,
-      asOfDate,
-      jointAccountIds,
-      restriction,
-    );
+    const [ledgerBalances, firstActivity] = await Promise.all([
+      this.ledgerBalances(userId, asOfDate, jointAccountIds, restriction),
+      this.firstActivityDates(userId, jointAccountIds, restriction),
+    ]);
 
     // One rate read serves both jobs: pricing a foreign holding into its own
     // account's currency, and presenting every account in the user's. Reading
@@ -184,6 +202,14 @@ export class AccountBalancesReportService {
         asOfDate,
       ),
       accounts: accounts.map((a) => {
+        const existsAsOf = this.existedOn(
+          a,
+          firstActivity.get(a.id) ?? null,
+          asOfDate,
+        );
+        // Before its inception the account held nothing, so the opening balance
+        // the ledger sum would otherwise carry does not travel back with it.
+        const balance = existsAsOf ? (ledgerBalances.get(a.id) ?? 0) : 0;
         const valuation = marketValues.get(a.id);
         // A row that holds no securities has no market value to report -- that
         // is "does not apply", which is why the completeness flag stays true
@@ -192,7 +218,7 @@ export class AccountBalancesReportService {
           return {
             accountId: a.id,
             currencyCode: a.currency_code,
-            balance: ledgerBalances.get(a.id) ?? 0,
+            balance,
             marketValue: null,
             knownMarketValueSubtotal: 0,
             unpricedHoldingsCount: 0,
@@ -200,13 +226,15 @@ export class AccountBalancesReportService {
             pricesComplete: true,
             fxComplete: true,
             valuationComplete: true,
+            existsAsOf,
           };
         }
         return {
           accountId: a.id,
           currencyCode: a.currency_code,
-          balance: ledgerBalances.get(a.id) ?? 0,
+          balance,
           ...valuation,
+          existsAsOf,
         };
       }),
     };
@@ -238,6 +266,84 @@ export class AccountBalancesReportService {
     );
 
     return new Map(rows.map((r) => [r.id, roundMoney(Number(r.balance))]));
+  }
+
+  /**
+   * The earliest date each account has any movement on record, over both
+   * ledgers -- ordinary transactions and investment transactions.
+   *
+   * Deliberately unbounded by `asOfDate`: the question it answers is whether
+   * the report's date falls *before* the account's first movement, which a
+   * window ending at that date cannot tell from "this account has never had
+   * one". `LEAST` ignores NULLs, so it is null only when both ledgers are
+   * empty.
+   */
+  private async firstActivityDates(
+    userId: string,
+    jointAccountIds: string[],
+    restriction: string[] | null,
+  ): Promise<Map<string, string>> {
+    const rows: Array<{ id: string; first_activity: string | null }> =
+      await this.scopedQuery(
+        `SELECT a.id,
+                LEAST(
+                  (SELECT MIN(t.transaction_date)
+                     FROM transactions t
+                    WHERE t.account_id = a.id
+                      AND (t.status IS NULL OR t.status != 'VOID')
+                      AND t.parent_transaction_id IS NULL),
+                  (SELECT MIN(it.transaction_date)
+                     FROM investment_transactions it
+                    WHERE it.account_id = a.id
+                      AND it.status != 'VOID')
+                )::text AS first_activity
+           FROM accounts a
+          WHERE (a.user_id = $1 OR a.id = ANY($2::UUID[]))
+            AND ($3::UUID[] IS NULL OR a.id = ANY($3::UUID[]))`,
+        [userId, jointAccountIds, restriction],
+      );
+
+    const dates = new Map<string, string>();
+    for (const row of rows) {
+      if (row.first_activity)
+        dates.set(row.id, row.first_activity.slice(0, 10));
+    }
+    return dates;
+  }
+
+  /**
+   * Whether the account was a thing with a balance at `asOfDate`.
+   *
+   * Its inception is `date_acquired` for an asset that carries one -- the date
+   * the user says they came to own it, which is the same date net worth zeroes
+   * an asset before -- and otherwise its first movement on either ledger. An
+   * acquisition date wins over an earlier transaction rather than being
+   * minimised with it: the field's whole job is to say when the asset started
+   * existing, and the two disagreeing is a correction the user has already made.
+   * A *future* acquisition date is honoured as written, because it is the user's
+   * own statement about an asset they do not own yet.
+   *
+   * A first movement in the future is not, and it is capped at today. The row is
+   * in `accounts` as this query runs, so the account demonstrably exists now
+   * whatever its ledger says about next week -- and without the cap an account
+   * funded with an opening balance whose only entry is an upcoming bill
+   * disappears from today's own balance sheet.
+   *
+   * With neither, nothing dates the account's inception and it is reported at
+   * every date. `created_at` is not a candidate -- it records when the row was
+   * typed in, so an account imported today would vanish from its own history.
+   */
+  private existedOn(
+    account: { account_type: string; date_acquired: string | null },
+    firstActivity: string | null,
+    asOfDate: string,
+  ): boolean {
+    if (account.account_type === "ASSET" && account.date_acquired) {
+      return asOfDate >= account.date_acquired.slice(0, 10);
+    }
+    if (firstActivity === null) return true;
+    const today = todayYMD();
+    return asOfDate >= (firstActivity < today ? firstActivity : today);
   }
 
   /**

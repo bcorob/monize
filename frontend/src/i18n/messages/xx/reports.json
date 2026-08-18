@@ -142,8 +142,6 @@
     "totalAssets": "[XX-Total Assets-XX]",
     "totalLiabilities": "[XX-Total Liabilities-XX]",
     "netWorth": "[XX-Net Worth-XX]",
-    "tableView": "[XX-Table view-XX]",
-    "chartView": "[XX-Chart view-XX]",
     "noData": "[XX-No data to display.-XX]",
     "noAccounts": "[XX-No accounts found.-XX]",
     "closed": "[XX-Closed-XX]",
@@ -193,6 +191,7 @@
     "groupAll": "[XX-All accounts-XX]",
     "colGroup": "[XX-Group-XX]",
     "noAccountsForFilters": "[XX-No accounts match the current filters.-XX]",
+    "noAccountsOnDate": "[XX-None of your accounts existed on {date}.-XX]",
     "accountTypes": {
       "CHEQUING": "[XX-Chequing-XX]",
       "SAVINGS": "[XX-Savings-XX]",

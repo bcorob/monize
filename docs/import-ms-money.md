@@ -97,10 +97,12 @@ and import the resulting `.mny`.
   funding account, payment amount and interest category are filled in too.
   Money's **Pmt Num** arrives in the loan register's Ref. num. column.
 - **Securities and investment transactions**: buys, sells, dividends,
-  reinvestments, share transfers between accounts, and stock splits. A trade
-  paid for out of the account's own cash puts one row in the cash side, as
-  Money's does; a trade funded from another account also shows the cash
-  arriving, which is again what Money shows.
+  reinvestments, share transfers between accounts, and stock splits. Each trade
+  puts exactly one row in exactly one cash register, wherever Money put it: the
+  account's own cash side for a trade paid out of it, the paying account for one
+  funded from elsewhere, and no row at all for a trade that was one line of a
+  larger transaction -- there the purchase appears as an investment line inside
+  that transaction's splits.
 - **Price history and exchange rates**, both additive -- importing twice, or
   importing on top of prices a quote provider already fetched, converges rather
   than duplicating.

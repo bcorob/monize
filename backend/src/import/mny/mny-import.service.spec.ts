@@ -325,6 +325,8 @@ describe("MnyImportService", () => {
       splitsCreated: 2,
       linksApplied: 4,
       affectedAccountIds: new Set(["account-1"]),
+      writtenTransactionIds: new Set<string>(),
+      writtenSplitIds: new Set<string>(),
     });
     mockedWriteBalances.mockResolvedValue(1);
     mockedClosures.mockResolvedValue(0);

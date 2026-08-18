@@ -25,10 +25,10 @@
     "cashFilterTo": "Hasta",
     "loadingCashTransactions": "Cargando transacciones de efectivo...",
     "today": "Hoy",
-    "transactionCount": "{count} transacción{plural}",
     "allPayees": "Todos los beneficiarios",
     "allCategories": "Todas las categorías",
-    "toastDeleteFailed": "Error al eliminar la transacción"
+    "toastDeleteFailed": "Error al eliminar la transacción",
+    "toastLoadFailed": "Error al cargar la transacción"
   },
   "portfolioSummary": {
     "title": "Resumen de Cartera",
@@ -131,6 +131,7 @@
     "portfolioLabel": "Cartera:"
   },
   "transactionList": {
+    "itemNamePlural": "transacciones",
     "title": "Transacciones Recientes",
     "filtered": "(filtrado)",
     "newBrokerageTransaction": "+ Nueva Transacción de Corretaje",

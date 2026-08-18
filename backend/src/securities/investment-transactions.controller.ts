@@ -252,6 +252,45 @@ export class InvestmentTransactionsController {
     );
   }
 
+  @Get("filter-options")
+  @ApiOperation({
+    summary:
+      "The investment actions in use on the given accounts, for the register's Action filter",
+  })
+  @ApiQuery({
+    name: "accountIds",
+    required: false,
+    description: "Comma-separated account IDs to filter by",
+  })
+  @ApiResponse({ status: 200, description: "Filter options retrieved" })
+  @AllowDelegate()
+  @DelegateRequiresSection("investments")
+  async getFilterOptions(
+    @Request() req,
+    @Query("accountIds") accountIds?: string,
+  ) {
+    const ids = accountIds ? accountIds.split(",").filter(Boolean) : undefined;
+    if (ids) {
+      const uuidRegex =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      for (const id of ids) {
+        if (!uuidRegex.test(id)) {
+          throw new BadRequestException(
+            tr(
+              "errors.securities.invalidAccountUuid",
+              `Invalid account UUID: ${id}`,
+              { id },
+            ),
+          );
+        }
+      }
+    }
+    return this.investmentTransactionsService.getRegisterFilterOptions(
+      req.user.id,
+      await this.scopeIds(req, ids),
+    );
+  }
+
   @Get("summary")
   @ApiOperation({ summary: "Get investment transaction summary" })
   @ApiQuery({

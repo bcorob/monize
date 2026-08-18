@@ -25,10 +25,10 @@
     "cashFilterTo": "Hingga",
     "loadingCashTransactions": "Memuat transaksi tunai...",
     "today": "Hari ini",
-    "transactionCount": "{count} transaksi{plural}",
     "allPayees": "Semua penerima",
     "allCategories": "Semua kategori",
-    "toastDeleteFailed": "Gagal menghapus transaksi"
+    "toastDeleteFailed": "Gagal menghapus transaksi",
+    "toastLoadFailed": "Gagal memuat transaksi"
   },
   "portfolioSummary": {
     "title": "Ringkasan Portofolio",
@@ -131,6 +131,7 @@
     "portfolioLabel": "Portofolio:"
   },
   "transactionList": {
+    "itemNamePlural": "transaksi",
     "title": "Transaksi Terbaru",
     "filtered": "(difilter)",
     "newBrokerageTransaction": "+ Transaksi Perantara Baru",

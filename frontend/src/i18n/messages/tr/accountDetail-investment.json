@@ -8,8 +8,7 @@
     "empty": "Bu yıl yatırım geliri yok"
   },
   "register": {
-    "cashHeading": "Nakit işlemleri",
-    "newCashTransaction": "Yeni Nakit İşlemi",
-    "deleteFailed": "İşlem silinemedi"
+    "deleteFailed": "İşlem silinemedi",
+    "loadFailed": "İşlem yüklenemedi"
   }
 }

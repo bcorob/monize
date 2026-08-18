@@ -20,6 +20,11 @@ import {
 import { mapTransactions } from "./map/map-transactions";
 import { mapSecurities, tradedSecurityHandles } from "./map/map-securities";
 import { mapInvestments } from "./map/map-investments";
+import {
+  applyInvestmentCashSources,
+  investmentWritesOwnCashRow,
+  tradesByHandle,
+} from "./map/investment-cash";
 import { billReferences, mapBills, selectedBills } from "./map/map-bills";
 import { mapLoans } from "./map/map-loans";
 import { crossCheckHoldings } from "./map/check-holdings";
@@ -223,9 +228,14 @@ export function computeExpectedBalances(
 
   // An investment's cash leg lands in the sleeve, so the sleeve's expected
   // balance has to know about it or every brokerage cash account reports a
-  // discrepancy the size of its trading history.
+  // discrepancy the size of its trading history. Only the legs the investment
+  // writer creates: a trade whose cash a banking row already records was
+  // counted above, from that row, and adding it again would double it.
   for (const investment of investments?.transactions ?? []) {
-    if (investment.status === TransactionStatus.VOID) {
+    if (
+      investment.status === TransactionStatus.VOID ||
+      !investmentWritesOwnCashRow(investment)
+    ) {
       continue;
     }
     add(
@@ -257,9 +267,11 @@ function countTransactionsByAccount(
   for (const transaction of transactions.transactions) {
     bump(transaction.accountKey);
   }
-  // The cash leg is a row in the sleeve like any other, so it counts there.
+  // The cash leg is a row in the sleeve like any other, so it counts there --
+  // when the investment writer is the one creating it. An adopted funding row
+  // or an embedded split leg was already counted with its own transaction.
   for (const investment of investments.transactions) {
-    if (investment.cashAmount !== 0) {
+    if (investmentWritesOwnCashRow(investment)) {
       bump(investment.cashAccountKey);
     }
   }
@@ -364,14 +376,6 @@ export class MnyParserService {
       options,
       input.userDefaultCurrency,
     );
-    const transactions = mapTransactions({
-      transactions: tables.transactions,
-      accountKeyByHandle: accounts.keyByHandle,
-      currencyByHandle: accounts.currencyByHandle,
-      bills: tables.bills.bills,
-      cashKeyByAccountKey: cashKeyByAccountKey(accounts),
-    });
-
     const currencyByHandle = currencyCodesByHandle(tables.reference);
     const securities = mapSecurities({
       securities: tables.investments.securities,
@@ -382,13 +386,32 @@ export class MnyParserService {
         tables.investments.lots,
       ),
     });
-    const investments = mapInvestments({
+    // Investments first, then banking, then the cash sources banking found fed
+    // back into the trades. A banking row Money paired with a trade is that
+    // trade's cash side, so the transaction mapper has to know which trades
+    // this import actually writes before it can decide what the row is -- and
+    // the trade cannot know which row it adopted until that decision is made.
+    // Neither mapper can answer alone; the loop is closed by running them in
+    // this order rather than by either guessing.
+    const mappedInvestments = mapInvestments({
       transactions: tables.transactions,
       investments: tables.investments,
       accounts,
       securities,
       bills: tables.bills.bills,
     });
+    const transactions = mapTransactions({
+      transactions: tables.transactions,
+      accountKeyByHandle: accounts.keyByHandle,
+      currencyByHandle: accounts.currencyByHandle,
+      bills: tables.bills.bills,
+      cashKeyByAccountKey: cashKeyByAccountKey(accounts),
+      tradesByHandle: tradesByHandle(mappedInvestments),
+    });
+    const investments = applyInvestmentCashSources(
+      mappedInvestments,
+      transactions.investmentCashSources,
+    );
     const holdings = crossCheckHoldings({
       transactions: investments.transactions,
       lots: tables.investments.lots,
@@ -457,7 +480,8 @@ export class MnyParserService {
         `${transactions.transactions.length} transactions, ` +
         `${securities.securities.length} securities, ` +
         `${investments.transactions.length} investment rows, ` +
-        `${transactions.tradeCashLegs} cash rows written by their trade`,
+        `${transactions.tradeCashLegs} cash rows written by their trade, ` +
+        `${transactions.investmentCashSources.size} trades whose cash a banking row already records`,
     );
 
     return {

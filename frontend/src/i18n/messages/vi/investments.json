@@ -25,10 +25,10 @@
     "cashFilterTo": "Đến",
     "loadingCashTransactions": "Đang tải giao dịch tiền mặt...",
     "today": "Hôm nay",
-    "transactionCount": "{count} giao dịch{plural}",
     "allPayees": "Tất cả người nhận",
     "allCategories": "Tất cả danh mục",
-    "toastDeleteFailed": "Xóa giao dịch thất bại"
+    "toastDeleteFailed": "Xóa giao dịch thất bại",
+    "toastLoadFailed": "Tải giao dịch thất bại"
   },
   "portfolioSummary": {
     "title": "Tóm tắt danh mục đầu tư",
@@ -131,6 +131,7 @@
     "portfolioLabel": "Danh mục:"
   },
   "transactionList": {
+    "itemNamePlural": "giao tác",
     "title": "Giao dịch gần đây",
     "filtered": "(đã lọc)",
     "newBrokerageTransaction": "+ Giao dịch môi giới mới",

@@ -25,10 +25,10 @@
     "cashFilterTo": "По",
     "loadingCashTransactions": "Загрузка кассовых проводок...",
     "today": "Сегодня",
-    "transactionCount": "{count} проводк{plural}",
     "allPayees": "Все получатели",
     "allCategories": "Все категории",
-    "toastDeleteFailed": "Не удалось удалить проводку"
+    "toastDeleteFailed": "Не удалось удалить проводку",
+    "toastLoadFailed": "Не удалось загрузить проводку"
   },
   "portfolioSummary": {
     "title": "Сводка по портфелю",
@@ -131,6 +131,7 @@
     "portfolioLabel": "Портфель:"
   },
   "transactionList": {
+    "itemNamePlural": "проводки",
     "title": "Последние проводки",
     "filtered": "(отфильтровано)",
     "newBrokerageTransaction": "+ Новая брокерская проводка",

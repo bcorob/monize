@@ -234,11 +234,36 @@ describe('AppHeader', () => {
     expect(activeButton).toBeTruthy();
   });
 
+  it('highlights the section a detail page belongs to', () => {
+    // An account detail page is in Accounts. Comparing the pathname to the href
+    // exactly unlit the tab the user had just come through, so the bar said
+    // nothing about where they were.
+    mockPathname = '/accounts/11111111-1111-1111-1111-111111111111';
+    render(<AppHeader />);
+
+    const accountsButtons = screen.getAllByText('Accounts');
+    const activeButton = accountsButtons.find(
+      (el) => el.closest('button')?.className.includes('bg-blue-100'),
+    );
+    expect(activeButton).toBeTruthy();
+  });
+
   it('highlights Tools dropdown when a tools link is active', () => {
     mockPathname = '/categories';
     render(<AppHeader />);
     const toolsButtons = screen.getAllByText('Tools');
     // The tools button should be highlighted since /categories is a tools link
+    const activeToolsButton = toolsButtons.find(
+      (el) => el.closest('button')?.className.includes('bg-blue-100'),
+    );
+    expect(activeToolsButton).toBeTruthy();
+  });
+
+  it('highlights the Tools dropdown from a tools detail page', () => {
+    mockPathname = '/securities/22222222-2222-2222-2222-222222222222';
+    render(<AppHeader />);
+
+    const toolsButtons = screen.getAllByText('Tools');
     const activeToolsButton = toolsButtons.find(
       (el) => el.closest('button')?.className.includes('bg-blue-100'),
     );

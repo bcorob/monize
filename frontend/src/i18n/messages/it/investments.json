@@ -25,10 +25,10 @@
     "cashFilterTo": "Al",
     "loadingCashTransactions": "Caricamento transazioni di cassa...",
     "today": "Oggi",
-    "transactionCount": "{count} transazion{plural}",
     "allPayees": "Tutti i beneficiari",
     "allCategories": "Tutte le categorie",
-    "toastDeleteFailed": "Eliminazione transazione non riuscita"
+    "toastDeleteFailed": "Eliminazione transazione non riuscita",
+    "toastLoadFailed": "Caricamento transazione non riuscito"
   },
   "portfolioSummary": {
     "title": "Riepilogo portafoglio",
@@ -131,6 +131,7 @@
     "portfolioLabel": "Portafoglio:"
   },
   "transactionList": {
+    "itemNamePlural": "transazioni",
     "title": "Transazioni recenti",
     "filtered": "(filtrato)",
     "newBrokerageTransaction": "+ Nuova transazione di intermediazione",

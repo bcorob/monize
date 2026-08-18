@@ -8,8 +8,7 @@
     "empty": "No investment income this year"
   },
   "register": {
-    "cashHeading": "Cash transactions",
-    "newCashTransaction": "New Cash Transaction",
-    "deleteFailed": "Failed to delete transaction"
+    "deleteFailed": "Failed to delete transaction",
+    "loadFailed": "Failed to load transaction"
   }
 }

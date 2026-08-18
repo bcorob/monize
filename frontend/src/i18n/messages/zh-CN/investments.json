@@ -25,10 +25,10 @@
     "cashFilterTo": "结束日期",
     "loadingCashTransactions": "正在加载现金交易...",
     "today": "今天",
-    "transactionCount": "{count} 笔交易{plural}",
     "allPayees": "所有收款人",
     "allCategories": "所有分类",
-    "toastDeleteFailed": "删除交易失败"
+    "toastDeleteFailed": "删除交易失败",
+    "toastLoadFailed": "加载交易失败"
   },
   "portfolioSummary": {
     "title": "投资组合摘要",
@@ -131,6 +131,7 @@
     "portfolioLabel": "投资组合："
   },
   "transactionList": {
+    "itemNamePlural": "笔交易",
     "title": "近期交易",
     "filtered": "（已筛选）",
     "newBrokerageTransaction": "+ 新建经纪交易",

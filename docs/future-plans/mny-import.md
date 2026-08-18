@@ -544,11 +544,20 @@ real mappers and, in the integration spec, the real INSERT path.
   orphaned transfer side, and `frq == -1`.
   **Scheduler-posted rows are imported** — they are real postings (loan payments,
   online-banking imports); excluding them was PR bug #1.
-- **A transfer whose far side carries `hsec` is a transfer into the brokerage's cash sleeve.**
-  Money's investment row is both the arriving cash and the trade, and the investment mapper
-  spends that cash on the trade — so the import synthesizes the sleeve-side row Money has no
-  place for. Without it 3,255 of the maintainer's transfers debited a bank account with nothing
-  arriving anywhere, and the sleeves absorbed $553,225.57.
+- **A transfer whose far side carries `hsec` is not a transfer.** Money's investment row is both
+  the arriving cash and the trade, so the near side is that trade's cash half and belongs to it.
+  Which of three shapes it becomes depends only on where the near side sits — see
+  `docs/ms-money-data-model.md`, "The cash counterpart of a trade": the trade's own sleeve (the
+  row is dropped and `writeInvestments` writes the leg, issue #1175), any other account (the row
+  *is* the cash leg and the trade names it as `funding_account_id`, issue #1212), or a split leg
+  (the trade is embedded in it and no cash row exists, issue #1211).
+  This plan originally specified the second and third as transfers into the sleeve, with a
+  synthesized sleeve-side row Money has no place for. That is right only when the far side is
+  **not** a trade this import writes, which is what `buildCashCounterparts` is left doing;
+  applied to a real trade it put a transfer in and a payment out in a register Money shows
+  nothing in. The measurement behind the original rule still stands — without *some* answer here,
+  3,255 of the maintainer's transfers debited a bank account with nothing arriving anywhere and
+  the sleeves absorbed $553,225.57 — only the conclusion drawn from it was too broad.
 - **Loan-payment templates (`grftt & 0x4000`) are phantoms, whole families of them.** One per
   debt account: an account-less split parent, its legs, and the legs' counterparts *in the loan
   account*, which have a real account and date and so import as ordinary principal postings if

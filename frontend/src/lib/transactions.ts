@@ -21,6 +21,7 @@ import {
   GroupedTotal,
   RecurringChargeInfo,
   StaleUnreconciledSummary,
+  RegisterFilterOptions,
 } from '@/types/transaction';
 import { invalidateBalanceCaches } from './apiCache';
 
@@ -483,6 +484,22 @@ export const transactionsApi = {
       {
         params: { statementDate, statementBalance },
       },
+    );
+    return response.data;
+  },
+
+  /**
+   * The payees and categories used by the rows in these accounts -- what a
+   * register's filter pickers offer. Scoped to the accounts on screen, so a
+   * cash ledger's picker lists that ledger's handful of payees rather than the
+   * household's whole address book.
+   */
+  getRegisterFilterOptions: async (
+    accountIds?: string[],
+  ): Promise<RegisterFilterOptions> => {
+    const response = await apiClient.get<RegisterFilterOptions>(
+      '/transactions/filter-options',
+      { params: accountIds?.length ? { accountIds: accountIds.join(',') } : {} },
     );
     return response.data;
   },

@@ -165,9 +165,40 @@ export function AccountBalancesReport() {
     [accounts, mainAccountName, portfolio, ledgerBalances],
   );
 
+  /**
+   * Accounts the payload says had not come into existence at the measured date
+   * -- an asset before the day it was acquired, an account before its first
+   * movement. A balance is a fact about something that exists, so these are not
+   * rows worth zero: they are not rows.
+   */
+  const notYetOpened = useMemo(() => {
+    const ids = new Set<string>();
+    for (const row of response?.balances.accounts ?? []) {
+      // `=== false`, never `!`: a backend that predates the field sends nothing,
+      // and absent means "no information", not "did not exist".
+      if (row.existsAsOf === false) ids.add(row.accountId);
+    }
+    return ids;
+  }, [response]);
+
+  /**
+   * An investment pair is one entity with two ledgers, and they can come into
+   * existence on different days -- the cash sleeve funded before the first
+   * trade settles. So the entity is dropped only when *every* ledger behind it
+   * predates its own inception; one live member is enough to have something to
+   * report.
+   */
+  const openedAccounts = useMemo(
+    () =>
+      logicalAccounts.filter((entry) =>
+        entry.memberIds.some((id) => !notYetOpened.has(id)),
+      ),
+    [logicalAccounts, notYetOpened],
+  );
+
   const visibleAccounts = useMemo(
-    () => logicalAccounts.filter((entry) => matchesFilters(entry.primary, filters)),
-    [logicalAccounts, filters],
+    () => openedAccounts.filter((entry) => matchesFilters(entry.primary, filters)),
+    [openedAccounts, filters],
   );
 
   const institutionNames = useMemo(() => {
@@ -722,7 +753,13 @@ export function AccountBalancesReport() {
               <p className="text-gray-500 dark:text-gray-400">
                 {accounts.length === 0
                   ? t('accountBalances.noAccounts')
-                  : t('accountBalances.noAccountsForFilters')}
+                  : openedAccounts.length === 0
+                    ? /* Every account the user has postdates the chosen day, so
+                         the filters are not what emptied the report. */
+                      t('accountBalances.noAccountsOnDate', {
+                        date: formatDate(measuredDate),
+                      })
+                    : t('accountBalances.noAccountsForFilters')}
               </p>
             </div>
           )}

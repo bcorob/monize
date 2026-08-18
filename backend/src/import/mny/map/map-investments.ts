@@ -246,6 +246,12 @@ function mapOne(
       cashAmount === 0
         ? null
         : (context.cashKeyByAccountKey.get(accountKey) ?? null),
+    // Both null here, and rewritten by `applyInvestmentCashSources` for the
+    // trades Money paired with a banking row: this mapper runs before the
+    // transaction mapper and cannot yet know which those are.
+    fundingAccountKey: null,
+    cashTransactionId: null,
+    transactionSplitId: null,
     securityHandle: row.security as number,
     action,
     transactionDate: row.date as string,
@@ -255,6 +261,9 @@ function mapOne(
     totalAmount,
     currencyCode:
       context.input.accounts.currencyByHandle.get(row.account as number) ?? "",
+    // A sleeve shares its brokerage's currency, so a trade settling there needs
+    // no conversion. Only an adopted funding row can make this anything else.
+    exchangeRate: 1,
     cashAmount,
     status: mapTransactionStatus(row.clearedStatus, row.flags),
     payeeHandle: row.payee,

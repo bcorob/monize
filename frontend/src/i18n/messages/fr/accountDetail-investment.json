@@ -8,8 +8,7 @@
     "empty": "Aucun revenu de placement cette année"
   },
   "register": {
-    "cashHeading": "Opérations de liquidités",
-    "newCashTransaction": "Nouvelle opération de liquidités",
-    "deleteFailed": "Échec de la suppression de l'opération"
+    "deleteFailed": "Échec de la suppression de l'opération",
+    "loadFailed": "Échec du chargement de la transaction"
   }
 }

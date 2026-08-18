@@ -93,6 +93,7 @@ const mockGetPriceStatus = vi.fn();
 const mockRefreshSelectedPrices = vi.fn();
 const mockDeleteTransaction = vi.fn();
 const mockGetTransaction = vi.fn();
+const mockGetInvestmentFilterOptions = vi.fn();
 
 vi.mock('@/lib/investments', () => ({
   investmentsApi: {
@@ -103,6 +104,7 @@ vi.mock('@/lib/investments', () => ({
     refreshSelectedPrices: (...args: any[]) => mockRefreshSelectedPrices(...args),
     getTransaction: (...args: any[]) => mockGetTransaction(...args),
     deleteTransaction: (...args: any[]) => mockDeleteTransaction(...args),
+    getRegisterFilterOptions: (...args: any[]) => mockGetInvestmentFilterOptions(...args),
   },
 }));
 
@@ -114,11 +116,13 @@ vi.mock('@/lib/accounts', () => ({
 
 const mockGetAllTransactions = vi.fn();
 const mockGetTransactionById = vi.fn();
+const mockGetFilterOptions = vi.fn();
 
 vi.mock('@/lib/transactions', () => ({
   transactionsApi: {
     getAll: (...args: any[]) => mockGetAllTransactions(...args),
     getById: (...args: any[]) => mockGetTransactionById(...args),
+    getRegisterFilterOptions: (...args: any[]) => mockGetFilterOptions(...args),
     delete: vi.fn(),
     deleteTransfer: vi.fn(),
     updateStatus: vi.fn(),
@@ -281,10 +285,15 @@ vi.mock('@/components/investments/GroupedHoldingsList', () => ({
 }));
 
 vi.mock('@/components/investments/InvestmentTransactionList', () => ({
-  InvestmentTransactionList: ({ transactions, onDelete, onEdit, onNewTransaction, onFiltersChange, filters, viewToggle }: any) => (
+  // The pager and the density toggle live in the list's own strip now, so the
+  // stub reports the paging it was handed rather than the page drawing one.
+  InvestmentTransactionList: ({ transactions, onDelete, onEdit, onNewTransaction, onFiltersChange, filters, viewToggle, currentPage, totalPages, totalItems, availableActions, availableSymbols }: any) => (
     <div data-testid="transaction-list">
       {viewToggle}
       <span>{transactions.length} transactions</span>
+      <span data-testid="brokerage-paging">{`${currentPage ?? ''}/${totalPages ?? ''} of ${totalItems ?? ''}`}</span>
+      <span data-testid="brokerage-actions">{(availableActions ?? []).join(',')}</span>
+      <span data-testid="brokerage-symbols">{(availableSymbols ?? []).join(',')}</span>
       {transactions.map((t: any) => (
         <div key={t.id} data-testid={`itx-${t.id}`}>
           <button data-testid={`delete-${t.id}`} onClick={() => onDelete(t.id)}>Delete</button>
@@ -300,7 +309,10 @@ vi.mock('@/components/investments/InvestmentTransactionList', () => ({
 }));
 
 vi.mock('@/components/transactions/TransactionList', () => ({
-  TransactionList: ({ transactions, onEdit, showToolbar, startingBalance, isSingleAccountView }: any) => (
+  // `onRefresh` is how the real list reports a row it has already deleted (and
+  // any other write it owns), so the mock's Delete button raises exactly that
+  // and nothing else -- see the delete-contract note in frontend/CLAUDE.md.
+  TransactionList: ({ transactions, onEdit, onRefresh, showToolbar, startingBalance, isSingleAccountView }: any) => (
     <div data-testid="cash-transaction-list">
       <span>{transactions.length} cash transactions</span>
       <span data-testid="cash-show-toolbar">{String(showToolbar)}</span>
@@ -309,6 +321,7 @@ vi.mock('@/components/transactions/TransactionList', () => ({
       {transactions.map((t: any) => (
         <div key={t.id} data-testid={`cash-tx-${t.id}`}>
           <button data-testid={`cash-edit-${t.id}`} onClick={() => onEdit(t)}>Edit</button>
+          <button data-testid={`cash-deleted-${t.id}`} onClick={() => onRefresh?.()}>Delete</button>
         </div>
       ))}
     </div>
@@ -328,9 +341,10 @@ vi.mock('@/components/investments/InvestmentTransactionForm', () => ({
 }));
 
 vi.mock('@/components/investments/InvestmentValueChart', () => ({
-  InvestmentValueChart: ({ accountIds }: any) => (
+  InvestmentValueChart: ({ accountIds, refreshKey }: any) => (
     <div data-testid="value-chart">
       {accountIds?.length > 0 ? `Filtered: ${accountIds.join(',')}` : 'All accounts'}
+      <span data-testid="value-chart-refresh-key">{String(refreshKey ?? '')}</span>
     </div>
   ),
   INVESTMENT_CHART_REFRESH_EVENT: 'monize:investment-chart-refresh',
@@ -388,6 +402,8 @@ describe('InvestmentsPage', () => {
     mockGetAllTransactions.mockResolvedValue({ data: [], pagination: { page: 1, totalPages: 1, total: 0 } });
     mockGetAllCategories.mockResolvedValue([]);
     mockGetAllPayees.mockResolvedValue([]);
+    mockGetFilterOptions.mockResolvedValue({ payees: [], categories: [] });
+    mockGetInvestmentFilterOptions.mockResolvedValue({ actions: [], symbols: [] });
   });
 
   describe('Rendering', () => {
@@ -700,6 +716,46 @@ describe('InvestmentsPage', () => {
 
       vi.restoreAllMocks();
     });
+
+    // A trade's cash leg goes with the trade, so a brokerage delete moves the
+    // cash register and the value chart as surely as the summary does.
+    it('refetches the cash register after deleting a brokerage transaction', async () => {
+      mockDeleteTransaction.mockResolvedValue(undefined);
+
+      await renderPage();
+      await waitFor(() => {
+        expect(screen.getByTestId('delete-itx-1')).toBeInTheDocument();
+      });
+
+      const cashCallsBefore = mockGetAllTransactions.mock.calls.length;
+
+      await act(async () => {
+        fireEvent.click(screen.getByTestId('delete-itx-1'));
+      });
+
+      await waitFor(() => {
+        expect(mockGetAllTransactions.mock.calls.length).toBeGreaterThan(cashCallsBefore);
+      });
+    });
+
+    it('bumps the value chart refresh key after deleting a brokerage transaction', async () => {
+      mockDeleteTransaction.mockResolvedValue(undefined);
+
+      await renderPage();
+      await waitFor(() => {
+        expect(screen.getByTestId('delete-itx-1')).toBeInTheDocument();
+      });
+
+      const chartKeyBefore = screen.getByTestId('value-chart-refresh-key').textContent;
+
+      await act(async () => {
+        fireEvent.click(screen.getByTestId('delete-itx-1'));
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('value-chart-refresh-key').textContent).not.toBe(chartKeyBefore);
+      });
+    });
   });
 
   describe('Transaction Filters', () => {
@@ -724,41 +780,62 @@ describe('InvestmentsPage', () => {
   });
 
   describe('Pagination', () => {
-    it('shows single page count when only one page', async () => {
-      await renderPage();
-      await waitFor(() => {
-        expect(screen.getByText('1 transaction')).toBeInTheDocument();
-      });
-    });
-
-    it('shows pagination when multiple pages exist', async () => {
+    it('hands the register its paging, which it draws above its rows', async () => {
+      // The detail page's registers page from the strip above the table; this
+      // one used to page from below it, so switching between the two pages
+      // moved the control.
       mockGetTransactions.mockResolvedValue({
         data: Array.from({ length: 25 }, (_, i) => ({ id: `tx-${i}`, action: 'BUY' })),
         pagination: { page: 1, totalPages: 3, total: 75 },
       });
       await renderPage();
+
       await waitFor(() => {
-        expect(screen.getByTestId('pagination')).toBeInTheDocument();
-        expect(screen.getByText('Page 1 of 3')).toBeInTheDocument();
+        expect(screen.getByTestId('brokerage-paging')).toHaveTextContent('1/3 of 75');
       });
     });
 
-    it('shows plural transactions label for multiple', async () => {
+    it('offers the register only the actions its accounts have used', async () => {
+      // Twenty-odd actions exist; a household brokerage uses four, and the
+      // picker is a way through the rows rather than a tour of the vocabulary.
+      mockGetInvestmentFilterOptions.mockResolvedValue({ actions: ['BUY', 'SELL'] });
+
+      await renderPage();
+
+      await waitFor(() => {
+        expect(screen.getByTestId('brokerage-actions')).toHaveTextContent('BUY,SELL');
+      });
+    });
+
+    it('offers the symbols the rows use, not the ones still held', async () => {
+      // The picker was built from `portfolioSummary.holdings`, so a position
+      // sold in full was not offered -- and its trades are exactly the rows
+      // somebody filtering by symbol is looking for. The summary here holds
+      // AAPL and GOOG; the register's own rows are what the picker follows.
+      mockGetInvestmentFilterOptions.mockResolvedValue({
+        actions: ['SELL'],
+        symbols: ['TSLA'],
+      });
+
+      await renderPage();
+
+      await waitFor(() => {
+        expect(screen.getByTestId('brokerage-symbols')).toHaveTextContent('TSLA');
+      });
+      expect(screen.getByTestId('brokerage-symbols')).not.toHaveTextContent('AAPL');
+    });
+
+    it('draws no second pager of its own below the register', async () => {
       mockGetTransactions.mockResolvedValue({
-        data: [
-          { id: 'itx-1', action: 'BUY' },
-          { id: 'itx-2', action: 'SELL' },
-        ],
-        pagination: { page: 1, totalPages: 1, total: 2 },
+        data: Array.from({ length: 25 }, (_, i) => ({ id: `tx-${i}`, action: 'BUY' })),
+        pagination: { page: 1, totalPages: 3, total: 75 },
       });
       await renderPage();
+
       await waitFor(() => {
-        // The page renders a total count div separate from the mock transaction list.
-        // Match the page's own total count div specifically (the one with the class for styling).
-        const totalCountDiv = document.querySelector('.mt-4.text-sm.text-gray-500');
-        expect(totalCountDiv).toBeInTheDocument();
-        expect(totalCountDiv?.textContent).toBe('2 transactions');
+        expect(screen.getByTestId('transaction-list')).toBeInTheDocument();
       });
+      expect(screen.queryByTestId('pagination')).not.toBeInTheDocument();
     });
   });
 
@@ -953,7 +1030,10 @@ describe('InvestmentsPage', () => {
       });
     });
 
-    it('passes showToolbar={false} to TransactionList', async () => {
+    it('lets the cash register draw its own strip, as the detail page does', async () => {
+      // It was suppressed here and the page drew a density toggle in the
+      // heading instead, which put the two pages' cash registers one control
+      // apart.
       mockGetAllTransactions.mockResolvedValue({
         data: [{ id: 'cash-tx-1', transactionDate: '2024-01-15', amount: 100 }],
         pagination: { page: 1, totalPages: 1, total: 1 },
@@ -962,7 +1042,7 @@ describe('InvestmentsPage', () => {
       await switchToCashView();
 
       await waitFor(() => {
-        expect(screen.getByTestId('cash-show-toolbar')).toHaveTextContent('false');
+        expect(screen.getByTestId('cash-show-toolbar')).not.toHaveTextContent('false');
       });
     });
 
@@ -1058,7 +1138,25 @@ describe('InvestmentsPage', () => {
       });
     });
 
-    it('shows density toggle in cash view', async () => {
+    it('leaves the density toggle to the register, not the page heading', async () => {
+      mockGetAllTransactions.mockResolvedValue({
+        data: [],
+        pagination: { page: 1, totalPages: 1, total: 0 },
+      });
+
+      await switchToCashView();
+      await waitFor(() => {
+        expect(screen.getByTestId('cash-transaction-list')).toBeInTheDocument();
+      });
+
+      // The stub draws no strip, so a toggle on screen here would be a second
+      // one the page had drawn itself.
+      expect(screen.queryByTitle('Toggle row density')).not.toBeInTheDocument();
+    });
+
+    it('asks for the filter options of the cash ledgers on screen', async () => {
+      // Not every payee and category in the ledger: a filter is a way through
+      // the rows in front of you.
       mockGetAllTransactions.mockResolvedValue({
         data: [],
         pagination: { page: 1, totalPages: 1, total: 0 },
@@ -1067,22 +1165,81 @@ describe('InvestmentsPage', () => {
       await switchToCashView();
 
       await waitFor(() => {
-        expect(screen.getByTitle('Toggle row density')).toBeInTheDocument();
+        expect(mockGetFilterOptions).toHaveBeenCalledWith(
+          expect.arrayContaining(['cash-1', 'cash-2']),
+        );
       });
     });
 
-    it('loads categories and payees on first switch to cash', async () => {
+    it('loads the filter options for a remembered cash view, with no click', async () => {
+      // The view is persisted, so returning to the page lands on the cash
+      // register without passing through the toggle. Loading the options only
+      // on that click left both pickers reading "No options found" for exactly
+      // the users who use the cash view most.
+      mockLocalStorageState['monize-investments-transaction-view'] = {
+        value: 'cash',
+        setter: vi.fn(),
+      };
       mockGetAllTransactions.mockResolvedValue({
         data: [],
         pagination: { page: 1, totalPages: 1, total: 0 },
       });
 
-      await switchToCashView();
+      await renderPage();
 
       await waitFor(() => {
-        expect(mockGetAllCategories).toHaveBeenCalled();
-        expect(mockGetAllPayees).toHaveBeenCalled();
+        expect(mockGetFilterOptions).toHaveBeenCalled();
       });
+    });
+
+    it('opens an investment-linked cash row in place, without navigating', async () => {
+      // Routing to `?edit=<id>` reached the same modal by reloading the page:
+      // it jumped to the top and every section refetched before the dialogue
+      // appeared.
+      mockGetAllTransactions.mockResolvedValue({
+        data: [
+          {
+            id: 'cash-tx-1',
+            transactionDate: '2026-01-15',
+            amount: -1000,
+            linkedInvestmentTransactionId: 'itx-9',
+          },
+        ],
+        pagination: { page: 1, totalPages: 1, total: 1 },
+      });
+      mockGetTransaction.mockResolvedValue({ id: 'itx-9', action: 'BUY' });
+
+      await switchToCashView();
+      await waitFor(() => {
+        expect(screen.getByTestId('cash-edit-cash-tx-1')).toBeInTheDocument();
+      });
+
+      await act(async () => {
+        fireEvent.click(screen.getByTestId('cash-edit-cash-tx-1'));
+      });
+
+      await waitFor(() => {
+        expect(mockGetTransaction).toHaveBeenCalledWith('itx-9');
+        expect(mockOpenEdit).toHaveBeenCalledWith({ id: 'itx-9', action: 'BUY' });
+      });
+      expect(mockRouterPush).not.toHaveBeenCalledWith(
+        expect.stringContaining('edit=itx-9'),
+      );
+      // Both modals share one `useFormModal` mock here, so the discriminating
+      // claim is the argument: the cash row itself must never be handed to a
+      // form. Its amount, date and payee are consequences of the trade.
+      expect(mockOpenEdit).not.toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'cash-tx-1' }),
+      );
+    });
+
+    it('does not ask for filter options while the brokerage register is on screen', async () => {
+      await renderPage();
+      await waitFor(() => {
+        expect(screen.getByTestId('transaction-list')).toBeInTheDocument();
+      });
+
+      expect(mockGetFilterOptions).not.toHaveBeenCalled();
     });
 
     it('shows filter panel when Filter button is clicked', async () => {
@@ -1147,6 +1304,67 @@ describe('InvestmentsPage', () => {
       await waitFor(() => {
         expect(screen.queryByTestId('transaction-list')).not.toBeInTheDocument();
         expect(screen.getByTestId('cash-transaction-list')).toBeInTheDocument();
+      });
+    });
+
+    // Issue #1190 facing the other way: the add path refreshed the figures
+    // above the register and the delete path reloaded the cash rows alone, so
+    // the deleted row vanished while the summary, the allocation, Holdings by
+    // Account and the chart kept their pre-delete values until Refresh.
+    describe('after a cash row is deleted', () => {
+      const deleteCashRow = async () => {
+        mockGetAllTransactions.mockResolvedValue({
+          data: [{ id: 'cash-tx-1', transactionDate: '2026-01-15', amount: 1000 }],
+          pagination: { page: 1, totalPages: 1, total: 1 },
+        });
+
+        await switchToCashView();
+        await waitFor(() => {
+          expect(screen.getByTestId('cash-deleted-cash-tx-1')).toBeInTheDocument();
+        });
+
+        const summaryCallsBefore = mockGetPortfolioSummary.mock.calls.length;
+        const brokerageCallsBefore = mockGetTransactions.mock.calls.length;
+        const cashCallsBefore = mockGetAllTransactions.mock.calls.length;
+        const chartKeyBefore = screen.getByTestId('value-chart-refresh-key').textContent;
+
+        await act(async () => {
+          fireEvent.click(screen.getByTestId('cash-deleted-cash-tx-1'));
+        });
+
+        return { summaryCallsBefore, brokerageCallsBefore, cashCallsBefore, chartKeyBefore };
+      };
+
+      it('refetches the portfolio summary the holdings and allocation are drawn from', async () => {
+        const { summaryCallsBefore } = await deleteCashRow();
+
+        await waitFor(() => {
+          expect(mockGetPortfolioSummary.mock.calls.length).toBeGreaterThan(summaryCallsBefore);
+        });
+      });
+
+      it('refetches the brokerage register, which a cash row with an investment split writes to', async () => {
+        const { brokerageCallsBefore } = await deleteCashRow();
+
+        await waitFor(() => {
+          expect(mockGetTransactions.mock.calls.length).toBeGreaterThan(brokerageCallsBefore);
+        });
+      });
+
+      it('refetches the cash register itself', async () => {
+        const { cashCallsBefore } = await deleteCashRow();
+
+        await waitFor(() => {
+          expect(mockGetAllTransactions.mock.calls.length).toBeGreaterThan(cashCallsBefore);
+        });
+      });
+
+      it('bumps the value chart refresh key, which fetches its own series', async () => {
+        const { chartKeyBefore } = await deleteCashRow();
+
+        await waitFor(() => {
+          expect(screen.getByTestId('value-chart-refresh-key').textContent).not.toBe(chartKeyBefore);
+        });
       });
     });
   });

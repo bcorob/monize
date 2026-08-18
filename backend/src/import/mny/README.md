@@ -111,13 +111,19 @@ not the cause -- see `helm/README.md` for the sizing table.
 
 Money's model and Monize's are not the same shape, and the gaps are silent. A transfer from a
 bank account into an investment account is one Money row on each side, and the investment side is
-*both* the arriving cash and the trade. Monize splits those: the trade's cash leg comes out of the
-brokerage's cash sleeve, so something has to pay into it. Money has no row for that, so
-`buildCashCounterparts` synthesizes one.
+*both* the arriving cash and the trade. Monize splits those: originally the trade's cash leg always
+came out of the brokerage's cash sleeve, so something had to pay into it, and Money has no row for
+that -- `buildCashCounterparts` synthesizes one.
 
 The failure mode when it does not is that money leaves an account and arrives nowhere, and no
 warning can fire because every row the file *has* was imported correctly. On the maintainer's file
 3,255 transfers were affected and the sleeves silently absorbed $553,225.57.
+
+(The premise that a trade's cash leg always comes out of the sleeve turned out to be wrong -- see
+"Three shapes" below -- so most of those pairings now keep the row Money wrote instead. What is
+left for `buildCashCounterparts` is the pairing whose far side carries a security but is not a
+trade this import writes, or is one that moves no cash. The rule the section states still holds
+for those.)
 
 So when a mapper is about to warn that it cannot represent something, check first whether the
 right answer is to *create* the row Monize needs rather than to report the mismatch. A warning
@@ -152,7 +158,7 @@ It presented as three rows in the cash register where Money shows one (issue #11
 a transfer in and a transfer out. The two extras are Money's row plus the counterpart
 `buildCashCounterparts` synthesized for it, which for this shape lands in that row's *own*
 account -- so they cancelled, every balance reconciled, and nothing in the verification report
-could see it. `tradeCashLegRows` (`map/map-transactions.ts`) names those rows and they are not
+could see it. `classifyTradeCashSides` (`map/map-transactions.ts`) names those rows and they are not
 imported; because membership in that set is exactly "its synthesized counterpart mirrored it into
 its own account", dropping the pair cannot move a balance.
 
@@ -161,9 +167,36 @@ counterpart**, whatever the code that built it thinks. And **a pair of rows that
 invisible to every check that reconciles a total** -- the row count is the assertion that catches
 it, which is why `map/trade-cash-legs.spec.ts` asserts the count and the balance together.
 
-The rule is deliberately confined to *top-level* rows. A split **leg** in the sleeve pointing at a
-trade is a different shape: its parent has already taken the cash out, so there the synthesized
-counterpart is what stops the trade's own leg debiting the sleeve twice, and it stays.
+### Three shapes, one question: where does this trade's cash already sit
+
+The rule above was first written as "top-level rows in the trade's own sleeve", with everything
+else falling through to the synthesized counterpart. That left two shapes wrong in the same way
+the sleeve one had been, and for the same reason -- a `TRN_XFER` pairing whose far side is a trade
+is never an ordinary transfer, wherever the near side lives:
+
+| Money's near side | Monize's model | Issue |
+|---|---|---|
+| A row in the trade's own cash sleeve | Drop it; `writeInvestments` writes the leg from `cashAmount` | #1175 |
+| A top-level row in another account | That row **is** the cash leg; the trade names it as its `funding_account_id` | #1212 |
+| A leg of a split transaction | The trade is embedded in the leg (`transaction_split_id`), and no cash row exists at all | #1211 |
+
+`classifyTradeCashSides` (`map/map-transactions.ts`) answers all three at once, and
+`map/investment-cash.ts` feeds the answer back to the trades. Two consequences worth stating:
+
+- **`mapInvestments` now runs before `mapTransactions`.** A banking row can only be read as a
+  trade's cash side if that trade is going to exist, so the transaction mapper is handed
+  `tradesByHandle`. A security-carrying row the investment mapper skipped -- an unknown `act`, a
+  currency pseudo-security -- is not a trade, and its Money row stays exactly as written.
+- **`investmentWritesOwnCashRow` is one predicate, not three copies of `cashAmount !== 0`.** The
+  writer, `computeExpectedBalances` and the per-account row count all have to agree about which
+  trades produce a sleeve row; when they disagree a balance is short or long by the trade and the
+  verification report flags every brokerage cash account.
+
+The general shape of both defects is worth keeping: **the same movement of money recorded twice
+sums correctly**. #1212 put a transfer into the sleeve and took it straight back out; #1211 did the
+same inside a split. Every balance reconciled in both, which is why the row count is the assertion
+that catches them -- `map/trade-cash-legs.spec.ts` asserts the register's contents and the balance
+together, per account.
 
 ## Traps
 

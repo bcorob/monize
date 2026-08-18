@@ -8,8 +8,7 @@
     "empty": "No hay ingresos por inversiones este año"
   },
   "register": {
-    "cashHeading": "Transacciones de efectivo",
-    "newCashTransaction": "Nueva transacción de efectivo",
-    "deleteFailed": "No se pudo eliminar la transacción"
+    "deleteFailed": "No se pudo eliminar la transacción",
+    "loadFailed": "Error al cargar la transacción"
   }
 }

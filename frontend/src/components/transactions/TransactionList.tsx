@@ -10,7 +10,7 @@ import { CategoryBudgetStatus } from '@/types/budget';
 import { transactionsApi } from '@/lib/transactions';
 import { getErrorMessage } from '@/lib/errors';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { Pagination } from '@/components/ui/Pagination';
+import { ListTopToolbar } from '@/components/ui/ListTopToolbar';
 import { TransactionRow } from './TransactionRow';
 import { TransactionActionSheet } from './TransactionActionSheet';
 import { useDateFormat } from '@/hooks/useDateFormat';
@@ -18,7 +18,6 @@ import { useNumberFormat } from '@/hooks/useNumberFormat';
 import { getLocalDateString } from '@/lib/utils';
 import { useTableDensity } from '@/hooks/useTableDensity';
 import { useDensityPreference, type DensityView } from '@/store/densityStore';
-import { DensityToggle } from '@/components/ui/DensityToggle';
 
 interface TransactionListProps {
   transactions: Transaction[];
@@ -405,10 +404,17 @@ export function TransactionList({
   return (
     <div>
       {/* Density toggle and top pagination */}
-      {showToolbar && (() => {
-        const toolbarButtons = (
-          <div className="flex items-center gap-1 flex-shrink-0">
-            {onExport && (
+      {showToolbar && (
+        <ListTopToolbar
+          densityView={densityView}
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalItems={totalItems}
+          pageSize={pageSize}
+          onPageChange={onPageChange}
+          itemName={t('list.itemNamePlural')}
+          actions={
+            onExport && (
               <button
                 onClick={onExport}
                 disabled={isExporting}
@@ -427,32 +433,10 @@ export function TransactionList({
                 )}
                 <span className="hidden sm:inline">{isExporting ? t('list.export.exporting') : t('list.export.button')}</span>
               </button>
-            )}
-            <DensityToggle view={densityView} hideLabelOnMobile className="flex-shrink-0" />
-          </div>
-        );
-        const showPagination = currentPage !== undefined && totalPages !== undefined && totalPages > 1 && totalItems !== undefined && pageSize !== undefined && onPageChange;
-        return (
-          <div className="flex items-center justify-end p-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
-            {showPagination ? (
-              <div className="flex-1">
-                <Pagination
-                  currentPage={currentPage!}
-                  totalPages={totalPages!}
-                  totalItems={totalItems!}
-                  pageSize={pageSize!}
-                  onPageChange={onPageChange!}
-                  itemName={t('list.itemNamePlural')}
-                  minimal
-                  infoRight={toolbarButtons}
-                />
-              </div>
-            ) : (
-              toolbarButtons
-            )}
-          </div>
-        );
-      })()}
+            )
+          }
+        />
+      )}
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
           <thead className="bg-gray-50 dark:bg-gray-800">

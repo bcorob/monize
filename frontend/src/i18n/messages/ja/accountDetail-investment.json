@@ -8,8 +8,7 @@
     "empty": "今年の投資収益はありません"
   },
   "register": {
-    "cashHeading": "現金取引",
-    "newCashTransaction": "現金取引を追加",
-    "deleteFailed": "取引を削除できませんでした"
+    "deleteFailed": "取引を削除できませんでした",
+    "loadFailed": "取引の読み込みに失敗しました"
   }
 }

@@ -142,8 +142,6 @@
     "totalAssets": "Total Aset",
     "totalLiabilities": "Total Liabilitas",
     "netWorth": "Nilai Bersih",
-    "tableView": "Tampilan tabel",
-    "chartView": "Tampilan grafik",
     "noData": "Tidak ada data untuk ditampilkan.",
     "noAccounts": "Tidak ada akun ditemukan.",
     "closed": "Ditutup",
@@ -193,6 +191,7 @@
     "groupAll": "Semua akun",
     "colGroup": "Grup",
     "noAccountsForFilters": "Tidak ada akun yang cocok dengan filter saat ini.",
+    "noAccountsOnDate": "Belum ada akun Anda yang berdiri pada {date}.",
     "accountTypes": {
       "CHEQUING": "Rekening Koran",
       "SAVINGS": "Tabungan",

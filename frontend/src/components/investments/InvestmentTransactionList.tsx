@@ -23,6 +23,7 @@ import { RowActions } from '@/components/ui/row-actions/RowActions';
 import { RowActionSheet } from '@/components/ui/row-actions/RowActionSheet';
 import type { RowAction } from '@/components/ui/row-actions/rowAction';
 import { DensityToggle } from '@/components/ui/DensityToggle';
+import { ListTopToolbar } from '@/components/ui/ListTopToolbar';
 
 /**
  * Builds the standard row actions for an investment transaction. Shared by the
@@ -76,9 +77,31 @@ interface InvestmentTransactionListProps {
   filters?: TransactionFilters;
   onFiltersChange?: (filters: TransactionFilters) => void;
   availableSymbols?: string[];
+  /**
+   * The actions the rows on this register actually use. The Action picker
+   * offers these instead of the full vocabulary, which is twenty-odd wide while
+   * a household brokerage uses four. Empty or absent -- still loading, or the
+   * lookup failed -- means "no information", so the picker keeps offering
+   * everything rather than emptying itself.
+   */
+  availableActions?: string[];
   /** Which surface's remembered row density this register reads. */
   densityView?: DensityView;
   viewToggle?: React.ReactNode;
+  /**
+   * Paging, when this list owns it. Supplied together, they put the pager in
+   * the strip above the table -- the same strip, in the same place, as the cash
+   * register beside it (`ListTopToolbar`), and the density toggle moves into it
+   * so the two registers of one account read identically. Left out, the list
+   * keeps the toggle in its heading and the surrounding page draws whatever
+   * pager it draws; the Investments page pages both of its registers below the
+   * table, and is consistent with itself that way.
+   */
+  currentPage?: number;
+  totalPages?: number;
+  totalItems?: number;
+  pageSize?: number;
+  onPageChange?: (page: number) => void;
 }
 
 /**
@@ -289,10 +312,21 @@ export function InvestmentTransactionList({
   filters,
   onFiltersChange,
   availableSymbols = [],
+  availableActions,
   densityView = 'investments',
   viewToggle,
+  currentPage,
+  totalPages,
+  totalItems,
+  pageSize,
+  onPageChange,
 }: InvestmentTransactionListProps) {
   const t = useTranslations('investments');
+  // Whether paging is this list's to draw. All five props travel together, so
+  // one of them is the question -- and the answer also decides where the
+  // density toggle lives, because the strip is where it belongs once there is
+  // a strip.
+  const ownsPaging = onPageChange !== undefined;
   const ACTION_OPTIONS = [
     { value: '', label: t('transactionList.allActions') },
     { value: 'BUY', label: t('transactionList.actionBuy') },
@@ -313,6 +347,20 @@ export function InvestmentTransactionList({
     { value: 'CAPITAL_GAIN_LONG', label: t('transactionList.actionCapitalGainLong') },
     { value: 'REDEEM', label: t('transactionList.actionRedeem') },
   ];
+  // "All actions" always stands, and so does whatever is currently selected --
+  // a filter set before the rows changed must stay visible in the control that
+  // set it, or the user cannot see what is narrowing the list, let alone undo
+  // it.
+  const actionOptions = useMemo(() => {
+    if (!availableActions || availableActions.length === 0) return ACTION_OPTIONS;
+    const offered = new Set(availableActions);
+    return ACTION_OPTIONS.filter(
+      (opt) => opt.value === '' || offered.has(opt.value) || opt.value === filters?.action,
+    );
+    // ACTION_OPTIONS is rebuilt each render from the translator; the values are
+    // what this depends on.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [availableActions, filters?.action, t]);
   const { formatCurrency, formatQuantity } = useNumberFormat();
   const { formatDate } = useDateFormat();
   const { defaultCurrency } = useExchangeRates();
@@ -518,7 +566,9 @@ export function InvestmentTransactionList({
             )}
           </button>
         )}
-        <DensityToggle view={densityView} size="md" className="ml-auto" />
+        {!ownsPaging && (
+          <DensityToggle view={densityView} size="md" className="ml-auto" />
+        )}
         </div>
       </div>
 
@@ -563,7 +613,7 @@ export function InvestmentTransactionList({
                 onChange={(e) => handleFilterChange('action', e.target.value)}
                 className="w-full text-sm font-sans border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-blue-500 focus:border-blue-500"
               >
-                {ACTION_OPTIONS.map((opt) => (
+                {actionOptions.map((opt) => (
                   <option key={opt.value} value={opt.value}>{opt.label}</option>
                 ))}
               </select>
@@ -600,6 +650,18 @@ export function InvestmentTransactionList({
 
       {/* Spacer between controls and table */}
       <div className="mt-3 sm:mt-4" />
+
+      {ownsPaging && (
+        <ListTopToolbar
+          densityView={densityView}
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalItems={totalItems}
+          pageSize={pageSize}
+          onPageChange={onPageChange}
+          itemName={t('transactionList.itemNamePlural')}
+        />
+      )}
 
       {/* Brokerage Transactions Table */}
       <div className="overflow-x-auto">

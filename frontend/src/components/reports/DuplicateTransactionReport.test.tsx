@@ -21,6 +21,8 @@ vi.mock('@/hooks/useDateRange', () => ({
 
 vi.mock('@/lib/utils', () => ({
   parseLocalDate: (d: string) => new Date(d + 'T00:00:00'),
+  // ExportDropdown (rendered by this report) imports `cn` for className merging.
+  cn: (...inputs: any[]) => inputs.flat(Infinity).filter(Boolean).join(' '),
 }));
 
 vi.mock('@/components/ui/DateRangeSelector', () => ({

@@ -40,6 +40,7 @@ function input(
     currencyByHandle: CURRENCIES,
     bills: [],
     cashKeyByAccountKey: new Map(),
+    tradesByHandle: new Map(),
     ...overrides,
   };
 }
@@ -588,10 +589,12 @@ describe("mapTransactions", () => {
         const sleeve = result.transactions.find((t) => t.handle === 3);
         expect(parent?.splits).toEqual([
           {
+            id: expect.any(String),
             kind: SplitKind.TRANSFER,
             categoryHandle: null,
             transferAccountKey: "acct-5-cash",
             linkedTransactionId: sleeve?.id,
+            investmentHandle: null,
             amount: -100,
             memo: null,
           },
@@ -688,18 +691,22 @@ describe("mapTransactions", () => {
       const [parent] = result.transactions;
       expect(parent.splits).toEqual([
         {
+          id: expect.any(String),
           kind: SplitKind.CATEGORY,
           categoryHandle: 51,
           transferAccountKey: null,
           linkedTransactionId: null,
+          investmentHandle: null,
           amount: -70,
           memo: "Food",
         },
         {
+          id: expect.any(String),
           kind: SplitKind.CATEGORY,
           categoryHandle: 52,
           transferAccountKey: null,
           linkedTransactionId: null,
+          investmentHandle: null,
           amount: -30,
           memo: "Household",
         },

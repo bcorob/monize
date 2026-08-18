@@ -40,6 +40,24 @@ export interface FxFeeMonthlySummaryRow {
   count: number;
 }
 
+/**
+ * The values a register's payee and category pickers offer.
+ *
+ * Scoped to the accounts on screen, because a filter is a way through the rows
+ * in front of you: a brokerage cash ledger has a handful of payees, and
+ * offering the household's entire payee list to narrow it buries them.
+ */
+export interface RegisterFilterOptions {
+  payees: { id: string; name: string }[];
+  /**
+   * Every category used by the rows, **plus the ancestors of each** -- a tree
+   * picker nests a child under its parent and drops one whose parent is absent
+   * (`MultiSelect` builds its top level from `parentId == null`), so a used
+   * sub-category with an unused parent would simply not be offered.
+   */
+  categories: { id: string; name: string; parentId: string | null }[];
+}
+
 export interface TransferAccountSummary {
   accountId: string | null;
   accountName: string;
@@ -267,6 +285,102 @@ export class TransactionAnalyticsService {
         totalOutbound: sumMoney(accounts.map((a) => a.outbound)),
         transferCount: accounts.reduce((s, a) => s + a.transferCount, 0),
       };
+    });
+  }
+
+  /**
+   * The payees and categories actually used by the rows in the given accounts.
+   *
+   * A split's category lives on the split row, not on its parent (whose
+   * `categoryId` is NULL), so both are read -- the register's own category
+   * filter matches split lines, and a picker that could not offer those
+   * categories would be narrower than the filter it feeds.
+   */
+  async getRegisterFilterOptions(
+    userId: string,
+    filters: { accountIds?: string[]; jointAccountIds?: string[] } = {},
+  ): Promise<RegisterFilterOptions> {
+    const { accountIds, jointAccountIds = [] } = filters;
+    return withScopedDb(this.dataSource, async (m) => {
+      const scoped = <T extends object>(
+        qb: import("typeorm").SelectQueryBuilder<T>,
+      ) => {
+        qb.where(this.analyticsScope(userId, jointAccountIds));
+        if (accountIds && accountIds.length > 0) {
+          qb.andWhere("transaction.accountId IN (:...filterAccountIds)", {
+            filterAccountIds: accountIds,
+          });
+        }
+        return qb;
+      };
+
+      const payeeRows = await scoped(
+        m
+          .getRepository(Transaction)
+          .createQueryBuilder("transaction")
+          .innerJoin("transaction.payee", "payee")
+          .select("payee.id", "id")
+          .addSelect("payee.name", "name")
+          .distinct(true),
+      )
+        .orderBy("payee.name", "ASC")
+        .getRawMany<{ id: string; name: string }>();
+
+      const ownCategoryRows = await scoped(
+        m
+          .getRepository(Transaction)
+          .createQueryBuilder("transaction")
+          .select("transaction.categoryId", "id")
+          .distinct(true),
+      )
+        .andWhere("transaction.categoryId IS NOT NULL")
+        .getRawMany<{ id: string }>();
+
+      const splitCategoryRows = await scoped(
+        m
+          .getRepository(Transaction)
+          .createQueryBuilder("transaction")
+          .innerJoin("transaction.splits", "split")
+          .select("split.categoryId", "id")
+          .distinct(true),
+      )
+        .andWhere("split.categoryId IS NOT NULL")
+        .getRawMany<{ id: string }>();
+
+      const usedCategoryIds = new Set(
+        [...ownCategoryRows, ...splitCategoryRows].map((r) => r.id),
+      );
+      if (usedCategoryIds.size === 0) {
+        return { payees: payeeRows, categories: [] };
+      }
+
+      // The whole tree, so an ancestor can be resolved without a query per
+      // level. A user's chart of accounts is tens to hundreds of rows.
+      const allCategories = await m.getRepository(Category).find({
+        where: { userId },
+        select: { id: true, name: true, parentId: true },
+      });
+      const byId = new Map(allCategories.map((c) => [c.id, c]));
+
+      const includedIds = new Set<string>();
+      for (const usedId of usedCategoryIds) {
+        // Walk up from each used category. `seen` stops a cycle -- a parent
+        // chain is data, and a self-referential row would otherwise hang here.
+        const seen = new Set<string>();
+        let current = byId.get(usedId);
+        while (current && !seen.has(current.id)) {
+          seen.add(current.id);
+          includedIds.add(current.id);
+          current = current.parentId ? byId.get(current.parentId) : undefined;
+        }
+      }
+
+      const categories = allCategories
+        .filter((c) => includedIds.has(c.id))
+        .map((c) => ({ id: c.id, name: c.name, parentId: c.parentId ?? null }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+
+      return { payees: payeeRows, categories };
     });
   }
 

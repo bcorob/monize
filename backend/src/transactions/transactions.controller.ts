@@ -1159,6 +1159,50 @@ export class TransactionsController {
     });
   }
 
+  @Get("filter-options")
+  @ApiOperation({
+    summary:
+      "Payees and categories used by the rows in the given accounts, for a register's filter pickers",
+  })
+  @ApiQuery({
+    name: "accountIds",
+    required: false,
+    description:
+      "Restrict to these account IDs (comma-separated). Omitted: every account the caller can read.",
+  })
+  @ApiResponse({ status: 200, description: "Filter options retrieved" })
+  @ApiResponse({ status: 401, description: "Unauthorized" })
+  async getFilterOptions(
+    @Request() req,
+    @Query("accountIds") accountIds?: string,
+  ) {
+    const requested = parseUuids(accountIds);
+    if (req.user.isActing) {
+      // A delegate sees the payees and categories of the accounts they were
+      // granted READ on, and no others. An empty readable set is an empty
+      // picker, never an unfiltered query over the owner's whole ledger.
+      const readable = await this.delegationService.readableAccountIds(
+        req.user.delegationId,
+      );
+      const readableSet = new Set(readable);
+      const scopedIds =
+        requested && requested.length > 0
+          ? requested.filter((id) => readableSet.has(id))
+          : readable;
+      if (scopedIds.length === 0) {
+        return { payees: [], categories: [] };
+      }
+      return this.transactionsService.getRegisterFilterOptions(req.user.id, {
+        accountIds: scopedIds,
+      });
+    }
+    const scope = await this.resolveOwnContextJointScope(req, requested);
+    return this.transactionsService.getRegisterFilterOptions(scope.userId, {
+      accountIds: requested,
+      jointAccountIds: scope.jointAccountIds,
+    });
+  }
+
   // ==================== Reconciliation Endpoints ====================
   // NOTE: These static-segment routes MUST be declared before the generic
   // :id param route below, otherwise NestJS matches "reconcile" as an :id

@@ -4,14 +4,28 @@ import { useState, useRef, useCallback } from 'react';
 import { useTranslations } from 'next-intl';
 import toast from 'react-hot-toast';
 import { useClickOutside } from '@/hooks/useClickOutside';
+import { cn } from '@/lib/utils';
 
 interface ExportDropdownProps {
   onExportCsv?: () => void;
   onExportPdf: () => void;
   disabled?: boolean;
+  /**
+   * Extra classes for the trigger button, for a caller that has to size it --
+   * a toolbar standing it beside labelled fields needs `h-full`, and the
+   * button's own padding cannot know that. Layout only; the colours, the
+   * spacing and the disabled treatment stay here so every export button reads
+   * the same.
+   */
+  className?: string;
 }
 
-export function ExportDropdown({ onExportCsv, onExportPdf, disabled }: ExportDropdownProps) {
+export function ExportDropdown({
+  onExportCsv,
+  onExportPdf,
+  disabled,
+  className,
+}: ExportDropdownProps) {
   const t = useTranslations('common');
   const [isOpen, setIsOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
@@ -45,7 +59,10 @@ export function ExportDropdown({ onExportCsv, onExportPdf, disabled }: ExportDro
       <button
         onClick={handleExportPdf}
         disabled={disabled || isExporting}
-        className="px-3 py-1.5 text-sm font-medium rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center gap-1.5 disabled:opacity-50"
+        className={cn(
+          'px-3 py-1.5 text-sm font-medium rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center gap-1.5 disabled:opacity-50',
+          className,
+        )}
         title={t('exportDropdown.exportPdf')}
       >
         <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -61,7 +78,10 @@ export function ExportDropdown({ onExportCsv, onExportPdf, disabled }: ExportDro
       <button
         onClick={() => setIsOpen(!isOpen)}
         disabled={disabled || isExporting}
-        className="px-3 py-1.5 text-sm font-medium rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center gap-1.5 disabled:opacity-50"
+        className={cn(
+          'px-3 py-1.5 text-sm font-medium rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center gap-1.5 disabled:opacity-50',
+          className,
+        )}
         title={t('exportDropdown.exportReport')}
       >
         <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

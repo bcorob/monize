@@ -2773,6 +2773,14 @@ export class TransactionsService {
     );
   }
 
+  /** The payees and categories a register's filter pickers may offer. */
+  async getRegisterFilterOptions(
+    userId: string,
+    filters: { accountIds?: string[]; jointAccountIds?: string[] } = {},
+  ) {
+    return this.analyticsService.getRegisterFilterOptions(userId, filters);
+  }
+
   async getGroupedTotals(
     userId: string,
     params: {

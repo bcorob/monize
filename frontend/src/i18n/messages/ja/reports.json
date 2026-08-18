@@ -142,8 +142,6 @@
     "totalAssets": "総資産",
     "totalLiabilities": "総負債",
     "netWorth": "純資産",
-    "tableView": "表形式",
-    "chartView": "グラフ形式",
     "noData": "表示するデータがありません。",
     "noAccounts": "口座が見つかりません。",
     "closed": "閉鎖済み",
@@ -193,6 +191,7 @@
     "groupAll": "すべての口座",
     "colGroup": "グループ",
     "noAccountsForFilters": "現在のフィルターに一致する口座はありません。",
+    "noAccountsOnDate": "{date} 時点では、いずれの口座もまだ存在していません。",
     "accountTypes": {
       "CHEQUING": "当座預金",
       "SAVINGS": "普通預金",

@@ -17,6 +17,8 @@ import commonNs from '@/i18n/messages/en/common.json';
 vi.mock('@/lib/investments', () => ({
   investmentsApi: {
     getTransactions: vi.fn(),
+    getRegisterFilterOptions: vi.fn(),
+    getTransaction: vi.fn(),
     deleteTransaction: vi.fn(),
   },
 }));
@@ -24,6 +26,8 @@ vi.mock('@/lib/investments', () => ({
 vi.mock('@/lib/transactions', () => ({
   transactionsApi: {
     getAll: vi.fn(),
+    getById: vi.fn(),
+    getRegisterFilterOptions: vi.fn(),
     delete: vi.fn(),
     deleteTransfer: vi.fn(),
     updateStatus: vi.fn(),
@@ -45,15 +49,23 @@ vi.mock('./InvestmentTransactionForm', () => ({
   InvestmentTransactionForm: ({
     defaultAccountId,
     allAccounts,
+    onConversionStateChange,
   }: {
     defaultAccountId?: string;
     allAccounts?: { id: string }[];
+    onConversionStateChange?: (needsConversion: boolean) => void;
   }) => (
     <div data-testid="investment-form">
       {defaultAccountId}
       <span data-testid="form-all-accounts">
         {allAccounts === undefined ? 'undefined' : allAccounts.map((a) => a.id).join(',')}
       </span>
+      <button
+        data-testid="form-needs-conversion"
+        onClick={() => onConversionStateChange?.(true)}
+      >
+        show conversion
+      </button>
     </div>
   ),
 }));
@@ -211,6 +223,12 @@ describe('InvestmentRegisterPanel', () => {
       pagination: { total: 1, page: 1, limit: 25, totalPages: 1 },
     });
     (transactionsApi.delete as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+    (
+      transactionsApi.getRegisterFilterOptions as ReturnType<typeof vi.fn>
+    ).mockResolvedValue({ payees: [], categories: [] });
+    (
+      investmentsApi.getRegisterFilterOptions as ReturnType<typeof vi.fn>
+    ).mockResolvedValue({ actions: [], symbols: [] });
     (accountsApi.getAll as ReturnType<typeof vi.fn>).mockResolvedValue([
       brokerage,
       cash,
@@ -495,6 +513,437 @@ describe('InvestmentRegisterPanel', () => {
   // passed no density props, so the list fell through to its own
   // `useState('normal')` and the level reset on every remount -- which is what
   // a page refresh, a tab switch, or navigating away and back all are.
+  describe('filters', () => {
+    const trade = {
+      id: 'tx-1',
+      accountId: 'brok',
+      action: 'BUY',
+      transactionDate: '2026-01-05',
+      quantity: 1,
+      price: 10,
+      totalAmount: 10,
+      security: { symbol: 'VTI', name: 'Vanguard', currencyCode: 'CAD' },
+    };
+
+    beforeEach(() => {
+      (investmentsApi.getTransactions as ReturnType<typeof vi.fn>).mockResolvedValue({
+        data: [trade],
+        pagination: { total: 1, page: 1, limit: 25, totalPages: 1 },
+      });
+      (
+        transactionsApi.getRegisterFilterOptions as ReturnType<typeof vi.fn>
+      ).mockResolvedValue({
+        // Deliberately not the register row's own payee: the option has to be
+        // found in the picker, not in the list behind it.
+        payees: [{ id: 'payee-1', name: 'Payroll' }],
+        categories: [{ id: 'cat-1', name: 'Investments', parentId: null }],
+      });
+      (
+        investmentsApi.getRegisterFilterOptions as ReturnType<typeof vi.fn>
+      ).mockResolvedValue({
+        // XEQT is not held any more; its trades are still in the register, and
+        // are exactly what somebody filtering by symbol tends to be after.
+        actions: ['BUY', 'SELL'],
+        symbols: ['VTI', 'XEQT'],
+      });
+    });
+
+    /** Open the filter row of whichever register is on screen. */
+    const openFilters = async () => {
+      await act(async () => {
+        fireEvent.click(screen.getByText('Filter'));
+      });
+    };
+
+    it('offers the brokerage register a filter row', async () => {
+      await renderPanel(brokerage, cash);
+      await openFilters();
+
+      expect(screen.getByLabelText('Symbol')).toBeInTheDocument();
+      expect(screen.getByLabelText('Action')).toBeInTheDocument();
+    });
+
+    it('offers the symbols the rows use, sold-out positions included', async () => {
+      await renderPanel(brokerage, cash);
+      await openFilters();
+
+      const symbolPicker = screen.getByLabelText('Symbol');
+      const offered = Array.from(symbolPicker.querySelectorAll('option')).map(
+        (o) => o.textContent,
+      );
+      expect(offered).toContain('VTI');
+      expect(offered).toContain('XEQT');
+    });
+
+    it('narrows the trades to the chosen symbol', async () => {
+      await renderPanel(brokerage, cash);
+      await openFilters();
+
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText('Symbol'), {
+          target: { value: 'VTI' },
+        });
+      });
+
+      await waitFor(() => {
+        expect(investmentsApi.getTransactions).toHaveBeenLastCalledWith(
+          expect.objectContaining({ symbol: 'VTI', page: 1 }),
+        );
+      });
+    });
+
+    it('offers the cash register its own kind of filter', async () => {
+      await renderPanel(brokerage, cash);
+      await switchToCash();
+      await openFilters();
+
+      // Payees and categories, which is what a cash row is filed under -- the
+      // brokerage side's symbol and action mean nothing here.
+      expect(screen.getByText('Payees')).toBeInTheDocument();
+      expect(screen.getByText('Categories')).toBeInTheDocument();
+      expect(screen.queryByLabelText('Symbol')).not.toBeInTheDocument();
+    });
+
+    it("asks for the filter options of this account's cash ledger", async () => {
+      await renderPanel(brokerage, cash);
+      await switchToCash();
+
+      await waitFor(() => {
+        expect(transactionsApi.getRegisterFilterOptions).toHaveBeenCalledWith([
+          'cash',
+        ]);
+      });
+    });
+
+    it('keeps the rows on screen while a filter reload runs', async () => {
+      // Swapping the table for three skeleton lines shortens the page under the
+      // reader, and the browser answers by scrolling to the top -- which is
+      // what applying a filter here used to do. The rows stay until the next
+      // payload lands.
+      let resolveSecond!: (value: unknown) => void;
+      await renderPanel(brokerage, cash);
+      // The table is what the skeleton branch replaces, so the table is what
+      // has to survive the reload.
+      const rowCount = () => document.querySelectorAll('tbody tr').length;
+      await waitFor(() => expect(rowCount()).toBeGreaterThan(0));
+
+      (investmentsApi.getTransactions as ReturnType<typeof vi.fn>).mockReturnValue(
+        new Promise((res) => {
+          resolveSecond = res;
+        }),
+      );
+      await openFilters();
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText('Symbol'), {
+          target: { value: 'VTI' },
+        });
+      });
+
+      // Mid-flight: the previous page's rows are still drawn.
+      expect(rowCount()).toBeGreaterThan(0);
+
+      await act(async () => {
+        resolveSecond({
+          data: [trade],
+          pagination: { total: 1, page: 1, limit: 25, totalPages: 1 },
+        });
+      });
+    });
+
+    it('narrows the cash rows to the chosen payee', async () => {
+      await renderPanel(brokerage, cash);
+      await switchToCash();
+      await openFilters();
+
+      // The picker is a dropdown: open it, then choose.
+      await act(async () => {
+        fireEvent.click(screen.getByText('All payees'));
+      });
+      await act(async () => {
+        fireEvent.click(screen.getByText('Payroll'));
+      });
+
+      await waitFor(() => {
+        expect(transactionsApi.getAll).toHaveBeenLastCalledWith(
+          expect.objectContaining({ payeeIds: ['payee-1'], page: 1 }),
+        );
+      });
+    });
+  });
+
+  describe('editing a cash row', () => {
+    /** Click the register's only row. */
+    const clickTheRow = async () => {
+      await act(async () => {
+        fireEvent.click(screen.getByText('Cash deposit'));
+      });
+    };
+
+    it("edits a trade's cash leg as the trade", async () => {
+      // Its amount, date and payee are consequences of the trade, so the cash
+      // form over it edits the wrong thing -- and offers to change figures the
+      // trade owns.
+      (transactionsApi.getAll as ReturnType<typeof vi.fn>).mockResolvedValue({
+        data: [{ ...cashTransaction, linkedInvestmentTransactionId: 'itx-9' }],
+        pagination: { total: 1, page: 1, limit: 25, totalPages: 1 },
+      });
+      (investmentsApi.getTransaction as ReturnType<typeof vi.fn>).mockResolvedValue({
+        id: 'itx-9',
+        action: 'BUY',
+      });
+
+      await renderPanel(brokerage, cash);
+      await switchToCash();
+      await clickTheRow();
+
+      expect(investmentsApi.getTransaction).toHaveBeenCalledWith('itx-9');
+      expect(screen.getByTestId('investment-form')).toBeInTheDocument();
+      expect(screen.queryByTestId('cash-form')).not.toBeInTheDocument();
+    });
+
+    it('fetches a transfer in full before editing it', async () => {
+      // The counterpart is not in the list payload, so the form would open
+      // without knowing where the money went.
+      (transactionsApi.getAll as ReturnType<typeof vi.fn>).mockResolvedValue({
+        data: [{ ...cashTransaction, isTransfer: true }],
+        pagination: { total: 1, page: 1, limit: 25, totalPages: 1 },
+      });
+      (transactionsApi.getById as ReturnType<typeof vi.fn>).mockResolvedValue({
+        ...cashTransaction,
+        isTransfer: true,
+        linkedTransactionId: 'cash-tx-2',
+      });
+
+      await renderPanel(brokerage, cash);
+      await switchToCash();
+      await clickTheRow();
+
+      expect(transactionsApi.getById).toHaveBeenCalledWith('cash-tx-1');
+      expect(screen.getByTestId('cash-form')).toBeInTheDocument();
+    });
+
+    it('edits an ordinary cash row as itself', async () => {
+      await renderPanel(brokerage, cash);
+      await switchToCash();
+      await clickTheRow();
+
+      expect(screen.getByTestId('cash-form')).toBeInTheDocument();
+      expect(screen.queryByTestId('investment-form')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('the two registers read as one', () => {
+    // A toggle is a change of ledger, not a change of page: a heading that
+    // renames itself, a button that gains a plus, or a gap that appears on one
+    // side make the switch look like a navigation.
+    const headingText = 'Recent Transactions';
+
+    // Both sides hold rows, so both draw a table -- an empty register is a
+    // different layout on either side, and not the one being compared here.
+    beforeEach(() => {
+      (investmentsApi.getTransactions as ReturnType<typeof vi.fn>).mockResolvedValue({
+        data: [
+          {
+            id: 'tx-1',
+            accountId: 'brok',
+            action: 'BUY',
+            transactionDate: '2026-01-05',
+            quantity: 1,
+            price: 10,
+            totalAmount: 10,
+            security: { symbol: 'VTI', name: 'Vanguard', currencyCode: 'CAD' },
+          },
+        ],
+        pagination: { total: 1, page: 1, limit: 25, totalPages: 1 },
+      });
+    });
+
+    it('gives both ledgers the same heading', async () => {
+      await renderPanel(brokerage, cash);
+      expect(screen.getByText(headingText)).toBeInTheDocument();
+
+      await switchToCash();
+      expect(screen.getByText(headingText)).toBeInTheDocument();
+    });
+
+    it('marks the new-row button the same way on both', async () => {
+      await renderPanel(brokerage, cash);
+      expect(screen.getByText('+ New Brokerage Transaction')).toBeInTheDocument();
+
+      await switchToCash();
+      expect(screen.getByText('+ New Cash Transaction')).toBeInTheDocument();
+    });
+
+    it('titles each form the way the Investments page titles it', async () => {
+      // One register drawn on two pages should not announce itself differently
+      // on each: these modals opened with no heading at all.
+      (transactionsApi.getAll as ReturnType<typeof vi.fn>).mockResolvedValue({
+        data: [cashTransaction],
+        pagination: { total: 1, page: 1, limit: 25, totalPages: 1 },
+      });
+      await renderPanel(brokerage, cash);
+
+      await act(async () => {
+        fireEvent.click(screen.getByText('+ New Brokerage Transaction'));
+      });
+      expect(screen.getByText('New Investment Transaction')).toBeInTheDocument();
+
+      await switchToCash();
+      await act(async () => {
+        fireEvent.click(screen.getByText('+ New Cash Transaction'));
+      });
+      expect(screen.getByText('New Transaction')).toBeInTheDocument();
+    });
+
+    it('opens the brokerage form at the width the Investments page opens it', async () => {
+      // Same form, same modal, two pages: it was `6xl` here and `xl` there, so
+      // the same dialogue arrived half the screen wider depending on the route
+      // taken to it.
+      await renderPanel(brokerage, cash);
+
+      await act(async () => {
+        fireEvent.click(screen.getByText('+ New Brokerage Transaction'));
+      });
+
+      expect(document.querySelector('.max-w-xl')).toBeInTheDocument();
+      expect(document.querySelector('.max-w-6xl')).not.toBeInTheDocument();
+    });
+
+    it('widens for the currency conversion section, and narrows again after', async () => {
+      await renderPanel(brokerage, cash);
+      await act(async () => {
+        fireEvent.click(screen.getByText('+ New Brokerage Transaction'));
+      });
+
+      await act(async () => {
+        fireEvent.click(screen.getByTestId('form-needs-conversion'));
+      });
+      expect(document.querySelector('.max-w-3xl')).toBeInTheDocument();
+
+      // Reopening starts narrow rather than at the last form's size. Escape is
+      // one of the routes out that has to reset it, alongside cancel, the
+      // backdrop and the back button -- they all land on the same close.
+      await act(async () => {
+        fireEvent.keyDown(document, { key: 'Escape' });
+      });
+      await act(async () => {
+        fireEvent.click(screen.getByText('+ New Brokerage Transaction'));
+      });
+      expect(document.querySelector('.max-w-xl')).toBeInTheDocument();
+    });
+
+    it('says Edit Transaction when a row is being edited', async () => {
+      (transactionsApi.getAll as ReturnType<typeof vi.fn>).mockResolvedValue({
+        data: [cashTransaction],
+        pagination: { total: 1, page: 1, limit: 25, totalPages: 1 },
+      });
+      await renderPanel(brokerage, cash);
+      await switchToCash();
+
+      await act(async () => {
+        fireEvent.click(screen.getByText('Cash deposit'));
+      });
+
+      expect(screen.getByText('Edit Transaction')).toBeInTheDocument();
+    });
+
+    it('keeps the same gap between the heading and the strip below it', async () => {
+      // The spacer is what that gap is; without it the cash register's rows sat
+      // higher than the brokerage register's and the page jumped on the toggle.
+      await renderPanel(brokerage, cash);
+      const SPACER = '[class="mt-3 sm:mt-4"]';
+      const brokerageSpacers = document.querySelectorAll(SPACER).length;
+
+      await switchToCash();
+      expect(document.querySelectorAll(SPACER)).toHaveLength(brokerageSpacers);
+      expect(brokerageSpacers).toBeGreaterThan(0);
+    });
+  });
+
+  describe('paging', () => {
+    // Two pages of trades, so the pager is drawn at all.
+    const manyTrades = {
+      data: [
+        {
+          id: 'tx-1',
+          accountId: 'brok',
+          action: 'BUY',
+          transactionDate: '2026-01-05',
+          quantity: 1,
+          price: 10,
+          totalAmount: 10,
+          security: { symbol: 'VTI', name: 'Vanguard', currencyCode: 'CAD' },
+        },
+      ],
+      pagination: { total: 60, page: 1, limit: 25, totalPages: 3 },
+    };
+
+    /**
+     * Where the pager sits relative to the rows it pages.
+     *
+     * The claim is about reading order, not about which component rendered it:
+     * a pager below the table is one the user meets only after scrolling past
+     * everything it could have helped them skip.
+     */
+    const pagerIsAboveTheTable = () => {
+      const pager = screen.getByTitle('Next page');
+      const table = document.querySelector('table')!;
+      // Node.DOCUMENT_POSITION_FOLLOWING: the table comes after the pager.
+      return Boolean(
+        pager.compareDocumentPosition(table) & Node.DOCUMENT_POSITION_FOLLOWING,
+      );
+    };
+
+    beforeEach(() => {
+      (investmentsApi.getTransactions as ReturnType<typeof vi.fn>).mockResolvedValue(
+        manyTrades,
+      );
+      (transactionsApi.getAll as ReturnType<typeof vi.fn>).mockResolvedValue({
+        data: [cashTransaction],
+        pagination: { total: 60, page: 1, limit: 25, totalPages: 3 },
+      });
+    });
+
+    it('pages the brokerage register from above its rows', async () => {
+      await renderPanel(brokerage, cash);
+
+      expect(pagerIsAboveTheTable()).toBe(true);
+    });
+
+    it("puts the cash register's pager in the same place", async () => {
+      // The point of the change: one account's two ledgers, one toggle apart,
+      // page from the same row of controls.
+      await renderPanel(brokerage, cash);
+      await switchToCash();
+
+      expect(pagerIsAboveTheTable()).toBe(true);
+    });
+
+    it('draws exactly one brokerage pager, not one above and one below', async () => {
+      await renderPanel(brokerage, cash);
+
+      expect(screen.getAllByTitle('Next page')).toHaveLength(1);
+    });
+
+    it('asks for the next page of trades when the pager advances', async () => {
+      await renderPanel(brokerage, cash);
+
+      await act(async () => {
+        fireEvent.click(screen.getByTitle('Next page'));
+      });
+
+      expect(investmentsApi.getTransactions).toHaveBeenLastCalledWith(
+        expect.objectContaining({ accountIds: 'brok', page: 2 }),
+      );
+    });
+
+    it('keeps one density toggle when the pager moves into the strip', async () => {
+      await renderPanel(brokerage, cash);
+
+      expect(screen.getAllByTitle('Toggle row density')).toHaveLength(1);
+    });
+  });
+
   describe('row density', () => {
     // The toolbar carrying the toggle only renders once the register has rows.
     beforeEach(() => {
@@ -543,7 +992,9 @@ describe('InvestmentRegisterPanel', () => {
       await act(async () => {
         fireEvent.click(screen.getByText('Cash'));
       });
-      expect(screen.getByText('Cash transactions')).toBeInTheDocument();
+      // The cash ledger is on screen -- its own New button says so, since both
+      // registers now share the heading.
+      expect(screen.getByText('+ New Cash Transaction')).toBeInTheDocument();
 
       await act(async () => {
         fireEvent.click(screen.getByText('Brokerage'));

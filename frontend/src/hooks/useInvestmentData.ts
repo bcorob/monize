@@ -7,6 +7,8 @@ import toast from 'react-hot-toast';
 import { investmentsApi } from '@/lib/investments';
 import { getErrorMessage } from '@/lib/errors';
 import { transactionsApi } from '@/lib/transactions';
+import { invalidateBalanceCaches } from '@/lib/apiCache';
+import { editCashRow } from '@/lib/cash-row-edit';
 import { accountsApi } from '@/lib/accounts';
 import { categoriesApi } from '@/lib/categories';
 import { payeesApi } from '@/lib/payees';
@@ -25,6 +27,11 @@ import { useFormModal } from '@/hooks/useFormModal';
 import { createLogger } from '@/lib/logger';
 import { PAGE_SIZE } from '@/lib/constants';
 import { type TransactionFilters } from '@/components/investments/InvestmentTransactionList';
+import {
+  countActiveCashFilters,
+  EMPTY_CASH_FILTERS,
+  type CashFilterValues,
+} from '@/components/investments/CashRegisterFilters';
 
 const logger = createLogger('Investments');
 
@@ -47,6 +54,10 @@ export function useInvestmentData() {
   } = useFormModal<InvestmentTransaction>();
   const [lastPriceUpdate, setLastPriceUpdate] = useState<string | null>(null);
   const [transactionFilters, setTransactionFilters] = useState<TransactionFilters>({});
+  // Bumped by every write on either register. The sections this hook fetches
+  // are reloaded directly; the Portfolio Value chart fetches its own series and
+  // is only reachable as a prop, so it takes this as its `refreshKey`.
+  const [writeRefreshKey, setWriteRefreshKey] = useState(0);
 
   // Cash transaction state
   const [cashTransactions, setCashTransactions] = useState<Transaction[]>([]);
@@ -55,10 +66,10 @@ export function useInvestmentData() {
   const [cashTransactionsLoading, setCashTransactionsLoading] = useState(false);
   const [cashStartingBalance, setCashStartingBalance] = useState<number | undefined>();
   const [showCashFilters, setShowCashFilters] = useState(false);
-  const [cashFilterPayeeIds, setCashFilterPayeeIds] = useState<string[]>([]);
-  const [cashFilterCategoryIds, setCashFilterCategoryIds] = useState<string[]>([]);
-  const [cashFilterStartDate, setCashFilterStartDate] = useState('');
-  const [cashFilterEndDate, setCashFilterEndDate] = useState('');
+  // One object for the four cash filters: they are set, counted and cleared
+  // together, and `CashFilterBar` -- shared with the account detail page's
+  // register -- is controlled by exactly this shape.
+  const [cashFilters, setCashFiltersState] = useState<CashFilterValues>(EMPTY_CASH_FILTERS);
   const [cashPayees, setCashPayees] = useState<Payee[]>([]);
   const [cashCategories, setCashCategories] = useState<Category[]>([]);
   const [initialLoadComplete, setInitialLoadComplete] = useState(false);
@@ -306,21 +317,51 @@ export function useInvestmentData() {
     loadTransactions(selectedAccountIds, currentPage, transactionFilters);
   }, [loadTransactions, selectedAccountIds, currentPage, transactionFilters]);
 
-  // Memoize cash filters object
-  const cashFiltersObj = useMemo(() => ({
-    payeeIds: cashFilterPayeeIds,
-    categoryIds: cashFilterCategoryIds,
-    startDate: cashFilterStartDate,
-    endDate: cashFilterEndDate,
-  }), [cashFilterPayeeIds, cashFilterCategoryIds, cashFilterStartDate, cashFilterEndDate]);
+  // Narrowing the list changes which rows page 1 holds, so a filter change
+  // always returns to it.
+  const setCashFilters = useCallback((next: CashFilterValues) => {
+    setCashFiltersState(next);
+    setCashCurrentPage(1);
+  }, []);
 
   // Load cash transactions when view switches to 'cash' or dependencies change
   // (Caller must pass transactionView to control this)
   const loadCashTransactionsIfNeeded = useCallback((transactionView: string) => {
     if (transactionView === 'cash') {
-      loadCashTransactions(cashAccountIds, cashCurrentPage, cashFiltersObj);
+      loadCashTransactions(cashAccountIds, cashCurrentPage, cashFilters);
     }
-  }, [loadCashTransactions, cashAccountIds, cashCurrentPage, cashFiltersObj]);
+  }, [loadCashTransactions, cashAccountIds, cashCurrentPage, cashFilters]);
+
+  /**
+   * Everything this page shows, re-fetched after a write on either register.
+   *
+   * The two registers are one account's two ledgers: a trade settles into the
+   * cash ledger, a cash row can carry an investment split, and both feed the
+   * portfolio summary, the allocation, Holdings by Account (cash row included)
+   * and the value chart. So a write on either side is a write to all of it, and
+   * every write path -- create, edit, delete, status change, on both lists --
+   * goes through here rather than reloading the list it happened on.
+   *
+   * Deleting a cash row reloaded that list alone, which is issue #1190 facing
+   * the other way: the row vanished and every figure above it kept its
+   * pre-delete value until the user pressed Refresh.
+   *
+   * Both registers are reloaded whether or not each is the visible one: which
+   * view happens to be on screen is not part of whether its rows changed, and
+   * toggling to a stale list is the same defect one step later.
+   *
+   * `invalidateBalanceCaches` only makes the *next* fetch honest, so the
+   * reloads below are what actually redraws the page.
+   */
+  const refreshAfterWrite = useCallback(() => {
+    invalidateBalanceCaches();
+    loadAllPortfolioData(selectedAccountIds, currentPage, transactionFilters);
+    loadCashTransactions(cashAccountIds, cashCurrentPage, cashFilters);
+    setWriteRefreshKey((key) => key + 1);
+  }, [
+    loadAllPortfolioData, selectedAccountIds, currentPage, transactionFilters,
+    loadCashTransactions, cashAccountIds, cashCurrentPage, cashFilters,
+  ]);
 
   useEffect(() => {
     if (!isLoading && !initialLoadComplete) {
@@ -397,9 +438,9 @@ export function useInvestmentData() {
     });
     try {
       await investmentsApi.deleteTransaction(id);
-      const ids = selectedAccountIds.length > 0 ? selectedAccountIds : undefined;
-      const summary = await investmentsApi.getPortfolioSummary(ids);
-      setPortfolioSummary(summary);
+      // A trade's cash leg goes with it, so the cash register, the chart and
+      // the balances are all stale now -- not just the portfolio summary.
+      refreshAfterWrite();
     } catch (error) {
       logger.error('Failed to delete transaction:', error);
       // Surface the backend's reason (e.g. "would cause holdings to go
@@ -415,7 +456,7 @@ export function useInvestmentData() {
   // "Create & New" keeps the form open, so the page only refreshes what it
   // shows behind it -- everything `handleFormSuccess` does bar the close.
   const handleFormCreateAndNew = () => {
-    loadAllPortfolioData(selectedAccountIds, currentPage, transactionFilters);
+    refreshAfterWrite();
   };
 
   const handleFormSuccess = () => {
@@ -424,37 +465,24 @@ export function useInvestmentData() {
   };
 
   // Cash transaction handlers
-  const handleEditCashTransaction = async (transaction: Transaction) => {
-    if (transaction.linkedInvestmentTransactionId) {
-      router.push(`/investments?edit=${transaction.linkedInvestmentTransactionId}`);
-      return;
-    }
-    if (transaction.isTransfer) {
-      try {
-        const fullTransaction = await transactionsApi.getById(transaction.id);
-        openCashEdit(fullTransaction);
-      } catch (error) {
-        logger.error('Failed to load transaction details:', error);
-        openCashEdit(transaction);
-      }
-    } else {
-      openCashEdit(transaction);
-    }
-  };
+  const handleEditCashTransaction = (transaction: Transaction) =>
+    editCashRow(transaction, {
+      // The investment form is mounted on this page already, so a trade's cash
+      // leg opens it here. Routing to `?edit=<id>` reached the same modal by
+      // navigating, which remounted the page and scrolled it to the top first;
+      // the URL parameter stays for arrivals from elsewhere.
+      openInvestment: openEdit,
+      openCash: openCashEdit,
+      onLookupFailed: (error) =>
+        toast.error(getErrorMessage(error, t('page.toastLoadFailed'))),
+    });
 
   const handleCashTransactionUpdate = useCallback((updatedTx: Transaction) => {
     setCashTransactions(prev => prev.map(tx => tx.id === updatedTx.id ? updatedTx : tx));
   }, []);
 
   const handleCashFormCreateAndNew = () => {
-    loadCashTransactions(cashAccountIds, cashCurrentPage, cashFiltersObj);
-    // The portfolio summary drives the Holdings by Account section's cash
-    // balances, so refresh it when a cash transaction changes.
-    loadPortfolioSummary(selectedAccountIds);
-    // A cash transaction can embed an investment-split action (BUY/SELL/etc),
-    // which writes to the linked brokerage account; refresh the brokerage
-    // transaction list so the new row appears without a manual reload.
-    loadTransactions(selectedAccountIds, currentPage, transactionFilters);
+    refreshAfterWrite();
   };
 
   const handleCashFormSuccess = () => {
@@ -462,25 +490,15 @@ export function useInvestmentData() {
     handleCashFormCreateAndNew();
   };
 
-  const refreshCashTransactions = useCallback(() => {
-    loadCashTransactions(cashAccountIds, cashCurrentPage, cashFiltersObj);
-  }, [loadCashTransactions, cashAccountIds, cashCurrentPage, cashFiltersObj]);
-
   const handleFiltersChange = (newFilters: TransactionFilters) => {
     setTransactionFilters(newFilters);
     setCurrentPage(1);
   };
 
-  const clearCashFilters = () => {
-    setCashFilterPayeeIds([]);
-    setCashFilterCategoryIds([]);
-    setCashFilterStartDate('');
-    setCashFilterEndDate('');
-    setCashCurrentPage(1);
-  };
+  const clearCashFilters = () => setCashFilters(EMPTY_CASH_FILTERS);
 
-  const hasActiveCashFilters = cashFilterPayeeIds.length > 0 || cashFilterCategoryIds.length > 0 || !!cashFilterStartDate || !!cashFilterEndDate;
-  const activeCashFilterCount = (cashFilterPayeeIds.length > 0 ? 1 : 0) + (cashFilterCategoryIds.length > 0 ? 1 : 0) + (cashFilterStartDate ? 1 : 0) + (cashFilterEndDate ? 1 : 0);
+  const activeCashFilterCount = countActiveCashFilters(cashFilters);
+  const hasActiveCashFilters = activeCashFilterCount > 0;
 
   // Clicking a holding opens that security's detail page (review of discussion
   // #964). It used to filter the transaction list by symbol instead; the filters
@@ -526,7 +544,7 @@ export function useInvestmentData() {
 
     // Portfolio
     portfolioSummary, isLoading,
-    loadAllPortfolioData,
+    loadAllPortfolioData, refreshAfterWrite, writeRefreshKey,
 
     // Brokerage transactions
     transactions, pagination, currentPage,
@@ -546,15 +564,12 @@ export function useInvestmentData() {
     // Cash transactions
     cashAccountIds, cashTransactions, cashPagination, cashCurrentPage,
     cashTransactionsLoading, cashStartingBalance, cashPayees, cashCategories,
-    cashFilterPayeeIds, setCashFilterPayeeIds,
-    cashFilterCategoryIds, setCashFilterCategoryIds,
-    cashFilterStartDate, setCashFilterStartDate,
-    cashFilterEndDate, setCashFilterEndDate,
+    cashFilters, setCashFilters,
     showCashFilters, setShowCashFilters,
     hasActiveCashFilters, activeCashFilterCount,
     handleEditCashTransaction, handleCashTransactionUpdate, handleCashFormSuccess,
     handleCashFormCreateAndNew,
-    refreshCashTransactions, clearCashFilters,
+    clearCashFilters,
     goToCashPage, handleCashClick,
     loadCashFilterData, loadCashTransactionsIfNeeded,
     setCashCurrentPage,

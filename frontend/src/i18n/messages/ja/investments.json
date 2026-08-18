@@ -25,10 +25,10 @@
     "cashFilterTo": "終了日",
     "loadingCashTransactions": "現金取引を読み込み中...",
     "today": "今日",
-    "transactionCount": "{count} 件の取引{plural}",
     "allPayees": "すべての支払先",
     "allCategories": "すべてのカテゴリ",
-    "toastDeleteFailed": "取引の削除に失敗しました"
+    "toastDeleteFailed": "取引の削除に失敗しました",
+    "toastLoadFailed": "取引の読み込みに失敗しました"
   },
   "portfolioSummary": {
     "title": "ポートフォリオサマリー",
@@ -131,6 +131,7 @@
     "portfolioLabel": "ポートフォリオ："
   },
   "transactionList": {
+    "itemNamePlural": "件の取引",
     "title": "最近の取引",
     "filtered": "（フィルタ済み）",
     "newBrokerageTransaction": "+ 新規証券取引",

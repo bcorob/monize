@@ -591,6 +591,22 @@ export interface PaginatedInvestmentTransactions {
   pagination: InvestmentTransactionPaginationInfo;
 }
 
+/**
+ * What a brokerage register's filter pickers offer: the actions and symbols its
+ * own rows use -- the actions in the vocabulary's order, the symbols
+ * alphabetical.
+ *
+ * A household brokerage uses four of the twenty-odd actions, so offering all of
+ * them to narrow a handful of rows is a list to read rather than a filter. The
+ * symbols answer a sharper question than length: built from current holdings,
+ * the picker omitted every position sold in full, whose trades are exactly what
+ * somebody filtering by symbol tends to be looking for.
+ */
+export interface InvestmentRegisterFilterOptions {
+  actions: string[];
+  symbols: string[];
+}
+
 export interface RealizedGainEntry {
   transactionId: string;
   transactionDate: string;

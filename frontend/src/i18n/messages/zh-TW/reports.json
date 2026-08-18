@@ -142,8 +142,6 @@
     "totalAssets": "總資產",
     "totalLiabilities": "總負債",
     "netWorth": "資產淨值",
-    "tableView": "表格檢視",
-    "chartView": "圖表檢視",
     "noData": "無資料可顯示。",
     "noAccounts": "找不到科目。",
     "closed": "已關閉",
@@ -193,6 +191,7 @@
     "groupAll": "所有科目",
     "colGroup": "分組",
     "noAccountsForFilters": "沒有科目符合目前的篩選條件。",
+    "noAccountsOnDate": "{date} 時您的科目均不存在。",
     "accountTypes": {
       "CHEQUING": "活期存款",
       "SAVINGS": "儲蓄存款",

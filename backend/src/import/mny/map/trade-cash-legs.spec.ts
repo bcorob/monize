@@ -1,7 +1,9 @@
 import { InvestmentAction } from "../../../securities/entities/investment-transaction.entity";
+import { SplitKind } from "../../../transactions/entities/split-kind.enum";
 import {
   investmentData,
   mnyAccount,
+  mnyCurrency,
   mnyInvestmentDetail,
   mnySecurity,
   mnySplit,
@@ -13,12 +15,18 @@ import {
 import { MnyTransactionData } from "../tables/read-transactions";
 import { MnyInvestmentData } from "../tables/read-investments";
 import { DEFAULT_MNY_IMPORT_OPTIONS } from "../model/mny-import-options";
-import { MNY_ACTION } from "../model/mny-model";
+import { MNY_ACTION, MNY_TRANSACTION_FLAG } from "../model/mny-model";
+import { TransactionStatus } from "../../../transactions/entities/transaction.entity";
 import { computeExpectedBalances } from "../mny-parser.service";
 import { mapAccounts, cashKeyByAccountKey } from "./map-reference";
 import { mapSecurities } from "./map-securities";
 import { mapTransactions } from "./map-transactions";
 import { mapInvestments } from "./map-investments";
+import {
+  applyInvestmentCashSources,
+  investmentWritesOwnCashRow,
+  tradesByHandle,
+} from "./investment-cash";
 
 /**
  * Issue #1175: what the cash register of a brokerage account ends up holding.
@@ -100,31 +108,41 @@ function mapAll(
   const mappedAccounts = accounts();
   const mappedSecurities = securities();
 
-  const banking = mapTransactions({
-    transactions,
-    accountKeyByHandle: mappedAccounts.keyByHandle,
-    currencyByHandle: mappedAccounts.currencyByHandle,
-    bills: [],
-    cashKeyByAccountKey: cashKeyByAccountKey(mappedAccounts),
-  });
-  const investments = mapInvestments({
+  const mappedInvestments = mapInvestments({
     transactions,
     investments: investmentTables,
     accounts: mappedAccounts,
     securities: mappedSecurities,
     bills: [],
   });
+  const banking = mapTransactions({
+    transactions,
+    accountKeyByHandle: mappedAccounts.keyByHandle,
+    currencyByHandle: mappedAccounts.currencyByHandle,
+    bills: [],
+    cashKeyByAccountKey: cashKeyByAccountKey(mappedAccounts),
+    tradesByHandle: tradesByHandle(mappedInvestments),
+  });
+  const investments = applyInvestmentCashSources(
+    mappedInvestments,
+    banking.investmentCashSources,
+  );
+
+  /** Every row a given account's register will hold, from both writers. */
+  const rowsIn = (accountKey: string) => [
+    ...banking.transactions.filter((row) => row.accountKey === accountKey),
+    ...investments.transactions.filter(
+      (row) =>
+        investmentWritesOwnCashRow(row) && row.cashAccountKey === accountKey,
+    ),
+  ];
 
   return {
     banking,
     investments,
+    rowsIn,
     /** Every row that will exist in the sleeve, from both writers. */
-    sleeveRows: [
-      ...banking.transactions.filter((row) => row.accountKey === "acct-6"),
-      ...investments.transactions.filter(
-        (row) => row.cashAccountKey === "acct-6" && row.cashAmount !== 0,
-      ),
-    ],
+    sleeveRows: rowsIn("acct-6"),
     balances: computeExpectedBalances(
       mappedAccounts,
       banking,
@@ -202,16 +220,25 @@ describe("a trade funded from the brokerage's own cash account", () => {
   });
 });
 
-describe("a trade funded from an outside account", () => {
+describe("a trade funded from an outside account (issue #1212)", () => {
   /**
-   * The other shape, and the one `buildCashCounterparts` exists for: the far
-   * side of the transfer is the trade itself, so Monize has to synthesize the
-   * cash arriving in the sleeve. Money shows two rows in the cash register for
-   * this -- the transfer in, then the purchase -- and so does Monize.
+   * Money records the cash half in the account that paid -- here chequing --
+   * and pairs it with the trade. Monize used to read that pairing as a transfer
+   * into the brokerage's cash sleeve, then have the trade take the money
+   * straight back out again: two rows in a register Money shows nothing in, and
+   * a purchase that claimed to be funded by the sleeve rather than by the
+   * account the user actually paid from.
+   *
+   * The row stays where Money put it and becomes the trade's cash leg.
    */
   const moneyRows = transactionData({
     transactions: [
-      mnyTransaction({ handle: 20, account: CHEQUING, amount: -PURCHASE }),
+      mnyTransaction({
+        handle: 20,
+        account: CHEQUING,
+        amount: -PURCHASE,
+        memo: "Buy VOO",
+      }),
       mnyTransaction({
         handle: 21,
         account: BROKERAGE,
@@ -223,22 +250,184 @@ describe("a trade funded from an outside account", () => {
     transfers: [mnyTransfer({ from: 20, to: 21 })],
   });
 
-  it("still synthesizes the cash arriving in the sleeve", () => {
-    const { banking, sleeveRows, balances } = mapAll(
-      moneyRows,
+  it("leaves the cash sleeve empty and keeps one row in the paying account", () => {
+    const { rowsIn, sleeveRows } = mapAll(moneyRows, purchaseDetail(21));
+
+    expect(sleeveRows).toEqual([]);
+    expect(rowsIn("acct-1")).toHaveLength(1);
+  });
+
+  it("makes the paying account's row the trade's cash leg, not a transfer", () => {
+    const { banking, investments } = mapAll(moneyRows, purchaseDetail(21));
+
+    const bank = banking.transactions.find((row) => row.handle === 20);
+    expect(bank).toMatchObject({
+      accountKey: "acct-1",
+      amount: -PURCHASE,
+      isTransfer: false,
+      linkedTransactionId: null,
+    });
+    // The trade names the account the funds came from, exactly as a natively
+    // entered purchase funded from elsewhere does, and adopts that row rather
+    // than writing a second one.
+    expect(investments.transactions[0]).toMatchObject({
+      accountKey: "acct-5",
+      action: InvestmentAction.BUY,
+      cashAccountKey: "acct-1",
+      fundingAccountKey: "acct-1",
+      cashTransactionId: bank?.id,
+      transactionSplitId: null,
+      exchangeRate: 1,
+    });
+    expect(banking.transfersLinked).toBe(0);
+    expect(banking.warnings).toEqual([]);
+    expect(investments.warnings).toEqual([]);
+  });
+
+  it("moves each balance exactly once", () => {
+    const { balances } = mapAll(moneyRows, purchaseDetail(21));
+
+    // The sleeve is untouched -- no cash ever arrived there or left it.
+    expect(balances.get("acct-6")).toBe(SLEEVE_OPENING);
+    expect(balances.get("acct-1")).toBe(-PURCHASE);
+    expect(balances.get("acct-5")).toBe(0);
+  });
+
+  it("voids the funding row when Money voided the trade", () => {
+    // The row would otherwise claim the chequing account paid for a purchase
+    // that, per the trade beside it, never happened -- and it would move the
+    // balance, since only VOID rows are excluded from it.
+    const { banking, investments, balances } = mapAll(
+      transactionData({
+        transactions: [
+          mnyTransaction({ handle: 20, account: CHEQUING, amount: -PURCHASE }),
+          mnyTransaction({
+            handle: 21,
+            account: BROKERAGE,
+            amount: PURCHASE,
+            security: SECURITY,
+            action: MNY_ACTION.BUY,
+            flags: MNY_TRANSACTION_FLAG.VOID,
+          }),
+        ],
+        transfers: [mnyTransfer({ from: 20, to: 21 })],
+      }),
       purchaseDetail(21),
     );
 
-    expect(banking.tradeCashLegs).toBe(0);
-    expect(sleeveRows).toHaveLength(2);
+    expect(investments.transactions[0].status).toBe(TransactionStatus.VOID);
+    expect(banking.transactions[0].status).toBe(TransactionStatus.VOID);
+    expect(balances.get("acct-1")).toBe(0);
+  });
+
+  it("derives the rate when the paying account is in another currency", () => {
+    // Money records both halves of one event: 2,400 in the brokerage's currency
+    // and 3,120 leaving a CAD chequing account. Their ratio is the rate the
+    // settlement happened at, and writing 1 there would post the cash
+    // unconverted -- short by the whole spread.
+    const mappedAccounts = mapAccounts(
+      referenceData({
+        currencies: [
+          mnyCurrency({ handle: 1, isoCode: "USD" }),
+          mnyCurrency({ handle: 2, isoCode: "CAD" }),
+        ],
+        accounts: [
+          mnyAccount({
+            handle: CHEQUING,
+            type: 0,
+            name: "Chequing",
+            currency: 2,
+          }),
+          mnyAccount({
+            handle: BROKERAGE,
+            type: 5,
+            name: "Brokerage",
+            relatedAccount: SLEEVE,
+            currency: 1,
+          }),
+          mnyAccount({
+            handle: SLEEVE,
+            type: 0,
+            name: "Brokerage (Cash)",
+            relatedAccount: BROKERAGE,
+            currency: 1,
+          }),
+        ],
+      }),
+      DEFAULT_MNY_IMPORT_OPTIONS,
+      "USD",
+    );
+    const rows = transactionData({
+      transactions: [
+        mnyTransaction({ handle: 20, account: CHEQUING, amount: -3_120 }),
+        mnyTransaction({
+          handle: 21,
+          account: BROKERAGE,
+          amount: PURCHASE,
+          security: SECURITY,
+          action: MNY_ACTION.BUY,
+        }),
+      ],
+      transfers: [mnyTransfer({ from: 20, to: 21 })],
+    });
+
+    const mappedInvestments = mapInvestments({
+      transactions: rows,
+      investments: purchaseDetail(21),
+      accounts: mappedAccounts,
+      securities: securities(),
+      bills: [],
+    });
+    const banking = mapTransactions({
+      transactions: rows,
+      accountKeyByHandle: mappedAccounts.keyByHandle,
+      currencyByHandle: mappedAccounts.currencyByHandle,
+      bills: [],
+      cashKeyByAccountKey: cashKeyByAccountKey(mappedAccounts),
+      tradesByHandle: tradesByHandle(mappedInvestments),
+    });
+    const investments = applyInvestmentCashSources(
+      mappedInvestments,
+      banking.investmentCashSources,
+    );
+
+    expect(investments.transactions[0]).toMatchObject({
+      currencyCode: "USD",
+      totalAmount: PURCHASE,
+      cashAccountKey: "acct-1",
+      exchangeRate: 1.3,
+    });
+  });
+});
+
+describe("a trade the investment mapper did not write", () => {
+  it("keeps Money's own funding row as an ordinary transfer", () => {
+    // `act` 99 is not an action Monize knows, so there is no trade to fund.
+    // Dropping the pairing's meaning here would be inventing one: the money
+    // Money recorded still has to arrive somewhere, so the old synthesized
+    // sleeve counterpart is what stands in for the row that will not exist.
+    const { banking, investments } = mapAll(
+      transactionData({
+        transactions: [
+          mnyTransaction({ handle: 20, account: CHEQUING, amount: -PURCHASE }),
+          mnyTransaction({
+            handle: 21,
+            account: BROKERAGE,
+            amount: PURCHASE,
+            security: SECURITY,
+            action: 99,
+          }),
+        ],
+        transfers: [mnyTransfer({ from: 20, to: 21 })],
+      }),
+      purchaseDetail(21),
+    );
+
+    expect(investments.transactions).toEqual([]);
+    expect(banking.transactions).toHaveLength(2);
     expect(
       banking.transactions.find((row) => row.accountKey === "acct-6"),
     ).toMatchObject({ amount: PURCHASE, isTransfer: true });
-
-    // Cash in, cash out: the sleeve ends where it started and the chequing
-    // account paid for the shares.
-    expect(balances.get("acct-6")).toBe(SLEEVE_OPENING);
-    expect(balances.get("acct-1")).toBe(-PURCHASE);
   });
 });
 
@@ -264,41 +453,94 @@ describe("cash moved into the sleeve without a trade", () => {
   });
 });
 
-describe("a split in the sleeve with a leg paying for a trade", () => {
-  it("keeps the synthesized counterpart, which is what balances the parent", () => {
-    // A split *leg* is a different shape from a top-level row: the parent has
-    // already taken the whole amount out of the sleeve, so the counterpart put
-    // back in is what stops the trade's own leg debiting it twice. Dropping it
-    // the way a top-level row is dropped would leave the sleeve short by the
-    // purchase.
-    const { banking, balances } = mapAll(
-      transactionData({
-        transactions: [
-          mnyTransaction({ handle: 20, account: SLEEVE, amount: -2_500 }),
-          mnyTransaction({ handle: 21, account: SLEEVE, amount: -PURCHASE }),
-          mnyTransaction({ handle: 22, account: SLEEVE, amount: -100 }),
-          mnyTransaction({
-            handle: 23,
-            account: BROKERAGE,
-            amount: PURCHASE,
-            security: SECURITY,
-            action: MNY_ACTION.BUY,
-          }),
-        ],
-        splits: [
-          mnySplit({ parent: 20, child: 21, position: 0 }),
-          mnySplit({ parent: 20, child: 22, position: 1 }),
-        ],
-        transfers: [mnyTransfer({ from: 21, to: 23 })],
-      }),
+describe("a split with a leg paying for a trade (issue #1211)", () => {
+  /**
+   * Issue #515 gave Monize a place for exactly this: a split leg whose amount
+   * *is* an investment action's cash impact, with the investment row embedded
+   * in the leg. The import did not use it -- the leg became a transfer to the
+   * brokerage's cash sleeve, so the register showed the purchase as a transfer
+   * to an account the user never chose, and the sleeve gained a transfer in and
+   * a purchase out that Money shows nothing of.
+   */
+  const paycheque = (parentAccount: number) =>
+    transactionData({
+      transactions: [
+        mnyTransaction({ handle: 20, account: parentAccount, amount: -2_500 }),
+        mnyTransaction({
+          handle: 21,
+          account: parentAccount,
+          amount: -PURCHASE,
+        }),
+        mnyTransaction({ handle: 22, account: parentAccount, amount: -100 }),
+        mnyTransaction({
+          handle: 23,
+          account: BROKERAGE,
+          amount: PURCHASE,
+          security: SECURITY,
+          action: MNY_ACTION.BUY,
+        }),
+      ],
+      splits: [
+        mnySplit({ parent: 20, child: 21, position: 0 }),
+        mnySplit({ parent: 20, child: 22, position: 1 }),
+      ],
+      transfers: [mnyTransfer({ from: 21, to: 23 })],
+    });
+
+  it("embeds the trade in the leg instead of transferring to the sleeve", () => {
+    const { banking, investments } = mapAll(
+      paycheque(CHEQUING),
       purchaseDetail(23),
     );
 
-    expect(banking.tradeCashLegs).toBe(0);
-    expect(banking.transactions.find((row) => row.handle === 23)).toMatchObject(
-      { accountKey: "acct-6", amount: PURCHASE },
+    const parent = banking.transactions.find((row) => row.handle === 20);
+    expect(parent?.splits).toHaveLength(2);
+    expect(parent?.splits[0]).toMatchObject({
+      kind: SplitKind.INVESTMENT,
+      categoryHandle: null,
+      transferAccountKey: null,
+      linkedTransactionId: null,
+      investmentHandle: 23,
+      amount: -PURCHASE,
+    });
+
+    expect(investments.transactions[0]).toMatchObject({
+      accountKey: "acct-5",
+      action: InvestmentAction.BUY,
+      transactionSplitId: parent?.splits[0].id,
+      cashTransactionId: null,
+      // Embedded rows name no funding account: the parent transaction's own
+      // account is the cash side, the same shape `createEmbeddedForSplit` writes.
+      fundingAccountKey: null,
+      cashAccountKey: "acct-1",
+    });
+  });
+
+  it("puts no row in any cash register but the parent's own", () => {
+    const { banking, rowsIn, sleeveRows, balances } = mapAll(
+      paycheque(CHEQUING),
+      purchaseDetail(23),
     );
-    // 5,000 - 2,500 (the split) + 2,400 (the counterpart) - 2,400 (the trade).
+
+    expect(banking.transactions).toHaveLength(1);
+    expect(rowsIn("acct-1")).toHaveLength(1);
+    expect(sleeveRows).toEqual([]);
+    expect(balances.get("acct-1")).toBe(-2_500);
+    expect(balances.get("acct-6")).toBe(SLEEVE_OPENING);
+  });
+
+  it("does the same when the split sits in the sleeve itself", () => {
+    // The old rule kept a synthesized counterpart here, on the premise that the
+    // parent had already taken the cash out and something had to put it back.
+    // With the trade embedded in the leg there is nothing to put back: the
+    // parent row is the only movement, and it is already right.
+    const { banking, sleeveRows, balances } = mapAll(
+      paycheque(SLEEVE),
+      purchaseDetail(23),
+    );
+
+    expect(sleeveRows).toHaveLength(1);
+    expect(banking.transactions.map((row) => row.handle)).toEqual([20]);
     expect(balances.get("acct-6")).toBe(SLEEVE_OPENING - 2_500);
   });
 });

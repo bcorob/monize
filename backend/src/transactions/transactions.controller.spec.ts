@@ -48,6 +48,10 @@ describe("TransactionsController", () => {
       bulkUpdate: jest.fn(),
       getRecent: jest.fn(),
       getFxFeeSummary: jest.fn(),
+      getRegisterFilterOptions: jest.fn().mockResolvedValue({
+        payees: [],
+        categories: [],
+      }),
     };
 
     mockJointAccounts = {
@@ -757,6 +761,58 @@ describe("TransactionsController", () => {
           "not-a-uuid",
         ),
       ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe("getFilterOptions()", () => {
+    it("passes the requested accounts through in own context", async () => {
+      await controller.getFilterOptions(mockReq, `${uuid1},${uuid2}`);
+
+      expect(mockService.getRegisterFilterOptions).toHaveBeenCalledWith(
+        "user-1",
+        expect.objectContaining({ accountIds: [uuid1, uuid2] }),
+      );
+    });
+
+    it("widens by the authorized joint accounts when nothing is requested", async () => {
+      mockJointAccounts.jointAccountIdSetFor.mockResolvedValue(
+        new Set([uuid3]),
+      );
+
+      await controller.getFilterOptions(mockReq);
+
+      expect(mockService.getRegisterFilterOptions).toHaveBeenCalledWith(
+        "user-1",
+        expect.objectContaining({ jointAccountIds: [uuid3] }),
+      );
+    });
+
+    it("narrows an acting delegate to the accounts they may read", async () => {
+      mockDelegationService.readableAccountIds.mockResolvedValue([uuid2]);
+      const actingReq = {
+        user: { id: "owner-1", isActing: true, delegationId: "del-1" },
+      };
+
+      await controller.getFilterOptions(actingReq, `${uuid1},${uuid2}`);
+
+      expect(mockService.getRegisterFilterOptions).toHaveBeenCalledWith(
+        "owner-1",
+        { accountIds: [uuid2] },
+      );
+    });
+
+    it("offers a delegate with no readable accounts nothing, and asks nothing", async () => {
+      // Not an unfiltered query: that would answer with the owner's whole
+      // ledger, which is the one thing the delegation does not grant.
+      mockDelegationService.readableAccountIds.mockResolvedValue([]);
+      const actingReq = {
+        user: { id: "owner-1", isActing: true, delegationId: "del-1" },
+      };
+
+      const result = await controller.getFilterOptions(actingReq);
+
+      expect(result).toEqual({ payees: [], categories: [] });
+      expect(mockService.getRegisterFilterOptions).not.toHaveBeenCalled();
     });
   });
 

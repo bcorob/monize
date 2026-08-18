@@ -43,6 +43,8 @@ import {
   mnyCurrency,
   mnyDefaults,
   mnyPayee,
+  mnyInvestmentDetail,
+  mnySecurity,
   mnySplit,
   mnyTransaction,
   mnyTransfer,
@@ -59,7 +61,13 @@ import { mapTransactions } from "@/import/mny/map/map-transactions";
 import { mapBills } from "@/import/mny/map/map-bills";
 import { mapLoans } from "@/import/mny/map/map-loans";
 import { mapSecurities } from "@/import/mny/map/map-securities";
+import { mapInvestments } from "@/import/mny/map/map-investments";
+import {
+  applyInvestmentCashSources,
+  tradesByHandle,
+} from "@/import/mny/map/investment-cash";
 import { DEFAULT_MNY_IMPORT_OPTIONS } from "@/import/mny/model/mny-import-options";
+import { MNY_ACTION } from "@/import/mny/model/mny-model";
 import {
   applyDeferredClosures,
   writeAccounts,
@@ -70,6 +78,10 @@ import {
   writeAccountBalances,
   writeTransactions,
 } from "@/import/mny/writers/write-transactions";
+import {
+  writeInvestments,
+  writeSecurities,
+} from "@/import/mny/writers/write-investments";
 import { writeBills } from "@/import/mny/writers/write-bills";
 import { writeLoans } from "@/import/mny/writers/write-loans";
 import { ScheduledTransaction } from "@/scheduled-transactions/entities/scheduled-transaction.entity";
@@ -468,6 +480,7 @@ describe("mny writers (integration)", () => {
         currencyByHandle: accounts.currencyByHandle,
         bills: [],
         cashKeyByAccountKey: cashKeyByAccountKey(accounts),
+        tradesByHandle: new Map(),
       });
       const categories = mapCategories(reference, null);
       const payees = mapPayees(reference.payees, null);
@@ -771,6 +784,227 @@ describe("mny writers (integration)", () => {
     });
   });
 
+  // -------------------------------------------------------------------------
+  // A trade whose cash a banking row already records (issues #1211, #1212)
+  // -------------------------------------------------------------------------
+
+  describe("a trade paid for from outside its own cash sleeve", () => {
+    /**
+     * The half a mocked writer cannot prove. `transaction_splits` has a
+     * kind-exclusivity CHECK that an investment leg has to satisfy, and both
+     * `investment_transactions.transaction_split_id` and `.transaction_id` are
+     * foreign keys -- so "the writer passed the right value" and "the database
+     * accepted it" are two different claims, and only this one tests the second.
+     */
+    const CHEQUING = 1;
+    const BROKERAGE = 5;
+    const SLEEVE = 6;
+    const SECURITY_HANDLE = 9;
+    const PURCHASE = 2_400;
+
+    const reference = () =>
+      referenceData({
+        currencies: [mnyCurrency({ handle: 1, isoCode: "USD" })],
+        defaults: mnyDefaults({ defaultCurrency: 1 }),
+        accounts: [
+          mnyAccount({ handle: CHEQUING, type: 0, name: "Chequing" }),
+          mnyAccount({
+            handle: BROKERAGE,
+            type: 5,
+            name: "Brokerage",
+            relatedAccount: SLEEVE,
+          }),
+          mnyAccount({
+            handle: SLEEVE,
+            type: 0,
+            name: "Brokerage (Cash)",
+            relatedAccount: BROKERAGE,
+          }),
+        ],
+      });
+
+    /** Money's `TRN_INV` detail for the one purchase every case here makes. */
+    const detail = (handle: number) =>
+      investmentData({
+        securities: [mnySecurity({ handle: SECURITY_HANDLE, symbol: "VOO" })],
+        investmentDetails: [
+          mnyInvestmentDetail({
+            transaction: handle,
+            price: 240,
+            quantity: 10,
+          }),
+        ],
+      });
+
+    /** The real mapper chain, in the parser's order, then the real writers. */
+    async function importRows(
+      rows: ReturnType<typeof transactionData>,
+      investmentTables: ReturnType<typeof investmentData>,
+    ) {
+      const referenceRows = reference();
+      const accounts = mapAccounts(
+        referenceRows,
+        DEFAULT_MNY_IMPORT_OPTIONS,
+        "USD",
+      );
+      const securities = mapSecurities({
+        securities: investmentTables.securities,
+        currencyByHandle: new Map(),
+        baseCurrency: "USD",
+        activeHandles: new Set([SECURITY_HANDLE]),
+      });
+      const mappedInvestments = mapInvestments({
+        transactions: rows,
+        investments: investmentTables,
+        accounts,
+        securities,
+        bills: [],
+      });
+      const transactions = mapTransactions({
+        transactions: rows,
+        accountKeyByHandle: accounts.keyByHandle,
+        currencyByHandle: accounts.currencyByHandle,
+        bills: [],
+        cashKeyByAccountKey: cashKeyByAccountKey(accounts),
+        tradesByHandle: tradesByHandle(mappedInvestments),
+      });
+      const investments = applyInvestmentCashSources(
+        mappedInvestments,
+        transactions.investmentCashSources,
+      );
+
+      return inTransaction(async (manager) => {
+        const writtenAccounts = await writeAccounts(
+          manager,
+          userId,
+          accounts.accounts,
+        );
+        const writtenSecurities = await writeSecurities(
+          manager,
+          userId,
+          securities.securities,
+        );
+        const writtenTransactions = await writeTransactions(manager, userId, {
+          transactions: transactions.transactions,
+          accountIdByKey: writtenAccounts.idByKey,
+          categoryIdByHandle: new Map(),
+          payeeIdByHandle: new Map(),
+          payeeNameByHandle: new Map(),
+        });
+        await writeInvestments(manager, userId, {
+          transactions: investments.transactions,
+          accountIdByKey: writtenAccounts.idByKey,
+          securityIdByHandle: writtenSecurities.idByHandle,
+          categoryIdByHandle: new Map(),
+          payeeIdByHandle: new Map(),
+          payeeNameByHandle: new Map(),
+          symbolByHandle: new Map([[SECURITY_HANDLE, "VOO"]]),
+          writtenTransactionIds: writtenTransactions.writtenTransactionIds,
+          writtenSplitIds: writtenTransactions.writtenSplitIds,
+        });
+        return { accountIdByKey: writtenAccounts.idByKey };
+      });
+    }
+
+    const rowsIn = async (accountId: string) =>
+      dataSource
+        .getRepository(Transaction)
+        .find({ where: { userId, accountId } });
+
+    it("makes the paying account's row the trade's cash leg (#1212)", async () => {
+      const { accountIdByKey } = await importRows(
+        transactionData({
+          transactions: [
+            mnyTransaction({
+              handle: 20,
+              account: CHEQUING,
+              amount: -PURCHASE,
+            }),
+            mnyTransaction({
+              handle: 21,
+              account: BROKERAGE,
+              amount: PURCHASE,
+              security: SECURITY_HANDLE,
+              action: MNY_ACTION.BUY,
+            }),
+          ],
+          transfers: [mnyTransfer({ from: 20, to: 21 })],
+        }),
+        detail(21),
+      );
+
+      const chequing = await rowsIn(accountIdByKey.get("acct-1")!);
+      expect(chequing).toHaveLength(1);
+      expect(chequing[0]).toMatchObject({
+        amount: "-2400.0000",
+        isTransfer: false,
+        linkedTransactionId: null,
+      });
+      // The sleeve holds nothing: no cash ever arrived there or left it.
+      expect(await rowsIn(accountIdByKey.get("acct-6")!)).toHaveLength(0);
+
+      const trade = await dataSource
+        .getRepository(InvestmentTransaction)
+        .findOneOrFail({ where: { userId } });
+      expect(trade.transactionId).toBe(chequing[0].id);
+      expect(trade.fundingAccountId).toBe(accountIdByKey.get("acct-1"));
+      expect(trade.transactionSplitId).toBeNull();
+    });
+
+    it("embeds the trade in a split leg the CHECK constraint accepts (#1211)", async () => {
+      const { accountIdByKey } = await importRows(
+        transactionData({
+          transactions: [
+            mnyTransaction({ handle: 20, account: CHEQUING, amount: -2_500 }),
+            mnyTransaction({
+              handle: 21,
+              account: CHEQUING,
+              amount: -PURCHASE,
+            }),
+            mnyTransaction({ handle: 22, account: CHEQUING, amount: -100 }),
+            mnyTransaction({
+              handle: 23,
+              account: BROKERAGE,
+              amount: PURCHASE,
+              security: SECURITY_HANDLE,
+              action: MNY_ACTION.BUY,
+            }),
+          ],
+          splits: [
+            mnySplit({ parent: 20, child: 21, position: 0 }),
+            mnySplit({ parent: 20, child: 22, position: 1 }),
+          ],
+          transfers: [mnyTransfer({ from: 21, to: 23 })],
+        }),
+        detail(23),
+      );
+
+      const chequing = await rowsIn(accountIdByKey.get("acct-1")!);
+      expect(chequing).toHaveLength(1);
+      expect(await rowsIn(accountIdByKey.get("acct-6")!)).toHaveLength(0);
+
+      const splits = await dataSource
+        .getRepository(TransactionSplit)
+        .find({ where: { transactionId: chequing[0].id } });
+      const investmentLeg = splits.find(
+        (split) => split.kind === SplitKind.INVESTMENT,
+      );
+      expect(investmentLeg).toMatchObject({
+        categoryId: null,
+        transferAccountId: null,
+        linkedTransactionId: null,
+        amount: "-2400.0000",
+      });
+
+      const trade = await dataSource
+        .getRepository(InvestmentTransaction)
+        .findOneOrFail({ where: { userId } });
+      expect(trade.transactionSplitId).toBe(investmentLeg!.id);
+      expect(trade.transactionId).toBeNull();
+      expect(trade.fundingAccountId).toBeNull();
+    });
+  });
+
   describe("writeAccountBalances", () => {
     it("writes each account's balance in one pass", async () => {
       const mapped = mapAccounts(
@@ -923,6 +1157,7 @@ describe("mny writers (integration)", () => {
         currencyByHandle: accounts.currencyByHandle,
         bills: bills.bills,
         cashKeyByAccountKey: cashKeyByAccountKey(accounts),
+        tradesByHandle: new Map(),
       });
       const securities = mapSecurities({
         securities: [],

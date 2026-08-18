@@ -39,12 +39,17 @@ function transaction(
   };
 }
 
+let nextSplitId = 0;
+
 function split(overrides: Partial<MappedSplit> = {}): MappedSplit {
+  nextSplitId += 1;
   return {
+    id: `split-${nextSplitId}`,
     kind: SplitKind.CATEGORY,
     categoryHandle: 10,
     transferAccountKey: null,
     linkedTransactionId: null,
+    investmentHandle: null,
     amount: -10,
     memo: null,
     ...overrides,
@@ -289,6 +294,65 @@ describe("writeTransactions", () => {
       kind: SplitKind.CATEGORY,
       transferAccountId: null,
     });
+  });
+
+  it("writes an investment leg with the id its embedded trade already names", async () => {
+    // The trade's `transaction_split_id` was resolved from this id before
+    // either row was inserted, so minting a fresh one here would leave the
+    // embedded investment pointing at a split that does not exist (issue #1211).
+    const { manager, splits } = doubles();
+
+    await writeTransactions(manager, "user-1", {
+      ...baseInput,
+      transactions: [
+        transaction({
+          splits: [
+            split({
+              id: "cccccccc-0000-0000-0000-000000000001",
+              kind: SplitKind.INVESTMENT,
+              categoryHandle: null,
+              investmentHandle: 23,
+              amount: -2400,
+            }),
+          ],
+        }),
+      ],
+    });
+
+    const written = splits.insert.mock.calls[0][0][0];
+    expect(written).toMatchObject({
+      id: "cccccccc-0000-0000-0000-000000000001",
+      kind: SplitKind.INVESTMENT,
+      // The table's kind-exclusivity constraint requires both to be null.
+      categoryId: null,
+      transferAccountId: null,
+      amount: -2400,
+    });
+  });
+
+  it("reports the transaction and split ids that reached the database", async () => {
+    const { manager } = doubles();
+
+    const written = await writeTransactions(manager, "user-1", {
+      ...baseInput,
+      transactions: [
+        transaction({
+          id: "id-a",
+          splits: [split({ id: "split-a" }), split({ id: "split-b" })],
+        }),
+        // An account the import did not write: neither this row nor its leg
+        // lands, so the investment writer must not reference either.
+        transaction({
+          id: "id-gone",
+          handle: 3,
+          accountKey: "acct-excluded",
+          splits: [split({ id: "split-gone" })],
+        }),
+      ],
+    });
+
+    expect([...written.writtenTransactionIds]).toEqual(["id-a"]);
+    expect([...written.writtenSplitIds].sort()).toEqual(["split-a", "split-b"]);
   });
 
   it("drops a split link whose counterpart is outside the import", async () => {

@@ -25,10 +25,10 @@
     "cashFilterTo": "Bitiş",
     "loadingCashTransactions": "Nakit işlemler yükleniyor...",
     "today": "Bugün",
-    "transactionCount": "{count} işlem",
     "allPayees": "Tüm alacaklılar",
     "allCategories": "Tüm kategoriler",
-    "toastDeleteFailed": "İşlem silinemedi"
+    "toastDeleteFailed": "İşlem silinemedi",
+    "toastLoadFailed": "İşlem yüklenemedi"
   },
   "portfolioSummary": {
     "title": "Portföy Özeti",
@@ -131,6 +131,7 @@
     "portfolioLabel": "Portföy:"
   },
   "transactionList": {
+    "itemNamePlural": "işlemler",
     "title": "Son İşlemler",
     "filtered": "(filtrelenmiş)",
     "newBrokerageTransaction": "+ Yeni Aracı Kurum İşlemi",

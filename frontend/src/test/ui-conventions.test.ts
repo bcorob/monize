@@ -993,3 +993,37 @@ describe("a report never unmounts the date field being typed into", () => {
     expect(subjects).toContain("/src/components/reports/NetWorthReport.tsx");
   });
 });
+
+describe("the bar above a table is the shared ListTopToolbar", () => {
+  /** The one file allowed to build that bar -- it *is* the bar. */
+  const TOOLBAR = "/src/components/ui/ListTopToolbar.tsx";
+  /** Where the bar's buttons ride: `Pagination`'s slot for them. */
+  const SLOT = /infoRight\s*\??[=:]/;
+  /** The component that defines the slot, which must keep naming it. */
+  const PAGINATION = "/src/components/ui/Pagination.tsx";
+
+  it("hands the pager its toolbar buttons from one place", () => {
+    const offenders = productionSources()
+      .filter(([path]) => path !== TOOLBAR && path !== PAGINATION)
+      .filter(([, content]) => SLOT.test(content))
+      .map(([path]) => path);
+
+    // A hand-rolled strip is how the two registers of one investment account
+    // drifted apart: the cash side paged from above its rows with the density
+    // toggle beside the pager, and the brokerage side paged from below the
+    // table with the toggle up in the heading -- one toggle apart, on the same
+    // page. Compose the bar from `ListTopToolbar` instead of rebuilding it.
+    expect(offenders).toEqual([]);
+  });
+
+  it("still finds the bar and its slot, so the rule cannot pass by accident", () => {
+    // Were either renamed, the check above would police an empty set. This
+    // fails first and says what to update.
+    const toolbar = sources[TOOLBAR];
+    expect(toolbar, `${TOOLBAR} not found -- update TOOLBAR in this test`).toBeTruthy();
+    expect(SLOT.test(toolbar)).toBe(true);
+    const pagination = sources[PAGINATION];
+    expect(pagination, `${PAGINATION} not found -- update PAGINATION in this test`).toBeTruthy();
+    expect(SLOT.test(pagination)).toBe(true);
+  });
+});

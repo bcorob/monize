@@ -25,10 +25,10 @@
     "cashFilterTo": "[XX-To-XX]",
     "loadingCashTransactions": "[XX-Loading cash transactions...-XX]",
     "today": "[XX-Today-XX]",
-    "transactionCount": "[XX-{count} transaction{plural}-XX]",
     "allPayees": "[XX-All payees-XX]",
     "allCategories": "[XX-All categories-XX]",
-    "toastDeleteFailed": "[XX-Failed to delete transaction-XX]"
+    "toastDeleteFailed": "[XX-Failed to delete transaction-XX]",
+    "toastLoadFailed": "[XX-Failed to load transaction-XX]"
   },
   "portfolioSummary": {
     "title": "[XX-Portfolio Summary-XX]",
@@ -132,6 +132,7 @@
   },
   "transactionList": {
     "title": "[XX-Recent Transactions-XX]",
+    "itemNamePlural": "[XX-transactions-XX]",
     "filtered": "[XX-(filtered)-XX]",
     "newBrokerageTransaction": "[XX-+ New Brokerage Transaction-XX]",
     "newBrokerageTransactionShort": "[XX-+ New-XX]",

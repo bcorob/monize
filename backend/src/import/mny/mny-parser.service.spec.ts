@@ -65,6 +65,7 @@ describe("computeExpectedBalances", () => {
       skipped: 0,
       deferredInvestments: 0,
       tradeCashLegs: 0,
+      investmentCashSources: new Map(),
       warnings: [],
     };
   }

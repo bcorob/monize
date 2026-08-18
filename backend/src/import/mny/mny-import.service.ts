@@ -505,6 +505,11 @@ export class MnyImportService {
             security.symbol,
           ]),
         ),
+        // A trade whose cash a banking row already records links to that row,
+        // or to the split leg it is embedded in. Both are foreign keys, so the
+        // writer is told which ids actually landed.
+        writtenTransactionIds: transactions.writtenTransactionIds,
+        writtenSplitIds: transactions.writtenSplitIds,
         onProgress: (processed, total) =>
           reportInvestments({ phase: "investments", processed, total }),
       });

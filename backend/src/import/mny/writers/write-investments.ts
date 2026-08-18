@@ -9,6 +9,7 @@ import {
   MappedInvestmentTransaction,
   MappedSecurity,
 } from "../model/mny-import-model";
+import { investmentWritesOwnCashRow } from "../map/investment-cash";
 import { INSERT_CHUNK_SIZE, chunk } from "./chunk";
 
 /**
@@ -99,6 +100,21 @@ export async function writeSecurities(
   return { idByHandle, created, reused };
 }
 
+/**
+ * A foreign key is only worth writing when the row it names was written. The
+ * sets are optional so a caller that writes investments alone (a spec, a future
+ * partial re-import) keeps the mapper's ids rather than silently dropping them.
+ */
+function resolveReference(
+  id: string | null,
+  written: ReadonlySet<string> | undefined,
+): string | null {
+  if (id === null) {
+    return null;
+  }
+  return written === undefined || written.has(id) ? id : null;
+}
+
 export interface WriteInvestmentsInput {
   readonly transactions: readonly MappedInvestmentTransaction[];
   /** Import-local account key -> Monize account id. */
@@ -111,6 +127,14 @@ export interface WriteInvestmentsInput {
   /** `SEC.hsec` -> symbol, for the cash leg's payee label and its
    * description of last resort. */
   readonly symbolByHandle: ReadonlyMap<number, string>;
+  /**
+   * Ids `writeTransactions` really inserted. A trade that adopted a banking row
+   * as its cash leg, or is embedded in a split leg, points at one of these
+   * through a foreign key -- so a reference to a row that was not written is
+   * dropped rather than aborting the import on a constraint violation.
+   */
+  readonly writtenTransactionIds?: ReadonlySet<string>;
+  readonly writtenSplitIds?: ReadonlySet<string>;
   readonly onProgress?: (processed: number, total: number) => Promise<void>;
 }
 
@@ -132,6 +156,12 @@ export interface WrittenInvestments {
  * brokerage side of a Monize investment pair carries no cash balance of its own,
  * so mirroring the leg there would invent a balance the Money file never had and
  * make the verification report disagree with itself.
+ *
+ * Not every trade needs one written. `investmentWritesOwnCashRow` is the single
+ * decision: a trade Money funded from another account adopts that account's row
+ * as its cash leg (issue #1212), and one embedded in a split leg has its cash
+ * impact on the leg (issue #1211). Synthesizing a sleeve row for either is what
+ * put a transfer in and a payment out in a register Money shows nothing in.
  *
  * The cash leg's category is Money's own, and so is its payee when the file
  * recorded one. When it did not -- which is the ordinary case for a trade --
@@ -172,14 +202,27 @@ export async function writeInvestments(
       affectedAccountIds.add(accountId);
       brokerageAccountIds.add(accountId);
 
+      const writesOwnCashRow = investmentWritesOwnCashRow(transaction);
       const cashAccountId =
-        transaction.cashAccountKey === null
+        !writesOwnCashRow || transaction.cashAccountKey === null
           ? null
           : (input.accountIdByKey.get(transaction.cashAccountKey) ?? null);
-      const cashTransactionId =
-        cashAccountId !== null && transaction.cashAmount !== 0
-          ? randomUUID()
-          : null;
+      // The sleeve row this writer is about to insert, when it is the one
+      // creating the cash leg at all.
+      const newCashTransactionId = cashAccountId !== null ? randomUUID() : null;
+      // Otherwise the banking row Money already wrote, adopted as the cash leg.
+      const adoptedCashTransactionId = resolveReference(
+        transaction.cashTransactionId,
+        input.writtenTransactionIds,
+      );
+      const transactionSplitId = resolveReference(
+        transaction.transactionSplitId,
+        input.writtenSplitIds,
+      );
+      const fundingAccountId =
+        transaction.fundingAccountKey === null
+          ? null
+          : (input.accountIdByKey.get(transaction.fundingAccountKey) ?? null);
 
       const symbol =
         input.symbolByHandle.get(transaction.securityHandle) ?? null;
@@ -198,7 +241,7 @@ export async function writeInvestments(
           : (input.payeeNameByHandle.get(transaction.payeeHandle) ?? null);
       const hasMoneyPayee = moneyPayeeId !== null && moneyPayeeName !== null;
 
-      if (cashTransactionId !== null) {
+      if (newCashTransactionId !== null) {
         affectedAccountIds.add(cashAccountId as string);
         // Rendered in the row's own currency: this writer denominates the
         // cash amount, the total and the price in `transaction.currencyCode`
@@ -213,7 +256,7 @@ export async function writeInvestments(
           currencyCode: transaction.currencyCode,
         });
         cashRows.push({
-          id: cashTransactionId,
+          id: newCashTransactionId,
           userId,
           accountId: cashAccountId,
           transactionDate: transaction.transactionDate,
@@ -243,7 +286,9 @@ export async function writeInvestments(
         id: transaction.id,
         userId,
         accountId,
-        transactionId: cashTransactionId,
+        transactionId: newCashTransactionId ?? adoptedCashTransactionId,
+        transactionSplitId,
+        fundingAccountId,
         securityId:
           input.securityIdByHandle.get(transaction.securityHandle) ?? null,
         action: transaction.action,
@@ -252,7 +297,7 @@ export async function writeInvestments(
         price: transaction.price,
         commission: transaction.commission,
         totalAmount: transaction.totalAmount,
-        exchangeRate: 1,
+        exchangeRate: transaction.exchangeRate,
         description,
         // Money's own cleared/void state, mapped by mapTransactionStatus. A
         // voided trade imports as a VOID row on BOTH sides -- previously only

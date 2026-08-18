@@ -91,10 +91,12 @@ function transaction(
 
 function principalLeg(amount = -1000): MappedSplit {
   return {
+    id: randomUUID(),
     kind: SplitKind.TRANSFER,
     categoryHandle: null,
     transferAccountKey: "acct-9",
     linkedTransactionId: randomUUID(),
+    investmentHandle: null,
     amount,
     memo: null,
   };
@@ -102,10 +104,12 @@ function principalLeg(amount = -1000): MappedSplit {
 
 function categoryLeg(categoryHandle: number, amount: number): MappedSplit {
   return {
+    id: randomUUID(),
     kind: SplitKind.CATEGORY,
     categoryHandle,
     transferAccountKey: null,
     linkedTransactionId: null,
+    investmentHandle: null,
     amount,
     memo: null,
   };
@@ -122,6 +126,7 @@ function transactionsFixture(
     skipped: 0,
     deferredInvestments: 0,
     tradeCashLegs: 0,
+    investmentCashSources: new Map(),
     warnings: [],
   };
 }

@@ -25,6 +25,10 @@ import {
 import { mapTransactions } from "./map/map-transactions";
 import { mapSecurities, tradedSecurityHandles } from "./map/map-securities";
 import { mapInvestments } from "./map/map-investments";
+import {
+  applyInvestmentCashSources,
+  tradesByHandle,
+} from "./map/investment-cash";
 import { mapBills } from "./map/map-bills";
 import { mapLoans } from "./map/map-loans";
 import { crossCheckHoldings } from "./map/check-holdings";
@@ -173,13 +177,6 @@ export function mappingSummary(tables: MnyTables): string[] {
     DEFAULT_MNY_IMPORT_OPTIONS,
     "USD",
   );
-  const transactions = mapTransactions({
-    transactions: tables.transactions,
-    accountKeyByHandle: accounts.keyByHandle,
-    currencyByHandle: accounts.currencyByHandle,
-    bills: tables.bills.bills,
-    cashKeyByAccountKey: cashKeyByAccountKey(accounts),
-  });
   const securities = mapSecurities({
     securities: tables.investments.securities,
     currencyByHandle: currencyCodesByHandle(tables.reference),
@@ -189,13 +186,27 @@ export function mappingSummary(tables: MnyTables): string[] {
       tables.investments.lots,
     ),
   });
-  const investments = mapInvestments({
+  // Same order as the parser, for the same reason: the two mappers answer half
+  // of "where does this trade's cash sit" each.
+  const mappedInvestments = mapInvestments({
     transactions: tables.transactions,
     investments: tables.investments,
     accounts,
     securities,
     bills: tables.bills.bills,
   });
+  const transactions = mapTransactions({
+    transactions: tables.transactions,
+    accountKeyByHandle: accounts.keyByHandle,
+    currencyByHandle: accounts.currencyByHandle,
+    bills: tables.bills.bills,
+    cashKeyByAccountKey: cashKeyByAccountKey(accounts),
+    tradesByHandle: tradesByHandle(mappedInvestments),
+  });
+  const investments = applyInvestmentCashSources(
+    mappedInvestments,
+    transactions.investmentCashSources,
+  );
   const holdings = crossCheckHoldings({
     transactions: investments.transactions,
     lots: tables.investments.lots,
@@ -258,7 +269,7 @@ export function mappingSummary(tables: MnyTables): string[] {
     `  split legs:      ${signs(splitAmounts)}`,
     `  investment cash: ${signs(investmentCash)}`,
     `  accounts:        ${accounts.accounts.length} (${accounts.skipped} skipped)`,
-    `  transactions:    ${transactions.transactions.length} (${transactions.transfersLinked} transfers linked, ${transactions.skipped} skipped, ${transactions.tradeCashLegs} cash rows written by their trade)`,
+    `  transactions:    ${transactions.transactions.length} (${transactions.transfersLinked} transfers linked, ${transactions.skipped} skipped, ${transactions.tradeCashLegs} cash rows written by their trade, ${transactions.investmentCashSources.size} trades funded by a banking row)`,
     `  securities:      ${securities.securities.length} (${securities.skipped} skipped as currencies or unusable)`,
     `  investments:     ${investments.transactions.length} (${investments.transfersPaired} share transfers paired, ${investments.skipped} skipped)`,
     "",

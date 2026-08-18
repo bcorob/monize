@@ -142,8 +142,6 @@
     "totalAssets": "Всего активов",
     "totalLiabilities": "Всего обязательств",
     "netWorth": "Чистая стоимость",
-    "tableView": "Таблица",
-    "chartView": "График",
     "noData": "Нет данных для отображения.",
     "noAccounts": "Счета не найдены.",
     "closed": "Закрыт",
@@ -193,6 +191,7 @@
     "groupAll": "Все счета",
     "colGroup": "Группа",
     "noAccountsForFilters": "Ни один счёт не подходит под текущие фильтры.",
+    "noAccountsOnDate": "На {date} ни одного вашего счёта ещё не существовало.",
     "accountTypes": {
       "CHEQUING": "Текущий",
       "SAVINGS": "Сберегательный",

@@ -8,8 +8,7 @@
     "empty": "Brak dochodu z inwestycji w tym roku"
   },
   "register": {
-    "cashHeading": "Transakcje gotówkowe",
-    "newCashTransaction": "Nowa transakcja gotówkowa",
-    "deleteFailed": "Nie udało się usunąć transakcji"
+    "deleteFailed": "Nie udało się usunąć transakcji",
+    "loadFailed": "Nie udało się wczytać transakcji"
   }
 }

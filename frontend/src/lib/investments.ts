@@ -32,6 +32,7 @@ import {
   SecurityNewsResult,
   SecurityTransactionHistory,
   SecurityDetail,
+  InvestmentRegisterFilterOptions,
 } from '@/types/investment';
 import { IntradayBreakdown } from '@/types/net-worth';
 import { getCached, setCache, invalidateBalanceCaches, invalidateCache } from './apiCache';
@@ -249,6 +250,21 @@ export const investmentsApi = {
     const response = await apiClient.get<PaginatedInvestmentTransactions>(
       '/investment-transactions',
       { params },
+    );
+    return response.data;
+  },
+
+  /**
+   * The investment actions the given accounts' rows actually use -- what the
+   * register's Action picker offers, rather than the whole twenty-odd
+   * vocabulary.
+   */
+  getRegisterFilterOptions: async (
+    accountIds?: string[],
+  ): Promise<InvestmentRegisterFilterOptions> => {
+    const response = await apiClient.get<InvestmentRegisterFilterOptions>(
+      '/investment-transactions/filter-options',
+      { params: accountIds?.length ? { accountIds: accountIds.join(',') } : {} },
     );
     return response.data;
   },

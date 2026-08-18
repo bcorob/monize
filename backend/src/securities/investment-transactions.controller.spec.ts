@@ -33,6 +33,9 @@ describe("InvestmentTransactionsController", () => {
       transferSecurity: jest.fn(),
       getSecurityTransactionHistory: jest.fn(),
       findAll: jest.fn(),
+      getRegisterFilterOptions: jest
+        .fn()
+        .mockResolvedValue({ actions: [], symbols: [] }),
       getSummary: jest.fn(),
       getRealizedGains: jest.fn(),
       getCapitalGainsByMonth: jest.fn(),
@@ -120,6 +123,46 @@ describe("InvestmentTransactionsController", () => {
         UUID1,
       );
       expect(result).toEqual(expected);
+    });
+  });
+
+  describe("getFilterOptions", () => {
+    it("asks about the accounts it was given", async () => {
+      await controller.getFilterOptions(req, `${UUID1},${UUID2}`);
+
+      expect(service.getRegisterFilterOptions).toHaveBeenCalledWith("user-1", [
+        UUID1,
+        UUID2,
+      ]);
+    });
+
+    it("asks about every account when none is named", async () => {
+      await controller.getFilterOptions(req);
+
+      expect(service.getRegisterFilterOptions).toHaveBeenCalledWith(
+        "user-1",
+        undefined,
+      );
+    });
+
+    it("rejects an account id that is not a UUID", async () => {
+      await expect(
+        controller.getFilterOptions(req, "not-a-uuid"),
+      ).rejects.toThrow();
+      expect(service.getRegisterFilterOptions).not.toHaveBeenCalled();
+    });
+
+    it("narrows an acting delegate to the accounts they may read", async () => {
+      const actingReq = {
+        user: { id: "owner-1", isActing: true, delegationId: "g1" },
+      };
+      delegationMock.readableAccountIds.mockResolvedValue([UUID2]);
+
+      await controller.getFilterOptions(actingReq, `${UUID1},${UUID2}`);
+
+      expect(service.getRegisterFilterOptions).toHaveBeenCalledWith("owner-1", [
+        UUID2,
+      ]);
     });
   });
 

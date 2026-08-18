@@ -268,6 +268,19 @@ export interface StaleUnreconciledSummary {
   totalCount: number;
 }
 
+/**
+ * What a register's filter pickers offer: the payees and categories actually
+ * used by the rows in the accounts on screen.
+ *
+ * `categories` carries the ancestors of every used category as well, because a
+ * tree picker builds its top level from the rows with no parent and drops a
+ * child whose parent is missing.
+ */
+export interface RegisterFilterOptions {
+  payees: { id: string; name: string }[];
+  categories: { id: string; name: string; parentId: string | null }[];
+}
+
 export interface BulkReconcileResult {
   reconciled: number;
 }

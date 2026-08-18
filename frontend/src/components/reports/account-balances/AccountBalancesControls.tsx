@@ -4,6 +4,7 @@ import { useTranslations } from 'next-intl';
 import { DateInput } from '@/components/ui/DateInput';
 import { Select } from '@/components/ui/Select';
 import { MultiSelect, type MultiSelectOption } from '@/components/ui/MultiSelect';
+import { ChartViewToggle } from '@/components/ui/ChartViewToggle';
 import { ExportDropdown } from '@/components/ui/ExportDropdown';
 import {
   GROUP_BY_OPTIONS,
@@ -39,6 +40,25 @@ interface Props {
 }
 
 const SCOPES: BalanceScope[] = ['all', 'assets', 'liabilities'];
+
+/**
+ * The space a `Select` gives its label, reserved above a control that has none.
+ *
+ * A button standing beside a labelled field is the height of the *field*, not
+ * of the field plus its label. Reserving the label's own space above it means
+ * what is left to stretch into is exactly the input's height, with no magic
+ * number that a font or padding change would silently invalidate --
+ * `self-stretch` alone measures from the top of the label and stands a label
+ * taller. Both the sort-direction toggle and the view/export group need it, so
+ * the rule lives in one place rather than being written out twice.
+ */
+function LabelSpacer() {
+  return (
+    <span aria-hidden="true" className="mb-1 block text-sm font-medium">
+      {'\u00a0'}
+    </span>
+  );
+}
 
 /**
  * The report's toolbar: the date the balances are measured at, what is
@@ -83,8 +103,18 @@ export function AccountBalancesControls({
           longest option's length in every language -- one the translations
           break. The grid gives each control an equal share of the full row and
           drops to fewer columns before any of them gets narrow. */}
-      <div className="flex flex-wrap items-end gap-4">
-        <div className="grid min-w-0 flex-1 grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {/* The fields and the actions column are two cells of one CSS grid row,
+          not two flex items -- `align-items: stretch` is grid's default, so
+          both cells are pulled to the row's own height (the fields' 66px:
+          label + gap + input) with no explicit number written down anywhere.
+          A flex row with `items-end` only lines up bottoms; it does not equalize
+          height, which is how the view toggle and export button ended up a
+          visibly shorter 36px sitting flush against the same baseline -- close
+          enough to pass a glance, wrong on measurement. Below `lg` the two
+          cells stack into their own rows (nothing to stretch against, and
+          nothing beside them to look mismatched against either). */}
+      <div className="grid grid-cols-1 items-stretch gap-4 lg:grid-cols-[minmax(0,1fr)_auto]">
+        <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <DateInput
             label={t('accountBalances.asOfDate')}
             value={asOfDate}
@@ -113,9 +143,7 @@ export function AccountBalancesControls({
               />
             </div>
             <div className="flex flex-col">
-              <span aria-hidden="true" className="mb-1 block text-sm font-medium">
-                {'\u00a0'}
-              </span>
+              <LabelSpacer />
               <button
                 type="button"
                 onClick={onSortDirectionToggle}
@@ -136,36 +164,27 @@ export function AccountBalancesControls({
             </div>
           </div>
         </div>
-        <div className="flex shrink-0 items-center gap-1">
-          <button
-            type="button"
-            onClick={() => onViewModeChange('table')}
-            className={`p-2 rounded-md transition-colors ${
-              viewMode === 'table'
-                ? 'bg-blue-600 text-white'
-                : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
-            }`}
-            title={t('accountBalances.tableView')}
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
-            </svg>
-          </button>
-          <button
-            type="button"
-            onClick={() => onViewModeChange('chart')}
-            className={`p-2 rounded-md transition-colors ${
-              viewMode === 'chart'
-                ? 'bg-blue-600 text-white'
-                : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
-            }`}
-            title={t('accountBalances.chartView')}
-          >
-            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M11 2v20c-5.07-.5-9-4.79-9-10s3.93-9.5 9-10zm2.03 0v8.99H22c-.47-4.74-4.24-8.52-8.97-8.99zm0 11.01V22c4.74-.47 8.5-4.25 8.97-8.99h-8.97z" />
-            </svg>
-          </button>
-          <ExportDropdown onExportPdf={onExportPdf} onExportCsv={onExportCsv} />
+        {/* The view toggle and the export button are controls on a row of
+            labelled fields, so they take the fields' height the same way the
+            sort-direction button does: the label's space is reserved above
+            them, and what is left is stretched into. They were previously a
+            hand-rolled pair of icon buttons centred against the row, which
+            stood short of every field beside them -- `ChartViewToggle` is the
+            component 19 other surfaces use for exactly this. */}
+        <div className="flex flex-col">
+          <LabelSpacer />
+          <div className="flex flex-1 items-stretch gap-2">
+            <ChartViewToggle
+              value={viewMode === 'chart' ? 'pie' : 'table'}
+              onChange={(view) => onViewModeChange(view === 'pie' ? 'chart' : 'table')}
+              options={['table', 'pie']}
+            />
+            <ExportDropdown
+              onExportPdf={onExportPdf}
+              onExportCsv={onExportCsv}
+              className="h-full"
+            />
+          </div>
         </div>
       </div>
 

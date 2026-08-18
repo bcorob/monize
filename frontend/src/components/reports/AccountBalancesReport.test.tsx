@@ -160,6 +160,7 @@ function balance(accountId: string, value: number, overrides: Record<string, unk
     pricesComplete: true,
     fxComplete: true,
     valuationComplete: true,
+    existsAsOf: true,
     ...overrides,
   };
 }
@@ -758,11 +759,11 @@ describe("AccountBalancesReport", () => {
     await waitFor(() => {
       expect(screen.getByText("Total Assets")).toBeInTheDocument();
     });
-    await act(async () => { fireEvent.click(screen.getByTitle("Chart view")); });
+    await act(async () => { fireEvent.click(chartViewButton()); });
     await waitFor(() => {
       expect(screen.getByTestId("pie-chart")).toBeInTheDocument();
     });
-    await act(async () => { fireEvent.click(screen.getByTitle("Table view")); });
+    await act(async () => { fireEvent.click(tableViewButton()); });
     await waitFor(() => {
       expect(screen.queryByTestId("pie-chart")).not.toBeInTheDocument();
     });
@@ -775,7 +776,7 @@ describe("AccountBalancesReport", () => {
     await waitFor(() => {
       expect(screen.getByText("Total Assets")).toBeInTheDocument();
     });
-    await act(async () => { fireEvent.click(screen.getByTitle("Chart view")); });
+    await act(async () => { fireEvent.click(chartViewButton()); });
     await waitFor(() => {
       expect(screen.getByText("No data to display.")).toBeInTheDocument();
     });
@@ -851,6 +852,128 @@ describe("AccountBalancesReport", () => {
     });
   });
 
+  /**
+   * A balance is a fact about something that exists. An asset bought in 2024
+   * was not worth its purchase price in 2019, and an opening balance is the sum
+   * an account *started* at rather than one it carried backwards forever -- so
+   * the server marks those rows and the report leaves them out entirely, rather
+   * than drawing them at zero.
+   */
+  describe("an account that did not exist on the chosen date", () => {
+    it("leaves it out of the rows and out of the totals", async () => {
+      mockGetAll.mockResolvedValue([
+        acc(),
+        acc({ id: "acc-2", name: "Lake House", accountType: "ASSET" }),
+      ]);
+      mockGetBalancesAsOf.mockResolvedValue(
+        balancesFor([
+          balance("acc-1", 5000),
+          balance("acc-2", 0, { existsAsOf: false }),
+        ]),
+      );
+      render(<AccountBalancesReport />);
+      await waitFor(() => {
+        expect(screen.getByText("Total Assets")).toBeInTheDocument();
+      });
+      expect(rowNames()).toEqual(["Chequing"]);
+      expect(screen.queryByText("Lake House")).not.toBeInTheDocument();
+      expect(
+        within(screen.getByTestId("summary-assets")).getByText("$5000.00"),
+      ).toBeInTheDocument();
+    });
+
+    // Not "worth nothing" -- a zero row is a measured zero, and this is not a
+    // measurement. It must not appear even as an empty group.
+    it("does not draw it as a zero row when its own type is the only group", async () => {
+      mockGetAll.mockResolvedValue([
+        acc({ id: "acc-2", name: "Lake House", accountType: "ASSET" }),
+      ]);
+      mockGetBalancesAsOf.mockResolvedValue(
+        balancesFor([balance("acc-2", 450000, { existsAsOf: false })]),
+      );
+      render(<AccountBalancesReport />);
+      await waitFor(() => {
+        expect(screen.getByText("Total Assets")).toBeInTheDocument();
+      });
+      expect(rowNames()).toEqual([]);
+      expect(screen.queryByText("$450000.00")).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("heading", { name: "Asset" }),
+      ).not.toBeInTheDocument();
+    });
+
+    // The filters are not what emptied the report, and saying they were sends
+    // the user to undo a filter they never set.
+    it("says the accounts postdate the day, rather than blaming the filters", async () => {
+      mockGetAll.mockResolvedValue([acc()]);
+      mockGetBalancesAsOf.mockResolvedValue(
+        balancesFor([balance("acc-1", 5000, { existsAsOf: false })]),
+      );
+      render(<AccountBalancesReport />);
+      await waitFor(() => {
+        expect(
+          screen.getByText(`None of your accounts existed on date(${TODAY}).`),
+        ).toBeInTheDocument();
+      });
+      expect(
+        screen.queryByText("No accounts match the current filters."),
+      ).not.toBeInTheDocument();
+      expect(screen.queryByText("No accounts found.")).not.toBeInTheDocument();
+    });
+
+    // An investment pair is one entity with two ledgers, and the cash sleeve
+    // can be funded before the first trade settles. One live member is enough
+    // to have something to report.
+    it("keeps a pair whose brokerage half is not yet trading", async () => {
+      mockGetAll.mockResolvedValue([
+        acc({
+          id: "acc-brokerage",
+          name: "Investments - Brokerage",
+          accountType: "INVESTMENT",
+          accountSubType: "INVESTMENT_BROKERAGE",
+          linkedAccountId: "acc-cash",
+        }),
+        acc({
+          id: "acc-cash",
+          name: "Investments - Cash",
+          accountType: "INVESTMENT",
+          accountSubType: "INVESTMENT_CASH",
+          linkedAccountId: "acc-brokerage",
+        }),
+      ]);
+      mockGetBalancesAsOf.mockResolvedValue(
+        balancesFor([
+          balance("acc-brokerage", 0, {
+            marketValue: 0,
+            existsAsOf: false,
+          }),
+          balance("acc-cash", 5000),
+        ]),
+      );
+      render(<AccountBalancesReport />);
+      await waitFor(() => {
+        expect(screen.getByText("Investments")).toBeInTheDocument();
+      });
+      const row = screen.getByText("Investments").closest("button")!;
+      expect(within(row).getByText("$5000.00")).toBeInTheDocument();
+    });
+
+    // Absent means "no information", not "did not exist": during a rolling
+    // deploy a page can be handed a response from a backend predating the
+    // field, and hiding every account would be the worse reading of it.
+    it("shows an account whose row carries no existence field at all", async () => {
+      mockGetAll.mockResolvedValue([acc()]);
+      mockGetBalancesAsOf.mockResolvedValue(
+        balancesFor([balance("acc-1", 5000, { existsAsOf: undefined })]),
+      );
+      render(<AccountBalancesReport />);
+      await waitFor(() => {
+        expect(screen.getByText("Total Assets")).toBeInTheDocument();
+      });
+      expect(rowNames()).toEqual(["Chequing"]);
+    });
+  });
+
   it("shows an account description under its name", async () => {
     mockGetAll.mockResolvedValue([
       acc({ name: "My Savings", accountType: "SAVINGS", description: "Emergency fund" }),
@@ -862,6 +985,21 @@ describe("AccountBalancesReport", () => {
     });
   });
 });
+
+/**
+ * The view toggle, found by the titles `ChartViewToggle` gives it.
+ *
+ * The report used to hand-roll this pair of buttons under its own "Chart
+ * view"/"Table view" copy, which is how they came to stand short of every
+ * field beside them; the shared component names them from `common`.
+ */
+function chartViewButton(): HTMLElement {
+  return screen.getByTitle("Pie Chart");
+}
+
+function tableViewButton(): HTMLElement {
+  return screen.getByTitle("Table");
+}
 
 /** The account rows the table is rendering, in order. */
 function rowButtons(): HTMLElement[] {

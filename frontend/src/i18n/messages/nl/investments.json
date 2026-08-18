@@ -25,10 +25,10 @@
     "cashFilterTo": "Tot",
     "loadingCashTransactions": "Kastransacties laden...",
     "today": "Vandaag",
-    "transactionCount": "{count} transactie{plural}",
     "allPayees": "Alle begunstigden",
     "allCategories": "Alle categorieën",
-    "toastDeleteFailed": "Verwijderen van transactie mislukt"
+    "toastDeleteFailed": "Verwijderen van transactie mislukt",
+    "toastLoadFailed": "Laden van transactie mislukt"
   },
   "portfolioSummary": {
     "title": "Portefeuillesamenvatting",
@@ -131,6 +131,7 @@
     "portfolioLabel": "Portefeuille:"
   },
   "transactionList": {
+    "itemNamePlural": "transacties",
     "title": "Recente transacties",
     "filtered": "(gefilterd)",
     "newBrokerageTransaction": "+ Nieuwe effectentransactie",

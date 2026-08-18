@@ -142,8 +142,6 @@
     "totalAssets": "Gesamte Aktiva",
     "totalLiabilities": "Gesamte Verbindlichkeiten",
     "netWorth": "Reinvermögen",
-    "tableView": "Tabellenansicht",
-    "chartView": "Diagrammansicht",
     "noData": "Keine Daten vorhanden.",
     "noAccounts": "Keine Konten gefunden.",
     "closed": "Geschlossen",
@@ -193,6 +191,7 @@
     "groupAll": "Alle Konten",
     "colGroup": "Gruppe",
     "noAccountsForFilters": "Keine Konten entsprechen den aktuellen Filtern.",
+    "noAccountsOnDate": "Am {date} existierte keines Ihrer Konten.",
     "accountTypes": {
       "CHEQUING": "Girokonto",
       "SAVINGS": "Sparkonto",

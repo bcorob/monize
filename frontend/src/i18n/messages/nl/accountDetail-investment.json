@@ -8,8 +8,7 @@
     "empty": "Dit jaar geen beleggingsinkomsten"
   },
   "register": {
-    "cashHeading": "Contante transacties",
-    "newCashTransaction": "Nieuwe contante transactie",
-    "deleteFailed": "Verwijderen van transactie mislukt"
+    "deleteFailed": "Verwijderen van transactie mislukt",
+    "loadFailed": "Laden van transactie mislukt"
   }
 }

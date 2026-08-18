@@ -142,8 +142,6 @@
     "totalAssets": "总资产",
     "totalLiabilities": "总负债",
     "netWorth": "资产净值",
-    "tableView": "表格视图",
-    "chartView": "图表视图",
     "noData": "无数据可显示。",
     "noAccounts": "未找到账户。",
     "closed": "已关闭",
@@ -193,6 +191,7 @@
     "groupAll": "所有账户",
     "colGroup": "分组",
     "noAccountsForFilters": "没有账户符合当前筛选条件。",
+    "noAccountsOnDate": "{date} 时您的账户均不存在。",
     "accountTypes": {
       "CHEQUING": "支票账户",
       "SAVINGS": "储蓄账户",

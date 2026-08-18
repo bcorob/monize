@@ -142,8 +142,6 @@
     "totalAssets": "Toplam Varlıklar",
     "totalLiabilities": "Toplam Yükümlülükler",
     "netWorth": "Net Değer",
-    "tableView": "Tablo görünümü",
-    "chartView": "Grafik görünümü",
     "noData": "Gösterilecek veri yok.",
     "noAccounts": "Hesap bulunamadı.",
     "closed": "Kapalı",
@@ -193,6 +191,7 @@
     "groupAll": "Tüm hesaplar",
     "colGroup": "Grup",
     "noAccountsForFilters": "Geçerli filtrelerle eşleşen hesap yok.",
+    "noAccountsOnDate": "{date} tarihinde hesaplarınızın hiçbiri mevcut değildi.",
     "accountTypes": {
       "CHEQUING": "Çek Hesabı",
       "SAVINGS": "Tasarruf",

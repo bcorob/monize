@@ -35,6 +35,9 @@ function investment(
     handle: 1,
     accountKey: "acct-10",
     cashAccountKey: "acct-11",
+    fundingAccountKey: null,
+    cashTransactionId: null,
+    transactionSplitId: null,
     securityHandle: 1,
     action: InvestmentAction.BUY,
     transactionDate: "2026-01-15",
@@ -43,6 +46,7 @@ function investment(
     commission: 9.99,
     totalAmount: 1009.99,
     currencyCode: "USD",
+    exchangeRate: 1,
     cashAmount: -1009.99,
     status: TransactionStatus.CLEARED,
     payeeHandle: null,
@@ -451,6 +455,108 @@ describe("writeInvestments", () => {
     expect(transactions.insert.mock.calls[0][0][0]).toMatchObject({
       payeeId: null,
       payeeName: "Buy: VOO 10 @ $100.00",
+    });
+  });
+
+  describe("a trade whose cash a banking row already records", () => {
+    // Issues #1211 and #1212. Money paired the trade with a row it wrote in a
+    // real account -- the chequing account that paid, or a leg of a paycheque.
+    // That row is the cash movement, so writing a sleeve row as well is the
+    // duplicate the user sees in the register.
+    const FUNDING_ROW = "bbbbbbbb-0000-0000-0000-000000000001";
+    const SPLIT_LEG = "cccccccc-0000-0000-0000-000000000001";
+
+    it("adopts the funding row instead of writing a cash leg", async () => {
+      const { manager, transactions, investments } = doubles();
+
+      await writeInvestments(manager, "user-1", {
+        ...baseInput,
+        writtenTransactionIds: new Set([FUNDING_ROW]),
+        transactions: [
+          investment({
+            cashAccountKey: "acct-11",
+            fundingAccountKey: "acct-11",
+            cashTransactionId: FUNDING_ROW,
+          }),
+        ],
+      });
+
+      expect(transactions.insert).not.toHaveBeenCalled();
+      expect(investments.insert.mock.calls[0][0][0]).toMatchObject({
+        transactionId: FUNDING_ROW,
+        transactionSplitId: null,
+        fundingAccountId: "aaaaaaaa-0000-0000-0000-000000000011",
+      });
+    });
+
+    it("embeds itself in a split leg and writes no cash row anywhere", async () => {
+      const { manager, transactions, investments } = doubles();
+
+      const result = await writeInvestments(manager, "user-1", {
+        ...baseInput,
+        writtenSplitIds: new Set([SPLIT_LEG]),
+        transactions: [
+          investment({
+            cashAccountKey: "acct-11",
+            transactionSplitId: SPLIT_LEG,
+          }),
+        ],
+      });
+
+      expect(transactions.insert).not.toHaveBeenCalled();
+      expect(result.cashTransactionsCreated).toBe(0);
+      expect(investments.insert.mock.calls[0][0][0]).toMatchObject({
+        transactionId: null,
+        transactionSplitId: SPLIT_LEG,
+        fundingAccountId: null,
+      });
+    });
+
+    it("drops a reference to a row that was not written", async () => {
+      // Both columns are foreign keys, so a dangling id aborts the whole
+      // import rather than losing one row.
+      const { manager, investments } = doubles();
+
+      await writeInvestments(manager, "user-1", {
+        ...baseInput,
+        writtenTransactionIds: new Set<string>(),
+        writtenSplitIds: new Set<string>(),
+        transactions: [
+          investment({
+            cashAccountKey: "acct-11",
+            cashTransactionId: FUNDING_ROW,
+            transactionSplitId: SPLIT_LEG,
+          }),
+        ],
+      });
+
+      expect(investments.insert.mock.calls[0][0][0]).toMatchObject({
+        transactionId: null,
+        transactionSplitId: null,
+      });
+    });
+
+    it("stores the rate the settlement happened at, not 1", async () => {
+      // A trade funded from an account in another currency: 1 here would post
+      // the cash unconverted.
+      const { manager, investments } = doubles();
+
+      await writeInvestments(manager, "user-1", {
+        ...baseInput,
+        writtenTransactionIds: new Set([FUNDING_ROW]),
+        transactions: [
+          investment({
+            cashAccountKey: "acct-11",
+            fundingAccountKey: "acct-11",
+            cashTransactionId: FUNDING_ROW,
+            exchangeRate: 1.3652,
+          }),
+        ],
+      });
+
+      expect(investments.insert.mock.calls[0][0][0]).toMatchObject({
+        exchangeRate: 1.3652,
+      });
     });
   });
 

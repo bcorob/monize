@@ -20,7 +20,11 @@ vi.mock('@/components/ui/MultiSelect', () => ({
 }));
 
 vi.mock('@/components/ui/ExportDropdown', () => ({
-  ExportDropdown: () => <div data-testid="export-dropdown" />,
+  ExportDropdown: ({ className }: any) => (
+    <button data-testid="export-dropdown" className={className}>
+      Export
+    </button>
+  ),
 }));
 
 function renderControls() {
@@ -49,6 +53,11 @@ function renderControls() {
 /** The sort-direction toggle, found by the label it carries in either state. */
 function directionToggle(): HTMLElement {
   return screen.getByTitle(/Sorted (highest|lowest) first/);
+}
+
+/** The table/chart view toggle's "Table" button, from `ChartViewToggle`. */
+function tableViewButton(): HTMLElement {
+  return screen.getByTitle('Table');
 }
 
 describe('AccountBalancesControls layout', () => {
@@ -119,14 +128,73 @@ describe('AccountBalancesControls layout', () => {
       'A control sized in rem cannot fit copy it has not seen; let the grid size it.',
     ).toEqual([]);
 
-    // Both bands are grids that start at one column and widen with the
+    // The two bands that hold the actual controls (the date/group/sort row and
+    // the filters row) are grids that start at one column and widen with the
     // viewport, so a narrow screen stacks rather than squeezing.
     const grids = [...container.querySelectorAll<HTMLElement>('.grid')];
     expect(grids.length).toBeGreaterThanOrEqual(2);
-    for (const grid of grids) {
+    const fieldGrids = grids.filter((grid) => grid.className.includes('sm:grid-cols-2'));
+    expect(fieldGrids.length).toBeGreaterThanOrEqual(2);
+    for (const grid of fieldGrids) {
       expect(grid.className).toContain('grid-cols-1');
       expect(grid.className).toMatch(/sm:grid-cols-2/);
     }
+  });
+
+  /**
+   * The outermost grid is structural -- it places the fields band and the
+   * actions column side by side rather than sizing repeated same-shape
+   * controls -- so it earns its own assertion instead of being swept into the
+   * field-sizing one above. It still starts single-column (stacked, actions
+   * below the fields on a narrow screen) and widens at a breakpoint, which is
+   * what makes `align-items: stretch` -- grid's default -- give the actions
+   * column the fields band's own row height with no number written down
+   * anywhere for it.
+   */
+  it('splits into fields and actions only once there is room for both', () => {
+    const { container } = renderControls();
+    const outer = container.querySelector<HTMLElement>('.grid')!;
+    expect(outer.className).toContain('grid-cols-1');
+    expect(outer.className).toContain('items-stretch');
+    expect(outer.className).toMatch(/lg:grid-cols-\[.*\]/);
+    // Not the field-sizing breakpoint -- this grid has exactly two cells and
+    // widens once, not once per extra control.
+    expect(outer.className).not.toMatch(/sm:grid-cols-2/);
+  });
+
+  /**
+   * The view toggle and the export button sit on the same row as the labelled
+   * fields (the date, group-by, sort-by), and used to be a hand-rolled pair of
+   * icon buttons centred against that row -- shorter than every field beside
+   * them, because nothing reserved the label space above them the way `Select`
+   * does above its own input. `ChartViewToggle`/`ExportDropdown` now sit in a
+   * column shaped exactly like the sort-direction toggle's: same spacer, same
+   * `items-stretch` row, so what is left to stretch into is the field height.
+   */
+  it('gives the view toggle and export button the height of the fields beside them', () => {
+    renderControls();
+    const tableButton = tableViewButton();
+    const exportButton = screen.getByTestId('export-dropdown');
+
+    // Both controls share one stretched row, inside a column that reserves a
+    // label spacer above them -- the same shape the sort-direction toggle uses.
+    // `ChartViewToggle` wraps its own buttons in a `flex gap-2` div, so the
+    // shared row is one level up from the button itself.
+    const row = tableButton.parentElement!.parentElement!;
+    expect(row).toBe(exportButton.parentElement);
+    expect(row.className).toContain('items-stretch');
+
+    const column = row.parentElement!;
+    const spacer = column.firstElementChild!;
+    expect(spacer).not.toBe(row);
+    expect(spacer.getAttribute('aria-hidden')).toBe('true');
+    expect(spacer.className).toContain('mb-1');
+    expect(spacer.className).toContain('text-sm');
+
+    // The export button is told to fill that stretched height; a plain toggle
+    // button already does via ChartViewToggle's own `p-2` sizing plus the
+    // stretched flex row.
+    expect(exportButton.className).toContain('h-full');
   });
 
   it('renders every filter the report offers', () => {

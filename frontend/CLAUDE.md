@@ -399,6 +399,20 @@ honest, and nothing mounted refetches on its own. `InvestmentRegisterPanel` rais
 `onDataChanged` after every write for exactly this, and `InvestmentDetailView`
 re-runs its load from it.
 
+**Every write path on a page shares one refresh, including the ones nobody
+reported.** The #1190 fix wired the account detail page's writes together and
+left the Investments page's own paths as they were, so adding a cash row there
+refreshed the summary, the allocation, Holdings by Account and the brokerage
+register, while deleting one reloaded the cash rows alone -- the row vanished
+and every figure above it kept its pre-delete value until the user pressed
+Refresh. A delete is a write, and so is an undo, a redo, an AI action and a
+status change; the fact that the reported symptom was a create says nothing
+about which paths are broken. `useInvestmentData.refreshAfterWrite` is that one
+function for the Investments page (`InvestmentRegisterPanel.afterWrite` is the
+detail page's), and each write path calls it rather than reloading the list the
+write happened on. When you fix a stale-figure defect, grep the surface for its
+other write paths and route them through the same function in the same commit.
+
 **A sibling that fetches for itself needs the signal as a prop, not as a
 re-render.** Re-running the parent's load refreshes what the parent fetched, and
 `InvestmentValueChart` fetches its own series -- so the write reaches it as
@@ -410,6 +424,112 @@ key it has already **acted on** rather than on running -- `loadData` changes
 identity on every range, account and currency change, and the load effect already
 covers those, so an ungated second effect fetches twice for each of them and
 again on any mount under a non-zero key.
+
+**Both registers of one account are paged, filtered and drawn the same way.**
+They are one account's two ledgers a toggle apart, so a difference between them
+reads as a bug even when each half is defensible on its own. The bar above the
+rows is `ListTopToolbar` (`components/ui/ListTopToolbar.tsx`) -- where you are in
+the list on the left, the density toggle and the list's own buttons on the right
+-- and both `TransactionList` and `InvestmentTransactionList` compose it rather
+than rebuilding the markup; `ui-conventions.test.ts` fails on a second call site
+handing `Pagination` an `infoRight`. A pager below the table is one the reader
+meets only after scrolling past everything it could have helped them skip, which
+is what the brokerage register had while the cash register beside it paged from
+above.
+
+Filtering follows the same rule with different questions: a trade is narrowed by
+symbol and action (the brokerage list's own filter row), a cash row by payee and
+category (`CashFilterBar`, shared by the Investments page and the account detail
+page). Each register's page returns to 1 when its filter changes, and the filters
+belong in the register's request key -- otherwise the rows keep answering the
+previous question until something else triggers a fetch.
+
+The chrome around them is part of "the same way": one heading (*Recent
+Transactions* on both -- the toggle beside it already says which ledger), a
+new-row button marked the same way on both, and the same gap between the header
+and the strip. A heading that renames itself and a spacer present on one side
+only made the toggle read as a navigation rather than a change of ledger. The
+Investments page and the account detail page draw the same two registers, so
+they take the same treatment: both page from the strip, neither draws a second
+pager below the table, and neither page puts a density toggle in its own heading
+beside the register's.
+
+**A filter picker offers what the rows use, and it loads because the register is
+on screen.** `useCashFilterOptions` asks
+`transactionsApi.getRegisterFilterOptions` for the payees and categories the
+selected accounts' rows actually reference -- a brokerage cash ledger has a dozen
+payees, and offering the household's whole address book to narrow it buries them.
+The endpoint reads split lines as well as parent rows (a split parent's own
+`categoryId` is NULL, and the register's category filter matches split lines), and
+returns the **ancestors** of every used category, because `MultiSelect` builds its
+top level from `parentId == null` and drops a child whose parent is absent.
+Trigger the load from the view being displayed, never from the click that reaches
+it: the Investments page remembers its view, so the cash register is reachable
+without that click, and gating on it left both pickers reading "No options found"
+for the users who live there.
+
+The brokerage side asks the same question of its own vocabulary:
+`useBrokerageFilterOptions` (`hooks/useBrokerageFilterOptions.ts`) fetches the
+actions and symbols those accounts have actually used, and the pickers offer
+those rather than all twenty-odd actions. Absent or empty is "no information" --
+still loading, or the lookup failed -- so the action list keeps offering
+everything; and whatever is currently selected stays in the control even when the
+rows no longer use it, or the list is narrowed by something the user can neither
+see nor undo. **Symbols come from the rows, never from current holdings**: the
+picker was built from `portfolioSummary.holdings`, so a position sold in full was
+not offered, and its trades are exactly the rows somebody filtering by symbol is
+looking for.
+
+**A one-shot fetch guarded by a ref cannot also be cancelled in its cleanup.**
+Both option hooks latch a `loadedKeyRef` so a re-render does not re-ask, and both
+originally set a `cancelled` flag in the effect's cleanup. Under React's
+development StrictMode -- which Next.js has on -- an effect runs, is cleaned up,
+and runs again: the first pass claims the key and starts the only request, the
+cleanup marks it cancelled, and the second pass finds the key already claimed and
+starts nothing. The response is then discarded and the pickers sit empty for the
+whole session, which is what "No options found" and an Action picker still
+offering all twenty were. Let the ref decide instead -- adopt the response while
+`loadedKeyRef.current === key` -- which also drops an answer a newer selection has
+overtaken. Testing Library does not double-invoke effects, so this class of defect
+is only caught by a test that renders the hook inside `<StrictMode>`; both hooks
+carry one.
+
+**A register that has rows keeps them while the next page loads.** Answering a
+filter or page change with a skeleton swaps a table for three lines, the page
+shortens under the reader, and the browser scrolls to the top -- which is what
+applying a filter on the account detail page used to do. Gate the skeleton on
+there being nothing to show yet (`loadedKey === null`), not on a request being in
+flight; the Investments page's `hasLoadedRef` is the same decision.
+
+**A pager stays drawn when a filter narrows the list to one page.** The buttons
+are inert there, but the line beside them -- "Showing 1-7 of 7 transactions" --
+is the answer to "did that filter work?", and hiding it exactly when a filter has
+just been applied takes the count away at the moment it is being read.
+
+**A nav tab is lit by the section a page belongs to, not by an exact path.**
+`isNavSectionActive` (`lib/nav-section.ts`) is that one predicate, used by the
+header and the mobile drawer: `/accounts/<id>` is Accounts, `/securities/<id>` is
+Tools. Comparing the pathname to the href unlit the tab the user had just come
+through, so the bar said nothing about where they were. The boundary is a slash,
+so `/accounts` never claims `/accounts-archive`.
+
+**A cash register holds rows that are not cash transactions, and one function
+decides which editor each gets** -- `editCashRow` (`lib/cash-row-edit.ts`). A
+trade's cash leg (`linkedInvestmentTransactionId`) is edited as the *trade*: its
+amount, date and payee are consequences of the trade, so a cash form over it
+offers to change figures it does not own. A transfer is fetched in full first,
+because the list payload does not carry its counterpart. Everything else opens
+on the row as listed. The account detail page's register had only the third
+case, which is how clicking a trade there opened a cash form -- and a failed
+lookup for a trade opens nothing rather than falling back to the cash form,
+since that fallback is the same defect arriving by another door.
+
+**A modal this page already mounts is opened, not navigated to.** Clicking an
+investment-linked row in the cash register pushed `/investments?edit=<id>`, which
+remounted the page, scrolled it to the top and refetched every section before the
+dialogue appeared -- to reach a form that was mounted the whole time. Fetch the
+row and call the modal's own `openEdit`; keep the URL parameter for arrivals from
+another page.
 
 **A form's account list is a property of the form, not of the page that opened
 it.** The same `InvestmentTransactionForm` is mounted from the Investments page

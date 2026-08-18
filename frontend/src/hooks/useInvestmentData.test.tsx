@@ -111,6 +111,19 @@ const makeTx = (id: string) => ({
 
 const mockSummary = { totalValue: 5000, totalCost: 4000, totalGain: 1000 };
 
+/**
+ * Hold the post-delete reload open.
+ *
+ * A successful delete now refetches both registers, the summary and the chart
+ * (the delete-side half of issue #1190), and that authoritative payload
+ * replaces the optimistic list and pagination as soon as it lands -- here, a
+ * mock still describing the pre-delete rows. The optimistic bookkeeping is what
+ * the user sees in the meantime, so a test about it leaves the reload pending.
+ */
+const holdReloadOpen = () => {
+  mockGetTransactions.mockReturnValue(new Promise(() => {}));
+};
+
 const defaultSetup = () => {
   mockGetInvestmentAccounts.mockResolvedValue([]);
   mockGetAllAccounts.mockResolvedValue([]);
@@ -168,6 +181,7 @@ describe('useInvestmentData – handleDeleteTransaction', () => {
     const { result } = renderHook(() => useInvestmentData(), { wrapper });
     await act(async () => { await new Promise(res => setTimeout(res, 0)); });
 
+    holdReloadOpen();
     await act(async () => {
       await result.current.handleDeleteTransaction('t1');
     });
@@ -188,6 +202,7 @@ describe('useInvestmentData – handleDeleteTransaction', () => {
     const { result } = renderHook(() => useInvestmentData(), { wrapper });
     await act(async () => { await new Promise(res => setTimeout(res, 0)); });
 
+    holdReloadOpen();
     await act(async () => {
       await result.current.handleDeleteTransaction('t1');
     });
@@ -216,6 +231,7 @@ describe('useInvestmentData – handleDeleteTransaction', () => {
       await new Promise(res => setTimeout(res, 0));
     });
 
+    holdReloadOpen();
     await act(async () => {
       await result.current.handleDeleteTransaction('t1');
     });
@@ -489,10 +505,12 @@ describe('useInvestmentData – pagination, filters, handlers', () => {
     const { result } = renderHook(() => useInvestmentData(), { wrapper });
     await act(async () => { await new Promise(res => setTimeout(res, 0)); });
     await act(async () => {
-      result.current.setCashFilterPayeeIds(['p1']);
-      result.current.setCashFilterCategoryIds(['c1']);
-      result.current.setCashFilterStartDate('2024-01-01');
-      result.current.setCashFilterEndDate('2024-12-31');
+      result.current.setCashFilters({
+        payeeIds: ['p1'],
+        categoryIds: ['c1'],
+        startDate: '2024-01-01',
+        endDate: '2024-12-31',
+      });
     });
     expect(result.current.hasActiveCashFilters).toBe(true);
     expect(result.current.activeCashFilterCount).toBe(4);
@@ -589,12 +607,21 @@ describe('useInvestmentData – cash transaction loading', () => {
     });
   });
 
-  it('refreshCashTransactions is callable', async () => {
+  it('refreshAfterWrite reloads both registers and bumps the chart key', async () => {
     const { result } = renderHook(() => useInvestmentData(), { wrapper });
     await act(async () => { await new Promise(res => setTimeout(res, 0)); });
+
+    const summaryCallsBefore = mockGetPortfolioSummary.mock.calls.length;
+    const brokerageCallsBefore = mockGetTransactions.mock.calls.length;
+    const keyBefore = result.current.writeRefreshKey;
+
     await act(async () => {
-      result.current.refreshCashTransactions();
+      result.current.refreshAfterWrite();
     });
+
+    expect(mockGetPortfolioSummary.mock.calls.length).toBeGreaterThan(summaryCallsBefore);
+    expect(mockGetTransactions.mock.calls.length).toBeGreaterThan(brokerageCallsBefore);
+    expect(result.current.writeRefreshKey).toBeGreaterThan(keyBefore);
   });
 
   it('loadCashFilterData loads categories and payees', async () => {
@@ -768,6 +795,7 @@ describe('useInvestmentData – delete error toast', () => {
     const { result } = renderHook(() => useInvestmentData(), { wrapper });
     await act(async () => { await new Promise(res => setTimeout(res, 0)); });
     expect(result.current.pagination?.total).toBe(1);
+    holdReloadOpen();
     await act(async () => {
       await result.current.handleDeleteTransaction('t1');
     });

@@ -2298,6 +2298,91 @@ export class InvestmentTransactionsService {
     }
   }
 
+  /**
+   * The account ids a register query runs over: the ones asked for, plus each
+   * one's linked ledger.
+   *
+   * An investment account is a pair, and its trades live on the brokerage half
+   * while the cash they settle into lives on the other -- so a register scoped
+   * to one half alone answers with part of what the user is looking at.
+   * Undefined means "every account", which is what an unfiltered register asks
+   * for. It is one function because the filter pickers must offer values from
+   * exactly the rows the list will show.
+   */
+  private async resolveRegisterAccountIds(
+    userId: string,
+    accountIds?: string[],
+  ): Promise<string[] | undefined> {
+    if (!accountIds || accountIds.length === 0) return undefined;
+    const resolvedIds = new Set<string>(accountIds);
+    const accounts = await this.accountsService.findByIds(userId, accountIds);
+    for (const acct of accounts) {
+      if (acct.linkedAccountId) {
+        resolvedIds.add(acct.linkedAccountId);
+      }
+    }
+    return [...resolvedIds];
+  }
+
+  /**
+   * The actions and symbols the register's rows actually use, for its filter.
+   *
+   * The action vocabulary is twenty-odd wide -- reinvested short-term capital
+   * gains, redemptions, share transfers -- and a household brokerage uses four
+   * of them. Offering all twenty as ways to narrow six rows is a list to read
+   * rather than a filter to use.
+   *
+   * Symbols come from the rows for a sharper reason than length: the picker used
+   * to be built from *current holdings*, so a position sold in full was not
+   * offered -- and its trades are exactly the rows somebody filtering by symbol
+   * is usually looking for. A filter offers what the list contains, not what the
+   * portfolio still holds.
+   *
+   * Actions are returned in the enum's own order, so the picker's order is a
+   * property of the vocabulary rather than of whichever action happened to be
+   * traded first; symbols are alphabetical, having no such order of their own.
+   */
+  async getRegisterFilterOptions(
+    userId: string,
+    accountIds?: string[],
+  ): Promise<{ actions: InvestmentAction[]; symbols: string[] }> {
+    return withScopedDb(this.dataSource, async (m) => {
+      // includes VOID rows: the register lists them, struck through, so the
+      // picker has to offer the action and symbol of a voided row or the filter
+      // cannot find it.
+      const query = m
+        .getRepository(InvestmentTransaction)
+        .createQueryBuilder("it")
+        .leftJoin("it.security", "security")
+        .select("it.action", "action")
+        .addSelect("security.symbol", "symbol")
+        .distinct(true)
+        .where("it.userId = :userId", { userId });
+
+      const allIds = await this.resolveRegisterAccountIds(userId, accountIds);
+      if (allIds) {
+        query.andWhere("it.accountId IN (:...allIds)", { allIds });
+      }
+
+      const rows = await query.getRawMany<{
+        action: InvestmentAction;
+        symbol: string | null;
+      }>();
+      const usedActions = new Set(rows.map((r) => r.action));
+      // A row can have no security at all -- an interest posting against the
+      // cash ledger -- and a blank option is not a symbol to filter by.
+      const usedSymbols = new Set(
+        rows.map((r) => r.symbol).filter((s): s is string => !!s),
+      );
+      return {
+        actions: Object.values(InvestmentAction).filter((a) =>
+          usedActions.has(a),
+        ),
+        symbols: [...usedSymbols].sort(),
+      };
+    });
+  }
+
   async findAll(
     userId: string,
     accountIds?: string[],
@@ -2327,19 +2412,8 @@ export class InvestmentTransactionsService {
         .leftJoinAndSelect("it.fundingAccount", "fundingAccount")
         .where("it.userId = :userId", { userId });
 
-      if (accountIds && accountIds.length > 0) {
-        const resolvedIds = new Set<string>(accountIds);
-        // Batch-fetch accounts to resolve linked account IDs
-        const accounts = await this.accountsService.findByIds(
-          userId,
-          accountIds,
-        );
-        for (const acct of accounts) {
-          if (acct.linkedAccountId) {
-            resolvedIds.add(acct.linkedAccountId);
-          }
-        }
-        const allIds = [...resolvedIds];
+      const allIds = await this.resolveRegisterAccountIds(userId, accountIds);
+      if (allIds) {
         query.andWhere("it.accountId IN (:...allIds)", { allIds });
       }
 

@@ -142,8 +142,6 @@
     "totalAssets": "कुल संपत्ति",
     "totalLiabilities": "कुल देनदारियाँ",
     "netWorth": "निवल मूल्य",
-    "tableView": "तालिका दृश्य",
-    "chartView": "चित्र दृश्य",
     "noData": "प्रदर्शित करने के लिए कोई डेटा नहीं।",
     "noAccounts": "कोई खाता नहीं मिला।",
     "closed": "बंद",
@@ -193,6 +191,7 @@
     "groupAll": "सभी खाते",
     "colGroup": "समूह",
     "noAccountsForFilters": "वर्तमान फ़िल्टर से कोई खाता मेल नहीं खाता।",
+    "noAccountsOnDate": "{date} को आपका कोई भी खाता मौजूद नहीं था।",
     "accountTypes": {
       "CHEQUING": "चेकिंग",
       "SAVINGS": "बचत",

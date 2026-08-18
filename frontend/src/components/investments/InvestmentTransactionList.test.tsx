@@ -630,6 +630,65 @@ describe('InvestmentTransactionList', () => {
       expect(onFiltersChange).toHaveBeenCalledWith(expect.objectContaining({ action: 'SELL' }));
     });
 
+    it('offers every action when it has not been told which are in use', () => {
+      // Absent or empty means "no information" -- still loading, or the lookup
+      // failed -- and a picker that empties itself on that is worse than one
+      // offering too much.
+      render(
+        <InvestmentTransactionList
+          transactions={[makeTx()] as any[]}
+          isLoading={false}
+          onFiltersChange={vi.fn()}
+        />
+      );
+      fireEvent.click(screen.getByText('Filter'));
+
+      const actionSelect = screen.getAllByRole('combobox')[1];
+      expect(
+        within(actionSelect).getAllByRole('option').length,
+      ).toBeGreaterThan(10);
+    });
+
+    it('offers only the actions in use when it has been told', () => {
+      render(
+        <InvestmentTransactionList
+          transactions={[makeTx()] as any[]}
+          isLoading={false}
+          onFiltersChange={vi.fn()}
+          availableActions={['BUY', 'SELL']}
+        />
+      );
+      fireEvent.click(screen.getByText('Filter'));
+
+      const actionSelect = screen.getAllByRole('combobox')[1];
+      const offered = within(actionSelect)
+        .getAllByRole('option')
+        .map((o) => (o as HTMLOptionElement).value);
+      expect(offered).toEqual(['', 'BUY', 'SELL']);
+    });
+
+    it('keeps showing an action that is already filtering the list', () => {
+      // The rows can change under a filter set earlier; dropping the selected
+      // action from the control leaves the list narrowed by something the user
+      // can no longer see, let alone undo.
+      render(
+        <InvestmentTransactionList
+          transactions={[makeTx()] as any[]}
+          isLoading={false}
+          onFiltersChange={vi.fn()}
+          filters={{ action: 'SPLIT' }}
+          availableActions={['BUY']}
+        />
+      );
+      fireEvent.click(screen.getByText('Filter'));
+
+      const actionSelect = screen.getAllByRole('combobox')[1];
+      const offered = within(actionSelect)
+        .getAllByRole('option')
+        .map((o) => (o as HTMLOptionElement).value);
+      expect(offered).toContain('SPLIT');
+    });
+
     it('clears filter value when empty string is selected', () => {
       const onFiltersChange = vi.fn();
       const transactions = [makeTx()] as any[];

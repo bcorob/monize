@@ -8,8 +8,7 @@
     "empty": "Sem rendimentos de investimento este ano"
   },
   "register": {
-    "cashHeading": "Transações de caixa",
-    "newCashTransaction": "Nova transação de caixa",
-    "deleteFailed": "Falha ao excluir a transação"
+    "deleteFailed": "Falha ao excluir a transação",
+    "loadFailed": "Falha ao carregar a transação"
   }
 }

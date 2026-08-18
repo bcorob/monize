@@ -142,8 +142,6 @@
     "totalAssets": "Totale activa",
     "totalLiabilities": "Totale passiva",
     "netWorth": "Nettowaarde",
-    "tableView": "Tabelweergave",
-    "chartView": "Grafiekweergave",
     "noData": "Geen gegevens om weer te geven.",
     "noAccounts": "Geen rekeningen gevonden.",
     "closed": "Gesloten",
@@ -193,6 +191,7 @@
     "groupAll": "Alle rekeningen",
     "colGroup": "Groep",
     "noAccountsForFilters": "Geen rekeningen komen overeen met de huidige filters.",
+    "noAccountsOnDate": "Geen van uw rekeningen bestond op {date}.",
     "accountTypes": {
       "CHEQUING": "Betaalrekening",
       "SAVINGS": "Spaarrekening",

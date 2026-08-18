@@ -142,8 +142,6 @@
     "totalAssets": "Total des actifs",
     "totalLiabilities": "Total des passifs",
     "netWorth": "Valeur nette",
-    "tableView": "Vue tableau",
-    "chartView": "Vue graphique",
     "noData": "Aucune donnée à afficher.",
     "noAccounts": "Aucun compte trouvé.",
     "closed": "Clôturé",
@@ -193,6 +191,7 @@
     "groupAll": "Tous les comptes",
     "colGroup": "Groupe",
     "noAccountsForFilters": "Aucun compte ne correspond aux filtres actuels.",
+    "noAccountsOnDate": "Aucun de vos comptes n'existait le {date}.",
     "accountTypes": {
       "CHEQUING": "Chèque",
       "SAVINGS": "Épargne",

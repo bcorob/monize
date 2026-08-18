@@ -142,8 +142,6 @@
     "totalAssets": "Total Assets",
     "totalLiabilities": "Total Liabilities",
     "netWorth": "Net Worth",
-    "tableView": "Table view",
-    "chartView": "Chart view",
     "noData": "No data to display.",
     "noAccounts": "No accounts found.",
     "closed": "Closed",
@@ -193,6 +191,7 @@
     "groupAll": "All accounts",
     "colGroup": "Group",
     "noAccountsForFilters": "No accounts match the current filters.",
+    "noAccountsOnDate": "None of your accounts existed on {date}.",
     "accountTypes": {
       "CHEQUING": "Chequing",
       "SAVINGS": "Savings",

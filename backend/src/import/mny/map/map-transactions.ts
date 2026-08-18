@@ -1,11 +1,15 @@
 import { randomUUID } from "node:crypto";
 import { SplitKind } from "../../../transactions/entities/split-kind.enum";
+import { TransactionStatus } from "../../../transactions/entities/transaction.entity";
+import { isInvestmentActionAllowedInSplit } from "../../../securities/cash-impact.util";
 import { roundMoney } from "../../../common/round.util";
 import { MnyBill, MnyTransaction } from "../model/mny-rows";
 import {
   MappedSplit,
   MappedTransaction,
   MappedTransactions,
+  MnyImportedTrade,
+  MnyInvestmentCashSource,
 } from "../model/mny-import-model";
 import {
   billTemplateHandles,
@@ -55,6 +59,18 @@ export interface MapTransactionsInput {
    * that is where Monize keeps a brokerage's cash.
    */
   readonly cashKeyByAccountKey: ReadonlyMap<string, string>;
+  /**
+   * The investment rows this import writes, by `TRN.htrn` -- from
+   * `mapInvestments`, which runs first for exactly this reason.
+   *
+   * A banking row Money paired to one of these is that trade's cash side, and
+   * which of the three shapes it is decides what gets written: the trade's own
+   * sleeve row (issue #1175), a funding row in another account (issue #1212), or
+   * a split leg the trade is embedded in (issue #1211). Without it the mapper
+   * cannot tell a trade that will exist from one the investment mapper skipped,
+   * and would wire a split or a funding link to nothing.
+   */
+  readonly tradesByHandle: ReadonlyMap<number, MnyImportedTrade>;
 }
 
 /**
@@ -80,6 +96,10 @@ interface Context {
   readonly idByHandle: ReadonlyMap<number, string>;
   /** Investment row handle -> the cash-sleeve transaction standing in for it. */
   readonly cashCounterparts: ReadonlyMap<number, CashCounterpart>;
+  /** Top-level row handle -> the trade it funds from another account. */
+  readonly externalFunders: ReadonlyMap<number, number>;
+  /** Split leg handle -> the trade that leg embeds. */
+  readonly investmentSplitLegs: ReadonlyMap<number, number>;
   readonly warnings: MnyWarning[];
 }
 
@@ -113,14 +133,21 @@ interface Indexes {
   readonly transfers: TransferIndex;
   /**
    * Rows that are Money's own copy of a trade's cash leg, which Monize writes
-   * from the investment transaction instead. See `tradeCashLegRows`.
+   * from the investment transaction instead. See `classifyTradeCashSides`.
    */
   readonly tradeCashLegs: ReadonlySet<number>;
+  /** Top-level row handle -> the trade it funds from another account. */
+  readonly externalFunders: ReadonlyMap<number, number>;
+  /** Split leg handle -> the trade that leg embeds. */
+  readonly investmentSplitLegs: ReadonlyMap<number, number>;
   readonly warnings: MnyWarning[];
 }
 
-/** Everything the posting predicate reads before `tradeCashLegs` can exist. */
-type PostingIndexes = Omit<Indexes, "tradeCashLegs">;
+/** Everything the posting predicate reads before the trade-cash classification. */
+type PostingIndexes = Omit<
+  Indexes,
+  "tradeCashLegs" | "externalFunders" | "investmentSplitLegs"
+>;
 
 function buildIndexes(input: MapTransactionsInput): Indexes {
   const warnings: MnyWarning[] = [];
@@ -174,7 +201,7 @@ function buildIndexes(input: MapTransactionsInput): Indexes {
     warnings,
   };
 
-  return { ...base, tradeCashLegs: tradeCashLegRows(rows, base, input) };
+  return { ...base, ...classifyTradeCashSides(rows, base, input) };
 }
 
 /**
@@ -185,7 +212,7 @@ function buildIndexes(input: MapTransactionsInput): Indexes {
  * orphaned transfer sides are out. Scheduler-posted rows are **in**: they are
  * real postings, and excluding them emptied PR #192's loan accounts.
  *
- * Separate from `isImportablePosting` only because `tradeCashLegRows` has to
+ * Separate from `isImportablePosting` only because `classifyTradeCashSides` has to
  * ask this question in order to answer the other one.
  */
 function isPostingRow(
@@ -225,64 +252,108 @@ function isImportablePosting(
 }
 
 /**
- * Rows that are Money's own record of the cash half of a trade in the paired
- * brokerage account.
+ * Where the cash for each trade already sits, from Money's own `TRN_XFER`
+ * pairings.
  *
- * Money keeps an investment account's cash in a companion account and writes
- * the cash side of a trade there as an ordinary `TRN` row, paired to the trade
- * through `TRN_XFER` -- `act` 1 has one 2,015 times in 2,029 and `act` 3 1,090
- * times in 1,090. Monize does not need that row: `writeInvestments` creates the
- * sleeve transaction itself from the investment row's `cashAmount`, and links
- * the two through `investment_transactions.transaction_id`.
+ * Money records the cash half of a trade as an ordinary `TRN` row paired to the
+ * investment row. There are three shapes, and Monize has a distinct model for
+ * each -- the whole point of this function is that they are one question asked
+ * once rather than three predicates that can disagree:
  *
- * Importing it anyway put the same payment in the cash register three times --
- * the purchase, a transfer in and a transfer out -- where Money shows one
- * (issue #1175). The pair of extra rows is this row plus the counterpart
- * `buildCashCounterparts` synthesized for it, which for these rows lands in the
- * row's **own** account.
+ * **The trade's own sleeve (issue #1175).** Money keeps an investment account's
+ * cash in a companion account and writes the cash side there -- `act` 1 does it
+ * 2,015 times in 2,029, `act` 3 1,090 in 1,090. Monize writes that row itself
+ * from the trade's `cashAmount`, linked through
+ * `investment_transactions.transaction_id`, so importing Money's copy as well
+ * put the same payment in the register three times: the purchase, a transfer in
+ * and a transfer out. The row is dropped and the trade writes it instead. That
+ * cannot move a balance, because the row and the counterpart
+ * `buildCashCounterparts` used to synthesize for it always summed to zero.
  *
- * That is also why dropping them cannot move a balance: a row belongs to this
- * set exactly when its synthesized counterpart mirrors it into the same
- * account, so the two always summed to zero. What changes is the row count, not
- * the money -- whatever the investment mapper then does with the trade, whether
- * it writes a cash leg, maps it to an action that moves none, or skips it
- * outright.
+ * **A funding row in another account (issue #1212).** A purchase paid for out of
+ * a chequing account. The row stays where Money put it and becomes the trade's
+ * cash leg, with the trade recording it as its `funding_account_id` -- which is
+ * what a natively entered trade funded from elsewhere already stores. Making it
+ * a transfer into the sleeve instead left the sleeve holding a transfer in and
+ * the trade's own leg taking it straight out again.
  *
- * **Top-level rows only.** A split *leg* in the sleeve pointing at a trade is a
- * different shape: its parent has already taken the cash out of the sleeve, so
- * there the synthesized counterpart is what keeps the balance right and must
- * stay.
+ * **A leg of a split (issue #1211).** A paycheque with an investment purchase in
+ * it. The leg becomes a `SplitKind.INVESTMENT` split with the trade embedded in
+ * it through `transaction_split_id`, exactly as `createEmbeddedForSplit` writes
+ * a hand-entered one; the leg's amount is the cash impact, so no cash row is
+ * written anywhere. The old transfer-split shape put two more rows in the
+ * sleeve, and showed the purchase as a transfer to an account the user never
+ * chose.
+ *
+ * A pairing only qualifies when the far side is a trade **this import writes**
+ * with a cash side of its own. A trade the investment mapper skipped, or one
+ * that moves no cash, leaves Money's row alone: dropping it would lose the money
+ * it records, and embedding a trade that does not exist would wire a split to
+ * nothing.
  */
-function tradeCashLegRows(
+function classifyTradeCashSides(
   rows: readonly MnyTransaction[],
   indexes: PostingIndexes,
   input: MapTransactionsInput,
-): ReadonlySet<number> {
-  const handles = new Set<number>();
+): {
+  tradeCashLegs: ReadonlySet<number>;
+  externalFunders: ReadonlyMap<number, number>;
+  investmentSplitLegs: ReadonlyMap<number, number>;
+} {
+  const tradeCashLegs = new Set<number>();
+  const externalFunders = new Map<number, number>();
+  const investmentSplitLegs = new Map<number, number>();
 
   for (const row of rows) {
-    if (!isPostingRow(row, indexes, input)) {
+    const handle = row.handle;
+    if (handle === null) {
       continue;
     }
-    const handle = row.handle as number;
     const partner = indexes.transfers.partnerByHandle.get(handle);
-    const far =
-      partner === undefined ? undefined : indexes.byHandle.get(partner);
-    if (!far || far.security === null || far.account === null) {
+    if (partner === undefined) {
+      continue;
+    }
+    const trade = input.tradesByHandle.get(partner);
+    if (trade === undefined || trade.cashAmount === 0) {
       continue;
     }
 
-    const brokerageKey = input.accountKeyByHandle.get(far.account);
-    const cashKey =
-      brokerageKey === undefined
-        ? undefined
-        : input.cashKeyByAccountKey.get(brokerageKey);
-    if (cashKey !== undefined && cashKey === accountKeyOf(row, input)) {
-      handles.add(handle);
+    const parent = indexes.parentOfChild.get(handle);
+    if (parent !== undefined) {
+      // A split leg. Its parent has already moved the whole amount, so the leg
+      // is the trade's cash side and the trade belongs inside it.
+      const parentRow = indexes.byHandle.get(parent);
+      if (
+        parentRow !== undefined &&
+        isPostingRow(parentRow, indexes, input) &&
+        isInvestmentActionAllowedInSplit(trade.action)
+      ) {
+        investmentSplitLegs.set(handle, partner);
+      }
+      continue;
+    }
+
+    // A split *parent* is not a cash side: its amount is the whole transaction,
+    // of which the trade is at most one leg, and dropping it would take the
+    // other legs with it. Money should never pair one, and if it does the row
+    // keeps the old synthesized-counterpart treatment rather than being read as
+    // something it is not.
+    if (
+      !isPostingRow(row, indexes, input) ||
+      indexes.childrenByParent.has(handle)
+    ) {
+      continue;
+    }
+
+    const sleeveKey = input.cashKeyByAccountKey.get(trade.accountKey);
+    if (sleeveKey !== undefined && sleeveKey === accountKeyOf(row, input)) {
+      tradeCashLegs.add(handle);
+    } else {
+      externalFunders.set(handle, partner);
     }
   }
 
-  return handles;
+  return { tradeCashLegs, externalFunders, investmentSplitLegs };
 }
 
 /**
@@ -308,6 +379,13 @@ function tradeCashLegRows(
  * rows are `tradeCashLegs`, so `isImportablePosting` rejects them and `nearId`
  * is undefined before the far side is ever looked at. A synthesized row
  * mirroring its own account is what issue #1175 saw in the register.
+ *
+ * Neither does a near side that is the trade's *own* cash movement --
+ * `externalFunders` and `investmentSplitLegs`. Those rows already record the
+ * money, so standing in for them a second time is what issues #1212 and #1211
+ * saw. What is left for this function is the pairing that genuinely has no
+ * banking counterpart: a far row carrying a security whose trade this import
+ * does not write, or writes with no cash side.
  */
 function buildCashCounterparts(
   rows: readonly MnyTransaction[],
@@ -326,6 +404,13 @@ function buildCashCounterparts(
     // The near side has to be a row this import actually creates: a posting, or
     // a leg of one. A leg's transfer points back at its parent payment, the
     // same wiring `counterpartId` uses in the other direction.
+    if (
+      indexes.externalFunders.has(handle) ||
+      indexes.investmentSplitLegs.has(handle)
+    ) {
+      continue;
+    }
+
     const parent = indexes.parentOfChild.get(handle);
     const nearId =
       parent === undefined
@@ -415,6 +500,22 @@ function mapSplitChild(
     return null;
   }
 
+  // A leg that pays for a trade embeds it (issue #1211): the leg's amount is
+  // the trade's cash impact, so nothing is transferred and no cash row exists.
+  const embeddedTrade = context.investmentSplitLegs.get(handle);
+  if (embeddedTrade !== undefined) {
+    return {
+      id: randomUUID(),
+      kind: SplitKind.INVESTMENT,
+      categoryHandle: null,
+      transferAccountKey: null,
+      linkedTransactionId: null,
+      investmentHandle: embeddedTrade,
+      amount: child.amount,
+      memo: child.memo,
+    };
+  }
+
   const partner = context.transfers.partnerByHandle.get(handle) ?? null;
   const partnerRow =
     partner === null ? null : (context.byHandle.get(partner) ?? null);
@@ -430,10 +531,12 @@ function mapSplitChild(
   // principal portion of a loan payment.
   if (partnerKey !== null && partnerId !== null) {
     return {
+      id: randomUUID(),
       kind: SplitKind.TRANSFER,
       categoryHandle: null,
       transferAccountKey: partnerKey,
       linkedTransactionId: partnerId,
+      investmentHandle: null,
       amount: child.amount,
       memo: child.memo,
     };
@@ -451,10 +554,12 @@ function mapSplitChild(
   }
 
   return {
+    id: randomUUID(),
     kind: SplitKind.CATEGORY,
     categoryHandle: child.category,
     transferAccountKey: null,
     linkedTransactionId: null,
+    investmentHandle: null,
     amount: child.amount,
     memo: child.memo,
   };
@@ -486,8 +591,10 @@ function mapOne(
   }
 
   // A split parent is never itself a transfer: its transfer legs are splits.
+  // Neither is a row funding a trade in another account -- Money pairs it with
+  // the trade, but in Monize that row *is* the trade's cash leg (issue #1212).
   const partner =
-    splits.length > 0
+    splits.length > 0 || context.externalFunders.has(handle)
       ? null
       : (context.transfers.partnerByHandle.get(handle) ?? null);
   const linkedTransactionId =
@@ -502,6 +609,20 @@ function mapOne(
     });
   }
 
+  // A funding row and the trade it pays for are one movement of money, so they
+  // share the VOID boundary: a row claiming the cash moved beside a trade that
+  // says it did not is the pair describing two different events. Only VOID --
+  // reconciliation states are per-ledger.
+  const fundedTrade = context.externalFunders.get(handle);
+  const tradeStatus =
+    fundedTrade === undefined
+      ? undefined
+      : context.input.tradesByHandle.get(fundedTrade)?.status;
+  const status =
+    tradeStatus === TransactionStatus.VOID
+      ? TransactionStatus.VOID
+      : mapTransactionStatus(row.clearedStatus, row.flags);
+
   return {
     id: context.idByHandle.get(handle) as string,
     handle,
@@ -510,7 +631,7 @@ function mapOne(
     amount: row.amount,
     currencyCode:
       context.input.currencyByHandle.get(row.account as number) ?? "",
-    status: mapTransactionStatus(row.clearedStatus, row.flags),
+    status,
     payeeHandle: row.payee,
     // A split parent carries no category of its own: the legs do.
     categoryHandle: splits.length > 0 ? null : row.category,
@@ -618,6 +739,53 @@ function countPlainTransferPairs(context: Context): number {
 }
 
 /**
+ * The rows that already record a trade's cash, keyed by the trade's `TRN.htrn`.
+ *
+ * Read back off the mapped output rather than accumulated while mapping, so a
+ * source can only name an id that is actually going to be written -- the split
+ * ids in particular exist only once `mapSplitChild` has produced the leg.
+ * `TRN_XFER` is a bijection (`indexTransfers`), so a trade has at most one.
+ */
+function collectInvestmentCashSources(
+  transactions: readonly MappedTransaction[],
+  indexes: Indexes,
+): Map<number, MnyInvestmentCashSource> {
+  const sources = new Map<number, MnyInvestmentCashSource>();
+
+  for (const transaction of transactions) {
+    const funded = indexes.externalFunders.get(transaction.handle);
+    if (funded !== undefined) {
+      sources.set(funded, {
+        accountKey: transaction.accountKey,
+        currencyCode: transaction.currencyCode,
+        amount: transaction.amount,
+        status: transaction.status,
+        transactionId: transaction.id,
+        splitId: null,
+      });
+    }
+
+    for (const split of transaction.splits) {
+      if (split.investmentHandle === null) {
+        continue;
+      }
+      sources.set(split.investmentHandle, {
+        accountKey: transaction.accountKey,
+        currencyCode: transaction.currencyCode,
+        amount: split.amount,
+        // The parent's, not the leg's: an embedded row's status is the
+        // parent's, the same rule `createEmbeddedForSplit` applies.
+        status: transaction.status,
+        transactionId: null,
+        splitId: split.id,
+      });
+    }
+  }
+
+  return sources;
+}
+
+/**
  * Maps banking transactions, deferring anything that carries a security to the
  * investment mapper (Phase 2 reads the same tables).
  *
@@ -654,6 +822,8 @@ export function mapTransactions(
     transfers: indexes.transfers,
     idByHandle,
     cashCounterparts,
+    externalFunders: indexes.externalFunders,
+    investmentSplitLegs: indexes.investmentSplitLegs,
     warnings,
   };
 
@@ -693,6 +863,7 @@ export function mapTransactions(
     transfersLinked: countPlainTransferPairs(context) + transferSplits,
     skipped: reportUnusable(rows, indexes, input, warnings),
     tradeCashLegs: indexes.tradeCashLegs.size,
+    investmentCashSources: collectInvestmentCashSources(transactions, indexes),
     deferredInvestments: rows.filter(
       (row) =>
         row.security !== null &&

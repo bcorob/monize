@@ -8,8 +8,7 @@
     "empty": "今年没有投资收益"
   },
   "register": {
-    "cashHeading": "现金交易",
-    "newCashTransaction": "新建现金交易",
-    "deleteFailed": "删除交易失败"
+    "deleteFailed": "删除交易失败",
+    "loadFailed": "加载交易失败"
   }
 }

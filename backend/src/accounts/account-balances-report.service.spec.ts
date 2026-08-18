@@ -32,6 +32,7 @@ interface Fixture {
     close_price: string;
   }>;
   securities?: Array<{ id: string; currency_code: string }>;
+  firstActivity?: Array<{ id: string; first_activity: string | null }>;
   rates?: Array<{
     from_currency: string;
     to_currency: string;
@@ -39,6 +40,17 @@ interface Fixture {
     rate: string;
   }>;
 }
+
+/**
+ * The holdings replay, told apart from the inception read beside it.
+ *
+ * Both name `investment_transactions`, so matching on the table alone finds
+ * whichever call the scheduler ran first -- and the assertions that no replay
+ * happened at all would pass for the wrong reason. The select list is what
+ * identifies the replay.
+ */
+const isReplayQuery = (sql: string): boolean =>
+  sql.includes("security_id, action");
 
 describe("AccountBalancesReportService", () => {
   let service: AccountBalancesReportService;
@@ -50,13 +62,18 @@ describe("AccountBalancesReportService", () => {
       if (sql.includes("FROM accounts\n") && sql.includes("account_sub_type")) {
         return fixture.accounts ?? [];
       }
+      // Checked before the ledger and investment reads: this one names both
+      // tables, so an earlier arm would swallow it.
+      if (sql.includes("AS first_activity")) {
+        return fixture.firstActivity ?? [];
+      }
       if (
         sql.includes("opening_balance") &&
         sql.includes("LEFT JOIN transactions")
       ) {
         return fixture.balances ?? [];
       }
-      if (sql.includes("FROM investment_transactions")) {
+      if (isReplayQuery(sql)) {
         return fixture.investmentTransactions ?? [];
       }
       if (sql.includes("FROM security_prices")) {
@@ -235,7 +252,7 @@ describe("AccountBalancesReportService", () => {
       );
       expect(ledgerCall[1][1]).toBe("2027-06-30");
       const replayCall = query.mock.calls.find(([sql]: [string]) =>
-        sql.includes("FROM investment_transactions"),
+        isReplayQuery(sql),
       );
       expect(replayCall[1][1]).toBe("2027-06-30");
 
@@ -331,6 +348,206 @@ describe("AccountBalancesReportService", () => {
     expect(result.accounts[0].balance).toBe(0);
   });
 
+  /**
+   * A balance is a fact about something that exists, so a date before the
+   * account came into existence has no balance to report -- not an opening
+   * balance carried backwards, which is the sum the account *started* at.
+   *
+   * Inception is `date_acquired` for an asset that carries one, and otherwise
+   * the first movement on either ledger.
+   */
+  describe("a date before the account existed", () => {
+    const asset = {
+      id: "acc-asset",
+      currency_code: "CAD",
+      account_type: "ASSET",
+      account_sub_type: null,
+      date_acquired: "2024-06-15",
+    };
+
+    it("reports an asset as absent before the day it was acquired", async () => {
+      program({
+        accounts: [asset],
+        balances: [{ id: "acc-asset", balance: "450000" }],
+      });
+      const result = await service.getBalancesAsOf("user-1", "2024-06-14");
+      expect(result.accounts[0]).toMatchObject({
+        accountId: "acc-asset",
+        existsAsOf: false,
+        balance: 0,
+      });
+    });
+
+    // The day itself is the day it started existing, not the day before it did.
+    it("reports the asset from its acquisition date onwards", async () => {
+      program({
+        accounts: [asset],
+        balances: [{ id: "acc-asset", balance: "450000" }],
+      });
+      for (const date of ["2024-06-15", "2026-03-01"]) {
+        const result = await service.getBalancesAsOf("user-1", date);
+        expect(result.accounts[0]).toMatchObject({
+          existsAsOf: true,
+          balance: 450000,
+        });
+      }
+    });
+
+    // The field says when the asset started existing. A transaction filed
+    // earlier is what the user has already corrected by setting it.
+    it("lets the acquisition date win over an earlier transaction", async () => {
+      program({
+        accounts: [asset],
+        balances: [{ id: "acc-asset", balance: "450000" }],
+        firstActivity: [{ id: "acc-asset", first_activity: "2020-01-01" }],
+      });
+      const result = await service.getBalancesAsOf("user-1", "2024-06-14");
+      expect(result.accounts[0]).toMatchObject({
+        existsAsOf: false,
+        balance: 0,
+      });
+    });
+
+    // `date_acquired` is an asset field; the account form offers it nowhere
+    // else, and net worth zeroes on it only for an ASSET. A stray value on
+    // another type must not hide a chequing account from its own history.
+    it("ignores an acquisition date on an account that is not an asset", async () => {
+      program({
+        accounts: [{ ...cheque, date_acquired: "2024-06-15" }],
+        balances: [{ id: "acc-1", balance: "5000" }],
+      });
+      const result = await service.getBalancesAsOf("user-1", "2020-01-01");
+      expect(result.accounts[0]).toMatchObject({
+        existsAsOf: true,
+        balance: 5000,
+      });
+    });
+
+    // The opening balance is what the account started at, so before the first
+    // transaction there is nothing to start from yet.
+    it("withholds an opening balance from dates before the first transaction", async () => {
+      program({
+        accounts: [cheque],
+        balances: [{ id: "acc-1", balance: "2500" }],
+        firstActivity: [{ id: "acc-1", first_activity: "2023-04-10" }],
+      });
+      const result = await service.getBalancesAsOf("user-1", "2023-04-09");
+      expect(result.accounts[0]).toMatchObject({
+        existsAsOf: false,
+        balance: 0,
+      });
+    });
+
+    it("reports the opening balance from the first transaction's own date", async () => {
+      program({
+        accounts: [cheque],
+        balances: [{ id: "acc-1", balance: "2500" }],
+        firstActivity: [{ id: "acc-1", first_activity: "2023-04-10" }],
+      });
+      const result = await service.getBalancesAsOf("user-1", "2023-04-10");
+      expect(result.accounts[0]).toMatchObject({
+        existsAsOf: true,
+        balance: 2500,
+      });
+    });
+
+    // Nothing dates this account's inception, and `created_at` is when the row
+    // was typed in rather than when the account came to exist -- so an account
+    // imported today would otherwise vanish from its own history.
+    it("reports an account with no acquisition date and no movements at every date", async () => {
+      program({
+        accounts: [cheque],
+        balances: [{ id: "acc-1", balance: "2500" }],
+        firstActivity: [{ id: "acc-1", first_activity: null }],
+      });
+      const result = await service.getBalancesAsOf("user-1", "1999-01-01");
+      expect(result.accounts[0]).toMatchObject({
+        existsAsOf: true,
+        balance: 2500,
+      });
+    });
+
+    // A brokerage's movements are trades, not ledger rows, so the inception
+    // read has to look at both tables or the account reports as timeless.
+    it("dates a brokerage from its investment transactions", async () => {
+      program({
+        accounts: [brokerage],
+        balances: [{ id: "acc-b", balance: "0" }],
+        firstActivity: [{ id: "acc-b", first_activity: "2025-02-03" }],
+      });
+      const result = await service.getBalancesAsOf("user-1", "2025-02-02");
+      expect(result.accounts[0]).toMatchObject({
+        existsAsOf: false,
+        balance: 0,
+      });
+    });
+
+    // The row is in `accounts` as the query runs, so the account exists now
+    // whatever its ledger says about next week. Today is the fixture's
+    // 2026-08-18.
+    it("reports an account whose only movement is still ahead of it", async () => {
+      program({
+        accounts: [cheque],
+        balances: [{ id: "acc-1", balance: "500" }],
+        firstActivity: [{ id: "acc-1", first_activity: "2026-09-01" }],
+      });
+      const result = await service.getBalancesAsOf("user-1", "2026-08-18");
+      expect(result.accounts[0]).toMatchObject({
+        existsAsOf: true,
+        balance: 500,
+      });
+    });
+
+    // Capped at today, not waived: nothing says the account was there in 2010.
+    it("still withholds that account from a date before today", async () => {
+      program({
+        accounts: [cheque],
+        balances: [{ id: "acc-1", balance: "500" }],
+        firstActivity: [{ id: "acc-1", first_activity: "2026-09-01" }],
+      });
+      const result = await service.getBalancesAsOf("user-1", "2026-08-17");
+      expect(result.accounts[0]).toMatchObject({
+        existsAsOf: false,
+        balance: 0,
+      });
+    });
+
+    // The user's own statement about an asset they do not own yet, so it is
+    // honoured as written rather than capped.
+    it("honours an acquisition date that has not arrived", async () => {
+      program({
+        accounts: [{ ...asset, date_acquired: "2027-01-01" }],
+        balances: [{ id: "acc-asset", balance: "450000" }],
+      });
+      const result = await service.getBalancesAsOf("user-1", "2026-08-18");
+      expect(result.accounts[0]).toMatchObject({
+        existsAsOf: false,
+        balance: 0,
+      });
+    });
+
+    it("asks both ledgers for the first movement, unbounded by the report's date", async () => {
+      program({
+        accounts: [cheque],
+        balances: [{ id: "acc-1", balance: "1" }],
+      });
+      await service.getBalancesAsOf("user-1", "2026-03-01");
+
+      const inceptionCall = query.mock.calls.find(([sql]: [string]) =>
+        sql.includes("AS first_activity"),
+      );
+      expect(inceptionCall[0]).toContain("FROM transactions t");
+      expect(inceptionCall[0]).toContain("FROM investment_transactions it");
+      expect(inceptionCall[0]).toContain("t.parent_transaction_id IS NULL");
+      expect(inceptionCall[0]).toContain("t.status != 'VOID'");
+      expect(inceptionCall[0]).toContain("it.status != 'VOID'");
+      // A window ending at the report's date cannot tell "before the first
+      // movement" from "has never had one".
+      expect(inceptionCall[0]).not.toContain("$4");
+      expect(inceptionCall[1]).toEqual(["user-1", [], null]);
+    });
+  });
+
   it("does not report a market value for an account that holds no securities", async () => {
     program({ accounts: [cheque], balances: [{ id: "acc-1", balance: "10" }] });
     const result = await service.getBalancesAsOf("user-1", "2026-06-30");
@@ -343,11 +560,9 @@ describe("AccountBalancesReportService", () => {
       fxComplete: true,
     });
     // No holdings accounts, so no replay and no price lookup at all.
-    expect(
-      query.mock.calls.some(([sql]: [string]) =>
-        sql.includes("investment_transactions"),
-      ),
-    ).toBe(false);
+    expect(query.mock.calls.some(([sql]: [string]) => isReplayQuery(sql))).toBe(
+      false,
+    );
   });
 
   it("values a holding at the last close on or before the date", async () => {
@@ -507,7 +722,7 @@ describe("AccountBalancesReportService", () => {
     });
     await service.getBalancesAsOf("user-1", "2026-03-01");
     const replayCall = query.mock.calls.find(([sql]: [string]) =>
-      sql.includes("FROM investment_transactions"),
+      isReplayQuery(sql),
     );
     expect(replayCall[0]).toContain("status != 'VOID'");
     expect(replayCall[0]).toContain("transaction_date <= $2");
@@ -719,11 +934,9 @@ describe("AccountBalancesReportService", () => {
       balance: 5000,
       marketValue: null,
     });
-    expect(
-      query.mock.calls.some(([sql]: [string]) =>
-        sql.includes("investment_transactions"),
-      ),
-    ).toBe(false);
+    expect(query.mock.calls.some(([sql]: [string]) => isReplayQuery(sql))).toBe(
+      false,
+    );
   });
 
   it("values a standalone investment account, which carries its own holdings", async () => {
@@ -778,7 +991,7 @@ describe("AccountBalancesReportService", () => {
     expect(query).not.toHaveBeenCalled();
   });
 
-  it("restricts both reads to the accounts a delegate may see", async () => {
+  it("restricts every read to the accounts a delegate may see", async () => {
     program({ accounts: [cheque], balances: [{ id: "acc-1", balance: "1" }] });
     await service.getBalancesAsOf("user-1", "2026-03-01", [], ["acc-1"]);
 
@@ -791,6 +1004,10 @@ describe("AccountBalancesReportService", () => {
       sql.includes("LEFT JOIN transactions"),
     );
     expect(ledgerCall[1][3]).toEqual(["acc-1"]);
+    const inceptionCall = query.mock.calls.find(([sql]: [string]) =>
+      sql.includes("AS first_activity"),
+    );
+    expect(inceptionCall[1][2]).toEqual(["acc-1"]);
   });
 
   it("widens the ownership predicate to the authorized joint accounts only", async () => {

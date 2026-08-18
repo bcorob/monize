@@ -25,10 +25,10 @@
     "cashFilterTo": "Até",
     "loadingCashTransactions": "A carregar transações de numerário...",
     "today": "Hoje",
-    "transactionCount": "{count} transação{plural}",
     "allPayees": "Todos os beneficiários",
     "allCategories": "Todas as categorias",
-    "toastDeleteFailed": "Falha ao eliminar a transação"
+    "toastDeleteFailed": "Falha ao eliminar a transação",
+    "toastLoadFailed": "Falha ao carregar a transação"
   },
   "portfolioSummary": {
     "title": "Resumo do Portefólio",
@@ -131,6 +131,7 @@
     "portfolioLabel": "Portefólio:"
   },
   "transactionList": {
+    "itemNamePlural": "transações",
     "title": "Transações Recentes",
     "filtered": "(filtrado)",
     "newBrokerageTransaction": "+ Nova Transação de Corretagem",

@@ -8,8 +8,7 @@
     "empty": "[XX-No investment income this year-XX]"
   },
   "register": {
-    "cashHeading": "[XX-Cash transactions-XX]",
-    "newCashTransaction": "[XX-New Cash Transaction-XX]",
-    "deleteFailed": "[XX-Failed to delete transaction-XX]"
+    "deleteFailed": "[XX-Failed to delete transaction-XX]",
+    "loadFailed": "[XX-Failed to load transaction-XX]"
   }
 }

@@ -53,6 +53,7 @@ describe("TransactionAnalyticsService", () => {
       limit: jest.fn().mockReturnValue(mockQueryBuilder),
       setParameter: jest.fn().mockReturnValue(mockQueryBuilder),
       setParameters: jest.fn().mockReturnValue(mockQueryBuilder),
+      distinct: jest.fn().mockReturnValue(mockQueryBuilder),
       getRawMany: jest.fn().mockResolvedValue([]),
     });
 
@@ -96,6 +97,94 @@ describe("TransactionAnalyticsService", () => {
     service = module.get<TransactionAnalyticsService>(
       TransactionAnalyticsService,
     );
+  });
+
+  describe("getRegisterFilterOptions", () => {
+    /**
+     * Three raw queries run in order: payees, the rows' own categories, then
+     * the split lines' categories. Each `getRawMany` answer is consumed by the
+     * next call, so a case describes the register in that order.
+     */
+    const answerWith = (
+      payees: { id: string; name: string }[],
+      ownCategoryIds: string[],
+      splitCategoryIds: string[] = [],
+    ) => {
+      mockQueryBuilder.getRawMany
+        .mockResolvedValueOnce(payees)
+        .mockResolvedValueOnce(ownCategoryIds.map((id) => ({ id })))
+        .mockResolvedValueOnce(splitCategoryIds.map((id) => ({ id })));
+    };
+
+    it("offers the payees the rows actually use", async () => {
+      answerWith([{ id: "payee-1", name: "Payroll" }], []);
+
+      const result = await service.getRegisterFilterOptions(userId, {
+        accountIds: ["acc-1"],
+      });
+
+      expect(result.payees).toEqual([{ id: "payee-1", name: "Payroll" }]);
+    });
+
+    it("restricts to the accounts asked for", async () => {
+      answerWith([], []);
+
+      await service.getRegisterFilterOptions(userId, { accountIds: ["acc-1"] });
+
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
+        "transaction.accountId IN (:...filterAccountIds)",
+        { filterAccountIds: ["acc-1"] },
+      );
+    });
+
+    it("carries the ancestors of a used sub-category", async () => {
+      // A tree picker builds its top level from the rows with no parent, so a
+      // child offered without its parent is a child nobody can see.
+      answerWith([], ["cat-bills-cell"]);
+
+      const result = await service.getRegisterFilterOptions(userId, {});
+
+      expect(result.categories.map((c) => c.id).sort()).toEqual([
+        "cat-bills",
+        "cat-bills-cell",
+      ]);
+    });
+
+    it("offers a category used only by a split line", async () => {
+      // A split parent's own categoryId is NULL: reading it alone would leave
+      // the picker narrower than the filter it feeds.
+      answerWith([], [], ["cat-travel"]);
+
+      const result = await service.getRegisterFilterOptions(userId, {});
+
+      expect(result.categories).toEqual([
+        { id: "cat-travel", name: "Travel", parentId: null },
+      ]);
+    });
+
+    it("offers no categories when the rows use none", async () => {
+      // Known and empty, not unknown: these accounts have nothing filed under
+      // a category, and the picker says so rather than listing the whole tree.
+      answerWith([{ id: "payee-1", name: "Payroll" }], []);
+
+      const result = await service.getRegisterFilterOptions(userId, {});
+
+      expect(result.categories).toEqual([]);
+      expect(categoriesRepository.find).not.toHaveBeenCalled();
+    });
+
+    it("widens the ownership predicate by the authorized joint accounts", async () => {
+      answerWith([], []);
+
+      await service.getRegisterFilterOptions(userId, {
+        jointAccountIds: ["joint-1"],
+      });
+
+      expect(mockQueryBuilder.orWhere).toHaveBeenCalledWith(
+        "transaction.accountId IN (:...analyticsScopeJointIds)",
+        { analyticsScopeJointIds: ["joint-1"] },
+      );
+    });
   });
 
   describe("getSummary", () => {

@@ -7,11 +7,11 @@ import { useHideOnScroll } from '@/hooks/useHideOnScroll';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
 import { authApi } from '@/lib/auth';
+import { isNavSectionActive } from '@/lib/nav-section';
 import { markLogoutIncomplete, clearLogoutIncomplete } from '@/lib/logout-state';
 import Image from 'next/image';
 import { Button } from '@/components/ui/Button';
 import { BudgetAlertBadge } from '@/components/budgets/BudgetAlertBadge';
-import { ReconciliationReminderBadge } from '@/components/reconcile/ReconciliationReminderBadge';
 import { ActionHistoryPanel } from '@/components/layout/ActionHistoryPanel';
 import { MobileNavDrawer } from '@/components/layout/MobileNavDrawer';
 import { TOUR_ANCHORS, tourAnchor } from '@/lib/tours/anchors';
@@ -168,8 +168,8 @@ export function AppHeader() {
     setMobileMenuOpen(false);
   }
 
-  const isToolsActive = toolsLinks.some((link) => pathname === link.href);
-  const isAiActive = aiLinks.some((link) => pathname === link.href);
+  const isToolsActive = toolsLinks.some((link) => isNavSectionActive(pathname, link.href));
+  const isAiActive = aiLinks.some((link) => isNavSectionActive(pathname, link.href));
 
   // Slide the header out of view when scrolling down, back in when scrolling up,
   // moving it in lockstep with the scroll position. Keep it pinned while any
@@ -290,7 +290,7 @@ export function AppHeader() {
                   {...NAV_TOUR_ANCHORS[link.href]}
                   onClick={() => router.push(link.href)}
                   className={`px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-                    pathname === link.href
+                    isNavSectionActive(pathname, link.href)
                       ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200'
                       : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700'
                   }`}
@@ -333,7 +333,7 @@ export function AppHeader() {
                             setAiOpen(false);
                           }}
                           className={`block w-full text-left px-4 py-2 text-sm transition-colors ${
-                            pathname === link.href
+                            isNavSectionActive(pathname, link.href)
                               ? 'bg-blue-50 dark:bg-blue-900/50 text-blue-700 dark:text-blue-200'
                               : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
                           }`}
@@ -387,7 +387,7 @@ export function AppHeader() {
                             setToolsOpen(false);
                           }}
                           className={`block w-full text-left px-4 py-2 text-sm transition-colors ${
-                            pathname === link.href
+                            isNavSectionActive(pathname, link.href)
                               ? 'bg-blue-50 dark:bg-blue-900/50 text-blue-700 dark:text-blue-200'
                               : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
                           }`}
@@ -475,7 +475,10 @@ export function AppHeader() {
             </div>
             <ActionHistoryPanel />
             <BudgetAlertBadge />
-            <ReconciliationReminderBadge />
+            {/* The reconciliation reminder badge is deliberately not mounted
+                here for now: the reminder is kept off the header until
+                reconciliation is a more established habit. The component and
+                its tests stand, so putting it back is one line. */}
             <button
               {...tourAnchor(TOUR_ANCHORS.navSettings)}
               onClick={() => router.push('/settings')}

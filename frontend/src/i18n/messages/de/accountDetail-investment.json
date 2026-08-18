@@ -8,8 +8,7 @@
     "empty": "Keine Anlageerträge in diesem Jahr"
   },
   "register": {
-    "cashHeading": "Bargeldtransaktionen",
-    "newCashTransaction": "Neue Bargeldtransaktion",
-    "deleteFailed": "Transaktion konnte nicht gelöscht werden"
+    "deleteFailed": "Transaktion konnte nicht gelöscht werden",
+    "loadFailed": "Buchung konnte nicht geladen werden"
   }
 }

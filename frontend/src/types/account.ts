@@ -327,6 +327,16 @@ export interface AccountBalanceAsOf {
   fxComplete: boolean;
   /** Read as `=== false`: an older backend sends no field, which is not "incomplete". */
   valuationComplete: boolean;
+  /**
+   * Whether the account existed at the as-of date.
+   *
+   * Its inception is an asset's acquisition date, or otherwise its first
+   * movement on either ledger; before that the account is not a thing with a
+   * balance, so it is left out of the report rather than shown at its opening
+   * balance. Read as `=== false`, never `!`: a backend that predates the field
+   * sends nothing, and absent means "no information", not "did not exist".
+   */
+  existsAsOf: boolean;
 }
 
 export interface AccountBalancesAsOfResponse {

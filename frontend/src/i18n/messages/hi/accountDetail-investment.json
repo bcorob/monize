@@ -8,8 +8,7 @@
     "empty": "इस वर्ष कोई निवेश आय नहीं"
   },
   "register": {
-    "cashHeading": "नकद लेनदेन",
-    "newCashTransaction": "नया नकद लेनदेन",
-    "deleteFailed": "लेनदेन हटाने में विफल"
+    "deleteFailed": "लेनदेन हटाने में विफल",
+    "loadFailed": "लेनदेन लोड करने में विफल"
   }
 }

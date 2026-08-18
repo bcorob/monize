@@ -25,10 +25,10 @@
     "cashFilterTo": "तक",
     "loadingCashTransactions": "नकद लेनदेन लोड हो रहे हैं...",
     "today": "आज",
-    "transactionCount": "{count} लेनदेन{plural}",
     "allPayees": "सभी भुगतानकर्ता",
     "allCategories": "सभी श्रेणियां",
-    "toastDeleteFailed": "लेनदेन हटाने में विफल"
+    "toastDeleteFailed": "लेनदेन हटाने में विफल",
+    "toastLoadFailed": "लेनदेन लोड करने में विफल"
   },
   "portfolioSummary": {
     "title": "पोर्टफोलियो सारांश",
@@ -131,6 +131,7 @@
     "portfolioLabel": "पोर्टफोलियो:"
   },
   "transactionList": {
+    "itemNamePlural": "लेन-देन",
     "title": "हाल के लेनदेन",
     "filtered": "(फ़िल्टर किया गया)",
     "newBrokerageTransaction": "+ नया ब्रोकरेज लेनदेन",

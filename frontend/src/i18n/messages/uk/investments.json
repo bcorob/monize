@@ -25,10 +25,10 @@
     "cashFilterTo": "По",
     "loadingCashTransactions": "Завантаження готівкових транзакцій...",
     "today": "Сьогодні",
-    "transactionCount": "{count} транзакцій{plural}",
     "allPayees": "Всі одержувачі",
     "allCategories": "Всі категорії",
-    "toastDeleteFailed": "Не вдалося видалити транзакцію"
+    "toastDeleteFailed": "Не вдалося видалити транзакцію",
+    "toastLoadFailed": "Не вдалося завантажити транзакцію"
   },
   "portfolioSummary": {
     "title": "Зведення портфеля",
@@ -131,6 +131,7 @@
     "portfolioLabel": "Портфель:"
   },
   "transactionList": {
+    "itemNamePlural": "транзакцій",
     "title": "Останні транзакції",
     "filtered": "(відфільтровано)",
     "newBrokerageTransaction": "+ Нова брокерська транзакція",

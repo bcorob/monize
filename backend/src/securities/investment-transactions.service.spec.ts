@@ -194,6 +194,13 @@ describe("InvestmentTransactionsService", () => {
         Array.isArray(result) ? result : result ? [result] : [],
       ),
     getCount: jest.fn().mockResolvedValue(count),
+    select: jest.fn().mockReturnThis(),
+    addSelect: jest.fn().mockReturnThis(),
+    leftJoin: jest.fn().mockReturnThis(),
+    distinct: jest.fn().mockReturnThis(),
+    getRawMany: jest
+      .fn()
+      .mockResolvedValue(Array.isArray(result) ? result : []),
   });
 
   beforeEach(async () => {
@@ -1389,6 +1396,112 @@ describe("InvestmentTransactionsService", () => {
           }),
         }),
       );
+    });
+  });
+
+  describe("getRegisterFilterOptions", () => {
+    /** The distinct (action, symbol) pairs the register's rows hold. */
+    const optionsFor = (
+      rows: Array<{ action: InvestmentAction; symbol?: string | null }>,
+    ) => {
+      const qb = createMockQueryBuilder(
+        rows.map((r) => ({ action: r.action, symbol: r.symbol ?? null })),
+      );
+      investmentTransactionsRepository.createQueryBuilder.mockReturnValue(qb);
+      return qb;
+    };
+
+    it("returns only the actions the rows use", async () => {
+      optionsFor([
+        { action: InvestmentAction.SELL, symbol: "XEQT" },
+        { action: InvestmentAction.BUY, symbol: "VTI" },
+      ]);
+
+      const result = await service.getRegisterFilterOptions(userId);
+
+      expect(result.actions).toEqual([
+        InvestmentAction.BUY,
+        InvestmentAction.SELL,
+      ]);
+    });
+
+    it("orders them by the vocabulary, not by what was traded first", async () => {
+      // The picker's order is a property of the action list; deriving it from
+      // the rows would reshuffle the control as the ledger grows.
+      optionsFor([
+        { action: InvestmentAction.SELL, symbol: "XEQT" },
+        { action: InvestmentAction.BUY, symbol: "VTI" },
+      ]);
+
+      const result = await service.getRegisterFilterOptions(userId);
+      const vocabulary = Object.values(InvestmentAction);
+
+      expect(result.actions).toEqual(
+        vocabulary.filter((a) =>
+          [InvestmentAction.BUY, InvestmentAction.SELL].includes(a),
+        ),
+      );
+    });
+
+    it("offers the symbols the rows use, sold-out positions included", async () => {
+      // The picker used to be built from current holdings, so a position sold
+      // in full was not offered -- and its trades are exactly what somebody
+      // filtering by symbol is looking for.
+      optionsFor([
+        { action: InvestmentAction.SELL, symbol: "XEQT" },
+        { action: InvestmentAction.BUY, symbol: "VTI" },
+      ]);
+
+      const result = await service.getRegisterFilterOptions(userId);
+
+      expect(result.symbols).toEqual(["VTI", "XEQT"]);
+    });
+
+    it("offers no blank symbol for a row that has no security", async () => {
+      // An interest posting against the cash ledger carries none, and a blank
+      // option is not a symbol to filter by.
+      optionsFor([
+        { action: InvestmentAction.INTEREST, symbol: null },
+        { action: InvestmentAction.BUY, symbol: "VTI" },
+      ]);
+
+      const result = await service.getRegisterFilterOptions(userId);
+
+      expect(result.symbols).toEqual(["VTI"]);
+    });
+
+    it("offers nothing for an account with no trades", async () => {
+      // Known and empty: this account has done nothing, and the picker says so.
+      optionsFor([]);
+
+      const result = await service.getRegisterFilterOptions(userId, [
+        accountId,
+      ]);
+
+      expect(result.actions).toEqual([]);
+    });
+
+    it("reads the whole pair, as the register itself does", async () => {
+      // A register scoped to the brokerage half alone answers with part of what
+      // the user is looking at, so the picker must not be narrower either.
+      accountsService.findByIds.mockResolvedValue([
+        { id: accountId, linkedAccountId: "cash-account-id" },
+      ]);
+      const qb = optionsFor([{ action: InvestmentAction.BUY, symbol: "VTI" }]);
+
+      await service.getRegisterFilterOptions(userId, [accountId]);
+
+      expect(qb.andWhere).toHaveBeenCalledWith("it.accountId IN (:...allIds)", {
+        allIds: [accountId, "cash-account-id"],
+      });
+    });
+
+    it("asks about every account when none is named", async () => {
+      const qb = optionsFor([{ action: InvestmentAction.BUY, symbol: "VTI" }]);
+
+      await service.getRegisterFilterOptions(userId);
+
+      expect(qb.andWhere).not.toHaveBeenCalled();
     });
   });
 

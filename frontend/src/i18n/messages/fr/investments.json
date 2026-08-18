@@ -25,10 +25,10 @@
     "cashFilterTo": "Au",
     "loadingCashTransactions": "Chargement des transactions de trésorerie…",
     "today": "Aujourd'hui",
-    "transactionCount": "{count} transaction{plural}",
     "allPayees": "Tous les bénéficiaires",
     "allCategories": "Toutes les catégories",
-    "toastDeleteFailed": "Échec de la suppression de la transaction"
+    "toastDeleteFailed": "Échec de la suppression de la transaction",
+    "toastLoadFailed": "Échec du chargement de la transaction"
   },
   "portfolioSummary": {
     "title": "Résumé du portefeuille",
@@ -131,6 +131,7 @@
     "portfolioLabel": "Portefeuille :"
   },
   "transactionList": {
+    "itemNamePlural": "transactions",
     "title": "Transactions récentes",
     "filtered": "(filtré)",
     "newBrokerageTransaction": "+ Nouvelle transaction de courtage",

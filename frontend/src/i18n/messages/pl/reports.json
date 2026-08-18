@@ -142,8 +142,6 @@
     "totalAssets": "Aktywa razem",
     "totalLiabilities": "Zobowiązania razem",
     "netWorth": "Wartość netto",
-    "tableView": "Widok tabeli",
-    "chartView": "Widok wykresu",
     "noData": "Brak danych do wyświetlenia.",
     "noAccounts": "Nie znaleziono kont.",
     "closed": "Zamknięte",
@@ -193,6 +191,7 @@
     "groupAll": "Wszystkie konta",
     "colGroup": "Grupa",
     "noAccountsForFilters": "Żadne konto nie pasuje do bieżących filtrów.",
+    "noAccountsOnDate": "Żadne z Twoich kont nie istniało w dniu {date}.",
     "accountTypes": {
       "CHEQUING": "Rachunek bieżący",
       "SAVINGS": "Oszczędności",

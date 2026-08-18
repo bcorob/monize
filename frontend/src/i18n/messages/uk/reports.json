@@ -142,8 +142,6 @@
     "totalAssets": "Усього активів",
     "totalLiabilities": "Усього пасивів",
     "netWorth": "Чистий капітал",
-    "tableView": "Таблиця",
-    "chartView": "Діаграма",
     "noData": "Немає даних для відображення.",
     "noAccounts": "Рахунків не знайдено.",
     "closed": "Закрито",
@@ -193,6 +191,7 @@
     "groupAll": "Усі рахунки",
     "colGroup": "Група",
     "noAccountsForFilters": "Жоден рахунок не відповідає поточним фільтрам.",
+    "noAccountsOnDate": "На {date} жодного вашого рахунку ще не існувало.",
     "accountTypes": {
       "CHEQUING": "Поточний",
       "SAVINGS": "Ощадний",

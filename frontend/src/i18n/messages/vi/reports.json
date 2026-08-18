@@ -142,8 +142,6 @@
     "totalAssets": "Tổng tài sản",
     "totalLiabilities": "Tổng nợ",
     "netWorth": "Giá trị ròng",
-    "tableView": "Chế độ bảng",
-    "chartView": "Chế độ biểu đồ",
     "noData": "Không có dữ liệu để hiển thị.",
     "noAccounts": "Không tìm thấy tài khoản.",
     "closed": "Đã đóng",
@@ -193,6 +191,7 @@
     "groupAll": "Tất cả tài khoản",
     "colGroup": "Nhóm",
     "noAccountsForFilters": "Không có tài khoản nào khớp với bộ lọc hiện tại.",
+    "noAccountsOnDate": "Không có tài khoản nào của bạn tồn tại vào {date}.",
     "accountTypes": {
       "CHEQUING": "Tài khoản hàng ngày",
       "SAVINGS": "Tiết kiệm",

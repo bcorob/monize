@@ -123,8 +123,14 @@ export interface MappedPayees {
 // ---------------------------------------------------------------------------
 
 export interface MappedSplit {
+  /**
+   * Pre-generated UUID, for the same reason a transaction has one: an
+   * INVESTMENT leg's embedded investment row references the split through
+   * `transaction_split_id` and both are inserted before either is read back.
+   */
+  readonly id: string;
   readonly kind: SplitKind;
-  /** Money `hcat` for a category split; null for a transfer split. */
+  /** Money `hcat` for a category split; null for a transfer or investment split. */
   readonly categoryHandle: number | null;
   /** Account key for a transfer split -- the loan or destination account. */
   readonly transferAccountKey: string | null;
@@ -133,6 +139,12 @@ export interface MappedSplit {
    * split is wired before either row is inserted.
    */
   readonly linkedTransactionId: string | null;
+  /**
+   * `TRN.htrn` of the investment row an INVESTMENT leg embeds; null on every
+   * other kind. The leg's `amount` is that trade's cash impact, so the trade
+   * writes no cash row of its own.
+   */
+  readonly investmentHandle: number | null;
   readonly amount: number;
   readonly memo: string | null;
 }
@@ -178,10 +190,79 @@ export interface MappedTransactions {
    * which the investment writer creates from the trade itself. Not skipped and
    * not lost: the row is written, from the other side. Reported because it is
    * the one number that says how much of a file went through that path, and it
-   * has no other surface -- see `tradeCashLegRows` (issue #1175).
+   * has no other surface -- see `classifyTradeCashSides` (issue #1175).
    */
   readonly tradeCashLegs: number;
+  /**
+   * Where each trade's cash already sits, keyed by the investment row's
+   * `TRN.htrn`. See `MnyInvestmentCashSource`: a trade named here must not
+   * write a cash row of its own, because the banking side this mapper produced
+   * *is* that row.
+   */
+  readonly investmentCashSources: ReadonlyMap<number, MnyInvestmentCashSource>;
   readonly warnings: readonly MnyWarning[];
+}
+
+/**
+ * The banking row that already records one trade's cash movement.
+ *
+ * Money pairs a trade with the row that funds it through `TRN_XFER`, and that
+ * row is a real posting in a real account -- a paycheque's investment leg, or a
+ * purchase paid for out of a chequing account. Monize's own model has a place
+ * for both shapes, so the pairing is honoured rather than turned into a
+ * transfer into the brokerage's cash sleeve plus a second cash row leaving it
+ * again (issues #1211 and #1212, the split and top-level halves of the same
+ * defect).
+ *
+ * Exactly one of `transactionId` and `splitId` is set:
+ *
+ * - `transactionId` -- a top-level row in another account. It becomes the
+ *   trade's cash leg (`investment_transactions.transaction_id`) and the trade
+ *   records it as its `funding_account_id`, which is what a natively entered
+ *   trade funded from elsewhere already stores.
+ * - `splitId` -- a leg of a split transaction. The trade is embedded in that
+ *   leg (`investment_transactions.transaction_split_id`) exactly as
+ *   `createEmbeddedForSplit` writes a hand-entered one, and the leg's amount is
+ *   the cash impact.
+ */
+export interface MnyInvestmentCashSource {
+  /** Account key the cash actually moves in. */
+  readonly accountKey: string;
+  /** That account's currency, so a cross-currency trade can derive its rate. */
+  readonly currencyCode: string;
+  /** Signed amount the row or leg records, in `currencyCode`. */
+  readonly amount: number;
+  /**
+   * The status of the transaction that carries it -- the funding row itself, or
+   * the split's **parent**. The two rows describe one movement of money, so
+   * they share the VOID boundary: a trade embedded in a voided split moves no
+   * shares, exactly as `createEmbeddedForSplit` creates one with its parent's
+   * status.
+   */
+  readonly status: TransactionStatus;
+  /** The imported transaction that is the trade's cash leg, else null. */
+  readonly transactionId: string | null;
+  /** The imported split leg the trade is embedded in, else null. */
+  readonly splitId: string | null;
+}
+
+/**
+ * An investment row this import writes, as the transaction mapper needs to see
+ * it: enough to tell a trade's cash side from an ordinary transfer, and no
+ * more. Keyed by `TRN.htrn` in `MapTransactionsInput.tradesByHandle`.
+ */
+export interface MnyImportedTrade {
+  /** The brokerage account key the shares land in. */
+  readonly accountKey: string;
+  readonly action: InvestmentAction;
+  /** Signed cash the trade moves; 0 for the share-only actions. */
+  readonly cashAmount: number;
+  /**
+   * So a funding row adopted as this trade's cash leg cannot claim the money
+   * moved when the trade says it did not. Only the VOID boundary is shared;
+   * reconciliation states stay per-row.
+   */
+  readonly status: TransactionStatus;
 }
 
 // ---------------------------------------------------------------------------
@@ -223,8 +304,34 @@ export interface MappedInvestmentTransaction {
   readonly handle: number | null;
   /** The brokerage account key the shares move in. */
   readonly accountKey: string;
-  /** The cash sleeve the cash leg lands in; null when the action moves no cash. */
+  /**
+   * The account the cash moves in; null when the action moves no cash.
+   *
+   * Ordinarily the brokerage's own cash sleeve. When Money paired the trade
+   * with a row in another account -- a purchase paid out of chequing, or a
+   * paycheque's investment leg -- it is that account, and `cashTransactionId`
+   * or `transactionSplitId` names the row already recording the movement.
+   */
   readonly cashAccountKey: string | null;
+  /**
+   * The account a BUY draws its cash from (or a SELL pays into) when that is
+   * not the brokerage's own sleeve -- `investment_transactions.funding_account_id`,
+   * exactly as a natively entered trade funded from elsewhere stores it. Null
+   * for a sleeve-funded trade and for one embedded in a split, matching
+   * `createEmbeddedForSplit`.
+   */
+  readonly fundingAccountKey: string | null;
+  /**
+   * An already-imported transaction adopted as this trade's cash leg, instead
+   * of the writer synthesizing one. Set only for issue #1212's shape: Money
+   * recorded the cash in another account and that row is the movement.
+   */
+  readonly cashTransactionId: string | null;
+  /**
+   * The split leg this trade is embedded in (issue #1211). The leg carries the
+   * cash impact, so no cash transaction is written for the trade at all.
+   */
+  readonly transactionSplitId: string | null;
   readonly securityHandle: number;
   readonly action: InvestmentAction;
   readonly transactionDate: string;
@@ -239,6 +346,14 @@ export interface MappedInvestmentTransaction {
   /** Positive magnitude of the transaction, in the account's currency. */
   readonly totalAmount: number;
   readonly currencyCode: string;
+  /**
+   * Converts `totalAmount` into the cash account's currency. 1 for a
+   * same-currency trade -- which is every trade whose cash lands in its own
+   * sleeve, since a sleeve shares its brokerage's currency. A trade funded from
+   * an account in another currency derives its rate from the two amounts Money
+   * recorded, because 1 there would post the cash unconverted.
+   */
+  readonly exchangeRate: number;
   /** Signed cash impact on the cash sleeve; 0 for the share-only actions. */
   readonly cashAmount: number;
   readonly status: TransactionStatus;

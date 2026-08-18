@@ -142,8 +142,6 @@
     "totalAssets": "Totale attività",
     "totalLiabilities": "Totale passività",
     "netWorth": "Patrimonio netto",
-    "tableView": "Vista tabella",
-    "chartView": "Vista grafico",
     "noData": "Nessun dato da visualizzare.",
     "noAccounts": "Nessun conto trovato.",
     "closed": "Chiuso",
@@ -193,6 +191,7 @@
     "groupAll": "Tutti i conti",
     "colGroup": "Gruppo",
     "noAccountsForFilters": "Nessun conto corrisponde ai filtri attuali.",
+    "noAccountsOnDate": "Nessuno dei tuoi conti esisteva il {date}.",
     "accountTypes": {
       "CHEQUING": "Conto corrente",
       "SAVINGS": "Conto di risparmio",

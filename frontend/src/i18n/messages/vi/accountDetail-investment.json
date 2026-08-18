@@ -8,8 +8,7 @@
     "empty": "Không có thu nhập đầu tư nào trong năm nay"
   },
   "register": {
-    "cashHeading": "Giao dịch tiền mặt",
-    "newCashTransaction": "Giao dịch tiền mặt mới",
-    "deleteFailed": "Không xóa được giao dịch"
+    "deleteFailed": "Không xóa được giao dịch",
+    "loadFailed": "Tải giao dịch thất bại"
   }
 }

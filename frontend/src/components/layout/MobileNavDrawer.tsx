@@ -1,6 +1,7 @@
 'use client';
 
 import Image from 'next/image';
+import { isNavSectionActive } from '@/lib/nav-section';
 import { useTranslations } from 'next-intl';
 import { Modal } from '@/components/ui/Modal';
 
@@ -110,13 +111,17 @@ export function MobileNavDrawer({
 
         <div className="py-2">
           {renderLink({ href: '/dashboard', label: t('dashboard') }, pathname === '/dashboard')}
-          {navLinks.map((link) => renderLink(link, pathname === link.href))}
+          {navLinks.map((link) =>
+            renderLink(link, isNavSectionActive(pathname, link.href)),
+          )}
 
           {showAiMenu && (
             <>
               <div className="border-t border-gray-200 dark:border-gray-700 mt-2" />
               <div className={SECTION_HEADER_CLASS}>{t('ai')}</div>
-              {aiLinks.map((link) => renderLink(link, pathname === link.href))}
+              {aiLinks.map((link) =>
+                renderLink(link, isNavSectionActive(pathname, link.href)),
+              )}
             </>
           )}
 
@@ -124,7 +129,9 @@ export function MobileNavDrawer({
             <>
               <div className="border-t border-gray-200 dark:border-gray-700 mt-2" />
               <div className={SECTION_HEADER_CLASS}>{t('tools')}</div>
-              {toolsLinks.map((link) => renderLink(link, pathname === link.href))}
+              {toolsLinks.map((link) =>
+                renderLink(link, isNavSectionActive(pathname, link.href)),
+              )}
             </>
           )}
 

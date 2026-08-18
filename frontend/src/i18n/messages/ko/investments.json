@@ -25,10 +25,10 @@
     "cashFilterTo": "종료",
     "loadingCashTransactions": "현금 거래 불러오는 중...",
     "today": "오늘",
-    "transactionCount": "{count}건의 거래{plural}",
     "allPayees": "모든 수취인",
     "allCategories": "모든 카테고리",
-    "toastDeleteFailed": "거래 삭제에 실패했습니다"
+    "toastDeleteFailed": "거래 삭제에 실패했습니다",
+    "toastLoadFailed": "거래를 불러오지 못했습니다"
   },
   "portfolioSummary": {
     "title": "포트폴리오 요약",
@@ -131,6 +131,7 @@
     "portfolioLabel": "포트폴리오:"
   },
   "transactionList": {
+    "itemNamePlural": "거래",
     "title": "최근 거래",
     "filtered": "(필터됨)",
     "newBrokerageTransaction": "+ 새 증권사 거래",

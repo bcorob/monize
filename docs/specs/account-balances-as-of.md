@@ -65,6 +65,33 @@ nowhere since, from a single observation. A security outside the window is
 **unpriced** for `d`, which makes the account's total null (section 4), not
 smaller.
 
+**Inception** -- the first date the account is a thing with a balance:
+`date_acquired` when the account is an `ASSET` that carries one, and otherwise
+the earliest non-VOID, non-child movement on either ledger (`transactions` and
+`investment_transactions`). An acquisition date **wins** over an earlier
+transaction rather than being minimised with it: the field's job is to say when
+the asset started existing, and the two disagreeing is a correction the user has
+already made, and a *future* acquisition date is honoured as written because it
+is the user's own statement about an asset they do not own yet.
+
+A first movement in the future is **capped at today**. The account's row is in
+`accounts` as the query runs, so it demonstrably exists now whatever its ledger
+says about next week; without the cap, an account funded with an opening balance
+whose only entry is an upcoming bill disappears from today's own balance sheet.
+The cap is not a waiver -- that account is still absent from any date before
+today, because nothing says it was there.
+
+An account with neither has no inception and is reported at every
+date -- `created_at` is not a candidate, because it records when the row was
+typed in, so an account imported today would vanish from its own history.
+
+Before its inception an account is **absent**, not worth zero: `existsAsOf` is
+`false` and `balance` is 0 rather than the opening balance the ledger sum would
+otherwise carry back with it. The opening balance is the sum the account
+*started* at, and an asset bought in 2024 was not worth its purchase price in
+2019. The client drops those rows from the report entirely -- an empty row is a
+measured zero, and this is not a measurement.
+
 **The market date is `min(d, today)`.** The ledger runs ahead -- a transaction
 can be dated next year -- and prices and rates cannot, so a future `d` reads the
 market at today, the same clamp `ExchangeRateService.getRateForDate` applies and
@@ -94,12 +121,24 @@ Per the contract, a total is `null` unless every component is known.
 
 `balance` is never `null`: a ledger sum over rows the database holds is always
 known, and an account with no transactions before `d` sits at its opening
-balance.
+balance -- unless `d` predates its inception, where it is 0 (section 3).
+
+An account before its inception holds no positions either, because the replay is
+bounded by `d` and the inception read covers the same investment rows -- so a
+holdings account reports `marketValue: 0`, complete, exactly as an emptied one
+does.
 
 `valuationComplete` means *every component of every figure this row reports is
 known*. A consumer reads it as `=== false`, never `!`, so a response from a
 backend that predates the field reads as "no information" rather than
-"incomplete".
+"incomplete". `existsAsOf` is read the same way and for the same reason: absent
+means "no information", which is not "did not exist" -- hiding every account
+during a rolling deploy is the worse reading of a missing field.
+
+An investment pair is one entity with two ledgers, and they can come into
+existence on different days (a cash sleeve funded before the first trade
+settles). The client therefore drops an entity only when **every** member
+account is `existsAsOf: false`.
 
 ## 5. Shape
 
@@ -120,6 +159,8 @@ interface AccountBalanceAsOf {
   pricesComplete: boolean;
   fxComplete: boolean;
   valuationComplete: boolean;
+  /** False when asOfDate predates the account's inception (section 3). */
+  existsAsOf: boolean;
 }
 
 interface AccountBalancesAsOfResponse {
@@ -145,6 +186,13 @@ payload without the date that produced it cannot be told from the previous one
 | same, but no close on or before the date | 2026-01-04 | 0 | `null` |
 | same, last close 2025-09-30 (outside the window) | 2026-03-01 | 0 | `null` |
 | BUY 10 @ 20 USD in a CAD account, no USD->CAD rate | any | 0 | `null` |
+| opening 100, first transaction 2026-01-10 | 2026-01-09 | 0 (absent) | n/a |
+| same | 2026-01-10 | 150 | n/a |
+| opening 100, no transactions, no acquisition date | 1999-01-01 | 100 | n/a |
+| opening 500, only movement dated next month | today | 500 | n/a |
+| same | yesterday | 0 (absent) | n/a |
+| ASSET, `date_acquired` 2024-06-15, opening 450000 | 2024-06-14 | 0 (absent) | n/a |
+| same | 2024-06-15 | 450000 | n/a |
 
 ## 7. Display currency
 
@@ -204,7 +252,20 @@ The backend spec must cover, at minimum:
    omits a currency it has no accepted rate for.
 11. A future date sums the ledger to that date while reading prices and rates at
    today, and its positions are valued rather than reported unpriced.
+12. Inception (section 3): an asset is `existsAsOf: false` with `balance: 0`
+   before `date_acquired` and reported from that day onwards; the acquisition
+   date wins over an earlier transaction; `date_acquired` on a non-`ASSET`
+   account is ignored; an account with a later first transaction withholds its
+   opening balance until that day; an account with neither is reported at every
+   date; a brokerage is dated from its investment transactions; a first movement
+   still ahead of today is capped at today (reported today, absent yesterday)
+   while a future acquisition date is not; and the inception read is unbounded
+   by `d` and restricted for a delegate.
 
 The client tests must cover the filters, the grouping keys, the sort orders, the
 default-date change in section 2, conversion at the payload's rates, and an
-omitted currency leaving the totals marked partial.
+omitted currency leaving the totals marked partial -- plus, for section 3: an
+`existsAsOf: false` account leaving both the rows and the totals, its group
+heading going with it, a pair surviving on one live member, a row with the field
+absent still rendering, and the empty state naming the date rather than the
+filters.

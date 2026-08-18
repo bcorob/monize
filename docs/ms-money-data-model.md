@@ -489,26 +489,30 @@ by name and amount the way a QIF importer has to.
 
 ### The cash counterpart of a trade, and which side Monize keeps
 
-A trade's `TRN_XFER` partner sits in one of two places, and they need opposite
-treatment:
+A `TRN_XFER` pairing whose far side carries `hsec` is never an ordinary
+transfer: the investment row is *both* the cash arriving and the trade. Where
+the near side sits decides which of Monize's three shapes it becomes.
 
-| Partner sits in | What Money is recording | What Monize does |
-|---|---|---|
-| The brokerage's own cash companion (`ACCT.hacctRel`) | The cash half of the trade | **Drops** the row. `writeInvestments` creates that sleeve transaction from the investment row's `cashAmount` and links the two through `investment_transactions.transaction_id` |
-| Any other account | Cash moving in from outside, where the investment row is *both* the arrival and the trade | Keeps the row and **synthesizes** the sleeve side Money has no row for (`buildCashCounterparts`) |
+| Near side | What Money is recording | What Monize does | Issue |
+|---|---|---|---|
+| A top-level row in the brokerage's own cash companion (`ACCT.hacctRel`) | The cash half of the trade | **Drops** the row. `writeInvestments` creates that sleeve transaction from the investment row's `cashAmount` and links the two through `investment_transactions.transaction_id` | #1175 |
+| A top-level row in any other account | The cash the trade was paid for with, in the account that paid | **Keeps** the row and makes it the trade's cash leg. The trade records the account as its `funding_account_id`, which is what a natively entered trade funded from elsewhere already stores | #1212 |
+| A `TRN_SPLIT` child | One leg of a larger transaction -- a paycheque with a purchase in it | **Embeds** the trade in that leg: `transaction_splits.kind = 'investment'` with `investment_transactions.transaction_split_id` pointing back, exactly as a hand-entered investment split (issue #515) is written. The leg's amount is the cash impact, so no cash transaction is written at all | #1211 |
 
-Importing the first kind put three rows in the cash register where Money shows
-one -- the purchase, plus a transfer in and a transfer out that cancelled
-(issue #1175). The cancellation is why every balance still reconciled: the
-imported row and the counterpart synthesized for it landed in the same account.
-That equivalence is also what makes dropping them safe, and `tradeCashLegRows`
-(`backend/src/import/mny/map/map-transactions.ts`) is written so a row qualifies
-only when it holds.
+All three defects had the same shape, and it is the one no balance check can
+see: **the same movement of money recorded twice, summing to zero.** Importing
+the first kind put three rows in the cash register where Money shows one -- the
+purchase, plus a transfer in and a transfer out that cancelled. The other two
+put a transfer into the brokerage's cash sleeve and had the trade take it
+straight back out again, so the sleeve netted to nothing while holding two rows
+Money has none of, and the purchase showed in the split editor as a transfer to
+an account the user never chose.
 
-The rule applies to top-level rows only. A `TRN_SPLIT` **child** in the sleeve
-whose partner is a trade is a third shape: its parent has already moved the cash
-out of the sleeve, so the synthesized counterpart is what keeps the balance
-right there and is kept.
+`classifyTradeCashSides` (`backend/src/import/mny/map/map-transactions.ts`)
+decides all three in one pass, from one predicate, so they cannot disagree; it
+qualifies a pairing only when the far side is a trade the import actually
+writes, since a security-carrying row the investment mapper skipped has no cash
+leg for the near row to be.
 
 ## LOT (tax lots)
 
