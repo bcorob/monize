@@ -1202,6 +1202,14 @@ describe("YahooFinanceService", () => {
 
       expect(alternates.length).toBe(3);
     });
+
+    // A currency pair is not listed on an exchange, so `USDCAD=X.TO` is three
+    // guaranteed misses -- and the on-demand historical FX fill asks for a pair
+    // precisely when nothing is stored for it, so the miss path is its own.
+    it("returns no alternates for a currency pair", () => {
+      expect(service.getAlternateSymbols("USDCAD=X")).toEqual([]);
+      expect(service.getAlternateSymbols("CADUSD=X")).toEqual([]);
+    });
   });
 
   describe("getTradingDate", () => {

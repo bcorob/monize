@@ -146,6 +146,7 @@
     "status": {
       "voidError": "請編輯交易以從作廢狀態更改",
       "changed": "狀態已更改為 {status}",
+      "changedLockedUndo": "狀態已變更為 {status}。已對帳的交易將被鎖定，在 {seconds} 秒內再次點擊可復原。",
       "updateError": "更新狀態失敗",
       "unreconciled": "未對帳",
       "cleared": "已結清",

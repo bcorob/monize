@@ -132,6 +132,7 @@
   },
   "transactionList": {
     "itemNamePlural": "giao tác",
+    "totalCount": "{count, plural, one {# giao tác} other {# giao tác}}",
     "title": "Giao dịch gần đây",
     "filtered": "(đã lọc)",
     "newBrokerageTransaction": "+ Giao dịch môi giới mới",

@@ -103,11 +103,13 @@ export function OverrideEditorDialog({
   const [priceFromOccurrence, setPriceFromOccurrence] = useState(false);
   const [priceCameFromMarket, setPriceCameFromMarket] = useState(false);
   // True once the user types into the Total field after the dialog opens. The
-  // latest close is fetched asynchronously and the auto-fill is quantity-first
-  // (writePrice keeps the shares and recomputes the total), so it would clobber a
-  // total the user typed while the fetch was still in flight. A quantity-only
-  // edit is safe to auto-fill -- the shares are preserved and the total follows --
-  // so only a typed total blocks it; a typed price already blocks via the
+  // latest close is fetched asynchronously and the auto-fill is total-first
+  // (writePrice preserves the total and re-derives the quantity, issue #1148), so
+  // a total the user typed while the fetch was in flight is present when the close
+  // lands and would have the quantity rescaled beside it. A quantity-only edit is
+  // safe to auto-fill -- with no total on the field the total-first fill degrades
+  // to deriving the total from the shares, so the quantity is preserved -- so only
+  // a typed total blocks it; a typed price already blocks via the
   // `investmentPrice === ''` gate.
   const [userEditedTotal, setUserEditedTotal] = useState(false);
 
@@ -268,13 +270,14 @@ export function OverrideEditorDialog({
    * "use latest close" button -- so the value always came from the market and
    * `priceCameFromMarket` is set unconditionally.
    *
-   * Precedence here is quantity-first: a stated quantity keeps its shares and
-   * the total follows, because clicking "use latest close" means "re-price the
-   * shares I am buying". Only when no quantity is entered does a stated total
-   * derive the quantity, so the click never leaves an inconsistent
-   * price/total/empty-quantity triple. This deliberately differs from the
-   * keystroke path (`handleInvestmentPriceChange`, total-first); reconciling the
-   * two is a product decision tracked separately, not a claim made here.
+   * Precedence here is total-first (issue #1148), matching the keystroke path
+   * (`handleInvestmentPriceChange`) and the posting dialog's market refresh: a
+   * stated total keeps the amount invested and the share count follows, so
+   * clicking "use latest close" and typing the same price book the same quantity
+   * and total. Only when no total is present does a stated quantity derive the
+   * total -- the auto-fill's own case, where the price field is empty so no total
+   * has been computed yet, which keeps a quantity-only edit safe to auto-fill.
+   * Either way the click never leaves an inconsistent price/total/quantity triple.
    *
    * Once a market price is written, the field no longer holds the stored
    * instruction, so `hasStoredPrice` drops -- the provenance note must not
@@ -285,13 +288,15 @@ export function OverrideEditorDialog({
     setInvestmentPrice(rounded);
     setPriceCameFromMarket(true);
     setHasStoredPrice(false);
-    if (investmentQuantity !== '' && Number(investmentQuantity) > 0) {
-      setInvestmentTotalValue(
-        totalFromQuantity(Number(investmentQuantity), rounded, investmentSign, investmentCommission),
-      );
-    } else if (investmentTotalValue !== '') {
+    if (investmentTotalValue !== '') {
+      // Total-first: preserve the amount invested, re-derive the quantity.
       setInvestmentQuantity(
         quantityFromTotal(Number(investmentTotalValue), rounded, investmentSign, investmentCommission),
+      );
+    } else if (investmentQuantity !== '' && Number(investmentQuantity) > 0) {
+      // No total to preserve (the auto-fill case) -- derive it from the quantity.
+      setInvestmentTotalValue(
+        totalFromQuantity(Number(investmentQuantity), rounded, investmentSign, investmentCommission),
       );
     }
   };
@@ -305,12 +310,14 @@ export function OverrideEditorDialog({
   // pattern to avoid violating react-hooks/set-state-in-effect.
   //
   // `!userEditedTotal` is the second half of that guard: the fetch is
-  // asynchronous, and the fill is quantity-first (writePrice keeps the shares and
-  // recomputes the total), so a total the user typed while it was in flight would
-  // be silently re-derived from the arriving close -- the typed-before-fetch race
-  // PostTransactionDialog guards on its side. A quantity-only edit does not block
-  // it: the shares are preserved and the total simply follows, so filling the
-  // price is safe and matches ScheduledTransactionForm on identical input.
+  // asynchronous, and the fill is total-first (writePrice preserves the total and
+  // re-derives the quantity, issue #1148). A total the user typed while the fetch
+  // was in flight is present when the close lands, so the fill would rescale the
+  // quantity beside it -- the typed-before-fetch race PostTransactionDialog guards
+  // on its side. A quantity-only edit does not block it: with no total on the
+  // field the total-first fill degrades to deriving the total from the shares, so
+  // the typed quantity is preserved and filling the price matches
+  // ScheduledTransactionForm on identical input.
   const [lastSeenMarketPrice, setLastSeenMarketPrice] = useState<number | null>(null);
   if (isOpen && marketPrice !== lastSeenMarketPrice) {
     setLastSeenMarketPrice(marketPrice);

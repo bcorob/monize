@@ -146,6 +146,7 @@
     "status": {
       "voidError": "取引を編集してVoid状態を変更してください",
       "changed": "状態を{status}に変更しました",
+      "changedLockedUndo": "ステータスを {status} に変更しました。消込済みの取引はロックされます。{seconds} 秒以内にもう一度押すと取り消せます。",
       "updateError": "状態の更新に失敗しました",
       "unreconciled": "未照合",
       "cleared": "決済済み",

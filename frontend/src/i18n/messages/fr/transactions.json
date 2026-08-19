@@ -146,6 +146,7 @@
     "status": {
       "voidError": "Modifiez la transaction pour changer son statut depuis Annulé",
       "changed": "Statut changé en {status}",
+      "changedLockedUndo": "Statut changé en {status}. Les transactions rapprochées sont verrouillées : appuyez de nouveau dans les {seconds} secondes pour annuler.",
       "updateError": "Échec de la mise à jour du statut",
       "unreconciled": "Non rapproché",
       "cleared": "Encaissé",

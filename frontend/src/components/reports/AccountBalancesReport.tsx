@@ -16,6 +16,7 @@ import { useNumberFormat } from '@/hooks/useNumberFormat';
 import { useDateFormat } from '@/hooks/useDateFormat';
 import { sumConverted, combineTotals } from '@/lib/currency-total';
 import { PartialTotal } from '@/components/ui/PartialTotal';
+import { InfoTooltip } from '@/components/ui/InfoTooltip';
 import { useReportData } from '@/hooks/useReportData';
 import { CHART_COLOURS } from '@/lib/chart-colours';
 import { ReportError } from '@/components/reports/ReportError';
@@ -314,6 +315,70 @@ export function AccountBalancesReport() {
     [groupBy, accountTypeLabels, institutionLabel, t],
   );
 
+  /**
+   * The figures on screen that came from an observation struck on another day.
+   *
+   * The server falls back to the closest stored price or rate when the chosen
+   * date has none, which is what keeps a total from reading "unavailable" for a
+   * day nobody ever loaded data for. A real observation from a nearby day is a
+   * usable answer and a different answer, so the report says which figures it
+   * applies to rather than presenting them as measurements of the date.
+   *
+   * Scoped to the accounts actually on screen: a currency approximated for an
+   * account the filters excluded is not part of any figure the user is looking
+   * at, and claiming otherwise would attach a caveat to a clean total.
+   */
+  const approximation = useMemo(() => {
+    const rows = new Map(
+      (response?.balances.accounts ?? []).map((row) => [row.accountId, row]),
+    );
+    const approximatedRates = response?.balances.approximatedDisplayRates ?? {};
+    let holdings = 0;
+    const rateNotes = new Map<string, string>();
+    for (const entry of visibleAccounts) {
+      for (const id of entry.memberIds) {
+        const row = rows.get(id);
+        if (!row) continue;
+        // `?? 0` / `?? []`: a backend that predates these fields sends nothing,
+        // and absent means "no information", not "approximated".
+        holdings += row.approximatedPriceCount ?? 0;
+        for (const pair of row.approximatedRatePairs ?? []) {
+          if (!rateNotes.has(pair)) rateNotes.set(pair, pair);
+        }
+      }
+      const currency = entry.primary.currencyCode;
+      const struckOn = approximatedRates[currency];
+      if (struckOn) {
+        rateNotes.set(
+          currency,
+          t('accountBalances.approximatedRateOn', {
+            currency,
+            date: formatDate(struckOn),
+          }),
+        );
+      }
+    }
+    const rates = [...rateNotes.values()].sort();
+    return { holdings, rates, active: holdings > 0 || rates.length > 0 };
+  }, [response, visibleAccounts, t, formatDate]);
+
+  const approximationDetail = useMemo(() => {
+    const clauses: string[] = [];
+    if (approximation.holdings > 0) {
+      clauses.push(
+        t('accountBalances.approximatedPrices', { count: approximation.holdings }),
+      );
+    }
+    if (approximation.rates.length > 0) {
+      clauses.push(
+        t('accountBalances.approximatedRates', {
+          pairs: approximation.rates.join(', '),
+        }),
+      );
+    }
+    return clauses.join(' ');
+  }, [approximation, t]);
+
   // Assets and liabilities are decided per account, not per group -- grouping by
   // institution puts both in the same box, and the summary cards must still
   // separate them.
@@ -435,6 +500,10 @@ export function AccountBalancesReport() {
 
   const subtitle = t('accountBalances.asOfSubtitle', { date: formatDate(measuredDate) });
 
+  const approximationNotice = approximation.active
+    ? t('accountBalances.approximatedNotice', { date: formatDate(measuredDate) })
+    : '';
+
   const handleExportCsv = useCallback(async () => {
     const { exportToCsv } = await import('@/lib/csv-export');
     exportToCsv(`account-balances-${measuredDate}`, exportHeaders, exportRows());
@@ -448,7 +517,11 @@ export function AccountBalancesReport() {
       total.excludedCount > 0 ? ` ${tCommon('partialTotal.srSuffix')}` : '';
     await exportToPdf({
       title: t('accountBalances.pdfTitle'),
-      subtitle,
+      // The caveat travels with the export: a printed figure has no tooltip to
+      // explain where its prices came from.
+      subtitle: approximationNotice
+        ? `${subtitle} ${approximationNotice} ${approximationDetail}`.trim()
+        : subtitle,
       summaryCards: [
         {
           label: t('accountBalances.totalAssets'),
@@ -482,6 +555,8 @@ export function AccountBalancesReport() {
     t,
     tCommon,
     subtitle,
+    approximationNotice,
+    approximationDetail,
     totals,
     formatCurrency,
     displayCurrency,
@@ -550,6 +625,20 @@ export function AccountBalancesReport() {
       <p className="text-sm text-gray-500 dark:text-gray-400" data-testid="as-of-caption">
         {subtitle}
       </p>
+
+      {/* A figure priced from a neighbouring day is an answer, not a
+          measurement of this day, and the difference is invisible in the
+          number itself. The tooltip names which holdings and which rates, so
+          the caveat is something the reader can act on. */}
+      {approximation.active && (
+        <p
+          className="text-sm text-amber-600 dark:text-amber-400 flex items-center gap-1"
+          data-testid="approximation-notice"
+        >
+          <span>{approximationNotice}</span>
+          <InfoTooltip placement="top" text={approximationDetail} usePortal />
+        </p>
+      )}
 
       <AccountBalancesControls
         asOfDate={asOfDate}

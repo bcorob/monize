@@ -132,6 +132,7 @@
   },
   "transactionList": {
     "itemNamePlural": "işlemler",
+    "totalCount": "{count, plural, one {# işlem} other {# işlem}}",
     "title": "Son İşlemler",
     "filtered": "(filtrelenmiş)",
     "newBrokerageTransaction": "+ Yeni Aracı Kurum İşlemi",

@@ -146,6 +146,7 @@
     "status": {
       "voidError": "Edit transaksi untuk mengubah statusnya dari Batal",
       "changed": "Status diubah menjadi {status}",
+      "changedLockedUndo": "Status diubah menjadi {status}. Transaksi yang direkonsiliasi terkunci; tekan lagi dalam {seconds} detik untuk membatalkan.",
       "updateError": "Gagal memperbarui status",
       "unreconciled": "Belum Direkonsiliasi",
       "cleared": "Kliring",

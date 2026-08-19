@@ -132,6 +132,7 @@
   },
   "transactionList": {
     "itemNamePlural": "transactions",
+    "totalCount": "{count, plural, one {# transaction} other {# transactions}}",
     "title": "Transactions récentes",
     "filtered": "(filtré)",
     "newBrokerageTransaction": "+ Nouvelle transaction de courtage",

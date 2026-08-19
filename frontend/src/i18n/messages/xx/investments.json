@@ -133,6 +133,7 @@
   "transactionList": {
     "title": "[XX-Recent Transactions-XX]",
     "itemNamePlural": "[XX-transactions-XX]",
+    "totalCount": "[XX-{count, plural, one {# transaction} other {# transactions}}-XX]",
     "filtered": "[XX-(filtered)-XX]",
     "newBrokerageTransaction": "[XX-+ New Brokerage Transaction-XX]",
     "newBrokerageTransactionShort": "[XX-+ New-XX]",

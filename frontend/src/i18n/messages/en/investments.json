@@ -133,6 +133,7 @@
   "transactionList": {
     "title": "Recent Transactions",
     "itemNamePlural": "transactions",
+    "totalCount": "{count, plural, one {# transaction} other {# transactions}}",
     "filtered": "(filtered)",
     "newBrokerageTransaction": "+ New Brokerage Transaction",
     "newBrokerageTransactionShort": "+ New",

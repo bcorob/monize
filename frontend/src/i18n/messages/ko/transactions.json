@@ -146,6 +146,7 @@
     "status": {
       "voidError": "상태를 무효에서 변경하려면 거래를 편집하세요",
       "changed": "상태가 {status}으로 변경되었습니다",
+      "changedLockedUndo": "상태를 {status}(으)로 변경했습니다. 대사 완료된 거래는 잠깁니다. {seconds}초 이내에 다시 누르면 취소됩니다.",
       "updateError": "상태 업데이트에 실패했습니다",
       "unreconciled": "미조정",
       "cleared": "정리됨",

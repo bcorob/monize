@@ -1,8 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, act } from '@/test/render';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, fireEvent, waitFor, act, cleanup } from '@/test/render';
 import { TransactionList } from './TransactionList';
 import { Transaction, TransactionStatus } from '@/types/transaction';
 import { useDensityStore } from '@/store/densityStore';
+import { usePreferencesStore } from '@/store/preferencesStore';
+import toast from 'react-hot-toast';
 
 vi.mock('@/lib/transactions', () => ({
   transactionsApi: {
@@ -1223,6 +1225,88 @@ describe('TransactionList', () => {
           tx.id,
           TransactionStatus.CLEARED
         );
+      });
+    });
+
+    /**
+     * With "Lock reconciled transactions" on, a reconcile from this register is
+     * the last freely reversible click on the row: the server allows the undo
+     * for a few seconds and refuses it afterwards. The toast is the only place
+     * the user is told that, so it is worth a test -- a window nobody is told
+     * about is a trap with a timer on it.
+     */
+    describe('the undo window for a locked reconcile', () => {
+      const reconcileFrom = async (locked: boolean) => {
+        usePreferencesStore.setState({
+          preferences: { lockReconciledTransactions: locked } as any,
+        });
+        const { transactionsApi } = await import('@/lib/transactions');
+        const tx = createTransaction({ status: TransactionStatus.CLEARED });
+        vi.mocked(transactionsApi.updateStatus).mockResolvedValueOnce({
+          ...tx,
+          status: TransactionStatus.RECONCILED,
+        });
+
+        render(
+          <TransactionList
+            transactions={[tx]}
+            onEdit={mockOnEdit}
+            onRefresh={mockOnRefresh}
+          />,
+        );
+        fireEvent.click(screen.getByTitle('Click to cycle status'));
+        await waitFor(() => {
+          expect(transactionsApi.updateStatus).toHaveBeenCalledWith(
+            tx.id,
+            TransactionStatus.RECONCILED,
+          );
+        });
+      };
+
+      afterEach(() => {
+        // `cleanup()` first: vitest runs after-hooks in reverse registration
+        // order, so a store write here would re-render the still-mounted tree
+        // outside act. `src/test/test-hygiene.test.ts` is the rule.
+        cleanup();
+        usePreferencesStore.setState({ preferences: null });
+      });
+
+      it('says how long the reconcile can still be taken back', async () => {
+        await reconcileFrom(true);
+        expect(toast.success).toHaveBeenCalledWith(
+          expect.stringContaining('press again within 10 seconds to undo'),
+        );
+      });
+
+      it('says nothing about a window when the lock is off', async () => {
+        await reconcileFrom(false);
+        expect(toast.success).toHaveBeenCalledWith('Status changed to Reconciled');
+      });
+
+      // The window belongs to a reconcile. Cycling to cleared is reversible for
+      // as long as the user likes, and saying otherwise would invent a deadline.
+      it('says nothing about a window on the other statuses', async () => {
+        usePreferencesStore.setState({
+          preferences: { lockReconciledTransactions: true } as any,
+        });
+        const { transactionsApi } = await import('@/lib/transactions');
+        const tx = createTransaction({ status: TransactionStatus.UNRECONCILED });
+        vi.mocked(transactionsApi.updateStatus).mockResolvedValueOnce({
+          ...tx,
+          status: TransactionStatus.CLEARED,
+        });
+
+        render(
+          <TransactionList
+            transactions={[tx]}
+            onEdit={mockOnEdit}
+            onRefresh={mockOnRefresh}
+          />,
+        );
+        fireEvent.click(screen.getByTitle('Click to cycle status'));
+        await waitFor(() => {
+          expect(toast.success).toHaveBeenCalledWith('Status changed to Cleared');
+        });
       });
     });
 
@@ -3055,7 +3139,11 @@ describe('TransactionList', () => {
       });
     });
 
-    it('marks a row older than the overdue boundary', async () => {
+    // "Overdue" says nobody has reconciled the *account* recently, which is
+    // true of every row in it at once -- so the register marked page after page
+    // of ordinary transactions for a condition about none of them. The
+    // reconcile screen still shows it, and the header badge still counts it.
+    it('leaves a row older than the overdue boundary unmarked', async () => {
       const overdue = createTransaction({
         transactionDate: '2026-07-02',
         status: TransactionStatus.UNRECONCILED,
@@ -3064,11 +3152,9 @@ describe('TransactionList', () => {
       render(<TransactionList transactions={[overdue]} staleContext={staleContext} />);
 
       await waitFor(() => {
-        expect(screen.getByTestId('stale-reconciliation-chip')).toHaveAttribute(
-          'data-stale',
-          'overdue',
-        );
+        expect(screen.getByText('Grocery Store')).toBeInTheDocument();
       });
+      expect(screen.queryByTestId('stale-reconciliation-chip')).not.toBeInTheDocument();
     });
 
     it('marks nothing without the context, which is how a failed lookup reads', async () => {

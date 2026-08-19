@@ -124,6 +124,26 @@ export interface QuoteProvider {
   ): Promise<HistoricalPrice[] | null>;
 
   /**
+   * Optional: fetch daily bars for an explicit date window rather than one of
+   * the provider's named ranges.
+   *
+   * A named range is always anchored at *today*, so reaching a date years back
+   * means downloading everything since. A window asks for the days that are
+   * actually wanted, which is what lets a point-in-time report fill one month
+   * of history for a security it could not price -- the same call shape the FX
+   * fill uses. Providers whose chart API only accepts a named timeframe (MSN)
+   * omit this, and callers fall back to the narrowest range that reaches the
+   * date.
+   */
+  fetchHistoricalWindow?(
+    symbol: string,
+    exchange: string | null,
+    fromDate: Date,
+    toDate: Date,
+    opts?: QuoteProviderOptions,
+  ): Promise<HistoricalPrice[] | null>;
+
+  /**
    * Optional: fetch intraday price bars for a symbol. Used by the
    * "Portfolio Value Over Time" intraday view (1D / 1W / 1M ranges).
    * Providers that don't support intraday data may omit this method.

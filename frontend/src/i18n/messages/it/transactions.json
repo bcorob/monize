@@ -146,6 +146,7 @@
     "status": {
       "voidError": "Modifica la transazione per cambiarne lo stato da Annullata",
       "changed": "Stato cambiato in {status}",
+      "changedLockedUndo": "Stato modificato in {status}. Le transazioni riconciliate sono bloccate: premi di nuovo entro {seconds} secondi per annullare.",
       "updateError": "Aggiornamento stato non riuscito",
       "unreconciled": "Non riconciliata",
       "cleared": "Compensata",

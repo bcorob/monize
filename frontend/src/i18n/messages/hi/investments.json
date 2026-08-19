@@ -132,6 +132,7 @@
   },
   "transactionList": {
     "itemNamePlural": "लेन-देन",
+    "totalCount": "{count, plural, one {# लेन-देन} other {# लेन-देन}}",
     "title": "हाल के लेनदेन",
     "filtered": "(फ़िल्टर किया गया)",
     "newBrokerageTransaction": "+ नया ब्रोकरेज लेनदेन",

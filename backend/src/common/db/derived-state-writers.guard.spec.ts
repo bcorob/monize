@@ -182,6 +182,23 @@ describe("derived financial state has one set of writers", () => {
           "sweepStaleSnapshots, which derives the staleness from accounts.updated_at " +
           "rather than from anything held in memory",
       ],
+      [
+        "currencies/exchange-rate.service.ts",
+        "emptyRateWindows is a negative cache on an on-demand read path, not a " +
+          "guard over the cron beside it: it records that the provider had no " +
+          "history for a pair in a month so a report reloaded on that date does " +
+          "not re-ask. It gates nothing -- a replica that has not seen the miss " +
+          "makes one extra fetch, and the write it would perform is an " +
+          "idempotent upsert, so duplicating it costs a round trip and changes " +
+          "no row",
+      ],
+      [
+        "securities/security-price.service.ts",
+        "emptyPriceWindows is the same negative cache as exchange-rate's, for " +
+          "the security prices an as-of report could not find: the same " +
+          "EmptyWindowMemory, the same idempotent upsert behind it, and the " +
+          "same non-role in deciding whether any cron work happens",
+      ],
     ]);
 
     const offenders = sourceFiles()
@@ -189,7 +206,10 @@ describe("derived financial state has one set of writers", () => {
         const source = read(file);
         if (!/@Cron\(/.test(source)) return false;
         // A field holding a Set/Map of ids at class scope, beside a cron.
-        return /^\s*private\s+(?:readonly\s+)?\w+\s*[:=]\s*(?:new\s+)?(?:Set|Map)\b/m.test(
+        // `EmptyWindowMemory` is named explicitly because it *is* such a map,
+        // wrapped: extracting the TTL and eviction policy out of two services
+        // must not also extract them out of this scan's sight.
+        return /^\s*private\s+(?:readonly\s+)?\w+\s*[:=]\s*(?:new\s+)?(?:Set|Map|EmptyWindowMemory)\b/m.test(
           source,
         );
       })

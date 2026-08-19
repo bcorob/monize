@@ -18,6 +18,7 @@ import {
   InvestmentTransactionList,
   type TransactionFilters,
 } from '@/components/investments/InvestmentTransactionList';
+import { ListBottomPager } from '@/components/ui/ListBottomPager';
 import {
   CashFilterBar,
   CashFilterToggleButton,
@@ -77,6 +78,10 @@ export function InvestmentRegisterPanel({
   // The cash register's own chrome is the Investments page's, word for word:
   // one heading, one button label, translated once.
   const tInv = useTranslations('investments');
+  // The cash register is the shared transactions list, so its pager counts
+  // "transactions" out of that list's own catalog rather than a second copy of
+  // the noun under `investments`.
+  const tTx = useTranslations('transactions');
   const [view, setView] = useLocalStorage<InvestmentTransactionView>(
     'monize-account-detail-register-view',
     'brokerage',
@@ -332,8 +337,20 @@ export function InvestmentRegisterPanel({
             pageSize={PAGE_SIZE}
             onPageChange={setBrokeragePage}
           />
+          <ListBottomPager
+            currentPage={brokeragePage}
+            totalPages={Math.ceil(brokerageTotal / PAGE_SIZE) || 1}
+            totalItems={brokerageTotal}
+            pageSize={PAGE_SIZE}
+            onPageChange={setBrokeragePage}
+            itemName={tInv('transactionList.itemNamePlural')}
+            totalLabel={tInv('transactionList.totalCount', {
+              count: brokerageTotal,
+            })}
+          />
         </>
       ) : (
+        <>
         <div className="bg-white dark:bg-gray-800 shadow dark:shadow-gray-700/50 rounded-lg overflow-hidden">
           <div className="px-3 pt-3 sm:px-4 sm:pt-4 flex flex-wrap justify-between items-center gap-2">
             <div className="flex items-center gap-3">
@@ -383,6 +400,18 @@ export function InvestmentRegisterPanel({
             startingBalance={cashStartingBalance}
           />
         </div>
+        {/* Outside the card the rows sit in, because the pager carries its own
+            background -- the same place the Transactions page draws it. */}
+        <ListBottomPager
+          currentPage={cashPage}
+          totalPages={Math.ceil(cashTotal / PAGE_SIZE) || 1}
+          totalItems={cashTotal}
+          pageSize={PAGE_SIZE}
+          onPageChange={setCashPage}
+          itemName={tTx('list.itemNamePlural')}
+          totalLabel={tTx('page.totalCount', { count: cashTotal })}
+        />
+        </>
       )}
 
       <Modal

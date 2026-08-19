@@ -85,6 +85,8 @@ describe("SecurityPriceService", () => {
   }>;
   let netWorthService: Record<string, jest.Mock>;
   let msnFinanceService: Record<string, jest.Mock>;
+  /** The real Yahoo provider the registry is built with, so tests can spy on it. */
+  let yahoo: YahooFinanceService;
   let originalFetch: typeof global.fetch;
 
   const mockSecurity: Security = {
@@ -361,9 +363,9 @@ describe("SecurityPriceService", () => {
       },
     );
 
-    const yahooFinanceService = new YahooFinanceService();
+    yahoo = new YahooFinanceService();
     const providers = new QuoteProviderRegistry(
-      yahooFinanceService,
+      yahoo,
       msnFinanceService as never,
     );
 
@@ -3256,6 +3258,195 @@ describe("SecurityPriceService", () => {
 
       expect(currency).toBeNull();
       spy.mockRestore();
+    });
+  });
+  /**
+   * On-demand price fill, for the securities a point-in-time report could not
+   * price (the price half of "Total unavailable" on the Account Balances
+   * report as its date moves back through years nothing ever backfilled).
+   */
+  describe("ensurePricesForDate", () => {
+    /** An ISO date `days` before today, so the fixtures never pin a calendar. */
+    const daysAgo = (days: number): string =>
+      new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
+
+    /** Rows the bulk upsert wrote, flattened out of its parameter list. */
+    const bulkInserted = (): Array<{ securityId: string; date: string }> => {
+      const rows: Array<{ securityId: string; date: string }> = [];
+      for (const [sql, params] of dataSourceMock.query.mock.calls) {
+        if (
+          typeof sql !== "string" ||
+          !sql.includes("INSERT INTO security_prices") ||
+          !Array.isArray(params)
+        ) {
+          continue;
+        }
+        for (let i = 0; i < params.length; i += 9) {
+          rows.push({
+            securityId: params[i] as string,
+            date: params[i + 1] as string,
+          });
+        }
+      }
+      return rows;
+    };
+
+    const bar = (date: string, close: number) => ({
+      date: new Date(`${date}T00:00:00.000Z`),
+      open: close,
+      high: close,
+      low: close,
+      close,
+      adjClose: close,
+      volume: 1,
+    });
+
+    let windowSpy: jest.SpyInstance;
+
+    beforeEach(() => {
+      windowSpy = jest
+        .spyOn(yahoo, "fetchHistoricalWindow")
+        .mockResolvedValue(null);
+      securitiesRepository.find.mockResolvedValue([mockSecurity]);
+    });
+
+    afterEach(() => windowSpy.mockRestore());
+
+    // A month rather than a day, and with the boundary lead, for the same
+    // reason the FX fill uses one: the call costs the same either way and the
+    // rest of the month becomes a database read.
+    it("fetches the month around the date and stores every bar", async () => {
+      const date = "2017-08-18";
+      windowSpy.mockResolvedValue([
+        bar("2017-08-16", 20),
+        bar("2017-08-17", 21),
+      ]);
+
+      const loaded = await service.ensurePricesForDate(["sec-1"], date);
+
+      expect(loaded).toBe(2);
+      expect(windowSpy).toHaveBeenCalledTimes(1);
+      const [symbol, exchange, from, to] = windowSpy.mock.calls[0];
+      expect(symbol).toBe("AAPL");
+      expect(exchange).toBe("NASDAQ");
+      expect((from as Date).toISOString().slice(0, 10)).toBe("2017-07-18");
+      expect((to as Date).toISOString().slice(0, 10)).toBe("2017-08-31");
+      expect(bulkInserted()).toEqual([
+        { securityId: "sec-1", date: "2017-08-16" },
+        { securityId: "sec-1", date: "2017-08-17" },
+      ]);
+    });
+
+    // An import that auto-generated a symbol set the flag precisely because
+    // fetching against it can only fail.
+    it("skips a security marked to skip price updates", async () => {
+      securitiesRepository.find.mockResolvedValue([
+        {
+          ...mockSecurity,
+          skipPriceUpdates: true,
+          quoteProvider: null,
+          msnInstrumentId: null,
+        },
+      ]);
+
+      const loaded = await service.ensurePricesForDate(["sec-1"], "2017-08-18");
+
+      expect(loaded).toBe(0);
+      expect(windowSpy).not.toHaveBeenCalled();
+    });
+
+    // MSN's chart API takes a named timeframe, not a window, so the fill asks
+    // for the narrowest range that still reaches the date.
+    it("falls back to a named range for a provider with no window fetch", async () => {
+      securitiesRepository.find.mockResolvedValue([
+        { ...mockSecurity, quoteProvider: "msn" },
+      ]);
+      msnFinanceService.fetchHistorical.mockResolvedValue([
+        bar(daysAgo(3000), 20),
+      ]);
+
+      const loaded = await service.ensurePricesForDate(
+        ["sec-1"],
+        daysAgo(3000),
+      );
+
+      expect(loaded).toBe(1);
+      expect(windowSpy).not.toHaveBeenCalled();
+      const [, , range] = msnFinanceService.fetchHistorical.mock.calls[0];
+      // A shade over eight years back: "5y" would not reach it and "max" is
+      // more than it needs.
+      expect(range).toBe("10y");
+    });
+
+    it("asks for only a year when the date is months old", async () => {
+      securitiesRepository.find.mockResolvedValue([
+        { ...mockSecurity, quoteProvider: "msn" },
+      ]);
+      msnFinanceService.fetchHistorical.mockResolvedValue([
+        bar(daysAgo(60), 20),
+      ]);
+
+      await service.ensurePricesForDate(["sec-1"], daysAgo(60));
+
+      const [, , range] = msnFinanceService.fetchHistorical.mock.calls[0];
+      expect(range).toBe("1y");
+    });
+
+    // The one case the fetch can never satisfy is the one that would otherwise
+    // repeat on every page load.
+    it("does not ask again for a security-month that came back empty", async () => {
+      windowSpy.mockResolvedValue(null);
+
+      await service.ensurePricesForDate(["sec-1"], "2017-08-18");
+      const afterFirst = windowSpy.mock.calls.length;
+      expect(afterFirst).toBeGreaterThan(0);
+
+      const loaded = await service.ensurePricesForDate(["sec-1"], "2017-08-30");
+
+      expect(loaded).toBe(0);
+      expect(windowSpy).toHaveBeenCalledTimes(afterFirst);
+    });
+
+    it("does ask again for a different month", async () => {
+      windowSpy.mockResolvedValue(null);
+
+      await service.ensurePricesForDate(["sec-1"], "2017-08-18");
+      const afterFirst = windowSpy.mock.calls.length;
+
+      await service.ensurePricesForDate(["sec-1"], "2017-09-18");
+
+      expect(windowSpy.mock.calls.length).toBeGreaterThan(afterFirst);
+    });
+
+    // Best-effort by construction: this runs inside a read that answered
+    // everything else.
+    it("lets the other securities through when one fetch throws", async () => {
+      securitiesRepository.find.mockResolvedValue([
+        mockSecurity,
+        mockSecurityTSX,
+      ]);
+      windowSpy.mockImplementation(async (symbol: string) => {
+        if (symbol === "AAPL") throw new Error("rate limited");
+        return [bar("2017-08-17", 90)];
+      });
+
+      const loaded = await service.ensurePricesForDate(
+        ["sec-1", "sec-2"],
+        "2017-08-18",
+      );
+
+      expect(loaded).toBe(1);
+      expect(bulkInserted()).toEqual([
+        { securityId: "sec-2", date: "2017-08-17" },
+      ]);
+    });
+
+    it("does nothing at all when asked for no securities", async () => {
+      const loaded = await service.ensurePricesForDate([], "2017-08-18");
+
+      expect(loaded).toBe(0);
+      expect(securitiesRepository.find).not.toHaveBeenCalled();
+      expect(windowSpy).not.toHaveBeenCalled();
     });
   });
 });

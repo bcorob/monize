@@ -132,6 +132,7 @@
   },
   "transactionList": {
     "itemNamePlural": "transaksi",
+    "totalCount": "{count, plural, one {# transaksi} other {# transaksi}}",
     "title": "Transaksi Terbaru",
     "filtered": "(difilter)",
     "newBrokerageTransaction": "+ Transaksi Perantara Baru",

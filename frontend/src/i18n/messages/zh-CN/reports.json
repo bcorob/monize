@@ -192,6 +192,10 @@
     "colGroup": "分组",
     "noAccountsForFilters": "没有账户符合当前筛选条件。",
     "noAccountsOnDate": "{date} 时您的账户均不存在。",
+    "approximatedNotice": "部分金额使用最接近的可用价格和汇率，而非 {date} 当天的数据。",
+    "approximatedPrices": "{count, plural, one {# 项持仓} other {# 项持仓}}按最接近的可用日期定价。",
+    "approximatedRates": "按最接近的可用汇率换算：{pairs}。",
+    "approximatedRateOn": "{date} 的 {currency}",
     "accountTypes": {
       "CHEQUING": "支票账户",
       "SAVINGS": "储蓄账户",

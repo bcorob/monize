@@ -132,6 +132,7 @@
   },
   "transactionList": {
     "itemNamePlural": "transacties",
+    "totalCount": "{count, plural, one {# transactie} other {# transacties}}",
     "title": "Recente transacties",
     "filtered": "(gefilterd)",
     "newBrokerageTransaction": "+ Nieuwe effectentransactie",

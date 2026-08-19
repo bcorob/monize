@@ -146,6 +146,7 @@
     "status": {
       "voidError": "Durumunu Geçersiz'den değiştirmek için işlemi düzenleyin",
       "changed": "Durum {status} olarak değiştirildi",
+      "changedLockedUndo": "Durum {status} olarak değiştirildi. Mutabık kılınan işlemler kilitlidir; geri almak için {seconds} saniye içinde tekrar basın.",
       "updateError": "Durum güncellenemedi",
       "unreconciled": "Mutabakatsız",
       "cleared": "Temizlendi",

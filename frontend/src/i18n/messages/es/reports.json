@@ -192,6 +192,10 @@
     "colGroup": "Grupo",
     "noAccountsForFilters": "Ninguna cuenta coincide con los filtros actuales.",
     "noAccountsOnDate": "Ninguna de tus cuentas existía el {date}.",
+    "approximatedNotice": "Algunas cifras usan los precios y tipos de cambio disponibles más cercanos, no los del {date}.",
+    "approximatedPrices": "{count, plural, one {# posición está valorada} other {# posiciones están valoradas}} con la fecha disponible más cercana.",
+    "approximatedRates": "Convertido al tipo de cambio disponible más cercano: {pairs}.",
+    "approximatedRateOn": "{currency} del {date}",
     "accountTypes": {
       "CHEQUING": "Cuenta corriente",
       "SAVINGS": "Cuenta de ahorros",

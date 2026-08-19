@@ -192,6 +192,10 @@
     "colGroup": "समूह",
     "noAccountsForFilters": "वर्तमान फ़िल्टर से कोई खाता मेल नहीं खाता।",
     "noAccountsOnDate": "{date} को आपका कोई भी खाता मौजूद नहीं था।",
+    "approximatedNotice": "कुछ आंकड़े {date} के बजाय निकटतम उपलब्ध कीमतों और विनिमय दरों का उपयोग करते हैं।",
+    "approximatedPrices": "{count, plural, one {# होल्डिंग की कीमत} other {# होल्डिंग्स की कीमत}} निकटतम उपलब्ध तिथि से ली गई है।",
+    "approximatedRates": "निकटतम उपलब्ध विनिमय दर पर परिवर्तित: {pairs}।",
+    "approximatedRateOn": "{date} को {currency}",
     "accountTypes": {
       "CHEQUING": "चेकिंग",
       "SAVINGS": "बचत",

@@ -484,9 +484,9 @@ export class YahooFinanceService implements QuoteProvider {
    */
   async fetchHistoricalWindow(
     symbol: string,
+    exchange: string | null,
     fromDate: Date,
     toDate: Date,
-    exchange: string | null = null,
   ): Promise<HistoricalPrice[] | null> {
     const period1 = Math.floor(fromDate.getTime() / 1000);
     const period2 = Math.floor(toDate.getTime() / 1000);
@@ -846,6 +846,12 @@ export class YahooFinanceService implements QuoteProvider {
     // suffixes are meaningless on one, so trying `^GSPC.TO` costs three extra
     // round trips per miss and can only ever fail.
     if (symbol.startsWith("^")) return alternates;
+
+    // Same argument for a currency pair (`USDCAD=X`): it is not listed on an
+    // exchange, so `USDCAD=X.TO` is three guaranteed misses. That cost lands on
+    // the on-demand historical FX fetch, which asks for a pair precisely when
+    // nothing is stored for it, so the miss path is the one it walks.
+    if (symbol.endsWith("=X")) return alternates;
 
     if (!symbol.includes(".")) {
       alternates.push(`${symbol}.TO`);

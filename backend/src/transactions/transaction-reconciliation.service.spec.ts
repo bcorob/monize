@@ -958,6 +958,166 @@ describe("TransactionReconciliationService", () => {
       });
     });
 
+    /**
+     * The undo window: with the lock on, the row the user reconciled seconds
+     * ago can still be taken back -- and only taken back.
+     *
+     * The freshness question is asked of the database, so a spec says what the
+     * database answers. The default (`[]`) is a row older than the window,
+     * which is what every case above describes.
+     */
+    const undoWindow = (open: boolean) =>
+      managerQuery.mockImplementation(async (sql: string) =>
+        sql.includes("within_undo_window")
+          ? [{ within_undo_window: open }]
+          : [],
+      );
+
+    it("allows the undo of a reconcile made moments ago", async () => {
+      // The click that made it reconciled is not settled history, and with the
+      // lock on the very next click used to be refused -- so a misclick on the
+      // register's status cell was permanent and the way out was disabling the
+      // lock for the whole ledger.
+      lockOn();
+      undoWindow(true);
+      const transaction = stageTransaction({
+        status: TransactionStatus.RECONCILED,
+        reconciledDate: "2026-01-15",
+      });
+      mockFindOne.mockResolvedValue(
+        makeTransaction({ status: TransactionStatus.UNRECONCILED }),
+      );
+
+      await expect(
+        service.updateStatus(
+          userId,
+          transaction.id,
+          TransactionStatus.UNRECONCILED,
+          mockTriggerNetWorthRecalc,
+          mockFindOne,
+        ),
+      ).resolves.toBeDefined();
+      // The status cycle writes the status alone; `reconciled_date` is cleared
+      // by the `unreconcile` endpoint (below) rather than by this path, which
+      // is how it behaves for a user with the lock off too.
+      expect(transactionsRepository.update).toHaveBeenCalledWith("tx-1", {
+        status: TransactionStatus.UNRECONCILED,
+      });
+    });
+
+    // `unreconcile` lands on CLEARED rather than UNRECONCILED. Both are the way
+    // back off a reconciled row, so the window takes both.
+    it("allows the unreconcile endpoint inside the window too", async () => {
+      lockOn();
+      undoWindow(true);
+      const transaction = stageTransaction({
+        status: TransactionStatus.RECONCILED,
+        reconciledDate: "2026-01-15",
+      });
+      mockFindOne.mockResolvedValue(
+        makeTransaction({
+          status: TransactionStatus.CLEARED,
+          reconciledDate: null,
+        }),
+      );
+
+      await expect(
+        service.unreconcile(userId, transaction.id, mockFindOne),
+      ).resolves.toBeDefined();
+    });
+
+    it("refuses the same undo once the window has closed", async () => {
+      lockOn();
+      undoWindow(false);
+      const transaction = stageTransaction({
+        status: TransactionStatus.RECONCILED,
+        reconciledDate: "2026-01-15",
+      });
+
+      await expect(
+        service.updateStatus(
+          userId,
+          transaction.id,
+          TransactionStatus.UNRECONCILED,
+          mockTriggerNetWorthRecalc,
+          mockFindOne,
+        ),
+      ).rejects.toThrow(ConflictException);
+      expect(transactionsRepository.update).not.toHaveBeenCalled();
+    });
+
+    // The window exists so a misclick can be taken back. Voiding moves money,
+    // so it stays refused -- otherwise the window is a ten-second door into
+    // every alteration the lock is there to prevent.
+    it("refuses a void inside the window, and writes nothing", async () => {
+      lockOn();
+      undoWindow(true);
+      const transaction = stageTransaction({
+        status: TransactionStatus.RECONCILED,
+        reconciledDate: "2026-01-15",
+      });
+
+      await expect(
+        service.updateStatus(
+          userId,
+          transaction.id,
+          TransactionStatus.VOID,
+          mockTriggerNetWorthRecalc,
+          mockFindOne,
+        ),
+      ).rejects.toThrow(ConflictException);
+      expect(transactionsRepository.update).not.toHaveBeenCalled();
+      expect(accountsService.updateBalance).not.toHaveBeenCalled();
+    });
+
+    it("does not ask about the window when the lock is off", async () => {
+      undoWindow(true);
+      const transaction = stageTransaction({
+        status: TransactionStatus.RECONCILED,
+        reconciledDate: "2026-01-15",
+      });
+      mockFindOne.mockResolvedValue(
+        makeTransaction({ status: TransactionStatus.UNRECONCILED }),
+      );
+
+      await service.updateStatus(
+        userId,
+        transaction.id,
+        TransactionStatus.UNRECONCILED,
+        mockTriggerNetWorthRecalc,
+        mockFindOne,
+      );
+      expect(
+        managerQuery.mock.calls.filter(([sql]: [string]) =>
+          sql.includes("within_undo_window"),
+        ),
+      ).toHaveLength(0);
+    });
+
+    it("does not ask about the window for a row that is not reconciled", async () => {
+      lockOn();
+      undoWindow(true);
+      const transaction = stageTransaction({
+        status: TransactionStatus.CLEARED,
+      });
+      mockFindOne.mockResolvedValue(
+        makeTransaction({ status: TransactionStatus.UNRECONCILED }),
+      );
+
+      await service.updateStatus(
+        userId,
+        transaction.id,
+        TransactionStatus.UNRECONCILED,
+        mockTriggerNetWorthRecalc,
+        mockFindOne,
+      );
+      expect(
+        managerQuery.mock.calls.filter(([sql]: [string]) =>
+          sql.includes("within_undo_window"),
+        ),
+      ).toHaveLength(0);
+    });
+
     it("allows the same unreconcile with the lock off", async () => {
       const transaction = stageTransaction({
         status: TransactionStatus.RECONCILED,

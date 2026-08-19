@@ -192,6 +192,10 @@
     "colGroup": "Gruppo",
     "noAccountsForFilters": "Nessun conto corrisponde ai filtri attuali.",
     "noAccountsOnDate": "Nessuno dei tuoi conti esisteva il {date}.",
+    "approximatedNotice": "Alcuni importi usano i prezzi e i tassi di cambio disponibili più vicini, non quelli del {date}.",
+    "approximatedPrices": "{count, plural, one {# posizione è valorizzata} other {# posizioni sono valorizzate}} alla data disponibile più vicina.",
+    "approximatedRates": "Convertito al tasso di cambio disponibile più vicino: {pairs}.",
+    "approximatedRateOn": "{currency} del {date}",
     "accountTypes": {
       "CHEQUING": "Conto corrente",
       "SAVINGS": "Conto di risparmio",

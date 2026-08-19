@@ -146,6 +146,7 @@
     "status": {
       "voidError": "[XX-Edit the transaction to change its status from Void-XX]",
       "changed": "[XX-Status changed to {status}-XX]",
+      "changedLockedUndo": "[XX-Status changed to {status}. Reconciled transactions are locked; press again within {seconds} seconds to undo.-XX]",
       "updateError": "[XX-Failed to update status-XX]",
       "unreconciled": "[XX-Unreconciled-XX]",
       "cleared": "[XX-Cleared-XX]",

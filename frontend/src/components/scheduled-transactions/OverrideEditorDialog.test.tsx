@@ -738,6 +738,10 @@ describe('OverrideEditorDialog', () => {
       );
     });
 
+    // Total-first (issue #1148): "use latest close" now keeps the scheduled total
+    // and re-derives the quantity, exactly as typing the same price does. It used
+    // to keep the quantity (10) and recompute the total to 1,234.5 -- the divergent
+    // behaviour the issue is closing.
     it('applies the latest close only when the user asks for it', async () => {
       mockGetSecurityPrices.mockResolvedValue([
         { closePrice: '123.45', priceDate: '2025-02-20' },
@@ -755,9 +759,67 @@ describe('OverrideEditorDialog', () => {
 
       const priceInput = screen.getByLabelText('Price per share') as HTMLInputElement;
       expect(Number(priceInput.value)).toBeCloseTo(123.45, 6);
-      // The total follows the applied price, not the old one.
+      // The scheduled total stands; the quantity follows the applied price.
       const totalInput = screen.getByLabelText('Total Price') as HTMLInputElement;
-      expect(totalInput.value).toBe('1,234.5');
+      expect(totalInput.value.replace(/,/g, '')).toBe('1000');
+      const qtyInput = screen.getByLabelText('Quantity (shares)') as HTMLInputElement;
+      // 1000 / 123.45 = 8.10044552 shares.
+      expect(Number(qtyInput.value)).toBeCloseTo(8.100446, 5);
+    });
+
+    // Issue #1148: the two affordances must agree. This runs BOTH paths from the
+    // same starting state (qty=10, price=100, total=1000) -- clicking "use latest
+    // close" and typing the same price -- and asserts they book the same quantity
+    // and total. Before the fix the button was quantity-first (10 / 1,234.5) and
+    // typing was total-first (8.1 / 1,000), so this comparison would have failed.
+    it('books the same quantity and total whether the price is typed or applied', async () => {
+      const readFields = () => ({
+        qty: Number(
+          (screen.getByLabelText('Quantity (shares)') as HTMLInputElement).value,
+        ),
+        total: (screen.getByLabelText('Total Price') as HTMLInputElement).value.replace(
+          /,/g,
+          '',
+        ),
+      });
+
+      // Path A -- the button. A stored price (100) differing from the market close
+      // (123.45) is what makes "use latest close" appear.
+      mockGetSecurityPrices.mockResolvedValue([
+        { closePrice: '123.45', priceDate: '2025-02-20' },
+      ]);
+      const applied = render(
+        <OverrideEditorDialog
+          {...defaultProps}
+          scheduledTransaction={investmentTransaction}
+        />,
+      );
+      await waitFor(() => {
+        expect(screen.getByText('Use latest close')).toBeInTheDocument();
+      });
+      fireEvent.click(screen.getByText('Use latest close'));
+      const appliedFields = readFields();
+      applied.unmount();
+
+      // Path B -- typing the same price into the same starting state.
+      mockGetSecurityPrices.mockResolvedValue([]);
+      render(
+        <OverrideEditorDialog
+          {...defaultProps}
+          scheduledTransaction={investmentTransaction}
+        />,
+      );
+      fireEvent.change(screen.getByLabelText('Price per share'), {
+        target: { value: '123.45' },
+      });
+      const typedFields = readFields();
+
+      // Same intent -> same booking, and concretely total-first: total held at
+      // 1000, quantity 1000 / 123.45 = 8.10044552.
+      expect(typedFields.total).toBe(appliedFields.total);
+      expect(typedFields.qty).toBeCloseTo(appliedFields.qty, 6);
+      expect(typedFields.total).toBe('1000');
+      expect(typedFields.qty).toBeCloseTo(8.100446, 5);
     });
 
     it('fills Price from the latest close when the schedule stored none', async () => {
@@ -891,10 +953,12 @@ describe('OverrideEditorDialog', () => {
       // slow connection the user enters a quantity and a total while
       // getSecurityPrices is still pending; the price field is still blank, so
       // the auto-fill gate's `investmentPrice === ''` holds. Without the
-      // userEditedTotal guard the arriving close fired writePrice, whose
-      // quantity-first branch re-derived the total to 10 * 123.45 = 1,234.5 --
-      // booking ~30% more money than the user entered. A deferred promise
-      // reproduces the timing. (No stored price, so the auto-fill is armed.)
+      // userEditedTotal guard the arriving close fired writePrice, and its
+      // total-first branch would keep the typed total (950) but re-derive the
+      // quantity from it -- 950 / 123.45 = ~7.6954 -- silently changing the 10
+      // shares the user entered. The guard blocks the fill entirely, so both the
+      // typed total and the typed quantity stand. A deferred promise reproduces
+      // the timing. (No stored price, so the auto-fill is armed.)
       let resolvePrices: (v: any) => void = () => {};
       mockGetSecurityPrices.mockReturnValue(
         new Promise((resolve) => {
@@ -932,10 +996,12 @@ describe('OverrideEditorDialog', () => {
     });
 
     it('auto-fills the price after a quantity-only edit, keeping the quantity', async () => {
-      // A quantity-only edit is safe to auto-fill: the fill is quantity-first, so
-      // the shares are preserved and the total simply follows. Blocking it (as an
-      // any-edit guard did) left the price empty and forced a manual click,
-      // diverging from ScheduledTransactionForm on identical input.
+      // A quantity-only edit is safe to auto-fill: the fill is total-first, but
+      // with no total on the field yet it falls into the fallback branch that
+      // derives the total from the shares, so the shares are preserved and the
+      // total simply follows. Blocking it (as an any-edit guard did) left the
+      // price empty and forced a manual click, diverging from
+      // ScheduledTransactionForm on identical input.
       let resolvePrices: (v: any) => void = () => {};
       mockGetSecurityPrices.mockReturnValue(
         new Promise((resolve) => {

@@ -192,6 +192,10 @@
     "colGroup": "Gruppe",
     "noAccountsForFilters": "Keine Konten entsprechen den aktuellen Filtern.",
     "noAccountsOnDate": "Am {date} existierte keines Ihrer Konten.",
+    "approximatedNotice": "Einige Werte verwenden die nächstgelegenen verfügbaren Kurse und Wechselkurse, nicht die vom {date}.",
+    "approximatedPrices": "{count, plural, one {# Position wird} other {# Positionen werden}} zum nächstgelegenen verfügbaren Datum bewertet.",
+    "approximatedRates": "Umgerechnet zum nächstgelegenen verfügbaren Wechselkurs: {pairs}.",
+    "approximatedRateOn": "{currency} am {date}",
     "accountTypes": {
       "CHEQUING": "Girokonto",
       "SAVINGS": "Sparkonto",

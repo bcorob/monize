@@ -169,15 +169,15 @@ describe("MarketIndexService", () => {
       // chunk, each within the span the provider serves daily.
       expect(calls.length).toBeGreaterThanOrEqual(16);
       expect(calls[0][0]).toBe("^GSPC");
-      expect(calls[0][1].toISOString().slice(0, 10)).toBe("2010-01-01");
-      for (const [, from, to] of calls) {
+      expect(calls[0][2].toISOString().slice(0, 10)).toBe("2010-01-01");
+      for (const [, , from, to] of calls) {
         const days = (to.getTime() - from.getTime()) / 86_400_000;
         expect(days).toBeLessThanOrEqual(366);
       }
       // Contiguous: each chunk starts the day after the previous one ends.
       for (let i = 1; i < calls.length; i += 1) {
-        const previousEnd = calls[i - 1][2].getTime();
-        const nextStart = calls[i][1].getTime();
+        const previousEnd = calls[i - 1][3].getTime();
+        const nextStart = calls[i][2].getTime();
         expect(nextStart - previousEnd).toBeLessThanOrEqual(86_400_000);
       }
       expect(
@@ -221,7 +221,7 @@ describe("MarketIndexService", () => {
       // Refetched from the deep start despite the apparently-complete span.
       const calls = yahoo.fetchHistoricalWindow.mock.calls;
       expect(calls.length).toBeGreaterThanOrEqual(16);
-      expect(calls[0][1].toISOString().slice(0, 10)).toBe("2010-01-01");
+      expect(calls[0][2].toISOString().slice(0, 10)).toBe("2010-01-01");
       // Replaced, not upserted over: monthly bars sit on the 1st, which is a
       // weekend often enough that the daily refetch has no bar on that date to
       // overwrite -- the wrong-dated close would survive under the fresh
@@ -274,7 +274,7 @@ describe("MarketIndexService", () => {
 
       await service.ensureHistory(["SP500"], null);
 
-      const [, from] = yahoo.fetchHistoricalWindow.mock.calls[0];
+      const [, , from] = yahoo.fetchHistoricalWindow.mock.calls[0];
       const yearsBack = (Date.now() - from.getTime()) / (365.25 * 86_400_000);
       expect(yearsBack).toBeGreaterThan(9);
       expect(yearsBack).toBeLessThan(11);
@@ -384,7 +384,7 @@ describe("MarketIndexService", () => {
 
       await service.ensureHistory(["SP500"], "2023-01-01");
 
-      const [symbol, from] = yahoo.fetchHistoricalWindow.mock.calls[0];
+      const [symbol, , from] = yahoo.fetchHistoricalWindow.mock.calls[0];
       expect(symbol).toBe("^GSPC");
       // The lookup that prices the window start searches backwards, so the
       // fetch has to reach behind the boundary.
@@ -403,7 +403,7 @@ describe("MarketIndexService", () => {
       await service.ensureHistory(["SP500"], "2025-01-01");
 
       expect(yahoo.fetchHistoricalWindow).toHaveBeenCalledTimes(1);
-      const [, from, to] = yahoo.fetchHistoricalWindow.mock.calls[0];
+      const [, , from, to] = yahoo.fetchHistoricalWindow.mock.calls[0];
       const days = (to.getTime() - from.getTime()) / 86_400_000;
       expect(days).toBeLessThan(30);
     });
@@ -634,7 +634,7 @@ describe("MarketIndexService", () => {
       );
       // A deep history is thousands of bars; the daily top-up must not ask for
       // one -- the window it passes is the giveaway.
-      const [, from, to] = yahoo.fetchHistoricalWindow.mock.calls[0];
+      const [, , from, to] = yahoo.fetchHistoricalWindow.mock.calls[0];
       const days = (to.getTime() - from.getTime()) / 86_400_000;
       expect(days).toBeLessThan(30);
     });
@@ -648,7 +648,7 @@ describe("MarketIndexService", () => {
       // Year-sized chunks from the earliest transaction's year, per index.
       const calls = yahoo.fetchHistoricalWindow.mock.calls;
       expect(calls.length).toBeGreaterThanOrEqual(MARKET_INDEXES.length * 11);
-      for (const [, from, to] of calls) {
+      for (const [, , from, to] of calls) {
         const days = (to.getTime() - from.getTime()) / 86_400_000;
         expect(days).toBeLessThanOrEqual(366);
       }

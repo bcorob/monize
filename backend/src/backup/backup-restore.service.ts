@@ -168,21 +168,36 @@ export class BackupRestoreService {
         skipped: skippedAttachments,
       } = await this.attachments.stageAttachmentObjects(userId, data, idRemap);
 
-      // The keys this user's *current* attachments occupy, read before the delete
-      // because afterwards there is nothing left to read them from. They are
-      // deleted after a successful commit -- see `deleteDisplacedAttachmentObjects`
-      // for why that is the only safe moment and why the backup's own old keys are
-      // not in this set.
-      const displacedKeys =
-        await this.attachments.collectExternalAttachmentKeys(userId);
+      // Everything between staging and the restore transaction runs after
+      // objects have been written to the store but before the transaction's
+      // `.catch` (below) is wired to discard them. A throw here would therefore
+      // orphan every staged object: the failure never reaches the handler that
+      // cleans them up. So this region discards the staged objects itself before
+      // re-raising. The cleanup swallows its own delete failures, so it cannot
+      // mask the error that actually aborted the restore.
+      let displacedKeys: string[];
+      let unusableAiProviderKeys: number;
+      try {
+        // The keys this user's *current* attachments occupy, read before the
+        // delete because afterwards there is nothing left to read them from.
+        // They are deleted after a successful commit -- see
+        // `deleteDisplacedAttachmentObjects` for why that is the only safe
+        // moment and why the backup's own old keys are not in this set.
+        displacedKeys =
+          await this.attachments.collectExternalAttachmentKeys(userId);
 
-      // Re-encrypt every AI provider key the artifact carries in plaintext under
-      // *this* instance's AI_ENCRYPTION_KEY, before the transaction: the work is
-      // scrypt-bound (tens of milliseconds per key) and does not belong inside
-      // the transaction that holds every one of this user's rows. Rows an older
-      // artifact carries as foreign ciphertext are left alone and counted, which
-      // is the pre-transport behaviour and the only case still reportable.
-      const unusableAiProviderKeys = this.restoreAiProviderKeys(userId, data);
+        // Re-encrypt every AI provider key the artifact carries in plaintext
+        // under *this* instance's AI_ENCRYPTION_KEY, before the transaction: the
+        // work is scrypt-bound (tens of milliseconds per key) and does not
+        // belong inside the transaction that holds every one of this user's
+        // rows. Rows an older artifact carries as foreign ciphertext are left
+        // alone and counted, which is the pre-transport behaviour and the only
+        // case still reportable.
+        unusableAiProviderKeys = this.restoreAiProviderKeys(userId, data);
+      } catch (error) {
+        await this.attachments.discardStagedAttachmentObjects(stagedKeys);
+        throw error;
+      }
 
       const restored: Record<string, number> = {};
 

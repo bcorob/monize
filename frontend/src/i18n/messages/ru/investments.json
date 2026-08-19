@@ -132,6 +132,7 @@
   },
   "transactionList": {
     "itemNamePlural": "проводки",
+    "totalCount": "{count, plural, one {# проводка} other {# проводок}}",
     "title": "Последние проводки",
     "filtered": "(отфильтровано)",
     "newBrokerageTransaction": "+ Новая брокерская проводка",

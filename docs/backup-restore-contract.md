@@ -340,6 +340,33 @@ The timing and the scope are both load-bearing:
   own receipt costs storage, while a backup that can only be restored once costs
   the receipt.
 
+**The objects the restore staged are discarded when it fails.** Staging writes
+bytes to the store *before* the destructive transaction, so a failure between
+the first successful write and the transaction's `.catch` would leave those
+objects orphaned — bytes no row will ever name again (issue #1094). Two throw
+sites are handled so it does not:
+
+- A destination write that fails *inside* the stage loop drops that one
+  attachment rather than aborting the whole restore (`tryStageAttachmentObject`):
+  it best-effort deletes the object it was writing, logs, and counts the row in
+  `skippedAttachments`. The objects already staged this run stay — they are
+  referenced by attachments still being restored. Crucially, a **legacy** row's
+  source object (`sourceKeys`) is recorded the moment its bytes are read and
+  verified, *before* the copy is attempted, so a failed copy on a same-account
+  restore never lets the post-commit sweep delete the file's only copy of those
+  bytes.
+- The displaced-key lookup and the AI-provider re-keying run after staging but
+  before the transaction's `.catch` is wired; a throw there discards every staged
+  object before re-raising. The discard swallows its own delete failures, so a
+  failed tidy-up cannot mask the error that aborted the restore.
+
+**Known gap:** this covers *catchable* failures only. A process crash or kill
+between staging and commit still orphans the staged objects, and there is no
+sweeper or recovery pass for them yet. It is a bounded storage cost, never a row
+promising bytes that are gone, so it is a leak to reclaim rather than a
+correctness hazard — tracked as a separate follow-up, not closed by the #1094
+fix.
+
 Operationally: for an artifact that carries its own bytes there is nothing to
 restore alongside it — that is the point. The sidecar directory or bucket only
 matters for an artifact produced before the bytes travelled, and for those it must

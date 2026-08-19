@@ -127,6 +127,24 @@ describe("the strict reconciled lock is asked on every write path", () => {
     expect(util).toContain("export async function assertReconciledIdsMutable(");
   });
 
+  /**
+   * The undo window hands half the rule to the caller: `undoWindowFor` makes
+   * the assertion *return* for a row reconciled seconds ago instead of
+   * throwing, and only the caller knows whether the transition it is about to
+   * make is the undo the window exists for. A site that asks for the window
+   * and never checks has quietly turned the lock into a ten-second door into
+   * every alteration -- and it reads exactly like a site that refuses.
+   */
+  it("closes the undo window it opens", () => {
+    const opened = ENFORCEMENT_SITES.filter(({ file, fn }) => {
+      const body = methodBody(sources.get(file)!, fn)!;
+      return (
+        body.includes("undoWindowFor") && !body.includes("isReconciledUndo(")
+      );
+    }).map(({ file, fn }) => `${file} ${fn}`);
+    expect(opened).toEqual([]);
+  });
+
   it("refuses before the write, not after it", () => {
     // Every assertion has to sit inside the mutation's own transaction: a 409
     // cannot undo a committed row (docs/financial-calculation-contract.md

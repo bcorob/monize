@@ -32,8 +32,13 @@ import {
   DEFAULT_PRICE_HISTORY_ROWS,
   MAX_PRICE_HISTORY_ROWS,
 } from "./dto/price-history-query.dto";
-import { formatDateYMD } from "../common/date-utils";
+import { formatDateYMD, todayYMD } from "../common/date-utils";
 import { mapWithConcurrency } from "../common/concurrency.util";
+import {
+  EmptyWindowMemory,
+  monthFetchWindow,
+} from "../common/time-series/history-fill";
+import { daysBetween } from "../common/time-series/price-boundary.util";
 
 export { SecurityLookupResult } from "./providers/quote-provider.interface";
 
@@ -60,6 +65,35 @@ const QUOTE_FETCH_CONCURRENCY = 6;
  * several megabytes a `max` range returns. Deep history is the backfill's job.
  */
 const SETTLEMENT_RANGE = "1mo";
+
+/**
+ * How long the on-demand price fill may spend before it stops starting fetches.
+ *
+ * It runs inside a report request over however many securities that report
+ * holds, and a provider under load answers slowly rather than not at all -- so
+ * without a ceiling one stale month could keep a page waiting on dozens of
+ * sequential timeouts. What is not reached stays unpriced, which the report
+ * already renders as a null total, and the count is logged.
+ */
+const PRICE_FILL_BUDGET_MS = 15_000;
+
+/**
+ * The narrowest named range that still reaches `date`, for a provider whose
+ * chart API takes a timeframe rather than a window.
+ *
+ * Named ranges are anchored at today, so reaching further back means asking for
+ * more; the point is to ask for as little more as the allowlist permits.
+ */
+function rangeReaching(date: string): BackfillRange {
+  // A month of slack, so a range that lands within days of the date still
+  // covers the lead the boundary lookup reaches over.
+  const years = (daysBetween(date, todayYMD()) + 31) / 365.25;
+  if (years <= 1) return "1y";
+  if (years <= 2) return "2y";
+  if (years <= 5) return "5y";
+  if (years <= 10) return "10y";
+  return "max";
+}
 
 /**
  * Price writes that were started without anybody waiting for them.
@@ -183,6 +217,12 @@ interface HistoricalWithProvider {
 @Injectable()
 export class SecurityPriceService {
   private readonly logger = new Logger(SecurityPriceService.name);
+
+  /**
+   * Securities whose month a provider answered with nothing, for the on-demand
+   * fill below. See `EmptyWindowMemory`.
+   */
+  private readonly emptyPriceWindows = new EmptyWindowMemory();
 
   constructor(
     private dataSource: DataSource,
@@ -1527,6 +1567,182 @@ export class SecurityPriceService {
       `Backfilled ${bundle.prices.length} ${range} prices for ${security.symbol} via ${bundle.provider}`,
     );
     return bundle.prices.length;
+  }
+
+  /**
+   * Make sure `security_prices` can price each security at `date`, fetching
+   * from the provider the ones it cannot.
+   *
+   * The counterpart to `ExchangeRateService.ensureRatesForDate`, and the same
+   * problem: the daily refresh writes today, `backfillSecurity` fetches a year
+   * from the day the security was created, and nothing ever goes back further
+   * on its own -- so a point-in-time report asked about 2017 finds no close
+   * within the boundary window, reports the position unpriced, and the
+   * account's market value is null. That is the report being honest about an
+   * absence, not a number to guess at; the absence is what this closes.
+   *
+   * **The unit is a calendar month** (`monthFetchWindow`), for the reason given
+   * there: one provider call covers the whole month, so the other days in it
+   * are database reads.
+   *
+   * Provider order is the user's own (`resolveForSecurity`), and a provider
+   * whose chart API takes only a named timeframe -- MSN -- gets the narrowest
+   * range that reaches `date` instead of a window. That range is anchored at
+   * today, so it returns more than the month asked for; all of it is stored,
+   * because throwing away bars already downloaded to honour a window nobody
+   * needs enforced would be the more expensive choice.
+   *
+   * Best-effort by construction, exactly as the rate fill is: this runs inside
+   * a read, so a provider that is down, rate-limited or has no history for a
+   * symbol leaves the report where it already was -- the position unpriced and
+   * the total null -- rather than failing the request. Nothing here invents a
+   * price.
+   *
+   * `skipPriceUpdates` is honoured (via `isRefreshEligible`): an import that
+   * auto-generated a symbol marked it precisely because fetching against it is
+   * pointless.
+   *
+   * Returns the number of daily bars persisted.
+   */
+  async ensurePricesForDate(
+    securityIds: string[],
+    date: string,
+  ): Promise<number> {
+    const month = date.slice(0, 7);
+    const due = [...new Set(securityIds)].filter(
+      (id) => !this.emptyPriceWindows.has(id, month),
+    );
+    if (due.length === 0) return 0;
+
+    const securities = await withScopedDb(this.dataSource, (m) =>
+      m.getRepository(Security).find({ where: { id: In(due) } }),
+    );
+    const eligible = securities.filter((s) => isRefreshEligible(s));
+    if (eligible.length === 0) return 0;
+
+    const contexts = await this.loadUserContexts(eligible.map((s) => s.userId));
+    const [start, end] = monthFetchWindow(date);
+    // A report can hold dozens of securities and this runs inside a request, so
+    // the fill is bounded by wall clock rather than by a count: whatever is not
+    // reached stays unpriced, which is a state the report already renders. The
+    // remainder is named in the log rather than dropped quietly -- a fill that
+    // silently covers half the portfolio reads as a fill that covered it.
+    const deadline = Date.now() + PRICE_FILL_BUDGET_MS;
+    let unattempted = 0;
+
+    this.logger.log(
+      `Filling ${eligible.length} securities' prices over ${start} to ${end}`,
+    );
+
+    const loaded = await mapWithConcurrency(
+      eligible,
+      QUOTE_FETCH_CONCURRENCY,
+      async (security) => {
+        if (Date.now() > deadline) {
+          unattempted += 1;
+          return 0;
+        }
+        try {
+          const stored = await this.fillPriceWindow(
+            security,
+            contexts.get(security.userId),
+            start,
+            end,
+            date,
+          );
+          if (stored === 0) {
+            // No history for this symbol in this era -- an instrument that did
+            // not trade yet, or one the provider does not carry. Note it, so a
+            // report reloaded on the same date does not re-ask.
+            this.emptyPriceWindows.remember(security.id, month);
+            this.logger.warn(
+              `No historical prices available for ${security.symbol} over ${start} to ${end}`,
+            );
+          }
+          return stored;
+        } catch (error) {
+          this.logger.warn(
+            `Historical price fill for ${security.symbol} over ${start} to ${end} failed: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          );
+          return 0;
+        }
+      },
+    );
+
+    if (unattempted > 0) {
+      this.logger.warn(
+        `Price fill for ${date} ran out of time with ${unattempted} of ${eligible.length} securities unattempted; they stay unpriced for this report`,
+      );
+    }
+
+    return loaded.reduce((sum, count) => sum + count, 0);
+  }
+
+  /**
+   * One security, one month, through whichever provider answers first.
+   *
+   * The window path and the range path both hand their whole payload to
+   * `bulkUpsertPrices`, which is where the daily-granularity check lives -- a
+   * provider that answers a long range with weekly or monthly bars is refused
+   * there rather than spliced through the daily table.
+   */
+  private async fillPriceWindow(
+    security: Security,
+    ctx: UserContext | undefined,
+    start: string,
+    end: string,
+    date: string,
+  ): Promise<number> {
+    const userCtx = ctx || {
+      defaultQuoteProvider: DEFAULT_QUOTE_PROVIDER,
+      preferredExchanges: [],
+    };
+    const fromDate = new Date(`${start}T00:00:00.000Z`);
+    const toDate = new Date(`${end}T23:59:59.999Z`);
+
+    for (const provider of this.providers.resolveForSecurity(
+      security,
+      userCtx.defaultQuoteProvider,
+    )) {
+      const opts = this.optsFor(provider, security, userCtx);
+      let prices: HistoricalPrice[] | null = null;
+      try {
+        prices = provider.fetchHistoricalWindow
+          ? await provider.fetchHistoricalWindow(
+              security.symbol,
+              security.exchange,
+              fromDate,
+              toDate,
+              opts,
+            )
+          : await provider.fetchHistorical(
+              security.symbol,
+              security.exchange,
+              rangeReaching(date),
+              opts,
+            );
+      } catch (err) {
+        this.logger.warn(
+          `${provider.name} historical fill failed for ${security.symbol}: ${err instanceof Error ? err.message : String(err)}`,
+        );
+        continue;
+      }
+      if (!prices || prices.length === 0) continue;
+
+      await this.bulkUpsertPrices(
+        security.id,
+        prices,
+        sourceFor(provider.name),
+      );
+      this.logger.log(
+        `Filled ${prices.length} prices for ${security.symbol} around ${date} via ${provider.name}`,
+      );
+      return prices.length;
+    }
+
+    return 0;
   }
 
   /**

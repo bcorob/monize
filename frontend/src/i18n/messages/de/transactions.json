@@ -146,6 +146,7 @@
     "status": {
       "voidError": "Bearbeiten Sie die Buchung, um den Status von „Ungültig” zu ändern",
       "changed": "Status geändert zu {status}",
+      "changedLockedUndo": "Status auf {status} geändert. Abgeglichene Buchungen sind gesperrt; innerhalb von {seconds} Sekunden erneut klicken, um dies rückgängig zu machen.",
       "updateError": "Status konnte nicht aktualisiert werden",
       "unreconciled": "Nicht abgeglichen",
       "cleared": "Bestätigt",

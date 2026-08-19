@@ -132,6 +132,7 @@
   },
   "transactionList": {
     "itemNamePlural": "筆交易",
+    "totalCount": "{count, plural, one {# 筆交易} other {# 筆交易}}",
     "title": "最近交易",
     "filtered": "（已篩選）",
     "newBrokerageTransaction": "+ 新增券商交易",

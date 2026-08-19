@@ -146,6 +146,7 @@
     "status": {
       "voidError": "Edita la transacción para cambiar su estado desde Anulada",
       "changed": "Estado cambiado a {status}",
+      "changedLockedUndo": "Estado cambiado a {status}. Las transacciones conciliadas están bloqueadas: vuelve a pulsar en {seconds} segundos para deshacerlo.",
       "updateError": "Error al actualizar el estado",
       "unreconciled": "Sin conciliar",
       "cleared": "Compensada",

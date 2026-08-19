@@ -192,6 +192,10 @@
     "colGroup": "Groep",
     "noAccountsForFilters": "Geen rekeningen komen overeen met de huidige filters.",
     "noAccountsOnDate": "Geen van uw rekeningen bestond op {date}.",
+    "approximatedNotice": "Sommige bedragen gebruiken de dichtstbijzijnde beschikbare koersen en wisselkoersen, niet die van {date}.",
+    "approximatedPrices": "{count, plural, one {# positie is} other {# posities zijn}} gewaardeerd op de dichtstbijzijnde beschikbare datum.",
+    "approximatedRates": "Omgerekend tegen de dichtstbijzijnde beschikbare wisselkoers: {pairs}.",
+    "approximatedRateOn": "{currency} op {date}",
     "accountTypes": {
       "CHEQUING": "Betaalrekening",
       "SAVINGS": "Spaarrekening",

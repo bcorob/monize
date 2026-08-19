@@ -132,6 +132,7 @@
   },
   "transactionList": {
     "itemNamePlural": "Buchungen",
+    "totalCount": "{count, plural, one {# Buchung} other {# Buchungen}}",
     "title": "Letzte Buchungen",
     "filtered": "(gefiltert)",
     "newBrokerageTransaction": "+ Neue Brokeragebuchung",

@@ -13,6 +13,7 @@ import { PortfolioSummaryCard } from '@/components/investments/PortfolioSummaryC
 import { GroupedHoldingsList } from '@/components/investments/GroupedHoldingsList';
 import { AssetAllocationChart } from '@/components/investments/AssetAllocationChart';
 import { InvestmentTransactionList } from '@/components/investments/InvestmentTransactionList';
+import { ListBottomPager } from '@/components/ui/ListBottomPager';
 import { NewTransactionButton } from '@/components/investments/NewTransactionButton';
 import { RefreshPricesButton } from '@/components/investments/RefreshPricesButton';
 import { InvestmentTransactionForm } from '@/components/investments/InvestmentTransactionForm';
@@ -55,6 +56,10 @@ export default function InvestmentsPage() {
 function InvestmentsContent() {
   const t = useTranslations('investments');
   const tc = useTranslations('common');
+  // The cash register below is the shared transactions list, so its pager
+  // counts "transactions" out of that list's own catalog rather than a second
+  // copy of the noun under `investments`.
+  const tTx = useTranslations('transactions');
   const mainAccountName = useMainAccountName();
   const data = useInvestmentData();
   // An undo or a redo is a write that happened elsewhere, so it refreshes the
@@ -277,6 +282,17 @@ function InvestmentsContent() {
                   onPageChange={data.goToPage}
                 />
               </div>
+              <ListBottomPager
+                currentPage={data.currentPage}
+                totalPages={data.pagination?.totalPages}
+                totalItems={data.pagination?.total}
+                pageSize={PAGE_SIZE}
+                onPageChange={data.goToPage}
+                itemName={t('transactionList.itemNamePlural')}
+                totalLabel={t('transactionList.totalCount', {
+                  count: data.pagination?.total ?? 0,
+                })}
+              />
             </>
           )}
 
@@ -338,7 +354,17 @@ function InvestmentsContent() {
                 />
               )}
             </div>
-
+            <ListBottomPager
+              currentPage={data.cashCurrentPage}
+              totalPages={data.cashPagination?.totalPages}
+              totalItems={data.cashPagination?.total}
+              pageSize={PAGE_SIZE}
+              onPageChange={data.goToCashPage}
+              itemName={tTx('list.itemNamePlural')}
+              totalLabel={tTx('page.totalCount', {
+                count: data.cashPagination?.total ?? 0,
+              })}
+            />
             </>
           )}
 

@@ -192,6 +192,10 @@
     "colGroup": "Grup",
     "noAccountsForFilters": "Tidak ada akun yang cocok dengan filter saat ini.",
     "noAccountsOnDate": "Belum ada akun Anda yang berdiri pada {date}.",
+    "approximatedNotice": "Beberapa angka menggunakan harga dan kurs terdekat yang tersedia, bukan dari {date}.",
+    "approximatedPrices": "{count, plural, one {# kepemilikan dinilai} other {# kepemilikan dinilai}} pada tanggal terdekat yang tersedia.",
+    "approximatedRates": "Dikonversi dengan kurs terdekat yang tersedia: {pairs}.",
+    "approximatedRateOn": "{currency} pada {date}",
     "accountTypes": {
       "CHEQUING": "Rekening Koran",
       "SAVINGS": "Tabungan",

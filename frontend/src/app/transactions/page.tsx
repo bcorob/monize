@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { TOUR_ANCHORS, tourAnchor } from '@/lib/tours/anchors';
 import { TransactionFilterPanel } from '@/components/transactions/TransactionFilterPanel';
 import { TagKeyBreakdownChart } from '@/components/transactions/TagKeyBreakdownChart';
-import { Pagination } from '@/components/ui/Pagination';
+import { ListBottomPager } from '@/components/ui/ListBottomPager';
 import { TransactionList } from '@/components/transactions/TransactionList';
 import dynamic from 'next/dynamic';
 
@@ -1357,26 +1357,16 @@ function TransactionsContent() {
           )}
         </div>
 
-        {/* Pagination */}
-        {pagination && pagination.totalPages > 1 && (
-          <div className="mt-4">
-            <Pagination
-              currentPage={filters.currentPage}
-              totalPages={pagination.totalPages}
-              totalItems={pagination.total}
-              pageSize={PAGE_SIZE}
-              onPageChange={filters.goToPage}
-              itemName={t('list.itemNamePlural')}
-            />
-          </div>
-        )}
-
-        {/* Show total count when only one page */}
-        {pagination && pagination.totalPages <= 1 && pagination.total > 0 && (
-          <div className="mt-4 text-sm text-gray-500 dark:text-gray-400 text-center">
-            {t('page.totalCount', { count: pagination.total })}
-          </div>
-        )}
+        {/* Pagination, repeated below the rows */}
+        <ListBottomPager
+          currentPage={filters.currentPage}
+          totalPages={pagination?.totalPages}
+          totalItems={pagination?.total}
+          pageSize={PAGE_SIZE}
+          onPageChange={filters.goToPage}
+          itemName={t('list.itemNamePlural')}
+          totalLabel={t('page.totalCount', { count: pagination?.total ?? 0 })}
+        />
       </main>
     </PageLayout>
   );

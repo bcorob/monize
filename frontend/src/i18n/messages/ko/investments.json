@@ -132,6 +132,7 @@
   },
   "transactionList": {
     "itemNamePlural": "거래",
+    "totalCount": "{count, plural, one {# 건의 거래} other {# 건의 거래}}",
     "title": "최근 거래",
     "filtered": "(필터됨)",
     "newBrokerageTransaction": "+ 새 증권사 거래",

@@ -192,6 +192,10 @@
     "colGroup": "Група",
     "noAccountsForFilters": "Жоден рахунок не відповідає поточним фільтрам.",
     "noAccountsOnDate": "На {date} жодного вашого рахунку ще не існувало.",
+    "approximatedNotice": "Деякі суми використовують найближчі доступні ціни та курси валют, а не значення на {date}.",
+    "approximatedPrices": "{count, plural, one {# позиція оцінена} few {# позиції оцінені} many {# позицій оцінено} other {# позиції оцінено}} за найближчою доступною датою.",
+    "approximatedRates": "Перераховано за найближчим доступним курсом: {pairs}.",
+    "approximatedRateOn": "{currency} на {date}",
     "accountTypes": {
       "CHEQUING": "Поточний",
       "SAVINGS": "Ощадний",

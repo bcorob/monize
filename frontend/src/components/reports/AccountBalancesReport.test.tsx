@@ -974,6 +974,122 @@ describe("AccountBalancesReport", () => {
     });
   });
 
+  /**
+   * The server falls back to the closest stored price or rate when the chosen
+   * date has none (spec sections 4.2 and 7.2), so a figure can be a real
+   * observation from a neighbouring day. The number alone cannot say that, and
+   * every case here is about the report saying it -- or, where nothing was
+   * approximated, not saying it.
+   */
+  describe("figures taken from the closest available date", () => {
+    const usdAccount = acc({
+      id: "acc-usd",
+      name: "US Savings",
+      accountType: "SAVINGS",
+      currencyCode: "USD",
+    });
+
+    it("says nothing when every figure stood on the date itself", async () => {
+      mockGetAll.mockResolvedValue([acc()]);
+      mockGetBalancesAsOf.mockResolvedValue(balancesFor([balance("acc-1", 5000)]));
+      render(<AccountBalancesReport />);
+      await waitFor(() => {
+        expect(screen.getByText("Total Assets")).toBeInTheDocument();
+      });
+      expect(screen.queryByTestId("approximation-notice")).toBeNull();
+    });
+
+    it("marks a holding priced from a neighbouring day, and still totals it", async () => {
+      mockGetAll.mockResolvedValue([
+        acc({ id: "acc-b", name: "Brokerage", accountType: "INVESTMENT" }),
+      ]);
+      mockGetBalancesAsOf.mockResolvedValue(
+        balancesFor([
+          balance("acc-b", 0, {
+            marketValue: 220,
+            knownMarketValueSubtotal: 220,
+            approximatedPriceCount: 2,
+            approximatedRatePairs: [],
+          }),
+        ]),
+      );
+      render(<AccountBalancesReport />);
+      await waitFor(() => {
+        expect(screen.getByTestId("approximation-notice")).toBeInTheDocument();
+      });
+      // The whole point of the fallback: the total is a number, not "Total
+      // unavailable" -- and it is not a subtotal either, because nothing was
+      // left out of it.
+      expect(screen.getByTestId("summary-assets")).toHaveTextContent("$220.00");
+      expect(screen.queryByTestId("partial-total")).toBeNull();
+      expect(
+        screen.getByLabelText(/2 holdings are priced from the closest available date/),
+      ).toBeInTheDocument();
+    });
+
+    it("names the day an approximated exchange rate was struck on", async () => {
+      mockGetAll.mockResolvedValue([usdAccount]);
+      mockGetBalancesAsOf.mockResolvedValue({
+        ...balancesFor([balance("acc-usd", 100, { currencyCode: "USD" })], TODAY, {
+          CAD: 1,
+          USD: 1.35,
+        }),
+        approximatedDisplayRates: { USD: "2024-05-01" },
+      });
+      render(<AccountBalancesReport />);
+      await waitFor(() => {
+        expect(screen.getByTestId("approximation-notice")).toBeInTheDocument();
+      });
+      expect(
+        screen.getByLabelText(/USD on date\(2024-05-01\)/),
+      ).toBeInTheDocument();
+    });
+
+    // A caveat belongs to the figures on screen. An approximated currency whose
+    // only account the filters removed is not part of any of them.
+    it("drops the caveat when the approximated account is filtered out", async () => {
+      mockGetAll.mockResolvedValue([acc(), usdAccount]);
+      mockGetBalancesAsOf.mockResolvedValue({
+        ...balancesFor(
+          [
+            balance("acc-1", 5000),
+            balance("acc-usd", 100, { currencyCode: "USD" }),
+          ],
+          TODAY,
+          { CAD: 1, USD: 1.35 },
+        ),
+        approximatedDisplayRates: { USD: "2024-05-01" },
+      });
+      render(<AccountBalancesReport />);
+      await waitFor(() => {
+        expect(screen.getByTestId("approximation-notice")).toBeInTheDocument();
+      });
+      // Narrowing to chequing leaves only the CAD account on screen; the USD
+      // one -- and its approximated rate -- is no longer part of any figure.
+      fireEvent.click(screen.getByTestId("option-CHEQUING"));
+      await waitFor(() => {
+        expect(screen.queryByTestId("approximation-notice")).toBeNull();
+      });
+    });
+
+    // A backend that predates these fields sends nothing, and absent means "no
+    // information" -- not "approximated", and not a crash.
+    it("renders a row whose approximation fields are absent", async () => {
+      mockGetAll.mockResolvedValue([acc()]);
+      mockGetBalancesAsOf.mockResolvedValue({
+        asOfDate: TODAY,
+        displayCurrency: "CAD",
+        displayRates: { CAD: 1 },
+        accounts: [balance("acc-1", 5000)],
+      });
+      render(<AccountBalancesReport />);
+      await waitFor(() => {
+        expect(screen.getByTestId("summary-assets")).toHaveTextContent("$5000.00");
+      });
+      expect(screen.queryByTestId("approximation-notice")).toBeNull();
+    });
+  });
+
   it("shows an account description under its name", async () => {
     mockGetAll.mockResolvedValue([
       acc({ name: "My Savings", accountType: "SAVINGS", description: "Emergency fund" }),

@@ -1,9 +1,14 @@
 import { ConflictException } from "@nestjs/common";
 import { EntityManager } from "typeorm";
+import { readFileSync } from "fs";
+import { join } from "path";
 import {
   assertReconciledIdsMutable,
   assertReconciledRowsMutable,
   isReconciledLockEnabled,
+  isReconciledUndo,
+  isWithinReconciledUndoWindow,
+  RECONCILED_UNDO_WINDOW_SECONDS,
 } from "./reconciled-lock.util";
 import { TransactionStatus } from "./entities/transaction.entity";
 
@@ -71,7 +76,9 @@ describe("assertReconciledRowsMutable", () => {
       assertReconciledRowsMutable(manager, "user-1", [
         { status: TransactionStatus.RECONCILED },
       ]),
-    ).resolves.toBeUndefined();
+      // The lock did not apply, so the undo window is not "open" -- a caller
+      // must never read this verdict as permission it did not get.
+    ).resolves.toEqual({ undoWindowOpen: false });
   });
 
   it("refuses a mixed set on the strength of its one reconciled row", async () => {
@@ -95,7 +102,7 @@ describe("assertReconciledRowsMutable", () => {
         { status: TransactionStatus.VOID },
         { status: null },
       ]),
-    ).resolves.toBeUndefined();
+    ).resolves.toEqual({ undoWindowOpen: false });
     expect(findOne).not.toHaveBeenCalled();
   });
 
@@ -103,8 +110,64 @@ describe("assertReconciledRowsMutable", () => {
     const { manager, findOne } = managerWith(true);
     await expect(
       assertReconciledRowsMutable(manager, "user-1", []),
-    ).resolves.toBeUndefined();
+    ).resolves.toEqual({ undoWindowOpen: false });
     expect(findOne).not.toHaveBeenCalled();
+  });
+});
+
+describe("assertReconciledRowsMutable and the undo window", () => {
+  it("returns instead of throwing for a row reconciled moments ago", async () => {
+    const { manager } = managerWith(true, [{ within_undo_window: true }]);
+    await expect(
+      assertReconciledRowsMutable(
+        manager,
+        "user-1",
+        [{ status: TransactionStatus.RECONCILED }],
+        { undoWindowFor: "tx-1" },
+      ),
+    ).resolves.toEqual({ undoWindowOpen: true });
+  });
+
+  it("still refuses once the row is older than the window", async () => {
+    const { manager } = managerWith(true, [{ within_undo_window: false }]);
+    await expect(
+      assertReconciledRowsMutable(
+        manager,
+        "user-1",
+        [{ status: TransactionStatus.RECONCILED }],
+        { undoWindowFor: "tx-1" },
+      ),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  // A caller that does not ask for the window must not get it: every other
+  // write path -- the ordinary edit, the deletes, the bulk routes -- refuses a
+  // reconciled row however recently it was reconciled.
+  it("is not consulted unless the caller asks for it", async () => {
+    const { manager, query } = managerWith(true, [
+      { within_undo_window: true },
+    ]);
+    await expect(
+      assertReconciledRowsMutable(manager, "user-1", [
+        { status: TransactionStatus.RECONCILED },
+      ]),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it("does not ask about the window when the lock is off", async () => {
+    const { manager, query } = managerWith(false, [
+      { within_undo_window: true },
+    ]);
+    await expect(
+      assertReconciledRowsMutable(
+        manager,
+        "user-1",
+        [{ status: TransactionStatus.RECONCILED }],
+        { undoWindowFor: "tx-1" },
+      ),
+    ).resolves.toEqual({ undoWindowOpen: false });
+    expect(query).not.toHaveBeenCalled();
   });
 });
 
@@ -143,5 +206,117 @@ describe("assertReconciledIdsMutable", () => {
     const { manager, query } = managerWith(true, []);
     await assertReconciledIdsMutable(manager, "user-1", []);
     expect(query).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * The undo window: the one thing the strict lock yields to, and only for the
+ * row the user reconciled seconds ago.
+ */
+describe("isReconciledUndo", () => {
+  it("is the transition back off a reconciled row", () => {
+    expect(
+      isReconciledUndo(
+        TransactionStatus.RECONCILED,
+        TransactionStatus.UNRECONCILED,
+      ),
+    ).toBe(true);
+    // `unreconcile` lands on CLEARED rather than UNRECONCILED, and it is the
+    // same undo -- the window would be half a window if it took only one of
+    // the two ways back.
+    expect(
+      isReconciledUndo(TransactionStatus.RECONCILED, TransactionStatus.CLEARED),
+    ).toBe(true);
+  });
+
+  // Voiding moves money and reverses shares. A window that exists so a misclick
+  // can be taken back must not become a ten-second door into it.
+  it("is not a void, and not a re-reconcile", () => {
+    expect(
+      isReconciledUndo(TransactionStatus.RECONCILED, TransactionStatus.VOID),
+    ).toBe(false);
+    expect(
+      isReconciledUndo(
+        TransactionStatus.RECONCILED,
+        TransactionStatus.RECONCILED,
+      ),
+    ).toBe(false);
+  });
+
+  it("says nothing about a row that was not reconciled", () => {
+    expect(
+      isReconciledUndo(
+        TransactionStatus.CLEARED,
+        TransactionStatus.UNRECONCILED,
+      ),
+    ).toBe(false);
+    expect(isReconciledUndo(null, TransactionStatus.UNRECONCILED)).toBe(false);
+  });
+});
+
+describe("isWithinReconciledUndoWindow", () => {
+  it("asks the database, on the row's own updated_at and its own clock", async () => {
+    const { manager, query } = managerWith(true, [
+      { within_undo_window: true },
+    ]);
+    await expect(isWithinReconciledUndoWindow(manager, "tx-1")).resolves.toBe(
+      true,
+    );
+    const [sql, params] = query.mock.calls[0];
+    // One clock decides. Comparing a database timestamp against the Node
+    // process's clock would make the window as wide as the drift between them.
+    expect(sql).toContain("clock_timestamp()");
+    expect(sql).toContain("updated_at");
+    expect(params).toEqual(["tx-1", RECONCILED_UNDO_WINDOW_SECONDS]);
+  });
+
+  it("is false once the row is older than the window", async () => {
+    const { manager } = managerWith(true, [{ within_undo_window: false }]);
+    await expect(isWithinReconciledUndoWindow(manager, "tx-1")).resolves.toBe(
+      false,
+    );
+  });
+
+  // An absent row is not a fresh one. Answering true would open the window on
+  // the strength of a row nobody found.
+  it("is false when the row is gone", async () => {
+    const { manager } = managerWith(true, []);
+    await expect(isWithinReconciledUndoWindow(manager, "tx-1")).resolves.toBe(
+      false,
+    );
+  });
+
+  it("is false for anything that is not an explicit true", async () => {
+    const { manager } = managerWith(true, [{ within_undo_window: null }]);
+    await expect(isWithinReconciledUndoWindow(manager, "tx-1")).resolves.toBe(
+      false,
+    );
+  });
+});
+
+/**
+ * The client tells the user how long they have, so it carries the same number.
+ * Two constants in two packages is exactly the drift a comment cannot catch:
+ * a toast promising ten seconds over a server that allows five is a promise the
+ * product breaks on the user's next click.
+ */
+describe("the window's two homes", () => {
+  it("matches the number the frontend prints", () => {
+    const source = readFileSync(
+      join(
+        __dirname,
+        "..",
+        "..",
+        "..",
+        "frontend",
+        "src",
+        "lib",
+        "transaction-status-cycle.ts",
+      ),
+      "utf8",
+    );
+    const declared = source.match(/RECONCILED_UNDO_WINDOW_SECONDS\s*=\s*(\d+)/);
+    expect(declared).not.toBeNull();
+    expect(Number(declared![1])).toBe(RECONCILED_UNDO_WINDOW_SECONDS);
   });
 });

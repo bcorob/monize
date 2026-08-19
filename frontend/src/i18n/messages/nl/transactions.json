@@ -146,6 +146,7 @@
     "status": {
       "voidError": "Bewerk de transactie om de status te wijzigen van Ongeldig",
       "changed": "Status gewijzigd naar {status}",
+      "changedLockedUndo": "Status gewijzigd naar {status}. Afgestemde transacties zijn vergrendeld; druk binnen {seconds} seconden opnieuw om dit ongedaan te maken.",
       "updateError": "Bijwerken van status mislukt",
       "unreconciled": "Niet afgestemd",
       "cleared": "Bevestigd",

@@ -132,6 +132,18 @@ In practice that bans, outside the helper itself:
 Where a module has such a helper, a scanning test should fail on a new call
 site that bypasses it, in the manner of
 `frontend/src/test/ui-conventions.test.ts`.
+`backend/src/common/time-series/price-boundary.one-door.spec.ts` is that test.
+
+One deliberate exception lives **inside** the door rather than beside it:
+`backend/src/common/time-series/nearest-observation.ts` answers "what is the
+closest thing anybody ever observed", unbounded, for a surface that has decided
+an approximation beats refusing the figure (the Account Balances report --
+`docs/specs/account-balances-as-of.md` sections 4.2 and 7.2). It is not a
+value-for-a-date and must never be used as one, which is why it returns the
+observation's **date** alongside its value and why every consumer has to carry
+that date through to the user. The bound above is what tells such a caller the
+date has no price in the first place; the substitution is explicit, marked, and
+after the fact.
 
 ### 2.2 An exchange rate is a price
 

@@ -192,6 +192,10 @@
     "colGroup": "分組",
     "noAccountsForFilters": "沒有科目符合目前的篩選條件。",
     "noAccountsOnDate": "{date} 時您的科目均不存在。",
+    "approximatedNotice": "部分金額使用最接近的可用價格與匯率，而非 {date} 當天的資料。",
+    "approximatedPrices": "{count, plural, one {# 項持倉} other {# 項持倉}}以最接近的可用日期定價。",
+    "approximatedRates": "按最接近的可用匯率換算：{pairs}。",
+    "approximatedRateOn": "{date} 的 {currency}",
     "accountTypes": {
       "CHEQUING": "活期存款",
       "SAVINGS": "儲蓄存款",

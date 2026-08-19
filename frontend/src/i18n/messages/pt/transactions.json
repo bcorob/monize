@@ -146,6 +146,7 @@
     "status": {
       "voidError": "Edite a transação para alterar o estado de Anulada",
       "changed": "Estado alterado para {status}",
+      "changedLockedUndo": "Estado alterado para {status}. As transações reconciliadas ficam bloqueadas; prima novamente dentro de {seconds} segundos para anular.",
       "updateError": "Falha ao atualizar o estado",
       "unreconciled": "Não reconciliada",
       "cleared": "Confirmada",

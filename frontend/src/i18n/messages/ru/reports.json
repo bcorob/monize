@@ -192,6 +192,10 @@
     "colGroup": "Группа",
     "noAccountsForFilters": "Ни один счёт не подходит под текущие фильтры.",
     "noAccountsOnDate": "На {date} ни одного вашего счёта ещё не существовало.",
+    "approximatedNotice": "Некоторые суммы используют ближайшие доступные цены и курсы валют, а не значения на {date}.",
+    "approximatedPrices": "{count, plural, one {# позиция оценена} few {# позиции оценены} many {# позиций оценено} other {# позиции оценено}} по ближайшей доступной дате.",
+    "approximatedRates": "Пересчитано по ближайшему доступному курсу: {pairs}.",
+    "approximatedRateOn": "{currency} на {date}",
     "accountTypes": {
       "CHEQUING": "Текущий",
       "SAVINGS": "Сберегательный",

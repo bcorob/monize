@@ -192,6 +192,10 @@
     "colGroup": "[XX-Group-XX]",
     "noAccountsForFilters": "[XX-No accounts match the current filters.-XX]",
     "noAccountsOnDate": "[XX-None of your accounts existed on {date}.-XX]",
+    "approximatedNotice": "[XX-Some figures use the closest available prices and exchange rates, not ones from {date}.-XX]",
+    "approximatedPrices": "[XX-{count, plural, one {# holding is} other {# holdings are}} priced from the closest available date.-XX]",
+    "approximatedRates": "[XX-Converted at the closest available exchange rate: {pairs}.-XX]",
+    "approximatedRateOn": "[XX-{currency} on {date}-XX]",
     "accountTypes": {
       "CHEQUING": "[XX-Chequing-XX]",
       "SAVINGS": "[XX-Savings-XX]",

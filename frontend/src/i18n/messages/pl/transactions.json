@@ -146,6 +146,7 @@
     "status": {
       "voidError": "Edytuj transakcję, aby zmienić jej status z Anulowana",
       "changed": "Zmieniono status na {status}",
+      "changedLockedUndo": "Zmieniono status na {status}. Uzgodnione transakcje są zablokowane; naciśnij ponownie w ciągu {seconds} sekund, aby cofnąć.",
       "updateError": "Nie udało się zaktualizować statusu",
       "unreconciled": "Nieuzgodniona",
       "cleared": "Rozliczona",

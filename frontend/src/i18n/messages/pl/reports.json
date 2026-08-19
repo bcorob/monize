@@ -192,6 +192,10 @@
     "colGroup": "Grupa",
     "noAccountsForFilters": "Żadne konto nie pasuje do bieżących filtrów.",
     "noAccountsOnDate": "Żadne z Twoich kont nie istniało w dniu {date}.",
+    "approximatedNotice": "Niektóre kwoty korzystają z najbliższych dostępnych cen i kursów wymiany, a nie z tych z {date}.",
+    "approximatedPrices": "{count, plural, one {# pozycja jest wyceniona} few {# pozycje są wycenione} many {# pozycji jest wycenionych} other {# pozycji jest wycenionych}} według najbliższej dostępnej daty.",
+    "approximatedRates": "Przeliczono po najbliższym dostępnym kursie wymiany: {pairs}.",
+    "approximatedRateOn": "{currency} z {date}",
     "accountTypes": {
       "CHEQUING": "Rachunek bieżący",
       "SAVINGS": "Oszczędności",

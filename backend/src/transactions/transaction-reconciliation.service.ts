@@ -26,7 +26,11 @@ import {
 import { tr } from "../i18n/translate";
 import { withScopedDb } from "../common/db/scoped-db";
 import { lockTransactionRow } from "../common/db/locks";
-import { assertReconciledRowsMutable } from "./reconciled-lock.util";
+import {
+  assertReconciledRowsMutable,
+  isReconciledUndo,
+  reconciledLockedError,
+} from "./reconciled-lock.util";
 
 /** What a transition resolver returns, or it throws to refuse the transition. */
 interface ResolvedTransition {
@@ -86,14 +90,34 @@ export class TransactionReconciliationService {
         );
       }
 
+      const oldStatus = locked.status as TransactionStatus;
+
       // Strict reconciled lock. A status change away from RECONCILED is an
       // alteration of a reconciled row, so it is refused here alongside edits
       // and deletes -- otherwise "unreconcile, then edit" is the lock's own
       // bypass, one click from the row it protects.
-      await assertReconciledRowsMutable(m, userId, [locked]);
+      //
+      // The exception is the row the user reconciled seconds ago: a click is
+      // not settled history, and with the lock on the very next click used to
+      // be refused, so a misclick on the register's status cell was permanent
+      // and the way out was disabling the lock for the whole ledger. The window
+      // is asked of the row (`isWithinReconciledUndoWindow`), never of the
+      // request, so it is the same ten seconds wherever the click came from.
+      const { undoWindowOpen } = await assertReconciledRowsMutable(
+        m,
+        userId,
+        [locked],
+        { undoWindowFor: transactionId },
+      );
 
-      const oldStatus = locked.status as TransactionStatus;
       const { status, clearReconciledDate } = resolve(oldStatus);
+
+      // Inside the window the lock yields to an undo and to nothing else. A
+      // VOID moves money, and a ten-second door into it is not what "press it
+      // again to take the reconcile back" asked for.
+      if (undoWindowOpen && !isReconciledUndo(oldStatus, status)) {
+        throw reconciledLockedError();
+      }
 
       const wasVoid = oldStatus === TransactionStatus.VOID;
       const isVoid = status === TransactionStatus.VOID;

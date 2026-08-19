@@ -994,6 +994,90 @@ describe("a report never unmounts the date field being typed into", () => {
   });
 });
 
+describe("the pager below a table is the shared ListBottomPager", () => {
+  /** The one file allowed to build that pager -- it *is* the pager. */
+  const PAGER = "/src/components/ui/ListBottomPager.tsx";
+  /** Its sibling above the rows, and the control both of them wrap. */
+  const TOOLBAR_PATH = "/src/components/ui/ListTopToolbar.tsx";
+  const PAGINATION_PATH = "/src/components/ui/Pagination.tsx";
+  /**
+   * Rendering the raw pager. Composing `ListTopToolbar` or `ListBottomPager`
+   * puts a pager on a table without matching this; dropping a `<Pagination>`
+   * under a table by hand does.
+   */
+  const RAW_PAGER = /<Pagination\b/;
+  /**
+   * The standalone list pages, which draw their own pager and predate both
+   * wrappers. Their rows are not a register: there is no top strip, no density
+   * toggle and no single-page count, so there is nothing here for them to
+   * compose. Listed rather than pattern-matched, so adding a fifth is a
+   * decision somebody makes on purpose.
+   */
+  const STANDALONE_LISTS = [
+    "/src/app/currencies/page.tsx",
+    "/src/app/institutions/page.tsx",
+    "/src/app/payees/page.tsx",
+    "/src/app/securities/page.tsx",
+  ];
+
+  it("has no hand-placed pager under a register's table", () => {
+    const offenders = productionSources()
+      .filter(([path]) => path !== PAGER && path !== TOOLBAR_PATH && path !== PAGINATION_PATH)
+      .filter(([path]) => !STANDALONE_LISTS.includes(path))
+      .filter(([, content]) => RAW_PAGER.test(content))
+      .map(([path]) => path);
+
+    // The Transactions page drew this block inline, and the two investment
+    // registers -- which page exactly the same way -- drew nothing at all, so
+    // the end of a page of trades had no controls on it. One component, and
+    // every register ends the same way.
+    expect(offenders).toEqual([]);
+  });
+
+  it("still finds the pager, so the rule cannot pass by accident", () => {
+    const pager = sources[PAGER];
+    expect(pager, `${PAGER} not found -- update PAGER in this test`).toBeTruthy();
+    expect(RAW_PAGER.test(pager)).toBe(true);
+    for (const path of STANDALONE_LISTS) {
+      expect(
+        sources[path],
+        `${path} not found -- update STANDALONE_LISTS in this test`,
+      ).toBeTruthy();
+    }
+  });
+
+  /**
+   * Every register that pages from the strip above its rows pages from below
+   * them too. The two ends are one decision, and it was the halves disagreeing
+   * -- top on one register, bottom on the other -- that this whole family of
+   * rules exists to stop.
+   */
+  it("gives every surface that draws the top strip a bottom pager as well", () => {
+    // The surfaces that own a register's paging state -- the file that hands
+    // the list its `onPageChange` is the one that must also draw the far end of
+    // it, because the top strip lives inside the list and this does not.
+    //
+    // Deliberately not every paging surface: a tab inside a detail panel ends
+    // with the next tab rather than with a pager, and the standalone lists
+    // above compose `Pagination` under their own cards.
+    const REGISTERS = [
+      "/src/app/transactions/page.tsx",
+      "/src/app/investments/page.tsx",
+      "/src/components/investments/InvestmentRegisterPanel.tsx",
+    ];
+
+    const missing = REGISTERS.filter((path) => {
+      expect(
+        sources[path],
+        `${path} not found -- update REGISTERS in this test`,
+      ).toBeTruthy();
+      return !/ListBottomPager/.test(sources[path]);
+    });
+
+    expect(missing).toEqual([]);
+  });
+});
+
 describe("the bar above a table is the shared ListTopToolbar", () => {
   /** The one file allowed to build that bar -- it *is* the bar. */
   const TOOLBAR = "/src/components/ui/ListTopToolbar.tsx";

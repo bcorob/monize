@@ -192,6 +192,10 @@
     "colGroup": "グループ",
     "noAccountsForFilters": "現在のフィルターに一致する口座はありません。",
     "noAccountsOnDate": "{date} 時点では、いずれの口座もまだ存在していません。",
+    "approximatedNotice": "一部の金額は {date} の価格や為替レートではなく、最も近い利用可能なものを使用しています。",
+    "approximatedPrices": "{count, plural, one {# 件の保有} other {# 件の保有}}は、最も近い利用可能な日付の価格で評価されています。",
+    "approximatedRates": "最も近い利用可能な為替レートで換算: {pairs}。",
+    "approximatedRateOn": "{date} 時点の {currency}",
     "accountTypes": {
       "CHEQUING": "当座預金",
       "SAVINGS": "普通預金",

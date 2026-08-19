@@ -132,6 +132,7 @@
   },
   "transactionList": {
     "itemNamePlural": "transakcji",
+    "totalCount": "{count, plural, one {# transakcja} few {# transakcje} many {# transakcji} other {# transakcji}}",
     "title": "Ostatnie transakcje",
     "filtered": "(przefiltrowane)",
     "newBrokerageTransaction": "+ Nowa transakcja maklerska",

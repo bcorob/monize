@@ -192,6 +192,10 @@
     "colGroup": "Nhóm",
     "noAccountsForFilters": "Không có tài khoản nào khớp với bộ lọc hiện tại.",
     "noAccountsOnDate": "Không có tài khoản nào của bạn tồn tại vào {date}.",
+    "approximatedNotice": "Một số số liệu dùng giá và tỷ giá gần nhất hiện có, không phải của {date}.",
+    "approximatedPrices": "{count, plural, one {# khoản nắm giữ được} other {# khoản nắm giữ được}} định giá theo ngày gần nhất hiện có.",
+    "approximatedRates": "Quy đổi theo tỷ giá gần nhất hiện có: {pairs}.",
+    "approximatedRateOn": "{currency} ngày {date}",
     "accountTypes": {
       "CHEQUING": "Tài khoản hàng ngày",
       "SAVINGS": "Tiết kiệm",

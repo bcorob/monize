@@ -825,7 +825,12 @@ describe('InvestmentsPage', () => {
       expect(screen.getByTestId('brokerage-symbols')).not.toHaveTextContent('AAPL');
     });
 
-    it('draws no second pager of its own below the register', async () => {
+    // The register pages from the strip above its rows *and* from below them,
+    // the way the Transactions page does: a reader who has just scrolled a page
+    // of trades meets the controls where they finished rather than scrolling
+    // back up for them. The top strip lives inside the list (which this suite
+    // stubs); the bottom pager is drawn by the page, outside the card.
+    it('pages the register from below the rows as well as above them', async () => {
       mockGetTransactions.mockResolvedValue({
         data: Array.from({ length: 25 }, (_, i) => ({ id: `tx-${i}`, action: 'BUY' })),
         pagination: { page: 1, totalPages: 3, total: 75 },
@@ -835,7 +840,23 @@ describe('InvestmentsPage', () => {
       await waitFor(() => {
         expect(screen.getByTestId('transaction-list')).toBeInTheDocument();
       });
+      expect(screen.getByTestId('pagination')).toHaveTextContent('Page 1 of 3');
+    });
+
+    // An inert pager at the end of a list says nothing, so the count says it
+    // instead -- the same substitution the Transactions page makes.
+    it('draws the count below the rows when everything fits on one page', async () => {
+      mockGetTransactions.mockResolvedValue({
+        data: [{ id: 'tx-1', action: 'BUY' }],
+        pagination: { page: 1, totalPages: 1, total: 1 },
+      });
+      await renderPage();
+
+      await waitFor(() => {
+        expect(screen.getByTestId('transaction-list')).toBeInTheDocument();
+      });
       expect(screen.queryByTestId('pagination')).not.toBeInTheDocument();
+      expect(screen.getByText('1 transaction')).toBeInTheDocument();
     });
   });
 

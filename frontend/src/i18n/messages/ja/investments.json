@@ -132,6 +132,7 @@
   },
   "transactionList": {
     "itemNamePlural": "件の取引",
+    "totalCount": "{count, plural, one {# 件の取引} other {# 件の取引}}",
     "title": "最近の取引",
     "filtered": "（フィルタ済み）",
     "newBrokerageTransaction": "+ 新規証券取引",

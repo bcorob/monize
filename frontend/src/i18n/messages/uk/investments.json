@@ -132,6 +132,7 @@
   },
   "transactionList": {
     "itemNamePlural": "транзакцій",
+    "totalCount": "{count, plural, one {# транзакція} other {# транзакцій}}",
     "title": "Останні транзакції",
     "filtered": "(відфільтровано)",
     "newBrokerageTransaction": "+ Нова брокерська транзакція",

@@ -22,11 +22,24 @@ import { roundFxRate } from "../common/fx-entry.util";
 import { withScopedDb } from "../common/db/scoped-db";
 import { returnedRows } from "../common/db/query-result";
 import { withSystemContext, withUserContext } from "../common/db/with-context";
+import {
+  EmptyWindowMemory,
+  monthFetchWindow,
+} from "../common/time-series/history-fill";
 
 // Cap concurrent Yahoo FX fetches so the daily refresh does not burst every
 // currency pair at once (this cron also runs alongside the security price
 // refresh, so the combined load on Yahoo needs to stay bounded).
 const FX_FETCH_CONCURRENCY = 6;
+
+/**
+ * A pair key that does not distinguish direction, because a fetch does not
+ * either: one provider call is persisted both ways, so USD->CAD and CAD->USD
+ * are one unit of work and one negative-cache entry.
+ */
+function directionlessPairKey(from: string, to: string): string {
+  return [from, to].sort().join("|");
+}
 
 export interface RateUpdateResult {
   pair: string;
@@ -61,6 +74,9 @@ export interface HistoricalRateBackfillSummary {
 @Injectable()
 export class ExchangeRateService implements OnModuleInit {
   private readonly logger = new Logger(ExchangeRateService.name);
+
+  /** Pair-months the provider answered with nothing. See `EmptyWindowMemory`. */
+  private readonly emptyRateWindows = new EmptyWindowMemory();
 
   constructor(
     private dataSource: DataSource,
@@ -194,6 +210,7 @@ export class ExchangeRateService implements OnModuleInit {
     const symbol = `${from}${to}=X`;
     const prices = await this.yahooFinanceService.fetchHistoricalWindow(
       symbol,
+      null,
       fromDate,
       toDate,
     );
@@ -670,6 +687,135 @@ export class ExchangeRateService implements OnModuleInit {
   }
 
   /**
+   * Make sure the stored series can answer `date` for each pair, fetching from
+   * the provider the ones it cannot.
+   *
+   * The daily refresh only ever writes today, and `backfillHistoricalRates`
+   * skips a pair the moment it has *any* row -- so a user whose USD/CAD history
+   * starts at their import has nothing at all for 2017, and a point-in-time
+   * report asked about that year cannot present a USD account in CAD or value a
+   * USD holding inside a CAD brokerage. Neither is a number to guess at: the
+   * report reports the pair as missing and the total goes null, which is what
+   * the user sees as "Total unavailable". The rates are simply not there yet,
+   * so this fetches them.
+   *
+   * **The unit is a calendar month, not a day.** One provider call returns the
+   * whole daily series for whatever period it is asked for and costs the same
+   * either way, so asking for the month around `date` -- plus
+   * `BOUNDARY_LAG_DAYS` of lead, which is the span `closeAt` may reach back
+   * over, so the first days of the month are answerable too -- makes every
+   * other date in that month a database read. A user stepping a report back
+   * through a year pays twelve calls per pair rather than three hundred.
+   *
+   * Best-effort by construction: it is called from a read path, so a provider
+   * failure is logged and the report renders with the pair still missing rather
+   * than the request failing. Callers decide which pairs are missing; this does
+   * not re-check the database, and it never invents a rate -- a pair the
+   * provider has no data for stays absent.
+   *
+   * Returns the number of daily observations persisted.
+   */
+  async ensureRatesForDate(
+    pairs: ReadonlyArray<{ from: string; to: string }>,
+    date: string,
+  ): Promise<number> {
+    // `persistRateSeries` writes both directions from one fetch, so USD->CAD
+    // and CAD->USD are the same piece of work and must not be fetched twice.
+    const wanted = new Map<string, { from: string; to: string }>();
+    for (const pair of pairs) {
+      if (!pair.from || !pair.to || pair.from === pair.to) continue;
+      const key = directionlessPairKey(pair.from, pair.to);
+      if (!wanted.has(key)) wanted.set(key, pair);
+    }
+    if (wanted.size === 0) return 0;
+
+    const month = date.slice(0, 7);
+    const due = [...wanted.entries()].filter(
+      ([key]) => !this.emptyRateWindows.has(key, month),
+    );
+    if (due.length === 0) return 0;
+
+    const [start, end] = monthFetchWindow(date);
+    this.logger.log(
+      `Fetching historical rates for ${due.map(([, p]) => `${p.from}/${p.to}`).join(", ")} over ${start} to ${end}`,
+    );
+
+    const loaded = await mapWithConcurrency(
+      due,
+      FX_FETCH_CONCURRENCY,
+      async ([key, pair]) => {
+        try {
+          const stored = await this.fillRateWindow(
+            pair.from,
+            pair.to,
+            start,
+            end,
+          );
+          if (stored === 0) {
+            // Nothing exists for this pair in this era -- a currency that
+            // predates the provider's history, or one it does not carry. Note
+            // it, so a report reloaded on the same date does not re-ask.
+            this.emptyRateWindows.remember(key, month);
+            this.logger.warn(
+              `No historical rates available for ${pair.from}/${pair.to} over ${start} to ${end}`,
+            );
+          }
+          return stored;
+        } catch (error) {
+          this.logger.warn(
+            `Historical rate fetch ${pair.from}->${pair.to} over ${start} to ${end} failed: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          );
+          return 0;
+        }
+      },
+    );
+
+    return loaded.reduce((sum, count) => sum + count, 0);
+  }
+
+  /**
+   * One pair, one window, persisted in both directions.
+   *
+   * The reverse symbol is tried when the direct one returns nothing, because
+   * Yahoo carries some pairs under one orientation only and
+   * `persistRateSeries` writes the inverse row regardless -- so `CADUSD=X`
+   * answers a `USD->CAD` question just as well.
+   */
+  private async fillRateWindow(
+    from: string,
+    to: string,
+    start: string,
+    end: string,
+  ): Promise<number> {
+    const startDate = new Date(`${start}T00:00:00.000Z`);
+    const endDate = new Date(`${end}T23:59:59.999Z`);
+
+    const direct = await this.fetchYahooHistoricalRatesWindow(
+      from,
+      to,
+      startDate,
+      endDate,
+    );
+    if (direct && direct.length > 0) {
+      return this.persistRateSeries(from, to, direct);
+    }
+
+    const reverse = await this.fetchYahooHistoricalRatesWindow(
+      to,
+      from,
+      startDate,
+      endDate,
+    );
+    if (reverse && reverse.length > 0) {
+      return this.persistRateSeries(to, from, reverse);
+    }
+
+    return 0;
+  }
+
+  /**
    * Get the latest exchange rates (most recent per currency pair)
    */
   async getLatestRates(): Promise<ExchangeRate[]> {
@@ -763,8 +909,8 @@ export class ExchangeRateService implements OnModuleInit {
 
     // 0. Clamp a future date to today: today's rate is the best available
     //    estimate, and it is the same figure the bills list is showing.
-    const todayYMD = new Date().toISOString().slice(0, 10);
-    const target = requested > todayYMD ? todayYMD : requested;
+    const todayUtc = new Date().toISOString().slice(0, 10);
+    const target = requested > todayUtc ? todayUtc : requested;
     const targetDate = new Date(`${target}T00:00:00.000Z`);
 
     // 1. Closest stored rate on or before the target date (carry-forward over

@@ -192,6 +192,10 @@
     "colGroup": "Grup",
     "noAccountsForFilters": "Geçerli filtrelerle eşleşen hesap yok.",
     "noAccountsOnDate": "{date} tarihinde hesaplarınızın hiçbiri mevcut değildi.",
+    "approximatedNotice": "Bazı tutarlar {date} tarihli fiyat ve döviz kurları yerine en yakın mevcut değerleri kullanıyor.",
+    "approximatedPrices": "{count, plural, one {# varlık} other {# varlık}} en yakın mevcut tarihe göre değerlendi.",
+    "approximatedRates": "En yakın mevcut döviz kuruyla çevrildi: {pairs}.",
+    "approximatedRateOn": "{date} tarihli {currency}",
     "accountTypes": {
       "CHEQUING": "Çek Hesabı",
       "SAVINGS": "Tasarruf",

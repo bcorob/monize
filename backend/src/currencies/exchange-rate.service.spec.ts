@@ -16,6 +16,15 @@ jest.mock("../common/db/scoped-db", () =>
   jest.requireActual("../test-helpers/scoped-db-testing").scopedDbMockModule(),
 );
 
+// `ensureRatesForDate` clamps its fetch window at today, so today has to be a
+// fixture: otherwise "does this month run past today" is a question about the
+// day the suite happens to run on. Only `todayYMD` is replaced -- the month
+// arithmetic beside it is the real thing.
+jest.mock("../common/date-utils", () => ({
+  ...jest.requireActual("../common/date-utils"),
+  todayYMD: jest.fn(() => "2026-08-18"),
+}));
+
 describe("ExchangeRateService", () => {
   let service: ExchangeRateService;
   let exchangeRateRepository: Record<string, jest.Mock>;
@@ -925,7 +934,7 @@ describe("ExchangeRateService", () => {
       expect(yahooFinanceService.fetchHistoricalWindow).toHaveBeenCalledTimes(
         1,
       );
-      const [sym, fromDate, toDate] =
+      const [sym, , fromDate, toDate] =
         yahooFinanceService.fetchHistoricalWindow.mock.calls[0];
       expect(sym).toBe("EURPLN=X");
       // Window brackets the target date, and is wide enough to be worth
@@ -1370,6 +1379,236 @@ describe("ExchangeRateService", () => {
 
       // Should not throw
       await expect(service.scheduledRateRefresh()).resolves.toBeUndefined();
+    });
+  });
+  /**
+   * On-demand historical fill, for the pairs a point-in-time report cannot
+   * convert (issue: "Total unavailable" on the Account Balances report as the
+   * date moves back through years the daily refresh never covered).
+   */
+  describe("ensureRatesForDate", () => {
+    /** Every row the bulk upsert wrote, flattened out of its parameter list. */
+    let inserted: Array<{
+      from: string;
+      to: string;
+      date: string;
+      rate: number;
+    }>;
+
+    const ymd = (date: Date): string => date.toISOString().slice(0, 10);
+
+    beforeEach(() => {
+      inserted = [];
+      dataSource.query.mockImplementation(
+        async (sql: string, params?: unknown[]) => {
+          if (
+            typeof sql === "string" &&
+            sql.includes("INSERT INTO exchange_rates") &&
+            Array.isArray(params)
+          ) {
+            for (let i = 0; i < params.length; i += 4) {
+              inserted.push({
+                from: params[i] as string,
+                to: params[i + 1] as string,
+                date: ymd(params[i + 2] as Date),
+                rate: params[i + 3] as number,
+              });
+            }
+          }
+          return [];
+        },
+      );
+    });
+
+    // One provider call returns the whole daily series for whatever period it is
+    // asked for and costs the same either way, so the unit is a calendar month --
+    // plus the lead `closeAt` may reach back over, without which the first days
+    // of the month would have nothing to carry forward from.
+    it("fetches the whole month, with the boundary lead the lookup needs", async () => {
+      yahooFinanceService.fetchHistoricalWindow.mockResolvedValue([
+        { date: new Date("2017-08-17T00:00:00Z"), close: 1.27 },
+      ]);
+
+      const loaded = await service.ensureRatesForDate(
+        [{ from: "USD", to: "CAD" }],
+        "2017-08-18",
+      );
+
+      expect(loaded).toBe(1);
+      expect(yahooFinanceService.fetchHistoricalWindow).toHaveBeenCalledTimes(
+        1,
+      );
+      const [symbol, , start, end] =
+        yahooFinanceService.fetchHistoricalWindow.mock.calls[0];
+      expect(symbol).toBe("USDCAD=X");
+      expect(ymd(start)).toBe("2017-07-18");
+      expect(ymd(end)).toBe("2017-08-31");
+    });
+
+    it("persists both directions from the one call", async () => {
+      yahooFinanceService.fetchHistoricalWindow.mockResolvedValue([
+        { date: new Date("2017-08-17T00:00:00Z"), close: 1.25 },
+      ]);
+
+      await service.ensureRatesForDate(
+        [{ from: "USD", to: "CAD" }],
+        "2017-08-18",
+      );
+
+      expect(inserted).toEqual([
+        { from: "USD", to: "CAD", date: "2017-08-17", rate: 1.25 },
+        { from: "CAD", to: "USD", date: "2017-08-17", rate: 0.8 },
+      ]);
+    });
+
+    // One fetch writes both directions, so USD->CAD and CAD->USD are one unit of
+    // work -- fetching each would be the same request twice.
+    it("asks once for a pair named in both directions", async () => {
+      yahooFinanceService.fetchHistoricalWindow.mockResolvedValue([
+        { date: new Date("2017-08-17T00:00:00Z"), close: 1.25 },
+      ]);
+
+      await service.ensureRatesForDate(
+        [
+          { from: "USD", to: "CAD" },
+          { from: "CAD", to: "USD" },
+        ],
+        "2017-08-18",
+      );
+
+      expect(yahooFinanceService.fetchHistoricalWindow).toHaveBeenCalledTimes(
+        1,
+      );
+    });
+
+    it("ignores a pair whose two sides are the same currency", async () => {
+      const loaded = await service.ensureRatesForDate(
+        [{ from: "CAD", to: "CAD" }],
+        "2017-08-18",
+      );
+
+      expect(loaded).toBe(0);
+      expect(yahooFinanceService.fetchHistoricalWindow).not.toHaveBeenCalled();
+    });
+
+    // Yahoo carries some pairs under one orientation only, and the inverse row
+    // is written either way -- so `CADUSD=X` answers a USD->CAD question.
+    it("falls back to the reverse symbol when the direct one has nothing", async () => {
+      yahooFinanceService.fetchHistoricalWindow.mockImplementation(
+        async (symbol: string) =>
+          symbol === "CADUSD=X"
+            ? [{ date: new Date("2017-08-17T00:00:00Z"), close: 0.8 }]
+            : null,
+      );
+
+      const loaded = await service.ensureRatesForDate(
+        [{ from: "USD", to: "CAD" }],
+        "2017-08-18",
+      );
+
+      expect(loaded).toBe(1);
+      expect(inserted).toEqual([
+        { from: "CAD", to: "USD", date: "2017-08-17", rate: 0.8 },
+        { from: "USD", to: "CAD", date: "2017-08-17", rate: 1.25 },
+      ]);
+    });
+
+    // The one case the fetch can never satisfy is the one that would otherwise
+    // repeat on every page load: a date before the pair's history begins.
+    it("does not ask again for a pair-month the provider had nothing for", async () => {
+      yahooFinanceService.fetchHistoricalWindow.mockResolvedValue(null);
+
+      await service.ensureRatesForDate(
+        [{ from: "USD", to: "CAD" }],
+        "2017-08-18",
+      );
+      const afterFirst =
+        yahooFinanceService.fetchHistoricalWindow.mock.calls.length;
+      expect(afterFirst).toBeGreaterThan(0);
+
+      const loaded = await service.ensureRatesForDate(
+        [{ from: "CAD", to: "USD" }],
+        "2017-08-30",
+      );
+
+      expect(loaded).toBe(0);
+      expect(yahooFinanceService.fetchHistoricalWindow).toHaveBeenCalledTimes(
+        afterFirst,
+      );
+    });
+
+    it("does ask again for a different month", async () => {
+      yahooFinanceService.fetchHistoricalWindow.mockResolvedValue(null);
+
+      await service.ensureRatesForDate(
+        [{ from: "USD", to: "CAD" }],
+        "2017-08-18",
+      );
+      const afterFirst =
+        yahooFinanceService.fetchHistoricalWindow.mock.calls.length;
+
+      await service.ensureRatesForDate(
+        [{ from: "USD", to: "CAD" }],
+        "2017-09-18",
+      );
+
+      expect(
+        yahooFinanceService.fetchHistoricalWindow.mock.calls.length,
+      ).toBeGreaterThan(afterFirst);
+    });
+
+    // The market has not been to the end of this month yet, so nothing asks it.
+    it("clamps the window at today", async () => {
+      yahooFinanceService.fetchHistoricalWindow.mockResolvedValue([
+        { date: new Date("2026-08-17T00:00:00Z"), close: 1.4 },
+      ]);
+
+      await service.ensureRatesForDate(
+        [{ from: "USD", to: "CAD" }],
+        "2026-08-18",
+      );
+
+      const [, , start, end] =
+        yahooFinanceService.fetchHistoricalWindow.mock.calls[0];
+      expect(ymd(start)).toBe("2026-07-18");
+      expect(ymd(end)).toBe("2026-08-18");
+    });
+
+    // Best-effort by construction: this runs inside a read the database could
+    // answer for every other pair.
+    it("lets the other pairs through when one provider call fails", async () => {
+      yahooFinanceService.fetchHistoricalWindow.mockImplementation(
+        async (symbol: string) => {
+          if (symbol.startsWith("USD")) throw new Error("rate limited");
+          if (symbol === "EURCAD=X")
+            return [{ date: new Date("2017-08-17T00:00:00Z"), close: 1.47 }];
+          return null;
+        },
+      );
+
+      const loaded = await service.ensureRatesForDate(
+        [
+          { from: "USD", to: "CAD" },
+          { from: "EUR", to: "CAD" },
+        ],
+        "2017-08-18",
+      );
+
+      expect(loaded).toBe(1);
+      expect(inserted).toContainEqual({
+        from: "EUR",
+        to: "CAD",
+        date: "2017-08-17",
+        rate: 1.47,
+      });
+    });
+
+    it("does nothing at all when asked for no pairs", async () => {
+      const loaded = await service.ensureRatesForDate([], "2017-08-18");
+
+      expect(loaded).toBe(0);
+      expect(yahooFinanceService.fetchHistoricalWindow).not.toHaveBeenCalled();
+      expect(dataSource.query).not.toHaveBeenCalled();
     });
   });
 });

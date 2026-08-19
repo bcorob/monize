@@ -328,6 +328,18 @@ export interface AccountBalanceAsOf {
   /** Read as `=== false`: an older backend sends no field, which is not "incomplete". */
   valuationComplete: boolean;
   /**
+   * Held positions valued at the closest close the server could find, because
+   * nothing was observed for the as-of date itself. The figure is a real
+   * observation from another day, so it counts as known -- and has to be shown
+   * as an approximation. Read as `?? 0`: an older backend sends no field.
+   */
+  approximatedPriceCount: number;
+  /**
+   * `"USD->CAD"` for each pair converted at the closest rate to the as-of date
+   * rather than one that stood on it. Read as `?? []`.
+   */
+  approximatedRatePairs: string[];
+  /**
    * Whether the account existed at the as-of date.
    *
    * Its inception is an asset's acquisition date, or otherwise its first
@@ -352,5 +364,15 @@ export interface AccountBalancesAsOfResponse {
    * `components/reports/account-balances/as-of-rates.ts`.
    */
   displayRates: Record<string, number>;
+  /**
+   * Currency -> the date its rate in `displayRates` was actually struck on, for
+   * the currencies converted at the closest observation rather than at a rate
+   * that stood on the as-of date.
+   *
+   * Absent from here means the rate stood on the date; absent from
+   * `displayRates` means there is no rate at all. The two absences mean
+   * opposite things, which is why the approximation is named separately.
+   */
+  approximatedDisplayRates: Record<string, string>;
   accounts: AccountBalanceAsOf[];
 }

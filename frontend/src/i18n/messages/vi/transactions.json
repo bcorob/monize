@@ -146,6 +146,7 @@
     "status": {
       "voidError": "Chỉnh sửa giao tác để thay đổi trạng thái từ Hủy bỏ",
       "changed": "Trạng thái đã thay đổi thành {status}",
+      "changedLockedUndo": "Đã đổi trạng thái thành {status}. Giao dịch đã đối chiếu bị khóa; nhấn lại trong {seconds} giây để hoàn tác.",
       "updateError": "Không thể cập nhật trạng thái",
       "unreconciled": "Chưa điều hoà",
       "cleared": "Đã xong",

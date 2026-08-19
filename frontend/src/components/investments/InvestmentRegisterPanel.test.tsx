@@ -879,18 +879,20 @@ describe('InvestmentRegisterPanel', () => {
     };
 
     /**
-     * Where the pager sits relative to the rows it pages.
+     * Where each pager sits relative to the rows it pages.
      *
-     * The claim is about reading order, not about which component rendered it:
-     * a pager below the table is one the user meets only after scrolling past
-     * everything it could have helped them skip.
+     * The claim is about reading order, not about which component rendered it.
+     * A register has one at each end: the strip above the rows, so the controls
+     * are met before scrolling past everything they could have helped skip, and
+     * a second below, so a reader who did scroll finds them where they finished.
      */
-    const pagerIsAboveTheTable = () => {
-      const pager = screen.getByTitle('Next page');
+    const pagerPositions = () => {
       const table = document.querySelector('table')!;
-      // Node.DOCUMENT_POSITION_FOLLOWING: the table comes after the pager.
-      return Boolean(
-        pager.compareDocumentPosition(table) & Node.DOCUMENT_POSITION_FOLLOWING,
+      return screen.getAllByTitle('Next page').map((pager) =>
+        // Node.DOCUMENT_POSITION_FOLLOWING: the table comes after the pager.
+        pager.compareDocumentPosition(table) & Node.DOCUMENT_POSITION_FOLLOWING
+          ? 'above'
+          : 'below',
       );
     };
 
@@ -904,32 +906,26 @@ describe('InvestmentRegisterPanel', () => {
       });
     });
 
-    it('pages the brokerage register from above its rows', async () => {
+    it('pages the brokerage register from both ends of its rows', async () => {
       await renderPanel(brokerage, cash);
 
-      expect(pagerIsAboveTheTable()).toBe(true);
+      expect(pagerPositions()).toEqual(['above', 'below']);
     });
 
-    it("puts the cash register's pager in the same place", async () => {
+    it("puts the cash register's pagers in the same places", async () => {
       // The point of the change: one account's two ledgers, one toggle apart,
-      // page from the same row of controls.
+      // page from the same rows of controls.
       await renderPanel(brokerage, cash);
       await switchToCash();
 
-      expect(pagerIsAboveTheTable()).toBe(true);
+      expect(pagerPositions()).toEqual(['above', 'below']);
     });
 
-    it('draws exactly one brokerage pager, not one above and one below', async () => {
-      await renderPanel(brokerage, cash);
-
-      expect(screen.getAllByTitle('Next page')).toHaveLength(1);
-    });
-
-    it('asks for the next page of trades when the pager advances', async () => {
+    it('asks for the next page of trades when the top pager advances', async () => {
       await renderPanel(brokerage, cash);
 
       await act(async () => {
-        fireEvent.click(screen.getByTitle('Next page'));
+        fireEvent.click(screen.getAllByTitle('Next page')[0]);
       });
 
       expect(investmentsApi.getTransactions).toHaveBeenLastCalledWith(
@@ -937,7 +933,35 @@ describe('InvestmentRegisterPanel', () => {
       );
     });
 
-    it('keeps one density toggle when the pager moves into the strip', async () => {
+    // Both ends drive the same state. A second pager wired to a stale page
+    // number, or to nothing, is worse than not drawing one.
+    it('asks for the next page of trades when the bottom pager advances', async () => {
+      await renderPanel(brokerage, cash);
+
+      await act(async () => {
+        fireEvent.click(screen.getAllByTitle('Next page')[1]);
+      });
+
+      expect(investmentsApi.getTransactions).toHaveBeenLastCalledWith(
+        expect.objectContaining({ accountIds: 'brok', page: 2 }),
+      );
+    });
+
+    // An inert pager at the end of a list says nothing; the count does.
+    it('draws the count below a register that fits on one page', async () => {
+      (investmentsApi.getTransactions as ReturnType<typeof vi.fn>).mockResolvedValue({
+        ...manyTrades,
+        pagination: { total: 1, page: 1, limit: 25, totalPages: 1 },
+      });
+      await renderPanel(brokerage, cash);
+
+      // The strip above keeps its pager -- that line answers "did the filter
+      // work?" -- so what changes is only what is drawn below the rows.
+      expect(pagerPositions()).toEqual(['above']);
+      expect(screen.getByText('1 transaction')).toBeInTheDocument();
+    });
+
+    it('keeps one density toggle, which the bottom pager does not repeat', async () => {
       await renderPanel(brokerage, cash);
 
       expect(screen.getAllByTitle('Toggle row density')).toHaveLength(1);

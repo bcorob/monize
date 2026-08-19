@@ -192,6 +192,10 @@
     "colGroup": "그룹",
     "noAccountsForFilters": "현재 필터와 일치하는 계정이 없습니다.",
     "noAccountsOnDate": "{date} 시점에는 존재하는 계정이 없습니다.",
+    "approximatedNotice": "일부 금액은 {date}의 가격과 환율이 아니라 가장 가까운 날짜의 값을 사용합니다.",
+    "approximatedPrices": "{count, plural, one {# 종목} other {# 종목}}이 가장 가까운 날짜의 가격으로 평가되었습니다.",
+    "approximatedRates": "가장 가까운 날짜의 환율로 환산: {pairs}.",
+    "approximatedRateOn": "{date}의 {currency}",
     "accountTypes": {
       "CHEQUING": "당좌예금",
       "SAVINGS": "저축예금",

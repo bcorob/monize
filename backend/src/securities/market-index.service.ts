@@ -406,6 +406,7 @@ export class MarketIndexService implements OnApplicationBootstrap {
         chunks.map(({ start, end }) =>
           this.yahooFinanceService.fetchHistoricalWindow(
             index.yahooSymbol,
+            null,
             new Date(`${start}T00:00:00Z`),
             new Date(`${end}T23:59:59Z`),
           ),
