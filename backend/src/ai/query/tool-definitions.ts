@@ -461,7 +461,7 @@ export const FINANCIAL_TOOLS: AiToolDefinition[] = [
       "Create, update, or delete the user's cash transactions (including transfers between their own accounts). This does NOT change anything immediately: it shows the user one or more confirmation cards they must explicitly approve before anything is saved. Use it only when the user clearly asks to add, edit, categorize, transfer, or delete a transaction in their latest message. Accepts NAMES for account, category, and payee -- they are resolved internally, so you do NOT need to look up IDs first. " +
       "operation = 'create' | 'update' | 'delete'. Provide an 'items' array (1-25 rows). " +
       "create (standard): { accountName, amount, date, payeeName?, categoryName?, description?, createPayeeIfMissing? } -- amount is positive for income, negative for expenses. " +
-      "create (transfer): { fromAccountName, toAccountName, amount, date, description?, payeeName?, categoryName?, createPayeeIfMissing?, exchangeRate?, toAmount? } -- an item is a transfer when toAccountName is present; amount is the positive transfer amount (exchangeRate/toAmount only for cross-currency); payeeName is an optional custom label for the transfer, matched to an existing payee (or created if missing, like a normal transaction) and applied to both legs (omit to auto-generate 'Transfer to/from <account>'); categoryName is an optional spending category stored on both legs (surfaces the transfer in the monthly category breakdown without counting as income/expense). " +
+      "create (transfer): { fromAccountName, toAccountName, amount, date, description?, payeeName?, categoryName?, createPayeeIfMissing?, exchangeRate?, toAmount? } -- an item is a transfer when toAccountName is present; amount is the positive transfer amount (exchangeRate/toAmount only for cross-currency); payeeName is an optional custom label for the transfer, matched to an existing payee (or created if missing, like a normal transaction) and applied to both legs (omit to leave the payee blank; blank transfer payees display as 'Transfer to/from <account>' resolved from the current account name); categoryName is an optional spending category stored on both legs (surfaces the transfer in the monthly category breakdown without counting as income/expense). " +
       "update: { transactionId, amount?, date?, payeeName?, categoryName?, description?, createPayeeIfMissing? } -- provide only the fields to change (at least one); a category-only change is just transactionId + categoryName. First call search_transactions to obtain the transactionId. Transfers are auto-detected and edited correctly; for a transfer, categoryName is stored on both legs and surfaces the transfer in the monthly category breakdown (without making it count as income/expense), and payeeName sets its custom label (matched to an existing payee or created if missing, like a normal transaction). " +
       "split transactions (create or update): add a 'splits' array of { categoryName, amount, memo? } (>= 2 lines, category splits only) instead of a single categoryName; the split amounts must sum to the transaction amount (e.g. a -100 expense split -60 Groceries / -40 Household). On create also give accountName, amount, date; on update give transactionId and splits (replaces the whole split set). Updating an EXISTING split transaction: parent fields (date, payeeName, description) work without splits, but changing its categories or its amount requires resending the COMPLETE splits array (the tool errors with instructions otherwise). Read tools return one row per split line (same transaction id, distinct splitId), and always the COMPLETE set for each transaction even when you filtered by category -- so read the current lines first, then resend all of them with your change applied. Several split transactions CAN go in one call: give each item its own complete splits array, and every row is previewed and applied with its own set (up to 25 rows). Only one proposing tool call is allowed per reply, so send them as ONE call with many items rather than several calls. Never promise cards for transactions you have not proposed. " +
       "delete: { transactionId } -- removes the transaction (and any linked transfer legs / split children). First call search_transactions to obtain the transactionId. " +
@@ -516,7 +516,7 @@ export const FINANCIAL_TOOLS: AiToolDefinition[] = [
               payeeName: {
                 type: "string",
                 description:
-                  "Optional payee name (standard create/update; matched to an existing payee when one exists, otherwise handled per createPayeeIfMissing). For a transfer (create/update), this is a custom label applied to both legs that is matched to an existing payee when one exists, otherwise handled per createPayeeIfMissing (omit to auto-generate 'Transfer to/from <account>').",
+                  "Optional payee name (standard create/update; matched to an existing payee when one exists, otherwise handled per createPayeeIfMissing). For a transfer (create/update), this is a custom label applied to both legs that is matched to an existing payee when one exists, otherwise handled per createPayeeIfMissing (omit to leave the payee blank; blank transfer payees display as 'Transfer to/from <account>' resolved from the current account name).",
               },
               categoryName: {
                 type: "string",
@@ -597,7 +597,7 @@ export const FINANCIAL_TOOLS: AiToolDefinition[] = [
   {
     name: "manage_payees",
     description:
-      "Create, edit, or delete the user's payees. This does NOT change anything immediately: it shows the user a confirmation card (or cards) they must approve. operation = 'create' | 'update' | 'delete' with an items array (1-25 rows). create: { name, categoryName? }. update: { name, newName?, categoryName? } (name identifies the existing payee; provide newName to rename and/or categoryName to set the default category; an empty categoryName clears it; at least one change is required). delete: { name }. approvalMode = 'bulk' (default; one card for the whole batch) or 'individual' (one card per item); ignored for a single item. Accepts NAMES (payee + category) and resolves them internally. After calling, briefly tell the user to review and approve the card(s); never claim the change was made.",
+      "Create, edit, or delete the user's payees. This does NOT change anything immediately: it shows the user a confirmation card (or cards) they must approve. operation = 'create' | 'update' | 'delete' with an items array (1-25 rows). create: { name, categoryName?, website? }. update: { name, newName?, categoryName?, website? } (name identifies the existing payee; provide newName to rename, categoryName to set the default category, and/or website to set the payee's web address; an empty categoryName or website clears that field; at least one change is required). delete: { name }. website accepts a bare domain ('acme.com') and is stored as an absolute https URL; setting one also resolves that site's icon for the payee. To find payees that need one, call list_payees and look for a null or missing website. approvalMode = 'bulk' (default; one card for the whole batch) or 'individual' (one card per item); ignored for a single item. Accepts NAMES (payee + category) and resolves them internally. After calling, briefly tell the user to review and approve the card(s); never claim the change was made.",
     inputSchema: {
       type: "object",
       properties: {
@@ -625,6 +625,11 @@ export const FINANCIAL_TOOLS: AiToolDefinition[] = [
                 type: "string",
                 description:
                   'create/update: default category name ("Parent: Child" for a subcategory). update: empty string clears it.',
+              },
+              website: {
+                type: "string",
+                description:
+                  "create/update: the payee's web address. A bare domain ('acme.com') is stored as 'https://acme.com'. update: empty string clears it.",
               },
             },
             required: ["name"],
@@ -777,8 +782,8 @@ export const FINANCIAL_TOOLS: AiToolDefinition[] = [
     description:
       "Create, update, or delete the user's brokerage/investment-account transactions (any type: buy, sell, dividend, interest, capital gain, stock split, transfer in/out, dividend reinvestment, or share add/remove). This does NOT change anything immediately: it shows the user one or more confirmation cards they must explicitly approve before anything is saved. Use it only when the user clearly asks to record, edit, or delete an investment transaction in their latest message. Accepts NAMES for account, funding account, and security -- they are resolved internally (security matched by ticker symbol or name), so you do NOT need to look up IDs first. " +
       "operation = 'create' | 'update' | 'delete'. Provide an 'items' array (1-25 rows). " +
-      "create: { accountName, action, date, security?, quantity?, price?, commission?, fundingAccountName?, description? } -- security is required for BUY, SELL, REDEEM, SPLIT, REINVEST (and the REINVEST_*/CAPITAL_GAIN_* refinements), ADD_SHARES, and REMOVE_SHARES; optional for cash-only INTEREST. price is the per-share price, or the total cash for a DIVIDEND/INTEREST/CAPITAL_GAIN with no quantity. Buys debit, and sells/dividends/interest/capital gains credit, the brokerage's linked cash account automatically -- do not also record a separate cash transaction; fundingAccountName overrides which cash account is used. " +
-      "update: { transactionId, action?, date?, security?, quantity?, price?, commission?, description? } -- provide only the fields to change (at least one); omitted fields keep their current value; the total and cash impact are recomputed. First call list_investment_transactions to obtain the transactionId. " +
+      "create: { accountName, action, date, security?, quantity?, price?, commission?, accruedInterest?, fundingAccountName?, description? } -- security is required for BUY, SELL, REDEEM, SPLIT, REINVEST (and the REINVEST_*/CAPITAL_GAIN_* refinements), ADD_SHARES, and REMOVE_SHARES; optional for cash-only INTEREST. price is the per-share price, or the total cash for a DIVIDEND/INTEREST/CAPITAL_GAIN with no quantity. accruedInterest applies to REDEEM alone: it rides on the same cash movement and is recorded as a linked INTEREST transaction, so never record a second transaction for it. Buys debit, and sells/dividends/interest/capital gains credit, the brokerage's linked cash account automatically -- do not also record a separate cash transaction; fundingAccountName overrides which cash account is used. " +
+      "update: { transactionId, action?, date?, security?, quantity?, price?, commission?, accruedInterest?, description? } -- provide only the fields to change (at least one); omitted fields keep their current value; the total and cash impact are recomputed. First call list_investment_transactions to obtain the transactionId. " +
       "delete: { transactionId } -- deleting one leg of a security transfer removes the paired leg too and reverses any linked cash impact. First call list_investment_transactions to obtain the transactionId. " +
       "approvalMode controls the confirmation: by default a batch of 6 or more items shows one card for the whole batch, while 1-5 items show one card per item the user approves separately. Pass 'individual' to force one card per item at any count. Ignored for a single item. Maximum 25 items per call; if the user pastes more, process the first 25 and tell them to send the rest. After calling this tool, briefly tell the user to review and approve the card(s); never claim the change was applied.",
     inputSchema: {
@@ -851,6 +856,11 @@ export const FINANCIAL_TOOLS: AiToolDefinition[] = [
                 description:
                   "Commission or fee (up to 4 decimals). Defaults to 0.",
               },
+              accruedInterest: {
+                type: "number",
+                description:
+                  "REDEEM only: accrued interest paid out with the redemption (up to 4 decimals). Recorded as a linked INTEREST transaction and included in the single cash movement, so do not record it separately. Defaults to 0.",
+              },
               exchangeRate: {
                 type: "number",
                 description:
@@ -886,7 +896,7 @@ export const FINANCIAL_TOOLS: AiToolDefinition[] = [
   {
     name: "list_payees",
     description:
-      "List the user's payees (the people and businesses they pay or receive money from), optionally filtered by a search query. Use this for questions like 'list my payees', 'do I have a payee for Netflix', or to confirm the exact spelling of a payee name before filtering list_transactions or proposing a manage_transactions edit. Returns each payee's name and default category. To see how much was spent at a payee, use list_transactions with payeeNames or generate_report (spending_by_payee) instead.",
+      "List the user's payees (the people and businesses they pay or receive money from), optionally filtered by a search query. Use this for questions like 'list my payees', 'do I have a payee for Netflix', or to confirm the exact spelling of a payee name before filtering list_transactions or proposing a manage_transactions edit. Returns each payee's name, default category and website (null when unset -- use this to find payees whose website is missing, then fill them in with manage_payees). To see how much was spent at a payee, use list_transactions with payeeNames or generate_report (spending_by_payee) instead.",
     inputSchema: {
       type: "object",
       properties: {

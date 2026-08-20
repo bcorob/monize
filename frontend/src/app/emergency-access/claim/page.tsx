@@ -207,7 +207,7 @@ export default function EmergencyClaimPage() {
       <div className="max-w-md w-full space-y-8">
         <div>
           <Image
-            src="/icons/monize-logo.svg"
+            src="/icons/monize-logo-transparent.svg"
             alt="Monize"
             width={96}
             height={96}

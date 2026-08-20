@@ -26,7 +26,7 @@ export function OnboardingPreferencesScreen({
       <div className="max-w-md w-full space-y-8">
         <div className="text-center">
           <Image
-            src="/icons/monize-logo.svg"
+            src="/icons/monize-logo-transparent.svg"
             alt="Monize"
             width={96}
             height={96}

@@ -39,6 +39,7 @@ import { SortableHeader } from '@/components/ui/SortableHeader';
 import { useSortableTable, compareValues } from '@/hooks/useSortableTable';
 import { exportToCsv } from '@/lib/csv-export';
 import { createLogger } from '@/lib/logger';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 type PortfolioBreakdownSortField = 'account' | 'holdings' | 'cash' | 'total' | 'gainLoss';
 type PortfolioChartSortField = 'name' | 'value';
@@ -935,18 +936,15 @@ export function PortfolioValueReport() {
           )}
         </h3>
         {intradayUnavailable ? (
-          <div className="text-center py-12 px-4">
-            <p className="text-sm text-gray-700 dark:text-gray-200 font-medium mb-1">
-              {t('portfolioValue.intradayUnavailableTitle')}
-            </p>
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              {t('portfolioValue.intradayUnavailableDesc', {
-                skipped: intradayUnavailable.skipped.length > 0
-                  ? t('portfolioValue.intradayUnavailableSkipped', { symbols: intradayUnavailable.skipped.join(', ') })
-                  : '',
-              })}
-            </p>
-          </div>
+          <EmptyState
+            className="px-4"
+            title={t('portfolioValue.intradayUnavailableTitle')}
+            description={t('portfolioValue.intradayUnavailableDesc', {
+              skipped: intradayUnavailable.skipped.length > 0
+                ? t('portfolioValue.intradayUnavailableSkipped', { symbols: intradayUnavailable.skipped.join(', ') })
+                : '',
+            })}
+          />
         ) : chartPoints.length === 0 ? (
           <p className="text-gray-500 dark:text-gray-400 text-center py-8">
             {t('portfolioValue.noData')}

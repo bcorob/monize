@@ -450,6 +450,62 @@ describe("AiActionsService", () => {
     expect(result).toEqual({ type: "create_payee", id: "payee-new" });
   });
 
+  it("writes an approved payee website through to the create", async () => {
+    // The card the user approved showed a website; the DTO the commit builds
+    // has to carry it, or approving does nothing about the address.
+    const descriptor: CreatePayeeDescriptor = {
+      type: "create_payee",
+      userId: USER,
+      actionId: "act-payee-site",
+      expiresAt: Date.now() + 60_000,
+      name: "Acme",
+      defaultCategoryId: null,
+      website: "https://acme.com",
+    };
+    await service.confirm(USER, dtoFor(descriptor));
+    expect(payees.create).toHaveBeenCalledWith(
+      USER,
+      expect.objectContaining({ website: "https://acme.com" }),
+    );
+  });
+
+  it("clears a payee website when the approved edit carried null", async () => {
+    const descriptor = {
+      type: "update_payee" as const,
+      userId: USER,
+      actionId: "act-payee-clear",
+      expiresAt: Date.now() + 60_000,
+      payeeId: "payee-1",
+      name: "Acme",
+      defaultCategoryId: null,
+      website: null,
+    };
+    await service.confirm(USER, dtoFor(descriptor));
+    expect(payees.update).toHaveBeenCalledWith(
+      USER,
+      "payee-1",
+      expect.objectContaining({ website: null }),
+    );
+  });
+
+  it("leaves a payee website alone when the edit said nothing about it", async () => {
+    // undefined and null are different instructions: a rename must not wipe
+    // an address the user never mentioned.
+    const descriptor = {
+      type: "update_payee" as const,
+      userId: USER,
+      actionId: "act-payee-rename",
+      expiresAt: Date.now() + 60_000,
+      payeeId: "payee-1",
+      name: "Acme Renamed",
+      defaultCategoryId: null,
+    };
+    await service.confirm(USER, dtoFor(descriptor));
+    const calls = payees.update.mock.calls;
+    const dto = calls[calls.length - 1][2] as Record<string, unknown>;
+    expect(dto.website).toBeUndefined();
+  });
+
   it("updates a payee on a valid confirmation", async () => {
     const descriptor = {
       type: "update_payee" as const,

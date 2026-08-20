@@ -23,6 +23,7 @@ import { PartialTotal } from '@/components/ui/PartialTotal';
 import { sumConverted, combineTotals } from '@/lib/currency-total';
 import { sumMoney } from '@/lib/format';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { CARD_CLASS } from '@/components/ui/Card';
 import { useFormModal } from '@/hooks/useFormModal';
 import { useExchangeRates } from '@/hooks/useExchangeRates';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
@@ -264,7 +265,7 @@ function AccountsContent() {
         <AccountFormModal formModal={formModal} onSaved={loadAccounts} />
 
         {/* Accounts List */}
-        <div className="bg-white dark:bg-gray-800 shadow dark:shadow-gray-700/50 rounded-lg overflow-hidden">
+        <div className={`${CARD_CLASS} overflow-hidden`}>
           {isLoading ? (
             <LoadingSpinner text={t('page.loadingAccounts')} />
           ) : (

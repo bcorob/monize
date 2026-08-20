@@ -37,6 +37,7 @@ function trade(
     quantity: 10,
     price: 240,
     commission: 0,
+    accruedInterest: 0,
     totalAmount: 2400,
     currencyCode: "USD",
     exchangeRate: 1,
@@ -122,6 +123,7 @@ describe("tradesByHandle", () => {
       accountKey: "acct-5",
       action: InvestmentAction.BUY,
       cashAmount: -2400,
+      accruedInterest: 0,
       status: TransactionStatus.CLEARED,
     });
   });

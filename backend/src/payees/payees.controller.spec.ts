@@ -41,6 +41,8 @@ describe("PayeesController", () => {
       findOne: jest.fn(),
       update: jest.fn(),
       remove: jest.fn(),
+      getLogo: jest.fn(),
+      refreshLogo: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -686,6 +688,42 @@ describe("PayeesController", () => {
       expect(mockAutoMergeService.applyAutoMerge).toHaveBeenCalledWith(
         "user-1",
         groups,
+      );
+    });
+  });
+  describe("brand favicon routes", () => {
+    it("streams the cached bytes with a private cache header", async () => {
+      const data = Buffer.from([1, 2, 3]);
+      mockPayeesService.getLogo.mockResolvedValue({
+        data,
+        contentType: "image/png",
+      });
+      const res = { set: jest.fn(), end: jest.fn() } as any;
+
+      await controller.getLogo(mockReq, "payee-1", res);
+
+      expect(mockPayeesService.getLogo).toHaveBeenCalledWith(
+        "user-1",
+        "payee-1",
+      );
+      expect(res.set).toHaveBeenCalledWith({
+        "Content-Type": "image/png",
+        "Content-Length": "3",
+        // The image is one user's cached copy, so it must not land in a
+        // shared cache.
+        "Cache-Control": "private, max-age=86400",
+      });
+      expect(res.end).toHaveBeenCalledWith(data);
+    });
+
+    it("delegates a refresh with the caller's id", async () => {
+      mockPayeesService.refreshLogo.mockResolvedValue({ id: "payee-1" });
+
+      await controller.refreshLogo(mockReq, "payee-1");
+
+      expect(mockPayeesService.refreshLogo).toHaveBeenCalledWith(
+        "user-1",
+        "payee-1",
       );
     });
   });

@@ -6,6 +6,15 @@ interface IconPickerProps {
   value: string | null;
   onChange: (icon: string) => void;
   label?: string;
+  /**
+   * When provided, "no icon" is a real state: a null value renders an empty
+   * placeholder in the trigger (instead of pretending `chart-bar` is picked),
+   * and the dropdown offers a clear row that calls this. For fields where an
+   * icon is optional (categories); the report/tag forms always have one.
+   */
+  onClear?: () => void;
+  /** Label for the clear row; required when `onClear` is set. */
+  clearLabel?: string;
 }
 
 // SVG icon definitions (Heroicons style)
@@ -176,10 +185,14 @@ const ICON_DEFINITIONS: Record<string, React.ReactNode> = {
 
 const ICON_NAMES = Object.keys(ICON_DEFINITIONS);
 
-export function IconPicker({ value, onChange, label }: IconPickerProps) {
+export function IconPicker({ value, onChange, label, onClear, clearLabel }: IconPickerProps) {
   const [isOpen, setIsOpen] = useState(false);
 
-  const selectedIcon = value && ICON_DEFINITIONS[value] ? value : 'chart-bar';
+  const clearable = !!onClear;
+  const hasValue = !!(value && ICON_DEFINITIONS[value]);
+  // Without a clear affordance the field always shows something, so an unset
+  // value falls back to the default glyph; with one, unset means unset.
+  const selectedIcon = hasValue ? (value as string) : clearable ? null : 'chart-bar';
 
   return (
     <div className="relative">
@@ -194,7 +207,14 @@ export function IconPicker({ value, onChange, label }: IconPickerProps) {
         className="w-full flex items-center justify-between px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
       >
         <span className="text-gray-700 dark:text-gray-200">
-          {ICON_DEFINITIONS[selectedIcon]}
+          {selectedIcon ? (
+            ICON_DEFINITIONS[selectedIcon]
+          ) : (
+            <span
+              aria-hidden
+              className="block w-6 h-6 rounded border border-dashed border-gray-300 dark:border-gray-600"
+            />
+          )}
         </span>
         <svg
           className={`w-5 h-5 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}
@@ -213,6 +233,18 @@ export function IconPicker({ value, onChange, label }: IconPickerProps) {
             onClick={() => setIsOpen(false)}
           />
           <div className="absolute z-20 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg p-2">
+            {clearable && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClear?.();
+                  setIsOpen(false);
+                }}
+                className="mb-1 w-full rounded px-2 py-1.5 text-left text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+              >
+                {clearLabel}
+              </button>
+            )}
             <div className="grid grid-cols-6 gap-1">
               {ICON_NAMES.map((iconName) => (
                 <button

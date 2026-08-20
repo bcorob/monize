@@ -58,6 +58,8 @@
     "colourInherit": "मूल से विरासत में लें",
     "colourNone": "कोई रंग नहीं",
     "colourInheritedFrom": "मूल ({name}) से विरासत में मिला रंग",
+    "iconLabel": "आइकन",
+    "iconNone": "कोई आइकन नहीं",
     "descriptionLabel": "विवरण (वैकल्पिक)",
     "submitCreate": "श्रेणी बनाएं",
     "submitUpdate": "श्रेणी अपडेट करें"

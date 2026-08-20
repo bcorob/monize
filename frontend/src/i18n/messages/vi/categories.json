@@ -58,6 +58,8 @@
     "colourInherit": "Kế thừa từ cha",
     "colourNone": "Không có màu",
     "colourInheritedFrom": "Màu kế thừa từ cha ({name})",
+    "iconLabel": "Biểu tượng",
+    "iconNone": "Không có biểu tượng",
     "descriptionLabel": "Mô tả (tùy chọn)",
     "submitCreate": "Tạo danh mục",
     "submitUpdate": "Cập nhật danh mục"

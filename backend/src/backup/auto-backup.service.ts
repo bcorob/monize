@@ -727,6 +727,13 @@ export class AutoBackupService {
    * fact. Advancing *before* the export also means a crash mid-backup skips this
    * window rather than retrying forever, which is the behaviour the failure path
    * already had.
+   *
+   * `RETURNING user_id` because that column is this table's primary key -- there
+   * is no `id`. `RETURNING id` parses fine in a mocked-`query` unit test and
+   * fails at runtime with `column "id" does not exist` (42703), which took the
+   * claim, and therefore every automatic backup, down for every user. The
+   * columns any raw SQL in `src/` names are now checked against
+   * `database/schema.sql` by `backend/src/common/db/raw-sql-columns.spec.ts`.
    */
   private async claimDueBackup(
     settings: AutoBackupSettings,
@@ -742,7 +749,7 @@ export class AutoBackupService {
               AND enabled = true
               AND next_backup_at IS NOT NULL
               AND next_backup_at <= $3
-            RETURNING id`,
+            RETURNING user_id`,
           [nextBackupAt, settings.userId, now],
         ),
       ),
@@ -802,99 +809,140 @@ export class AutoBackupService {
     this.logger.log(`Auto-backup cron: ${dueSettings.length} backup(s) due`);
 
     for (const settings of dueSettings) {
-      const nextBackupAt = this.calculateNextBackupAt(
-        settings.frequency as AutoBackupFrequency,
-        settings.backupTime,
-        settings.timezone,
-        now,
-      );
-
-      // Do not start a backup of a dataset that is already mid-replacement. A
-      // `.mny` import with "start fresh" commits its wipe and then writes rows
-      // for minutes, so an hourly backup landing in that window would export the
-      // empty dataset, save it as today's file, and enforce retention --
-      // rotating the last good backup out to make room for one containing
-      // nothing. Skipping without claiming leaves `next_backup_at` in the past,
-      // so the next hour retries (audit DR-04-02).
-      //
-      // This is a pre-check and only a pre-check: `isUnderMaintenance` is
-      // documented as a hint, and maintenance can still begin between this read
-      // and the export snapshot below. It narrows the window rather than closing
-      // it; closing it needs backup admission and maintenance acquisition to
-      // share one lease, which is the outstanding HIGH item in the PR
-      // description.
-      //
-      // Runs under the user's context like the claim and the outcome write: it
-      // reaches `import_jobs` and `job_claims` through `withScopedDb`, which
-      // throws without an ambient identity. The `withSystemContext` fan-out
-      // above covers only the cross-user settings read.
-      const underMaintenance = await withUserContext(settings.userId, () =>
-        this.maintenance.isUnderMaintenance(settings.userId),
-      );
-      if (underMaintenance) {
-        this.logger.log(
-          `Auto-backup deferred for user ${settings.userId}: their data is being replaced`,
-        );
-        continue;
-      }
-
-      const claimed = await this.claimDueBackup(settings, now, nextBackupAt);
-      if (!claimed) {
-        // Either another replica took this window, or the user disabled or
-        // rescheduled the backup after this sweep read its snapshot. Both mean
-        // "not ours to run".
-        continue;
-      }
-
+      // Everything about one user, including the steps *before* the claim,
+      // happens inside this try. It used to start below the claim, so an error
+      // raised while deciding whether to run -- the maintenance pre-check, or
+      // the claim's own UPDATE -- escaped the loop and ended the sweep for
+      // every user after this one, with nothing recorded as failed either. That
+      // is precisely how `RETURNING id` against a table with no `id` column
+      // turned one bad statement into "no automatic backups at all". The same
+      // rule is already written out in `enrollManagedUsers` below: one user's
+      // row failing must not stop the others.
       try {
-        settings.folderPath = this.resolveFolderPath(settings.folderPath);
-        const userFolder = await this.resolveUserFolder(
-          settings.userId,
-          settings.folderPath,
-        );
-        const timezone = settings.timezone || "UTC";
-        // RLS (task C2): the export reads this user's entire dataset, and the
-        // settings write below is that user's row -- both under a user context.
-        const { filename, report } = await withUserContext(
-          settings.userId,
-          () => this.exportToFile(settings.userId, userFolder, timezone),
-        );
-        // Promotion and retention run only for a complete artifact; a partial is
-        // written but never allowed to displace a complete copy (F3R7-001).
-        await this.applyBackupOutcome(
-          settings,
-          userFolder,
-          filename,
-          report,
-          timezone,
-        );
-
-        // applyBackupOutcome set lastBackupStatus/Error to reflect a complete
-        // ("success") or incomplete ("partial") artifact; record exactly that,
-        // never a hardcoded success, so a partial backup is not persisted as a
-        // full one (F3R7-001). The write is the targeted outcome UPDATE, not a
-        // whole-row save, so it cannot revert a concurrent settings edit.
-        await this.recordBackupOutcome(
-          settings.userId,
-          now,
-          report.complete ? "success" : "partial",
-          settings.lastBackupError,
-        );
-
-        this.logger.log(
-          `Auto-backup ${report.complete ? "completed" : "written (partial)"} for user ${settings.userId}: ${filename}`,
-        );
+        await this.runDueBackup(settings, now);
       } catch (error) {
         this.logger.error(
           `Auto-backup failed for user ${settings.userId}: ${error.message}`,
         );
-        await this.recordBackupOutcome(
-          settings.userId,
-          now,
-          "failed",
-          String(error.message).slice(0, 1024),
-        );
+        await this.recordFailureQuietly(settings.userId, now, error);
       }
+    }
+  }
+
+  /**
+   * One user's window: decide whether to run it, claim it, export it, record it.
+   *
+   * Throws rather than swallowing, so `handleAutoBackupCron` -- which owns the
+   * "one user must not take out the sweep" rule -- is the only place that
+   * decides what a failure means.
+   */
+  private async runDueBackup(
+    settings: AutoBackupSettings,
+    now: Date,
+  ): Promise<void> {
+    const nextBackupAt = this.calculateNextBackupAt(
+      settings.frequency as AutoBackupFrequency,
+      settings.backupTime,
+      settings.timezone,
+      now,
+    );
+
+    // Do not start a backup of a dataset that is already mid-replacement. A
+    // `.mny` import with "start fresh" commits its wipe and then writes rows
+    // for minutes, so an hourly backup landing in that window would export the
+    // empty dataset, save it as today's file, and enforce retention --
+    // rotating the last good backup out to make room for one containing
+    // nothing. Skipping without claiming leaves `next_backup_at` in the past,
+    // so the next hour retries (audit DR-04-02).
+    //
+    // This is a pre-check and only a pre-check: `isUnderMaintenance` is
+    // documented as a hint, and maintenance can still begin between this read
+    // and the export snapshot below. It narrows the window rather than closing
+    // it; closing it needs backup admission and maintenance acquisition to
+    // share one lease, which is the outstanding HIGH item in the PR
+    // description.
+    //
+    // Runs under the user's context like the claim and the outcome write: it
+    // reaches `import_jobs` and `job_claims` through `withScopedDb`, which
+    // throws without an ambient identity. The `withSystemContext` fan-out
+    // above covers only the cross-user settings read.
+    const underMaintenance = await withUserContext(settings.userId, () =>
+      this.maintenance.isUnderMaintenance(settings.userId),
+    );
+    if (underMaintenance) {
+      this.logger.log(
+        `Auto-backup deferred for user ${settings.userId}: their data is being replaced`,
+      );
+      return;
+    }
+
+    const claimed = await this.claimDueBackup(settings, now, nextBackupAt);
+    if (!claimed) {
+      // Either another replica took this window, or the user disabled or
+      // rescheduled the backup after this sweep read its snapshot. Both mean
+      // "not ours to run".
+      return;
+    }
+
+    settings.folderPath = this.resolveFolderPath(settings.folderPath);
+    const userFolder = await this.resolveUserFolder(
+      settings.userId,
+      settings.folderPath,
+    );
+    const timezone = settings.timezone || "UTC";
+    // RLS (task C2): the export reads this user's entire dataset, and the
+    // settings write below is that user's row -- both under a user context.
+    const { filename, report } = await withUserContext(settings.userId, () =>
+      this.exportToFile(settings.userId, userFolder, timezone),
+    );
+    // Promotion and retention run only for a complete artifact; a partial is
+    // written but never allowed to displace a complete copy (F3R7-001).
+    await this.applyBackupOutcome(
+      settings,
+      userFolder,
+      filename,
+      report,
+      timezone,
+    );
+
+    // applyBackupOutcome set lastBackupStatus/Error to reflect a complete
+    // ("success") or incomplete ("partial") artifact; record exactly that,
+    // never a hardcoded success, so a partial backup is not persisted as a
+    // full one (F3R7-001). The write is the targeted outcome UPDATE, not a
+    // whole-row save, so it cannot revert a concurrent settings edit.
+    await this.recordBackupOutcome(
+      settings.userId,
+      now,
+      report.complete ? "success" : "partial",
+      settings.lastBackupError,
+    );
+
+    this.logger.log(
+      `Auto-backup ${report.complete ? "completed" : "written (partial)"} for user ${settings.userId}: ${filename}`,
+    );
+  }
+
+  /**
+   * Record a failed window without letting the recording become the failure.
+   *
+   * The outcome write is itself a database call, so the errors most likely to
+   * bring the export down -- the connection, the pool, a broken statement --
+   * are exactly the ones that can also break the write recording them. Throwing
+   * here would put the sweep back where it started: one user's failure ending
+   * everybody else's backups.
+   */
+  private async recordFailureQuietly(
+    userId: string,
+    at: Date,
+    cause: unknown,
+  ): Promise<void> {
+    const message = String((cause as Error)?.message ?? cause).slice(0, 1024);
+    try {
+      await this.recordBackupOutcome(userId, at, "failed", message);
+    } catch (error) {
+      this.logger.error(
+        `Auto-backup could not record the failure for user ${userId}: ${error.message}`,
+      );
     }
   }
 

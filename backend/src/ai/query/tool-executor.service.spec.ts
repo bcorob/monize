@@ -2584,6 +2584,33 @@ describe("ToolExecutorService", () => {
       });
     });
 
+    it("carries a website onto the confirmation card", async () => {
+      payees.previewCreatePayee.mockResolvedValueOnce({
+        name: "Acme",
+        defaultCategoryId: null,
+        defaultCategoryName: null,
+        website: "https://acme.com",
+      });
+
+      const result = await service.execute(userId, "manage_payees", {
+        operation: "create",
+        items: [{ name: "Acme", website: "acme.com" }],
+      });
+
+      expect(payees.previewCreatePayee).toHaveBeenCalledWith(
+        userId,
+        expect.objectContaining({ website: "acme.com" }),
+      );
+      // The card shows the normalised address, and the signed descriptor
+      // carries it so approving actually writes it.
+      expect(result.pendingAction?.preview).toMatchObject({
+        website: "https://acme.com",
+      });
+      expect(result.pendingAction?.descriptor).toMatchObject({
+        website: "https://acme.com",
+      });
+    });
+
     it("update returns a signed pending action", async () => {
       const result = await service.execute(userId, "manage_payees", {
         operation: "update",

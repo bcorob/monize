@@ -37,3 +37,46 @@ export function transferCsvLabel(
 ): string {
   return `Transfer ${transferDirection(amount) === 'to' ? 'To' : 'From'} ${accountName}`;
 }
+
+/**
+ * The inputs for a transfer leg's *resolved* payee label (issue #1214).
+ *
+ * A transfer created without a payee is PERSISTED without one; the payee cell
+ * shows "Transfer to/from <account>" resolved at render time from the linked
+ * leg's account -- its CURRENT name, in the reader's language -- so renaming
+ * an account or switching languages updates every historical row at once.
+ * Consumers pass the result through the `common.transferPayee` catalog string
+ * (via `usePayeeDisplay`); this helper only decides WHEN the fallback applies
+ * and from which row facts.
+ *
+ * Returns null when the row is not a transfer, already carries a payee, or
+ * its counterpart is not loaded (then the caller shows its usual empty state).
+ */
+/**
+ * The English payee cell for a blank-payee transfer leg in a CSV export --
+ * `Transfer to Savings` -- matching the backend account export
+ * (`transferPayeeLabel` in `backend/src/transactions/transfer-payee-label.util.ts`)
+ * and the text the pre-#1214 write paths stamped, so exports read unchanged.
+ * The whole exported file is English (see `transferCsvLabel` above), so this
+ * is too. Returns null when no fallback applies (the caller writes '').
+ */
+export function transferPayeeCsvLabel(
+  tx: Parameters<typeof transferPayeeParams>[0],
+): string | null {
+  const params = transferPayeeParams(tx);
+  return params ? `Transfer ${params.direction} ${params.name}` : null;
+}
+
+export function transferPayeeParams(tx: {
+  payeeName?: string | null;
+  payee?: { name: string } | null;
+  isTransfer?: boolean;
+  amount: number | string;
+  linkedTransaction?: { account?: { name: string } | null } | null;
+}): { direction: TransferDirection; name: string } | null {
+  if (tx.payeeName || tx.payee?.name) return null;
+  if (!tx.isTransfer) return null;
+  const name = tx.linkedTransaction?.account?.name;
+  if (!name) return null;
+  return { direction: transferDirection(tx.amount), name };
+}

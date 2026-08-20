@@ -17,6 +17,7 @@
     "unavailable": "Không có ghi chú phát hành cho phiên bản này.",
     "englishOnly": "Ghi chú phát hành bên dưới chỉ có bằng tiếng Anh. Bản thân Monize, bao gồm các hướng dẫn tương tác, tuân theo cài đặt ngôn ngữ của bạn."
   },
+  "transferPayee": "{direction, select, to {Chuyển khoản đến {name}} other {Chuyển khoản từ {name}}}",
   "save": "Lưu",
   "cancel": "Hủy",
   "delete": "Xóa",

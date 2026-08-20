@@ -58,6 +58,8 @@
     "colourInherit": "Overnemen van bovenliggende",
     "colourNone": "Geen kleur",
     "colourInheritedFrom": "Kleur overgenomen van bovenliggende ({name})",
+    "iconLabel": "Pictogram",
+    "iconNone": "Geen pictogram",
     "descriptionLabel": "Beschrijving (optioneel)",
     "submitCreate": "Categorie aanmaken",
     "submitUpdate": "Categorie bijwerken"

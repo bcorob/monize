@@ -2,7 +2,7 @@ import { Test, TestingModule } from "@nestjs/testing";
 import { DataSource } from "typeorm";
 import { DemoSeedService } from "./demo-seed.service";
 import { SeedService } from "./seed.service";
-import { InstitutionLogoService } from "../institutions/institution-logo.service";
+import { FaviconService } from "../common/favicon/favicon.service";
 import { demoAccounts } from "./demo-seed-data/accounts";
 import { demoInstitutions } from "./demo-seed-data/institutions";
 import { demoPayees } from "./demo-seed-data/payees";
@@ -39,7 +39,7 @@ describe("DemoSeedService", () => {
         DemoSeedService,
         { provide: DataSource, useValue: dataSource },
         { provide: SeedService, useValue: seedService },
-        { provide: InstitutionLogoService, useValue: logoService },
+        { provide: FaviconService, useValue: logoService },
       ],
     }).compile();
 

@@ -58,6 +58,8 @@
     "colourInherit": "Üst kategoriden devral",
     "colourNone": "Renk yok",
     "colourInheritedFrom": "Renk üst kategoriden devralındı ({name})",
+    "iconLabel": "Simge",
+    "iconNone": "Simge yok",
     "descriptionLabel": "Açıklama (isteğe bağlı)",
     "submitCreate": "Kategori Oluştur",
     "submitUpdate": "Kategoriyi Güncelle"

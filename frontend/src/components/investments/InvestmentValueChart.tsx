@@ -40,6 +40,7 @@ import {
   ChartFlagShadowFilter,
 } from './portfolio-chart-utils';
 import { isoDatePart, priorCloseChange } from './portfolio-change-baseline';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 const logger = createLogger('InvestmentChart');
 
@@ -598,17 +599,18 @@ export function InvestmentValueChart({ accountIds, displayCurrency, titleSuffix,
 
       {/* Chart */}
       {intradayUnavailable ? (
-        <div className="text-center py-12 px-4">
-          <p className="text-sm text-gray-700 dark:text-gray-200 font-medium mb-1">
-            {t('investmentValueChart.intradayUnavailableTitle')}
-          </p>
-          <p className="text-xs text-gray-500 dark:text-gray-400">
-            {t('investmentValueChart.intradayUnavailableDescription')}
-            {intradayUnavailable.skipped.length > 0
-              ? `: ${intradayUnavailable.skipped.join(', ')}`
-              : ''}
-          </p>
-        </div>
+        <EmptyState
+          className="px-4"
+          title={t('investmentValueChart.intradayUnavailableTitle')}
+          description={
+            <>
+              {t('investmentValueChart.intradayUnavailableDescription')}
+              {intradayUnavailable.skipped.length > 0
+                ? `: ${intradayUnavailable.skipped.join(', ')}`
+                : ''}
+            </>
+          }
+        />
       ) : chartPoints.length === 0 ? (
         <p className="text-gray-500 dark:text-gray-400 text-center py-8">
           {t('investmentValueChart.noDataForPeriod')}

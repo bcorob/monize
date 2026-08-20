@@ -1165,6 +1165,48 @@ describe("ImportRegularProcessorService", () => {
       expect(linkedTxCreate).toBeDefined();
       expect(linkedTxCreate[1].amount).toBe(500); // Negated
       expect(linkedTxCreate[1].isTransfer).toBe(true);
+      // The QIF payee is carried onto the linked leg verbatim; there is no
+      // stamped fallback any more (issue #1214).
+      expect(linkedTxCreate[1].payeeName).toBe("Transfer");
+    });
+
+    it("persists a blank transfer payee as null on the linked leg (issue #1214)", async () => {
+      // No QIF payee: the old writer stamped "Transfer from <account>" here.
+      // Blank stays blank now, and the display resolves the label from the
+      // linked leg at read time.
+      const accountMap = new Map<string, string | null>();
+      accountMap.set("Savings", "acc-savings");
+      const ctx = makeContext({ accountMap });
+
+      managerOf(ctx).createQueryBuilder.mockReturnValue(
+        makeMockQueryBuilder(null),
+      );
+
+      managerOf(ctx).findOne.mockImplementation((_entity: any, opts: any) => {
+        if (opts?.where?.id === "acc-savings") {
+          return Promise.resolve({ id: "acc-savings", currencyCode: "CAD" });
+        }
+        if (opts?.where?.id === accountId) {
+          return Promise.resolve({ id: accountId, currentBalance: 1000 });
+        }
+        return Promise.resolve(null);
+      });
+
+      const qifTx = {
+        date: "2025-01-15",
+        amount: -500,
+        isTransfer: true,
+        transferAccount: "Savings",
+      };
+
+      await service.processTransaction(ctx, qifTx);
+
+      const createCalls = managerOf(ctx).create.mock.calls;
+      const linkedTxCreate = createCalls.find(
+        (call: any) => call[1]?.accountId === "acc-savings",
+      );
+      expect(linkedTxCreate).toBeDefined();
+      expect(linkedTxCreate[1].payeeName).toBeNull();
     });
 
     it("should add PENDING IMPORT note for cross-currency transfers", async () => {

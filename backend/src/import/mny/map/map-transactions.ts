@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 import { SplitKind } from "../../../transactions/entities/split-kind.enum";
 import { TransactionStatus } from "../../../transactions/entities/transaction.entity";
 import { isInvestmentActionAllowedInSplit } from "../../../securities/cash-impact.util";
+import { InvestmentAction } from "../../../securities/entities/investment-transaction.entity";
+import { proceedsExcludingAccruedInterest } from "../../../securities/accrued-interest.util";
 import { roundMoney } from "../../../common/round.util";
 import { MnyBill, MnyTransaction } from "../model/mny-rows";
 import {
@@ -457,6 +459,7 @@ function buildCashCounterparts(
       isTransfer: true,
       linkedTransactionId: nearId,
       splits: [],
+      collapsedTradeHandle: null,
     });
   }
 
@@ -565,15 +568,85 @@ function mapSplitChild(
   };
 }
 
+/**
+ * The trade whose two-leg split this row can be collapsed into, or null.
+ *
+ * Money records a CD redemption that paid accrued interest as a split: the
+ * investment leg for the principal, a second leg for the interest. Monize keeps
+ * the interest on the redemption's own INTEREST companion, so the split has no
+ * remaining purpose and the parent becomes the trade's single cash row.
+ *
+ * Deliberately narrow. A split that means anything else -- three legs, a
+ * sibling whose amount is not the accrued interest, legs that do not sum to the
+ * parent -- keeps the shape Money wrote, because rewriting a split on the
+ * strength of one leg being a redemption would silently discard whatever else
+ * the user recorded there.
+ */
+function collapsibleRedemptionTrade(
+  splits: readonly MappedSplit[],
+  parentAmount: number,
+  context: Context,
+): number | null {
+  if (splits.length !== 2) return null;
+
+  const investmentLegs = splits.filter(
+    (split) => split.investmentHandle !== null,
+  );
+  if (investmentLegs.length !== 1) return null;
+
+  const investmentLeg = investmentLegs[0];
+  const interestLeg = splits.find((split) => split !== investmentLeg);
+  if (interestLeg === undefined) return null;
+
+  const trade = context.input.tradesByHandle.get(
+    investmentLeg.investmentHandle as number,
+  );
+  if (
+    trade === undefined ||
+    trade.action !== InvestmentAction.REDEEM ||
+    !(trade.accruedInterest > 0)
+  ) {
+    return null;
+  }
+
+  const interest = roundMoney(Math.abs(interestLeg.amount));
+  if (interest !== roundMoney(trade.accruedInterest)) return null;
+
+  // The principal leg has to be the redemption's proceeds, and the two legs
+  // Money's own total, or this is not the shape it looks like.
+  const proceeds = proceedsExcludingAccruedInterest(
+    Math.abs(trade.cashAmount),
+    trade.accruedInterest,
+  );
+  if (roundMoney(Math.abs(investmentLeg.amount)) !== proceeds) return null;
+  if (
+    roundMoney(investmentLeg.amount + interestLeg.amount) !==
+    roundMoney(parentAmount)
+  ) {
+    return null;
+  }
+
+  return investmentLeg.investmentHandle;
+}
+
 function mapOne(
   row: MnyTransaction,
   accountKey: string,
   context: Context,
 ): MappedTransaction {
   const handle = row.handle as number;
-  const splits = (context.childrenByParent.get(handle) ?? [])
+  const allSplits = (context.childrenByParent.get(handle) ?? [])
     .map((child) => mapSplitChild(child, context))
     .filter((split): split is MappedSplit => split !== null);
+  const collapsedTradeHandle = collapsibleRedemptionTrade(
+    allSplits,
+    row.amount,
+    context,
+  );
+  // A redemption Money wrote as principal + interest is one movement of money
+  // in Monize: the interest lives on the trade's INTEREST companion, so this
+  // row records the whole payout and the trade adopts it.
+  const splits = collapsedTradeHandle === null ? allSplits : [];
 
   if (splits.length > 0) {
     const legTotal = roundMoney(
@@ -640,6 +713,7 @@ function mapOne(
     isTransfer: linkedTransactionId !== null,
     linkedTransactionId,
     splits,
+    collapsedTradeHandle,
   };
 }
 
@@ -756,6 +830,20 @@ function collectInvestmentCashSources(
     const funded = indexes.externalFunders.get(transaction.handle);
     if (funded !== undefined) {
       sources.set(funded, {
+        accountKey: transaction.accountKey,
+        currencyCode: transaction.currencyCode,
+        amount: transaction.amount,
+        status: transaction.status,
+        transactionId: transaction.id,
+        splitId: null,
+      });
+    }
+
+    // A collapsed redemption split: the parent row itself is now the cash leg,
+    // so it is registered exactly as an external funding row is. Without this
+    // the trade would write a second cash row of its own beside it.
+    if (transaction.collapsedTradeHandle !== null) {
+      sources.set(transaction.collapsedTradeHandle, {
         accountKey: transaction.accountKey,
         currencyCode: transaction.currencyCode,
         amount: transaction.amount,

@@ -38,7 +38,7 @@ const numericTransformer = {
  * | REINVEST_CAPITAL_GAIN_LONG | REINVEST | + | none | long-term gain, reinvested |
  * | CAPITAL_GAIN_SHORT | CAPITAL_GAIN | none | in | short-term gain distribution |
  * | CAPITAL_GAIN_LONG | CAPITAL_GAIN | none | in | long-term gain distribution |
- * | REDEEM | SELL | - | in | CD/bond redemption (proceeds may include accrued interest) |
+ * | REDEEM | SELL | - | in | CD/bond redemption (accrued interest rides on a linked INTEREST companion) |
  *
  * Every financial fold normalizes through `baseInvestmentAction`
  * (`securities/investment-replay.util.ts`) so a refinement cannot behave
@@ -241,4 +241,14 @@ export class InvestmentTransaction {
   @ApiProperty()
   @UpdateDateColumn({ name: "updated_at" })
   updatedAt: Date;
+
+  /**
+   * Accrued interest paid out with a redemption, read from the linked INTEREST
+   * companion row. Not a column: the interest is stored as its own investment
+   * transaction so it is income to every report without a special case, and
+   * this field is the redemption's view of it. `0` when there is no companion.
+   * Spec: docs/specs/redemption-accrued-interest.md.
+   */
+  @ApiProperty({ required: false, example: 87.5 })
+  accruedInterest?: number;
 }

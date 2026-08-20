@@ -35,8 +35,9 @@ interface ManagePayeeItem {
   // create
   name?: string;
   categoryName?: string;
-  // update (name identifies the payee; newName/categoryName are the changes)
+  // update (name identifies the payee; the rest are the changes)
   newName?: string;
+  website?: string;
 }
 
 @Injectable()
@@ -55,7 +56,8 @@ export class McpPayeesTools {
       {
         title: "List payees",
         annotations: READ_ONLY,
-        description: "List payees, optionally filtered by search query",
+        description:
+          "List payees, optionally filtered by search query. Each payee carries its default category and its website (null when unset), so this is how to find payees whose website is missing before filling them in with manage_payees.",
         inputSchema: {
           search: z
             .string()
@@ -95,8 +97,8 @@ export class McpPayeesTools {
         annotations: WRITE,
         description:
           "Create, edit, or delete the user's payees. Accepts NAMES -- the payee and its default category are resolved internally, so you do NOT need to call list_payees/list_categories first. operation = 'create' | 'update' | 'delete' with an items array (1-25 rows). " +
-          "create: { name, categoryName? } -- categoryName optionally sets the payee's default category ('Parent: Child' for a subcategory). " +
-          "update: { name, newName?, categoryName? } -- name identifies the existing payee; provide newName to rename and/or categoryName to set the default category (pass an empty string to clear it). At least one of newName/categoryName is required. " +
+          "create: { name, categoryName?, website? } -- categoryName optionally sets the payee's default category ('Parent: Child' for a subcategory); website accepts a bare domain ('acme.com') and is stored as an absolute https URL. " +
+          "update: { name, newName?, categoryName?, website? } -- name identifies the existing payee; provide newName to rename, categoryName to set the default category, and/or website to set the web address (pass an empty string to clear either). At least one of newName/categoryName/website is required. Setting a website also resolves that site's icon for the payee; to find payees that need one, call list_payees and look for a null or missing website. " +
           "delete: { name } -- removes the payee (its transactions keep their stored payee name). " +
           "approvalMode = 'bulk' (default; one confirmation for the whole batch) or 'individual' (one confirmation per item); ignored for a single item. Set dryRun=true to preview every item without saving. The user is asked to confirm before anything is saved (web chat card via relay, or an MCP confirmation dialog).",
         inputSchema: {
@@ -123,6 +125,13 @@ export class McpPayeesTools {
                   .optional()
                   .describe(
                     'create/update: default category name ("Parent: Child" for a subcategory). update: empty string clears it.',
+                  ),
+                website: z
+                  .string()
+                  .max(2048)
+                  .optional()
+                  .describe(
+                    'create/update: the payee\'s web address. A bare domain ("acme.com") is stored as "https://acme.com". update: empty string clears it.',
                   ),
               }),
             )
@@ -196,7 +205,11 @@ export class McpPayeesTools {
   // -------------------------------------------------------------------------
 
   private toCreateRow(item: ManagePayeeItem): ManageCreatePayeeRow {
-    return { name: item.name as string, categoryName: item.categoryName };
+    return {
+      name: item.name as string,
+      categoryName: item.categoryName,
+      website: item.website,
+    };
   }
 
   private toUpdateRow(item: ManagePayeeItem): ManageUpdatePayeeRow {
@@ -204,6 +217,7 @@ export class McpPayeesTools {
       name: item.name as string,
       newName: item.newName,
       categoryName: item.categoryName,
+      website: item.website,
     };
   }
 
@@ -278,7 +292,7 @@ export class McpPayeesTools {
         server,
         userId,
         action,
-        `Create this payee?\nName: ${preview.name}${preview.defaultCategoryName ? `\nDefault category: ${preview.defaultCategoryName}` : ""}`,
+        `Create this payee?\nName: ${preview.name}${preview.defaultCategoryName ? `\nDefault category: ${preview.defaultCategoryName}` : ""}${preview.website ? `\nWebsite: ${preview.website}` : ""}`,
         requestId,
       );
       if (outcome === "relay") return toolResult(RELAY_PREVIEW_SHOWN);
@@ -289,6 +303,7 @@ export class McpPayeesTools {
       const payee = await this.payeesService.create(userId, {
         name: preview.name,
         defaultCategoryId: preview.defaultCategoryId ?? undefined,
+        website: preview.website,
       });
       this.writeLimiter.record(userId, "create_payee");
       return toolResult({ id: payee.id, name: payee.name, count: 1 });
@@ -336,6 +351,7 @@ export class McpPayeesTools {
       const payee = await this.payeesService.create(userId, {
         name: preview.name,
         defaultCategoryId: preview.defaultCategoryId ?? undefined,
+        website: preview.website,
       });
       ids.push(payee.id);
       this.writeLimiter.record(userId, "create_payee");
@@ -362,7 +378,7 @@ export class McpPayeesTools {
         server,
         userId,
         action,
-        `Apply this payee edit?\nName: ${preview.name}\nDefault category: ${preview.defaultCategoryName ?? "(none)"}`,
+        `Apply this payee edit?\nName: ${preview.name}\nDefault category: ${preview.defaultCategoryName ?? "(none)"}${preview.website !== undefined ? `\nWebsite: ${preview.website ?? "(cleared)"}` : ""}`,
         requestId,
       );
       if (outcome === "relay") return toolResult(RELAY_PREVIEW_SHOWN);
@@ -373,6 +389,7 @@ export class McpPayeesTools {
       const payee = await this.payeesService.update(userId, preview.payeeId, {
         name: preview.name,
         defaultCategoryId: preview.defaultCategoryId,
+        website: preview.website,
       });
       this.writeLimiter.record(userId, "update_payee");
       return toolResult({ id: payee.id, name: payee.name, count: 1 });
@@ -420,6 +437,7 @@ export class McpPayeesTools {
       const payee = await this.payeesService.update(userId, preview.payeeId, {
         name: preview.name,
         defaultCategoryId: preview.defaultCategoryId,
+        website: preview.website,
       });
       ids.push(payee.id);
       this.writeLimiter.record(userId, "update_payee");
@@ -542,9 +560,9 @@ export class McpPayeesTools {
       case "delete_payee":
         return `Delete this payee?\nName: ${p.name}`;
       case "update_payee":
-        return `Apply this payee edit?\nName: ${p.name}\nDefault category: ${p.categoryName ?? "(none)"}`;
+        return `Apply this payee edit?\nName: ${p.name}\nDefault category: ${p.categoryName ?? "(none)"}${p.website !== undefined ? `\nWebsite: ${p.website ?? "(cleared)"}` : ""}`;
       default:
-        return `Create this payee?\nName: ${p.name}${p.categoryName ? `\nDefault category: ${p.categoryName}` : ""}`;
+        return `Create this payee?\nName: ${p.name}${p.categoryName ? `\nDefault category: ${p.categoryName}` : ""}${p.website ? `\nWebsite: ${p.website}` : ""}`;
     }
   }
 
@@ -559,6 +577,7 @@ export class McpPayeesTools {
         const payee = await this.payeesService.create(userId, {
           name: d.name,
           defaultCategoryId: d.defaultCategoryId ?? undefined,
+          website: d.website,
         });
         this.writeLimiter.record(userId, "create_payee");
         return payee.id;
@@ -567,6 +586,7 @@ export class McpPayeesTools {
         const payee = await this.payeesService.update(userId, d.payeeId, {
           name: d.name,
           defaultCategoryId: d.defaultCategoryId,
+          website: d.website,
         });
         this.writeLimiter.record(userId, "update_payee");
         return payee.id;

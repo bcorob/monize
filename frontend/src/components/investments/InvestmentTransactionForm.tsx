@@ -36,7 +36,11 @@ import {
   FX_RATE_DISPLAY_DECIMALS,
 } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errors';
-import { baseInvestmentAction } from '@/lib/investment-actions';
+import {
+  baseInvestmentAction,
+  redemptionTotalWithInterest,
+  supportsAccruedInterest,
+} from '@/lib/investment-actions';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
 import { useExchangeRates } from '@/hooks/useExchangeRates';
 import { useDateFormat } from '@/hooks/useDateFormat';
@@ -75,6 +79,7 @@ export const buildInvestmentTransactionSchema = (t: (key: string) => string) => 
   quantity: z.coerce.number().min(0).optional(),
   price: z.coerce.number().min(0).optional(),
   commission: z.coerce.number().min(0).optional(),
+  accruedInterest: z.coerce.number().min(0).optional(),
   exchangeRate: z.coerce.number().gt(0).optional(),
   description: z.string().optional(),
   status: z.nativeEnum(TransactionStatus).default(TransactionStatus.UNRECONCILED),
@@ -319,6 +324,7 @@ function InvestmentTransactionFormFields({
             ? (transaction.totalAmount ?? 0)
             : (transaction.price ?? 0),
           commission: transaction.commission ?? 0,
+          accruedInterest: transaction.accruedInterest ?? 0,
           exchangeRate: transaction.exchangeRate ?? 1,
           description: transaction.description || '',
           // Rows from a backend that predates the column have no status;
@@ -382,6 +388,7 @@ function InvestmentTransactionFormFields({
   const watchedQuantity = Number(watch('quantity')) || 0;
   const watchedPrice = Number(watch('price')) || 0;
   const watchedCommission = Number(watch('commission')) || 0;
+  const watchedAccruedInterest = Number(watch('accruedInterest')) || 0;
   const watchedExchangeRate = Number(watch('exchangeRate')) || 0;
   const watchedTransactionDate = watch('transactionDate');
   const watchedSplitNewShares = Number(watch('splitNewShares')) || 0;
@@ -455,12 +462,22 @@ function InvestmentTransactionFormFields({
       const subtotal = roundToDecimals(watchedQuantity * watchedPrice, 4);
       if (baseInvestmentAction(watchedAction) === 'BUY' || baseInvestmentAction(watchedAction) === 'REINVEST') {
         return roundToDecimals(subtotal + watchedCommission, 4);
-      } else {
-        return roundToDecimals(subtotal - watchedCommission, 4);
       }
+      const proceeds = roundToDecimals(subtotal - watchedCommission, 4);
+      // The accrued interest arrives with the proceeds, so the figure the user
+      // approves is what the cash account will actually receive.
+      return supportsAccruedInterest(watchedAction)
+        ? redemptionTotalWithInterest(proceeds, watchedAccruedInterest)
+        : proceeds;
     }
     return watchedPrice; // For amount-only actions, price is used as the amount
-  }, [watchedAction, watchedQuantity, watchedPrice, watchedCommission]);
+  }, [
+    watchedAction,
+    watchedQuantity,
+    watchedPrice,
+    watchedCommission,
+    watchedAccruedInterest,
+  ]);
 
   // Auto-fill the exchange rate with the latest market rate whenever the
   // currency pair changes, unless the user is editing an existing transaction
@@ -958,6 +975,11 @@ function InvestmentTransactionFormFields({
         commission: actionIn(action, quantityOnlyActions) || isSplit
           ? undefined
           : data.commission,
+        // Always sent for a redemption, including as 0: an omitted field means
+        // "unchanged" to the backend, so clearing the box has to say so.
+        accruedInterest: supportsAccruedInterest(action)
+          ? (data.accruedInterest ?? 0)
+          : undefined,
         // Only send the exchange rate for actions that post a cash transaction.
         exchangeRate:
           postsCash && data.exchangeRate && data.exchangeRate > 0
@@ -1376,6 +1398,24 @@ function InvestmentTransactionFormFields({
         />
       )}
 
+      {/* Accrued interest -- a redemption alone pays it, and it rides on the
+          same cash movement rather than needing a transaction of its own. */}
+      {supportsAccruedInterest(watchedAction) && (
+        <div>
+          <CurrencyInput
+            label={t('transactionForm.accruedInterest', { currency: transactionCurrency })}
+            prefix={currencySymbol}
+            value={watchedAccruedInterest || undefined}
+            onChange={(value) => setValue('accruedInterest', value, { shouldValidate: true })}
+            error={errors.accruedInterest?.message}
+            allowNegative={false}
+          />
+          <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            {t('transactionForm.accruedInterestHelp')}
+          </div>
+        </div>
+      )}
+
       {/* Description */}
       <Input
         label={t('transactionForm.description')}
@@ -1483,6 +1523,8 @@ function InvestmentTransactionFormFields({
             <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
               {t('transactionForm.sharesAtPrice', { shares: watchedQuantity, symbol: currencySymbol, price: watchedPrice.toFixed(6) })}
               {watchedCommission > 0 && ` ${baseInvestmentAction(watchedAction) === 'SELL' ? '-' : '+'} ${formatCurrency(watchedCommission, transactionCurrency)} ${t('transactionForm.commissionSuffix')}`}
+              {supportsAccruedInterest(watchedAction) && watchedAccruedInterest > 0 &&
+                ` + ${formatCurrency(watchedAccruedInterest, transactionCurrency)} ${t('transactionForm.accruedInterestSuffix')}`}
             </div>
           )}
           {needsConversion && (

@@ -8,10 +8,10 @@ import '@/lib/zodConfig';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import Link from 'next/link';
-import Image from 'next/image';
 import toast from 'react-hot-toast';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
+import { AuthShell } from '@/components/auth/AuthShell';
 import { authApi } from '@/lib/auth';
 import { getErrorMessage } from '@/lib/errors';
 import { buildPasswordSchema } from '@/lib/zod-helpers';
@@ -124,21 +124,10 @@ export default function ResetPasswordPage() {
   const tr = useTranslations('auth.resetPassword');
   const tc = useTranslations('common');
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        <div>
-          <Image src="/icons/monize-logo.svg" alt="Monize" width={96} height={96} className="mx-auto rounded-xl" priority />
-          <h2 className="mt-4 text-center text-3xl font-extrabold text-gray-900 dark:text-gray-100">
-            {tr('title')}
-          </h2>
-          <p className="mt-2 text-center text-sm text-gray-600 dark:text-gray-400">
-            {tr('subtitle')}
-          </p>
-        </div>
-        <Suspense fallback={<div className="text-center text-gray-500 dark:text-gray-400">{tc('loading')}</div>}>
-          <ResetPasswordForm />
-        </Suspense>
-      </div>
-    </div>
+    <AuthShell title={tr('title')} subtitle={tr('subtitle')}>
+      <Suspense fallback={<div className="text-center text-gray-500 dark:text-gray-400">{tc('loading')}</div>}>
+        <ResetPasswordForm />
+      </Suspense>
+    </AuthShell>
   );
 }

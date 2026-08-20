@@ -64,7 +64,7 @@ Every branch added by this plan is entered only when the two accounts (or two le
 |---|---|---|
 | date, amount / toAmount / exchangeRate | mirrored | mirrored |
 | description, referenceNumber | mirrored | mirrored |
-| auto payeeName ("Transfer to/from X") | regenerated per leg | regenerated per leg (the editor can read both accounts at edit time) |
+| auto payeeName ("Transfer to/from X") | resolved at read time from the linked leg's account (issue #1214); a legacy stamped value is cleared on edit, never regenerated | same -- the mask already rewrites the linked account's name for a reader without READ, so the resolved label masks with it |
 | categoryId | mirrored | **effective-user legs only** -- categories are per-user reference data; writing A's category id onto B's row is an ownership violation |
 | payeeId | mirrored | **effective-user legs only** (payees are per-user) |
 | tagIds | mirrored (service wrappers) | **effective-user legs only** -- the wrappers in `transactions.service.ts` and the bulk path currently write tag ids onto both legs; on a foreign leg that attaches one user's tag ids to another user's transaction |

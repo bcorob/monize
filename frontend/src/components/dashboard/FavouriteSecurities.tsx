@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import { FavouriteSecurityQuote } from '@/types/investment';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
 import { usePreferencesStore } from '@/store/preferencesStore';
+import { WidgetHeading } from './widget-meta';
 
 interface FavouriteSecuritiesProps {
   securities: FavouriteSecurityQuote[];
@@ -49,9 +50,9 @@ export function FavouriteSecurities({ securities, isLoading, onRefresh, isRefres
     return (
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-3 sm:p-6 lg:min-h-[500px]">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+          <WidgetHeading id="favourite-securities">
             {t('favouriteSecurities.title')}
-          </h3>
+          </WidgetHeading>
           <div className="flex items-center gap-2">
             <RefreshButton onRefresh={onRefresh} isRefreshing={isRefreshing} refreshTitle={t('favouriteSecurities.refreshPrices')} />
             <span className="text-sm text-gray-500 dark:text-gray-400">{t('favouriteSecurities.dailyChange')}</span>
@@ -69,9 +70,9 @@ export function FavouriteSecurities({ securities, isLoading, onRefresh, isRefres
   if (securities.length === 0) {
     return (
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-3 sm:p-6 lg:min-h-[500px]">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
+        <WidgetHeading id="favourite-securities" className="mb-4">
           {t('favouriteSecurities.title')}
-        </h3>
+        </WidgetHeading>
         <p className="text-gray-500 dark:text-gray-400 text-sm">
           {t.rich('favouriteSecurities.empty', {
             securitiesLink: (chunks) => (
@@ -91,12 +92,9 @@ export function FavouriteSecurities({ securities, isLoading, onRefresh, isRefres
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-3 sm:p-6 lg:min-h-[500px]">
       <div className="flex items-center justify-between mb-4">
-        <button
-          onClick={() => router.push('/securities')}
-          className="text-lg font-semibold text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-        >
+        <WidgetHeading id="favourite-securities" onClick={() => router.push('/securities')}>
           {t('favouriteSecurities.title')}
-        </button>
+        </WidgetHeading>
         <div className="flex items-center gap-2">
           <RefreshButton onRefresh={onRefresh} isRefreshing={isRefreshing} refreshTitle={t('favouriteSecurities.refreshPrices')} />
           <span className="text-sm text-gray-500 dark:text-gray-400">{t('favouriteSecurities.dailyChange')}</span>

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { useDateFormat } from '@/hooks/useDateFormat';
 import { parseLocalDate } from '@/lib/utils';
 import type { Category } from '@/types/category';
+import { CategoryGlyph } from '@/components/categories/CategoryGlyph';
 import { CategorySwitcher } from './CategorySwitcher';
 
 interface CategoryDetailHeaderProps {
@@ -53,8 +54,9 @@ export function CategoryDetailHeader({
   const t = useTranslations('categoryDetail');
   const { formatDate } = useDateFormat();
 
-  // The user's own colour (or the parent's, inherited); never themed.
+  // The user's own colour and icon, or the nearest ancestor's; never themed.
   const swatchColor = category.effectiveColor ?? category.color;
+  const glyphIcon = category.effectiveIcon ?? category.icon;
 
   // The title carries the same hierarchical label every category picker uses:
   // "Parent: Child" for a subcategory, the bare name for a top-level one. A
@@ -83,15 +85,13 @@ export function CategoryDetailHeader({
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
           <div className="flex min-w-0 items-center gap-2">
-            {swatchColor && (
-              <span
-                className="h-4 w-4 shrink-0 rounded"
-                style={{ backgroundColor: swatchColor }}
-                aria-hidden
-              />
-            )}
+            <CategoryGlyph
+              icon={glyphIcon}
+              color={swatchColor}
+              inherited={!category.icon && !category.color}
+              size={20}
+            />
             <h1 className="truncate text-2xl font-bold text-gray-900 dark:text-gray-100">
-              {category.icon ? `${category.icon} ` : ''}
               {title}
             </h1>
             {/* Jump straight to another category instead of going back to the

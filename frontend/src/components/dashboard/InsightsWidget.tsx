@@ -6,6 +6,7 @@ import { useTranslations } from 'next-intl';
 import { aiApi } from '@/lib/ai';
 import { AiInsight } from '@/types/ai';
 import { stripLinkMarkup } from '@/lib/ai-entity-links';
+import { WidgetHeading } from './widget-meta';
 
 const severityColors: Record<string, string> = {
   alert: 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800',
@@ -45,12 +46,9 @@ export function InsightsWidget({ isLoading: parentLoading }: InsightsWidgetProps
   if (isLoading || parentLoading) {
     return (
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-3 sm:p-6 lg:min-h-[390px]">
-        <button
-          onClick={() => router.push('/insights')}
-          className="text-lg font-semibold text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 transition-colors mb-4"
-        >
+        <WidgetHeading id="insights" onClick={() => router.push('/insights')} className="mb-4">
           {sectionTitle}
-        </button>
+        </WidgetHeading>
         <div className="animate-pulse space-y-3">
           {[1, 2, 3].map((i) => (
             <div key={i} className="h-16 bg-gray-200 dark:bg-gray-700 rounded" />
@@ -63,12 +61,9 @@ export function InsightsWidget({ isLoading: parentLoading }: InsightsWidgetProps
   if (insights.length === 0) {
     return (
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-3 sm:p-6 lg:min-h-[390px]">
-        <button
-          onClick={() => router.push('/insights')}
-          className="text-lg font-semibold text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 transition-colors mb-4"
-        >
+        <WidgetHeading id="insights" onClick={() => router.push('/insights')} className="mb-4">
           {sectionTitle}
-        </button>
+        </WidgetHeading>
         <p className="text-gray-500 dark:text-gray-400 text-sm">
           {t('insights.empty')}
         </p>
@@ -85,12 +80,9 @@ export function InsightsWidget({ isLoading: parentLoading }: InsightsWidgetProps
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-3 sm:p-6 lg:min-h-[390px]">
       <div className="flex items-center justify-between mb-4">
-        <button
-          onClick={() => router.push('/insights')}
-          className="text-lg font-semibold text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-        >
+        <WidgetHeading id="insights" onClick={() => router.push('/insights')}>
           {sectionTitle}
-        </button>
+        </WidgetHeading>
         <span className="text-sm text-gray-500 dark:text-gray-400">
           {t('insights.activeCount', { count: insights.length })}
         </span>

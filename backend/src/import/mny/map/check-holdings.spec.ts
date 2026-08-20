@@ -67,6 +67,7 @@ function tx(
     quantity,
     price: 100,
     commission: 0,
+    accruedInterest: 0,
     totalAmount: 0,
     currencyCode: "USD",
     exchangeRate: 1,

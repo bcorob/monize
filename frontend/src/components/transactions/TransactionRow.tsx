@@ -5,6 +5,8 @@ import { useTranslations } from 'next-intl';
 import { useClickOutside } from '@/hooks/useClickOutside';
 import { createPortal } from 'react-dom';
 import { getIconComponent } from '@/components/ui/IconPicker';
+import { CategoryPill } from '@/components/transactions/CategoryPill';
+import { PayeeLogo } from '@/components/payees/PayeeLogo';
 import { Transaction, TransactionSplit, TransactionStatus } from '@/types/transaction';
 import { StatusCellButton } from '@/components/transactions/StatusCellButton';
 import { CategoryBudgetStatus } from '@/types/budget';
@@ -13,6 +15,7 @@ import { HIGHLIGHT_FLASH, HIGHLIGHT_FLASH_CELL } from '@/hooks/useHighlightTarge
 import { formatAmountWithCommas, getDecimalPlacesForCurrency } from '@/lib/format';
 import { foreignTransactionFee } from '@/lib/fx-fees';
 import { transferDirection } from '@/lib/transfer-label';
+import { usePayeeDisplay } from '@/hooks/usePayeeDisplay';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
 import type { StaleUnreconciledReason } from '@/lib/stale-reconciliation';
 
@@ -171,6 +174,8 @@ export interface TransactionRowProps {
   selectionMode?: boolean;
   onToggleSelection?: () => void;
   categoryColorMap?: Map<string, string | null>;
+  /** Inherited-aware icon per category id; see buildCategoryIconMap. */
+  categoryIconMap?: Map<string, string | null>;
   budgetStatusMap?: Record<string, CategoryBudgetStatus>;
   isFuture?: boolean;
   /** Flash and scroll to this row (e.g. when arriving from a deep link). */
@@ -219,6 +224,7 @@ export const TransactionRow = memo(function TransactionRow({
   selectionMode,
   onToggleSelection,
   categoryColorMap,
+  categoryIconMap,
   budgetStatusMap,
   isFuture,
   isHighlighted,
@@ -241,16 +247,23 @@ export const TransactionRow = memo(function TransactionRow({
       rowRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   }, [isHighlighted]);
-  // Prefer the denormalized payeeName, but fall back to the linked payee's name
-  // so a transaction that has only payeeId set (e.g. created via the REST API
-  // without payeeName) still shows the payee instead of a dash.
-  const payeeLabel = transaction.payeeName || transaction.payee?.name || null;
+  // Prefer the denormalized payeeName, then the linked payee's name (a
+  // transaction with only payeeId set still shows its payee), then -- for a
+  // transfer leg with no payee at all -- the label resolved from the linked
+  // account's current name, localized (issue #1214).
+  const payeeDisplay = usePayeeDisplay();
+  const payeeLabel = payeeDisplay(transaction);
 
   // Fee paid, as a positive cost in the account currency. 0 means no fee
   // applied (e.g. recorded before the account's fee percentage was configured).
   const fxFeePaid = showFxColumns ? foreignTransactionFee(transaction) : 0;
   const categoryColor = transaction.category
     ? (categoryColorMap?.get(transaction.category.id) ?? transaction.category.color)
+    : null;
+  // Same inheritance as the colour: the joined row carries only its own icon,
+  // so a child of an icon-bearing parent needs the map to show one.
+  const categoryIcon = transaction.category
+    ? (categoryIconMap?.get(transaction.category.id) ?? transaction.category.icon)
     : null;
 
   return (
@@ -300,22 +313,36 @@ export const TransactionRow = memo(function TransactionRow({
         {transaction.account?.name || '-'}
       </td>
       <td className={`${cellPadding} max-w-[100px] sm:max-w-none overflow-hidden`}>
-        {transaction.payeeId && onPayeeClick ? (
-          <button
-            onClick={(e) => { e.stopPropagation(); onPayeeClick(transaction.payeeId!); }}
-            className={`text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline block truncate sm:max-w-[280px] text-left ${isVoid ? 'line-through' : ''}`}
-            title={t('list.row.viewPayeeTitle', { name: payeeLabel ?? '' })}
-          >
-            {payeeLabel || '-'}
-          </button>
-        ) : (
-          <div
-            className={`text-sm font-medium text-gray-900 dark:text-gray-100 truncate sm:max-w-[280px] ${isVoid ? 'line-through' : ''}`}
-            title={payeeLabel || undefined}
-          >
-            {payeeLabel || '-'}
-          </div>
-        )}
+        <div className="flex items-center gap-2 min-w-0">
+          {/* Brand badge beside the name, never inside the button: the button's
+              text is the payee name, and a decorative glyph in it changes what
+              every textContent assertion reads. Hidden at dense, where the row
+              is one line of data and a 20px chip per row is noise. */}
+          {density !== 'dense' && payeeLabel && (
+            <PayeeLogo
+              payee={transaction.payee}
+              name={payeeLabel}
+              size={20}
+              className="hidden sm:inline-flex"
+            />
+          )}
+          {transaction.payeeId && onPayeeClick ? (
+            <button
+              onClick={(e) => { e.stopPropagation(); onPayeeClick(transaction.payeeId!); }}
+              className={`text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline block truncate sm:max-w-[280px] text-left ${isVoid ? 'line-through' : ''}`}
+              title={t('list.row.viewPayeeTitle', { name: payeeLabel ?? '' })}
+            >
+              {payeeLabel || '-'}
+            </button>
+          ) : (
+            <div
+              className={`text-sm font-medium text-gray-900 dark:text-gray-100 truncate sm:max-w-[280px] ${isVoid ? 'line-through' : ''}`}
+              title={payeeLabel || undefined}
+            >
+              {payeeLabel || '-'}
+            </div>
+          )}
+        </div>
         {density === 'normal' && transaction.referenceNumber && (
           <div className="text-xs text-gray-500 dark:text-gray-400">
             {t('list.row.ref', { number: transaction.referenceNumber })}
@@ -337,39 +364,25 @@ export const TransactionRow = memo(function TransactionRow({
           // the category chip alongside the arrow so the assigned category is
           // visible, not hidden behind the transfer chip.
           <span className="inline-flex items-center gap-1 flex-wrap">
-            {transaction.category &&
-              (onCategoryClick ? (
-                <button
-                  onClick={(e) => { e.stopPropagation(); onCategoryClick(transaction.category!.id); }}
-                  className={`inline-flex text-xs leading-5 font-semibold rounded-full truncate max-w-[140px] hover:opacity-80 transition-opacity ${density === 'dense' ? 'px-1.5 py-0.5' : 'px-2 py-1'}`}
-                  style={{
-                    backgroundColor: categoryColor
-                      ? `color-mix(in srgb, ${categoryColor} 15%, var(--category-bg-base, #e5e7eb))`
-                      : 'var(--category-bg-base, #e5e7eb)',
-                    color: categoryColor
-                      ? `color-mix(in srgb, ${categoryColor} 85%, var(--category-text-mix, #000))`
-                      : 'var(--category-text-base, #6b7280)',
-                  }}
-                  title={t('list.row.filterByCategory', { name: transaction.category.name })}
-                >
-                  {transaction.category.name}
-                </button>
-              ) : (
-                <span
-                  className={`inline-flex text-xs leading-5 font-semibold rounded-full truncate max-w-[140px] ${density === 'dense' ? 'px-1.5 py-0.5' : 'px-2 py-1'}`}
-                  style={{
-                    backgroundColor: categoryColor
-                      ? `color-mix(in srgb, ${categoryColor} 15%, var(--category-bg-base, #e5e7eb))`
-                      : 'var(--category-bg-base, #e5e7eb)',
-                    color: categoryColor
-                      ? `color-mix(in srgb, ${categoryColor} 85%, var(--category-text-mix, #000))`
-                      : 'var(--category-text-base, #6b7280)',
-                  }}
-                  title={transaction.category.name}
-                >
-                  {transaction.category.name}
-                </span>
-              ))}
+            {transaction.category && (
+              <CategoryPill
+                name={transaction.category.name}
+                color={categoryColor}
+                icon={categoryIcon}
+                density={density}
+                maxWidthClass="max-w-[140px]"
+                title={
+                  onCategoryClick
+                    ? t('list.row.filterByCategory', { name: transaction.category.name })
+                    : undefined
+                }
+                onClick={
+                  onCategoryClick
+                    ? (e) => { e.stopPropagation(); onCategoryClick(transaction.category!.id); }
+                    : undefined
+                }
+              />
+            )}
             {onTransferClick && transaction.linkedTransaction?.account?.id && transaction.linkedTransactionId ? (
               <button
                 onClick={(e) => {
@@ -453,41 +466,24 @@ export const TransactionRow = memo(function TransactionRow({
               />
             ) : null;
 
-            return onCategoryClick ? (
+            return (
               <span className="inline-flex items-center">
-                <button
-                  onClick={(e) => { e.stopPropagation(); onCategoryClick(transaction.category!.id); }}
-                  className={`inline-flex text-xs leading-5 font-semibold rounded-full truncate max-w-[160px] hover:opacity-80 transition-opacity ${density === 'dense' ? 'px-1.5 py-0.5' : 'px-2 py-1'}`}
-                  style={{
-                    backgroundColor: categoryColor
-                      ? `color-mix(in srgb, ${categoryColor} 15%, var(--category-bg-base, #e5e7eb))`
-                      : 'var(--category-bg-base, #e5e7eb)',
-                    color: categoryColor
-                      ? `color-mix(in srgb, ${categoryColor} 85%, var(--category-text-mix, #000))`
-                      : 'var(--category-text-base, #6b7280)',
-                  }}
-                  title={t('list.row.filterByCategory', { name: transaction.category!.name })}
-                >
-                  {transaction.category!.name}
-                </button>
-                {budgetIndicator}
-              </span>
-            ) : (
-              <span className="inline-flex items-center">
-                <span
-                  className={`inline-flex text-xs leading-5 font-semibold rounded-full truncate max-w-[160px] ${density === 'dense' ? 'px-1.5 py-0.5' : 'px-2 py-1'}`}
-                  style={{
-                    backgroundColor: categoryColor
-                      ? `color-mix(in srgb, ${categoryColor} 15%, var(--category-bg-base, #e5e7eb))`
-                      : 'var(--category-bg-base, #e5e7eb)',
-                    color: categoryColor
-                      ? `color-mix(in srgb, ${categoryColor} 85%, var(--category-text-mix, #000))`
-                      : 'var(--category-text-base, #6b7280)',
-                  }}
-                  title={transaction.category!.name}
-                >
-                  {transaction.category!.name}
-                </span>
+                <CategoryPill
+                  name={transaction.category!.name}
+                  color={categoryColor}
+                  icon={categoryIcon}
+                  density={density}
+                  title={
+                    onCategoryClick
+                      ? t('list.row.filterByCategory', { name: transaction.category!.name })
+                      : undefined
+                  }
+                  onClick={
+                    onCategoryClick
+                      ? (e) => { e.stopPropagation(); onCategoryClick(transaction.category!.id); }
+                      : undefined
+                  }
+                />
                 {budgetIndicator}
               </span>
             );

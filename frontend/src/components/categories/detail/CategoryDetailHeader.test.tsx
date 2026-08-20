@@ -16,6 +16,7 @@ function category(overrides: Partial<Category> = {}): Category {
     icon: null,
     color: null,
     effectiveColor: null,
+    effectiveIcon: null,
     isIncome: false,
     isSystem: false,
     createdAt: '2024-01-15T00:00:00.000Z',
@@ -127,5 +128,29 @@ describe('CategoryDetailHeader', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Switch category' }));
     fireEvent.click(screen.getByRole('menuitem', { name: /Travel/ }));
     expect(onSelectCategory).toHaveBeenCalledWith('cat-2');
+  });
+  describe('the category glyph', () => {
+    it('draws the icon rather than printing its name', () => {
+      // The heading interpolated `category.icon` into text, so picking an icon
+      // showed "shopping-cart" beside the name.
+      const { container } = renderHeader({
+        icon: 'shopping-cart',
+        color: '#22c55e',
+      });
+
+      expect(screen.queryByText(/shopping-cart/)).toBeNull();
+      expect(container.querySelector('svg')).toBeTruthy();
+    });
+
+    it('shows the icon inherited from a parent category', () => {
+      const { container } = renderHeader({
+        icon: null,
+        effectiveIcon: 'home',
+        color: null,
+        effectiveColor: '#22c55e',
+      });
+
+      expect(container.querySelector('svg')).toBeTruthy();
+    });
   });
 });

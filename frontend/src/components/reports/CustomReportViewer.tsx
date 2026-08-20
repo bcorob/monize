@@ -23,6 +23,7 @@ import { useDateFormat } from '@/hooks/useDateFormat';
 import { createLogger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/errors';
 import { useTranslations } from 'next-intl';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 const logger = createLogger('CustomReportViewer');
 
@@ -148,12 +149,14 @@ export function CustomReportViewer({ reportId }: CustomReportViewerProps) {
 
   if (!report) {
     return (
-      <div className="text-center py-12">
-        <p className="text-gray-500 dark:text-gray-400">{t('customReportViewer.notFound')}</p>
-        <Button variant="outline" onClick={() => router.push('/reports')} className="mt-4">
-          {t('detailHeader.backToReports')}
-        </Button>
-      </div>
+      <EmptyState
+        title={t('customReportViewer.notFound')}
+        action={
+          <Button variant="outline" onClick={() => router.push('/reports')}>
+            {t('detailHeader.backToReports')}
+          </Button>
+        }
+      />
     );
   }
 

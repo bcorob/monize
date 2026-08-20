@@ -23,6 +23,7 @@ import { mapInvestments } from "./map/map-investments";
 import {
   applyInvestmentCashSources,
   investmentWritesOwnCashRow,
+  reconcileEmbeddedAccruedInterest,
   tradesByHandle,
 } from "./map/investment-cash";
 import { billReferences, mapBills, selectedBills } from "./map/map-bills";
@@ -408,9 +409,11 @@ export class MnyParserService {
       cashKeyByAccountKey: cashKeyByAccountKey(accounts),
       tradesByHandle: tradesByHandle(mappedInvestments),
     });
-    const investments = applyInvestmentCashSources(
-      mappedInvestments,
-      transactions.investmentCashSources,
+    const investments = reconcileEmbeddedAccruedInterest(
+      applyInvestmentCashSources(
+        mappedInvestments,
+        transactions.investmentCashSources,
+      ),
     );
     const holdings = crossCheckHoldings({
       transactions: investments.transactions,

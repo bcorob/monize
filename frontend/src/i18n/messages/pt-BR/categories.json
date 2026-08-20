@@ -58,6 +58,8 @@
     "colourInherit": "Herdar da categoria-mãe",
     "colourNone": "Sem cor",
     "colourInheritedFrom": "Cor herdada da categoria-mãe ({name})",
+    "iconLabel": "Ícone",
+    "iconNone": "Sem ícone",
     "descriptionLabel": "Descrição (opcional)",
     "submitCreate": "Criar categoria",
     "submitUpdate": "Atualizar categoria"

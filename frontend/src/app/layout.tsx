@@ -73,26 +73,30 @@ export default async function RootLayout({
             </PreferencesLoader>
             <WhatsNewHost />
             <TourHost />
+            {/* Toast colours ride the theme variables so all colour themes
+                in themes.css re-skin them; the chip stays dark in both modes
+                (gray-800 is a surface every theme defines), and the semantic
+                icon tints come from the @theme tokens. */}
             <Toaster
               position="top-right"
               toastOptions={{
                 duration: 4000,
                 style: {
-                  background: '#363636',
-                  color: '#fff',
+                  background: 'var(--color-gray-800)',
+                  color: 'var(--color-gray-100)',
                 },
                 success: {
                   duration: 3000,
                   iconTheme: {
-                    primary: '#10b981',
-                    secondary: '#fff',
+                    primary: 'var(--color-success)',
+                    secondary: 'var(--color-gray-100)',
                   },
                 },
                 error: {
                   duration: 4000,
                   iconTheme: {
-                    primary: '#ef4444',
-                    secondary: '#fff',
+                    primary: 'var(--color-danger)',
+                    secondary: 'var(--color-gray-100)',
                   },
                 },
               }}

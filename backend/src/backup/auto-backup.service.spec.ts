@@ -28,6 +28,11 @@ import {
   userMaintenanceProvider,
   type UserMaintenanceMock,
 } from "../test-helpers/job-claim-testing";
+import {
+  columnProblem,
+  parseSchemaColumns,
+  statementClaims,
+} from "../common/db/raw-sql-columns";
 
 jest.mock("../common/db/scoped-db", () =>
   jest.requireActual("../test-helpers/scoped-db-testing").scopedDbMockModule(),
@@ -154,8 +159,11 @@ describe("AutoBackupService", () => {
     // `UPDATE ... RETURNING`, which the pg driver answers as
     // `[rows, rowCount]`. Winning by default preserves the behaviour every test
     // written before the claim existed expects; the loser path is asserted
-    // explicitly below.
-    scoped.manager.query.mockResolvedValue([[{ id: "settings-1" }], 1]);
+    // explicitly below. The returned row carries `user_id` because that is what
+    // the statement returns and what the table has -- a fixture keyed `id`
+    // described a column `auto_backup_settings` does not define, which is the
+    // shape the outage was in.
+    scoped.manager.query.mockResolvedValue([[{ user_id: userId }], 1]);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -1470,8 +1478,127 @@ describe("AutoBackupService", () => {
         )!;
         expect(sql).toContain("next_backup_at <= $3");
         expect(sql).toContain("enabled = true");
-        expect(sql).toContain("RETURNING id");
         expect(params).toHaveLength(3);
+      });
+
+      it("returns a column this table actually has", async () => {
+        // The regression: the claim ended `RETURNING id`, and
+        // `auto_backup_settings` has no `id` -- `user_id` is its primary key.
+        // Postgres raised 42703 out of `claimDueBackup`, which runs before the
+        // per-user `try`, so the whole sweep aborted on the first due user and
+        // nothing was even recorded as failed.
+        //
+        // This assertion is deliberately not `toContain("RETURNING user_id")`:
+        // the previous one was `toContain("RETURNING id")`, and a mocked
+        // `manager.query` cannot tell a real column from a plausible one. The
+        // column is checked against `database/schema.sql`, and the tree-wide
+        // version of the same check is
+        // `backend/src/common/db/raw-sql-columns.spec.ts`.
+        const schema = parseSchemaColumns(
+          readFileSync(
+            join(__dirname, "..", "..", "..", "database", "schema.sql"),
+            "utf8",
+          ),
+        );
+        mockSettingsRepo.find.mockResolvedValue([dueSettings()]);
+        await service.handleAutoBackupCron();
+        const claimSql = String(
+          scoped.manager.query.mock.calls.find((call) =>
+            String(call[0]).includes("UPDATE auto_backup_settings"),
+          )![0],
+        );
+        const claims = statementClaims(claimSql).flatMap(
+          (statement) => statement.claims,
+        );
+        expect(claims).toContainEqual({
+          table: "auto_backup_settings",
+          column: "user_id",
+          clause: "RETURNING",
+        });
+        expect(
+          claims
+            .map((claim) => columnProblem(claim, schema))
+            .filter((problem) => problem !== null),
+        ).toEqual([]);
+      });
+
+      it("runs the users after one whose claim throws", async () => {
+        // The regression this pairs with: `RETURNING id` raised 42703 from
+        // inside `claimDueBackup`, which sat *outside* the per-user try, so the
+        // throw left `handleAutoBackupCron` entirely. Every user after the
+        // first due one was skipped, hour after hour, and none of them was even
+        // recorded as failed -- the settings page showed the last successful
+        // run from before the deploy.
+        mockSettingsRepo.find.mockResolvedValue([
+          dueSettings(),
+          createSettings({
+            userId: otherUserId,
+            folderPath: root,
+            enabled: true,
+            nextBackupAt: new Date(Date.now() - 3600000),
+          }),
+        ]);
+        scoped.manager.query
+          .mockRejectedValueOnce(new Error('column "id" does not exist'))
+          .mockResolvedValue([[{ user_id: otherUserId }], 1]);
+
+        await service.handleAutoBackupCron();
+
+        expect(await listBackups(folderFor())).toHaveLength(0);
+        expect(await listBackups(folderFor(otherUserId))).toHaveLength(1);
+        // And the user whose window failed is told so, rather than being left
+        // showing the last run that worked.
+        expect(updateBuilder.set).toHaveBeenCalledWith(
+          expect.objectContaining({
+            lastBackupStatus: "failed",
+            lastBackupError: expect.stringContaining("does not exist"),
+          }),
+        );
+      });
+
+      it("runs the users after one whose maintenance pre-check throws", async () => {
+        // The pre-check was outside the try as well, and it reads two other
+        // tables -- so the same one-user-ends-the-sweep failure was reachable
+        // without any backup being attempted at all.
+        mockSettingsRepo.find.mockResolvedValue([
+          dueSettings(),
+          createSettings({
+            userId: otherUserId,
+            folderPath: root,
+            enabled: true,
+            nextBackupAt: new Date(Date.now() - 3600000),
+          }),
+        ]);
+        maintenance.isUnderMaintenance
+          .mockRejectedValueOnce(new Error("db down"))
+          .mockResolvedValue(false);
+
+        await service.handleAutoBackupCron();
+
+        expect(await listBackups(folderFor(otherUserId))).toHaveLength(1);
+      });
+
+      it("continues when recording the failure fails too", async () => {
+        // The outcome write is a database call, so whatever broke the backup can
+        // break the recording of it. Throwing from the recorder would put the
+        // sweep back where it started.
+        mockSettingsRepo.find.mockResolvedValue([
+          dueSettings(),
+          createSettings({
+            userId: otherUserId,
+            folderPath: root,
+            enabled: true,
+            nextBackupAt: new Date(Date.now() - 3600000),
+          }),
+        ]);
+        scoped.manager.query
+          .mockRejectedValueOnce(new Error("claim failed"))
+          .mockResolvedValue([[{ user_id: otherUserId }], 1]);
+        updateBuilder.execute.mockRejectedValueOnce(new Error("write failed"));
+
+        await expect(service.handleAutoBackupCron()).resolves.toBeUndefined();
+
+        expect(await listBackups(folderFor(otherUserId))).toHaveLength(1);
       });
 
       it("exports nothing when another replica claimed the window", async () => {

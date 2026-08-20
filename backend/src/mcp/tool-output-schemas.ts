@@ -233,6 +233,12 @@ export const getPayeesOutput = {
       // notes is a nullable column -- a payee without notes serializes as null,
       // which must pass output validation (was rejected by a non-null string).
       notes: strNull.optional(),
+      // Declared so a model can answer "which payees have no website?" from
+      // the schema rather than guessing that the field exists. Nullable, like
+      // notes -- a payee without one serializes as null.
+      website: strNull.optional(),
+      /** Whether a brand icon has been resolved from that website. */
+      hasLogo: bool.optional(),
       isActive: bool.optional(),
       transactionCount: num.optional(),
       lastUsedDate: strNull.optional(),

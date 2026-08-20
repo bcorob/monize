@@ -58,6 +58,7 @@ describe("computeExpectedBalances", () => {
         isTransfer: false,
         linkedTransactionId: null,
         splits: [],
+        collapsedTradeHandle: null,
       })),
       referencedPayees: new Set(),
       referencedCategories: new Set(),

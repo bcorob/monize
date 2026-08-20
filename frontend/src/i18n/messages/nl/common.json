@@ -17,6 +17,7 @@
     "unavailable": "Er zijn geen release-opmerkingen beschikbaar voor deze versie.",
     "englishOnly": "De release-opmerkingen hieronder zijn alleen in het Engels. Monize zelf, inclusief de rondleidingen, volgt je taalinstelling."
   },
+  "transferPayee": "{direction, select, to {Overboeking naar {name}} other {Overboeking van {name}}}",
   "save": "Opslaan",
   "cancel": "Annuleren",
   "delete": "Verwijderen",

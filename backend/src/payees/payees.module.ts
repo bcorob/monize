@@ -11,6 +11,7 @@ import { PayeeToolPrepService } from "./payee-tool-prep.service";
 import { PayeeAutoMergeService } from "./payee-auto-merge.service";
 import { PayeesController } from "./payees.controller";
 import { ActionHistoryModule } from "../action-history/action-history.module";
+import { FaviconModule } from "../common/favicon/favicon.module";
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { ActionHistoryModule } from "../action-history/action-history.module";
       Category,
     ]),
     ActionHistoryModule,
+    FaviconModule,
   ],
   providers: [
     PayeesService,

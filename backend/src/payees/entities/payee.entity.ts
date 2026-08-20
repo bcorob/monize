@@ -7,7 +7,8 @@ import {
   CreateDateColumn,
   Unique,
 } from "typeorm";
-import { ApiProperty } from "@nestjs/swagger";
+import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
+import { Exclude } from "class-transformer";
 import { Category } from "../../categories/entities/category.entity";
 import { User } from "../../users/entities/user.entity";
 
@@ -49,6 +50,33 @@ export class Payee {
   @ApiProperty({ example: "https://www.starbucks.com", required: false })
   @Column({ type: "varchar", length: 2048, nullable: true })
   website: string | null;
+
+  // Cached favicon bytes. Never selected by default and never serialized to the
+  // client -- the bytes are served only through GET /payees/:id/logo.
+  @Exclude()
+  @Column({ type: "bytea", name: "logo_data", nullable: true, select: false })
+  logoData: Buffer | null;
+
+  @Exclude()
+  @Column({
+    type: "varchar",
+    name: "logo_content_type",
+    length: 100,
+    nullable: true,
+    select: false,
+  })
+  logoContentType: string | null;
+
+  @ApiProperty({
+    example: true,
+    description: "Whether a cached brand logo is available",
+  })
+  @Column({ type: "boolean", name: "has_logo", default: false })
+  hasLogo: boolean;
+
+  @ApiPropertyOptional()
+  @Column({ type: "timestamp", name: "logo_fetched_at", nullable: true })
+  logoFetchedAt: Date | null;
 
   @ApiProperty({ example: true, description: "Whether the payee is active" })
   @Column({ type: "boolean", name: "is_active", default: true })

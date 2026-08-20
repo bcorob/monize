@@ -58,6 +58,8 @@
     "colourInherit": "상위에서 상속",
     "colourNone": "색상 없음",
     "colourInheritedFrom": "상위({name})에서 색상 상속",
+    "iconLabel": "아이콘",
+    "iconNone": "아이콘 없음",
     "descriptionLabel": "설명 (선택 사항)",
     "submitCreate": "카테고리 만들기",
     "submitUpdate": "카테고리 업데이트"

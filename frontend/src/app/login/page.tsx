@@ -8,7 +8,6 @@ import '@/lib/zodConfig';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import Link from 'next/link';
-import Image from 'next/image';
 import toast from 'react-hot-toast';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
@@ -16,10 +15,9 @@ import { useAuthStore } from '@/store/authStore';
 import { useDemoStore } from '@/store/demoStore';
 import { authApi, AuthMethods } from '@/lib/auth';
 import { TwoFactorVerify } from '@/components/auth/TwoFactorVerify';
-import { AuthLanguagePicker } from '@/components/auth/AuthLanguagePicker';
+import { AuthShell } from '@/components/auth/AuthShell';
 import { IncompleteLogoutNotice } from '@/components/auth/IncompleteLogoutNotice';
 import { clearLogoutIncomplete } from '@/lib/logout-state';
-import { AppVersion } from '@/components/ui/AppVersion';
 import { User } from '@/types/auth';
 import { createLogger } from '@/lib/logger';
 import { buildEmailSchema } from '@/lib/zod-helpers';
@@ -189,24 +187,22 @@ export default function LoginPage() {
 
   if (isLoadingMethods) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-        <div className="text-gray-500 dark:text-gray-400">{tc('loading')}</div>
-      </div>
+      <AuthShell plain>
+        <div className="text-center text-gray-500 dark:text-gray-400">{tc('loading')}</div>
+      </AuthShell>
     );
   }
 
   // If only OIDC is available, auto-redirect to OIDC
   if (!authMethods.local && authMethods.oidc) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-md w-full space-y-8 text-center">
-          <IncompleteLogoutNotice />
-          <div>
-            <Image src="/icons/monize-logo.svg" alt="Monize" width={96} height={96} className="mx-auto rounded-xl" priority />
-            <h2 className="mt-4 text-3xl font-extrabold text-gray-900 dark:text-gray-100">
-              {t('signIn.title')}
-            </h2>
-          </div>
+      <AuthShell
+        title={t('signIn.title')}
+        notices={<IncompleteLogoutNotice />}
+        languagePicker
+        showVersion
+      >
+        <div className="space-y-6 text-center">
           <p className="text-gray-600 dark:text-gray-400">
             {t('signIn.ssoIntro')}
           </p>
@@ -231,105 +227,92 @@ export default function LoginPage() {
             </svg>
             {t('signIn.ssoButton')}
           </Button>
-
-          <AuthLanguagePicker />
-
-          <AppVersion className="text-xs text-gray-400 dark:text-gray-500 mt-6" />
         </div>
-      </div>
+      </AuthShell>
     );
   }
 
   if (twoFactorState) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-md w-full space-y-8">
-          <div className="text-center">
-            <Image src="/icons/monize-logo.svg" alt="Monize" width={96} height={96} className="mx-auto rounded-xl" priority />
-          </div>
-          <TwoFactorVerify
-            tempToken={twoFactorState.tempToken}
-            onVerified={handle2FAVerified}
-            onCancel={() => setTwoFactorState(null)}
-          />
-          <AuthLanguagePicker />
-        </div>
-      </div>
+      <AuthShell languagePicker>
+        <TwoFactorVerify
+          tempToken={twoFactorState.tempToken}
+          onVerified={handle2FAVerified}
+          onCancel={() => setTwoFactorState(null)}
+        />
+      </AuthShell>
     );
   }
 
   if (emailNotVerified) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-md w-full space-y-8">
-          <div className="text-center">
-            <Image src="/icons/monize-logo.svg" alt="Monize" width={96} height={96} className="mx-auto rounded-xl" priority />
-            <h2 className="mt-4 text-3xl font-extrabold text-gray-900 dark:text-gray-100">
-              {t('signIn.notVerifiedTitle')}
-            </h2>
-          </div>
+      <AuthShell
+        title={t('signIn.notVerifiedTitle')}
+        notices={
           <div className="bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-lg p-4 text-center">
             <p className="text-sm text-amber-800 dark:text-amber-200">
               {t('signIn.notVerifiedMessage')}
             </p>
           </div>
-          <div className="space-y-3">
-            <Button
-              type="button"
-              variant="primary"
-              size="lg"
-              isLoading={isResending}
-              onClick={handleResendVerification}
-              className="w-full"
-            >
-              {t('signIn.resendVerification')}
-            </Button>
-            <button
-              type="button"
-              onClick={() => setEmailNotVerified(null)}
-              className="block w-full text-center font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300"
-            >
-              {t('backToSignIn')}
-            </button>
-          </div>
-          <AuthLanguagePicker />
+        }
+        languagePicker
+      >
+        <div className="space-y-3">
+          <Button
+            type="button"
+            variant="primary"
+            size="lg"
+            isLoading={isResending}
+            onClick={handleResendVerification}
+            className="w-full"
+          >
+            {t('signIn.resendVerification')}
+          </Button>
+          <button
+            type="button"
+            onClick={() => setEmailNotVerified(null)}
+            className="block w-full text-center font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300"
+          >
+            {t('backToSignIn')}
+          </button>
         </div>
-      </div>
+      </AuthShell>
     );
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        <div>
-          <Image src="/icons/monize-logo.svg" alt="Monize" width={96} height={96} className="mx-auto rounded-xl" priority />
-          <h2 className="mt-4 text-center text-3xl font-extrabold text-gray-900 dark:text-gray-100">
-            {t('signIn.title')}
-          </h2>
-          {authMethods.local && authMethods.registration && !authMethods.demo && (
-            <p className="mt-2 text-center text-sm text-gray-600 dark:text-gray-400">
-              {t('signIn.orPrefix')}{' '}
-              <Link
-                href="/register"
-                className="font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300"
-              >
-                {t('signIn.createAccount')}
-              </Link>
-            </p>
+    <AuthShell
+      title={t('signIn.title')}
+      subtitle={
+        authMethods.local && authMethods.registration && !authMethods.demo ? (
+          <p>
+            {t('signIn.orPrefix')}{' '}
+            <Link
+              href="/register"
+              className="font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300"
+            >
+              {t('signIn.createAccount')}
+            </Link>
+          </p>
+        ) : undefined
+      }
+      notices={
+        <>
+          <IncompleteLogoutNotice />
+          {authMethods.demo && (
+            <div className="bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-lg px-4 py-3 text-center text-sm text-amber-800 dark:text-amber-200">
+              <p className="font-semibold">{t('demo.badge')}</p>
+              <p className="mt-1">{t('demo.credentialsNote')}</p>
+            </div>
           )}
-        </div>
-
-        <IncompleteLogoutNotice />
-
-        {authMethods.demo && (
-          <div className="bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-lg px-4 py-3 text-center text-sm text-amber-800 dark:text-amber-200">
-            <p className="font-semibold">{t('demo.badge')}</p>
-            <p className="mt-1">{t('demo.credentialsNote')}</p>
-          </div>
-        )}
-
+        </>
+      }
+      languagePicker
+      showVersion
+    >
+      <>
         {authMethods.local && (
-          <form className="mt-8 space-y-6" onSubmit={handleSubmit(onSubmit)}>
+          <form className="space-y-6" onSubmit={handleSubmit(onSubmit)}>
             <div className="space-y-4">
               <Input
                 label={t('signIn.emailLabel')}
@@ -394,7 +377,7 @@ export default function LoginPage() {
                       <div className="w-full border-t border-gray-300 dark:border-gray-700" />
                     </div>
                     <div className="relative flex justify-center text-sm">
-                      <span className="px-2 bg-gray-50 dark:bg-gray-900 text-gray-500 dark:text-gray-400">
+                      <span className="px-2 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400">
                         {t('signIn.orContinueWith')}
                       </span>
                     </div>
@@ -432,11 +415,7 @@ export default function LoginPage() {
             {t('signIn.noMethods')}
           </div>
         )}
-
-        <AuthLanguagePicker />
-
-        <AppVersion className="text-center text-xs text-gray-400 dark:text-gray-500 mt-6" />
-      </div>
-    </div>
+      </>
+    </AuthShell>
   );
 }

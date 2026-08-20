@@ -342,4 +342,54 @@ describe('CategoryInfoWidget', () => {
     fireEvent.click(screen.getByLabelText('View category details'));
     expect(mockPush).toHaveBeenCalledWith('/categories/c-1');
   });
+  describe('the category glyph', () => {
+    /**
+     * The glyph sits in the header row beside the name. Scope every assertion
+     * to that row: the widget draws other icons further down, so a bare
+     * `querySelector('svg')` would pass whether or not the glyph rendered.
+     */
+    const headerRow = (container: HTMLElement) =>
+      container.querySelector('.flex.items-center.gap-3') as HTMLElement;
+
+    it('draws the icon rather than printing its name', async () => {
+      // The header used to interpolate `category.icon` into the heading, so a
+      // category with an icon read "shopping-cart Bakery".
+      const { container } = await renderWidget({
+        category: makeCategory({ name: 'Bakery', icon: 'shopping-cart' }),
+      });
+
+      expect(screen.queryByText(/shopping-cart/)).toBeNull();
+      expect(headerRow(container).querySelector('svg')).toBeTruthy();
+      expect(screen.getByText('Bakery')).toBeInTheDocument();
+    });
+
+    it('inherits a parent icon when the category has none of its own', async () => {
+      const { container } = await renderWidget({
+        category: makeCategory({
+          name: 'Bakery',
+          icon: null,
+          effectiveIcon: 'shopping-cart',
+        }),
+      });
+
+      expect(headerRow(container).querySelector('svg')).toBeTruthy();
+      expect(screen.queryByText(/shopping-cart/)).toBeNull();
+    });
+
+    it('falls back to the colour dot when there is no icon anywhere', async () => {
+      const { container } = await renderWidget({
+        category: makeCategory({
+          name: 'Bakery',
+          icon: null,
+          effectiveIcon: null,
+          color: '#ff0000',
+          effectiveColor: '#ff0000',
+        }),
+      });
+
+      const row = headerRow(container);
+      expect(row.querySelector('svg')).toBeNull();
+      expect(row.querySelector('span[class*="rounded-full"]')).toBeTruthy();
+    });
+  });
 });

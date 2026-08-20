@@ -115,6 +115,67 @@ describe('TransactionRow', () => {
     expect(onPayeeClick).toHaveBeenCalledWith('p1');
   });
 
+  it('resolves a blank transfer payee from the linked account (issue #1214)', () => {
+    // A transfer persisted with no payee (the stored state since #1214)
+    // shows "Transfer to <account>" resolved at render time from the linked
+    // leg's CURRENT account name, localized -- not a dash, and not a stamped
+    // string from creation time.
+    renderRow({}, {
+      payeeId: null,
+      payeeName: null,
+      payee: null,
+      isTransfer: true,
+      amount: -250,
+      categoryId: null,
+      category: null,
+      linkedTransactionId: 't2',
+      linkedTransaction: {
+        id: 't2',
+        accountId: 'a2',
+        account: { id: 'a2', name: 'Savings' },
+      } as any,
+    });
+    expect(screen.getByText('Transfer to Savings')).toBeInTheDocument();
+  });
+
+  it('resolves the receiving leg as Transfer from (issue #1214)', () => {
+    renderRow({}, {
+      payeeId: null,
+      payeeName: null,
+      payee: null,
+      isTransfer: true,
+      amount: 250,
+      categoryId: null,
+      category: null,
+      linkedTransactionId: 't2',
+      linkedTransaction: {
+        id: 't2',
+        accountId: 'a2',
+        account: { id: 'a2', name: 'Chequing' },
+      } as any,
+    });
+    expect(screen.getByText('Transfer from Chequing')).toBeInTheDocument();
+  });
+
+  it('keeps a stored payee over the resolved transfer label', () => {
+    // A custom label (or a legacy stamp the migration could not match) wins.
+    renderRow({}, {
+      payeeId: null,
+      payeeName: 'Transfer to Old Name',
+      payee: null,
+      isTransfer: true,
+      amount: -250,
+      linkedTransactionId: 't2',
+      linkedTransaction: {
+        id: 't2',
+        accountId: 'a2',
+        account: { id: 'a2', name: 'Savings' },
+      } as any,
+    });
+    expect(screen.getByText('Transfer to Old Name')).toBeInTheDocument();
+    expect(screen.queryByText('Transfer to Savings')).not.toBeInTheDocument();
+  });
+
   it('renders payee as text when no payeeId', () => {
     renderRow({}, { payeeId: null, payeeName: null });
     // Multiple "-" in row
@@ -685,6 +746,21 @@ describe('TransactionRow', () => {
     expect(screen.getByText('Food')).toBeInTheDocument();
   });
 
+  it('draws the icon a category inherited from its parent', () => {
+    // The joined category row carries only its own icon, so without the map a
+    // child of an icon-bearing parent shows a bare pill while the categories
+    // list beside it shows a glyph.
+    const { container } = renderRow({
+      categoryIconMap: new Map([['c1', 'shopping-cart']]),
+    });
+    expect(container.querySelector('svg')).toBeTruthy();
+  });
+
+  it('draws no glyph when neither the row nor the map has an icon', () => {
+    const { container } = renderRow({ categoryIconMap: new Map() });
+    expect(container.querySelector('svg')).toBeNull();
+  });
+
   it('renders category badge using categoryColorMap color override', () => {
     renderRow({
       categoryColorMap: new Map([['c1', '#abcdef']]),
@@ -905,5 +981,73 @@ describe('TransactionRow', () => {
       },
     );
     expect(screen.getByText(/Dividend:/)).toBeInTheDocument();
+  });
+});
+
+describe('TransactionRow payee brand icon', () => {
+  const withLogo = {
+    id: 'p1',
+    name: 'Coffee Co',
+    hasLogo: true,
+  } as Transaction['payee'];
+
+  it('renders the cached favicon at normal density', () => {
+    const { container } = renderRow({}, { payee: withLogo });
+    const img = container.querySelector('td img') as HTMLImageElement;
+    expect(img).toBeTruthy();
+    expect(img.getAttribute('src')).toBe('/api/v1/payees/p1/logo');
+  });
+
+  it('renders the cached favicon at compact density', () => {
+    const { container } = renderRow({ density: 'compact' }, { payee: withLogo });
+    expect(container.querySelector('td img')).toBeTruthy();
+  });
+
+  it('draws no badge at dense density', () => {
+    // A dense row is one line of data; a chip on every row is noise there.
+    const { container } = renderRow({ density: 'dense' }, { payee: withLogo });
+    expect(container.querySelector('td img')).toBeNull();
+    expect(screen.queryByText('C')).toBeNull();
+  });
+
+  it('falls back to the initial badge when the payee has no cached icon', () => {
+    const { container } = renderRow(
+      {},
+      { payee: { ...withLogo, hasLogo: false } as Transaction['payee'] },
+    );
+    // hasLogo false must not issue a request that is a guaranteed 404.
+    expect(container.querySelector('td img')).toBeNull();
+    expect(screen.getByText('C')).toBeInTheDocument();
+  });
+
+  it('badges a free-text payee from its name', () => {
+    // payeeId/payee are null for a name typed straight onto the transaction;
+    // there is no logo route to read, but the column still has to line up.
+    const { container } = renderRow(
+      {},
+      { payeeId: null, payee: null, payeeName: 'Corner Shop' },
+    );
+    expect(container.querySelector('td img')).toBeNull();
+    expect(screen.getByText('C')).toBeInTheDocument();
+  });
+
+  it('draws no badge when the row has no payee at all', () => {
+    const { container } = renderRow(
+      {},
+      { payeeId: null, payee: null, payeeName: null },
+    );
+    expect(container.querySelector('td img')).toBeNull();
+    expect(container.querySelector('td span[aria-hidden="true"]')).toBeNull();
+  });
+
+  it('keeps the payee button\'s text to the name alone', () => {
+    // The badge is a sibling of the button, never inside it: a glyph in there
+    // changes what every textContent assertion over the cell reads.
+    renderRow({ onPayeeClick: vi.fn() }, { payee: withLogo });
+    // getByText matches an element's own text, so a badge moved inside the
+    // button would make this fail rather than quietly pass.
+    const button = screen.getByText('Coffee Co');
+    expect(button.tagName).toBe('BUTTON');
+    expect(button.textContent).toBe('Coffee Co');
   });
 });

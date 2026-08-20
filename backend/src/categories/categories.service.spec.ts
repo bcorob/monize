@@ -497,12 +497,111 @@ describe("CategoriesService", () => {
       // Parent chain lookups must include userId for user isolation
       expect(categoriesRepository.findOne).toHaveBeenNthCalledWith(2, {
         where: { id: "p", userId: "user-1" },
-        select: ["id", "color", "parentId"],
+        select: ["id", "color", "icon", "parentId"],
       });
       expect(categoriesRepository.findOne).toHaveBeenNthCalledWith(3, {
         where: { id: "gp", userId: "user-1" },
-        select: ["id", "color", "parentId"],
+        select: ["id", "color", "icon", "parentId"],
       });
+    });
+  });
+
+  describe("inherited icons", () => {
+    it("carries a parent's icon down to a child that sets none", async () => {
+      const child = { ...mockCategory, id: "c1", parentId: "p1", icon: null };
+      const parent = {
+        ...mockCategory,
+        id: "p1",
+        parentId: null,
+        icon: "shopping-cart",
+      };
+      categoriesRepository.findOne
+        .mockResolvedValueOnce(child)
+        .mockResolvedValueOnce(parent);
+
+      const result = await service.findOne("user-1", "c1");
+
+      expect(result.effectiveIcon).toBe("shopping-cart");
+      // The child's own column is untouched -- inheritance is a read-time
+      // resolution, not a write.
+      expect(result.icon).toBeNull();
+    });
+
+    it("lets a child's own icon win over its parent's", async () => {
+      const child = { ...mockCategory, id: "c1", parentId: "p1", icon: "home" };
+      categoriesRepository.findOne.mockResolvedValueOnce(child);
+
+      const result = await service.findOne("user-1", "c1");
+
+      expect(result.effectiveIcon).toBe("home");
+    });
+
+    it("resolves icon and colour in a single walk up the ancestry", async () => {
+      // The two attributes can come from different ancestors, and the walk
+      // stops only once neither is still outstanding.
+      const grandchild = {
+        ...mockCategory,
+        id: "gc",
+        parentId: "p",
+        color: null,
+        icon: null,
+      };
+      const parent = {
+        ...mockCategory,
+        id: "p",
+        parentId: "gp",
+        color: null,
+        icon: "tag",
+      };
+      const grandparent = {
+        ...mockCategory,
+        id: "gp",
+        parentId: null,
+        color: "#8b5cf6",
+        icon: null,
+      };
+      categoriesRepository.findOne
+        .mockResolvedValueOnce(grandchild)
+        .mockResolvedValueOnce(parent)
+        .mockResolvedValueOnce(grandparent);
+
+      const result = await service.findOne("user-1", "gc");
+
+      expect(result.effectiveIcon).toBe("tag");
+      expect(result.effectiveColor).toBe("#8b5cf6");
+    });
+
+    it("inherits icons down a list in one pass", async () => {
+      const parent = {
+        ...mockCategory,
+        id: "p1",
+        parentId: null,
+        icon: "home",
+        color: null,
+      };
+      const child = {
+        ...mockCategory,
+        id: "c1",
+        parentId: "p1",
+        icon: null,
+        color: null,
+      };
+      const ownIcon = {
+        ...mockCategory,
+        id: "c2",
+        parentId: "p1",
+        icon: "car",
+        color: null,
+      };
+      categoriesRepository.find.mockResolvedValue([parent, child, ownIcon]);
+
+      const result = await service.findByType("user-1", false);
+
+      expect(result.map((c) => c.effectiveIcon)).toEqual([
+        "home",
+        "home",
+        "car",
+      ]);
     });
   });
 
@@ -578,7 +677,11 @@ describe("CategoriesService", () => {
         order: { name: "ASC" },
       });
       expect(result).toEqual(
-        incomeCategories.map((c) => ({ ...c, effectiveColor: null })),
+        incomeCategories.map((c) => ({
+          ...c,
+          effectiveColor: null,
+          effectiveIcon: null,
+        })),
       );
     });
 
@@ -591,7 +694,9 @@ describe("CategoriesService", () => {
         where: { userId: "user-1", isIncome: false },
         order: { name: "ASC" },
       });
-      expect(result).toEqual([{ ...mockCategory, effectiveColor: null }]);
+      expect(result).toEqual([
+        { ...mockCategory, effectiveColor: null, effectiveIcon: null },
+      ]);
     });
   });
 
@@ -720,7 +825,11 @@ describe("CategoriesService", () => {
 
       const result = await service.findOne("user-1", "cat-1");
 
-      expect(result).toEqual({ ...mockCategory, effectiveColor: null });
+      expect(result).toEqual({
+        ...mockCategory,
+        effectiveColor: null,
+        effectiveIcon: null,
+      });
       expect(categoriesRepository.findOne).toHaveBeenCalledWith({
         where: { id: "cat-1", userId: "user-1" },
         relations: ["children"],

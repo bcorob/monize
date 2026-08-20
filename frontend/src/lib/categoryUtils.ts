@@ -104,6 +104,18 @@ export function buildCategoryColorMap(
 }
 
 /**
+ * The icon sibling of {@link buildCategoryColorMap}, for the same reason: a
+ * transaction's joined category row carries its own `icon` but not the
+ * inherited one, so a child filed under an icon-bearing parent would show a
+ * pill with no glyph beside a list row that has one.
+ */
+export function buildCategoryIconMap(
+  categories: Category[],
+): Map<string, string | null> {
+  return new Map(categories.map((c) => [c.id, c.effectiveIcon ?? c.icon]));
+}
+
+/**
  * Build a map of category ID to its full hierarchical label
  * ("Parent: Child", or just the name for a top-level category). Useful for
  * surfaces that only hold a transaction's own category row (the list query

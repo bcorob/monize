@@ -58,6 +58,8 @@
     "colourInherit": "繼承自上層",
     "colourNone": "無顏色",
     "colourInheritedFrom": "顏色繼承自上層（{name}）",
+    "iconLabel": "圖示",
+    "iconNone": "無圖示",
     "descriptionLabel": "說明（選填）",
     "submitCreate": "建立類別",
     "submitUpdate": "更新類別"

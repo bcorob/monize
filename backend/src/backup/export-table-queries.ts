@@ -159,8 +159,17 @@ export function buildExportTableQueries(
       sql: "SELECT * FROM categories WHERE user_id = $1 ORDER BY parent_id NULLS FIRST, name",
     },
     {
+      // Columns are listed rather than `SELECT *` because logo_data is BYTEA:
+      // the driver returns a Buffer, which JSON.stringify turns into
+      // {"type":"Buffer",...} and the restore then feeds to decode(...,
+      // 'base64'). Base64-encoding it here is what makes the round trip work,
+      // exactly as for institutions below.
       key: "payees",
-      sql: "SELECT * FROM payees WHERE user_id = $1 ORDER BY name",
+      sql: `SELECT id, user_id, name, default_category_id, notes, website,
+                   encode(logo_data, 'base64') AS logo_data,
+                   logo_content_type, has_logo, logo_fetched_at,
+                   is_active, created_at
+            FROM payees WHERE user_id = $1 ORDER BY name`,
     },
     {
       key: "payee_aliases",

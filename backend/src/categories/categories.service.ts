@@ -78,35 +78,52 @@ export class CategoriesService {
     return saved;
   }
 
-  private resolveEffectiveColors<
-    T extends { id: string; parentId: string | null; color: string | null },
-  >(categories: T[]): (T & { effectiveColor: string | null })[] {
+  /**
+   * Resolve the attributes a category inherits from its ancestors. Colour and
+   * icon follow the same rule -- a category's own value wins, otherwise the
+   * nearest ancestor that sets one -- so they are resolved in one traversal
+   * rather than in two that could disagree about what "nearest" means.
+   */
+  private resolveInheritedAttributes<
+    T extends {
+      id: string;
+      parentId: string | null;
+      color: string | null;
+      icon: string | null;
+    },
+  >(
+    categories: T[],
+  ): (T & { effectiveColor: string | null; effectiveIcon: string | null })[] {
     const categoryMap = new Map(categories.map((c) => [c.id, c]));
     const resolved = new Map<string, string | null>();
 
-    const getEffectiveColor = (cat: T): string | null => {
-      if (resolved.has(cat.id)) {
-        return resolved.get(cat.id)!;
+    /** Nearest set value of `attribute`, walking up from `cat`. */
+    const inherit = (cat: T, attribute: "color" | "icon"): string | null => {
+      const key = `${attribute}:${cat.id}`;
+      if (resolved.has(key)) {
+        return resolved.get(key)!;
       }
-      if (cat.color !== null) {
-        resolved.set(cat.id, cat.color);
-        return cat.color;
+      const own = cat[attribute];
+      if (own !== null) {
+        resolved.set(key, own);
+        return own;
       }
       if (cat.parentId) {
         const parent = categoryMap.get(cat.parentId);
         if (parent) {
-          const parentColor = getEffectiveColor(parent);
-          resolved.set(cat.id, parentColor);
-          return parentColor;
+          const inherited = inherit(parent, attribute);
+          resolved.set(key, inherited);
+          return inherited;
         }
       }
-      resolved.set(cat.id, null);
+      resolved.set(key, null);
       return null;
     };
 
     return categories.map((cat) => ({
       ...cat,
-      effectiveColor: getEffectiveColor(cat),
+      effectiveColor: inherit(cat, "color"),
+      effectiveIcon: inherit(cat, "icon"),
     }));
   }
 
@@ -169,7 +186,7 @@ export class CategoriesService {
       },
     );
 
-    return this.resolveEffectiveColors(categoriesWithCounts);
+    return this.resolveInheritedAttributes(categoriesWithCounts);
   }
 
   async getTree(
@@ -210,7 +227,12 @@ export class CategoriesService {
   async findByType(
     userId: string,
     isIncome: boolean,
-  ): Promise<(Category & { effectiveColor: string | null })[]> {
+  ): Promise<
+    (Category & {
+      effectiveColor: string | null;
+      effectiveIcon: string | null;
+    })[]
+  > {
     const categories = await withScopedDb(this.dataSource, (m) =>
       m.getRepository(Category).find({
         where: { userId, isIncome },
@@ -218,7 +240,7 @@ export class CategoriesService {
       }),
     );
 
-    return this.resolveEffectiveColors(categories);
+    return this.resolveInheritedAttributes(categories);
   }
 
   /**
@@ -315,7 +337,9 @@ export class CategoriesService {
   async findOne(
     userId: string,
     id: string,
-  ): Promise<Category & { effectiveColor: string | null }> {
+  ): Promise<
+    Category & { effectiveColor: string | null; effectiveIcon: string | null }
+  > {
     return withScopedDb(this.dataSource, async (m) => {
       const repo = m.getRepository(Category);
       const category = await repo.findOne({
@@ -331,24 +355,29 @@ export class CategoriesService {
         );
       }
 
+      // Colour and icon are inherited by the same rule, so one walk up the
+      // ancestry resolves both: each stops at the nearest ancestor that sets
+      // it, and the walk ends once neither is still outstanding.
       let effectiveColor = category.color;
-      if (effectiveColor === null && category.parentId) {
-        let currentParentId: string | null = category.parentId;
-        while (currentParentId !== null && effectiveColor === null) {
-          const parent = await repo.findOne({
-            where: { id: currentParentId, userId },
-            select: ["id", "color", "parentId"],
-          });
-          if (parent) {
-            effectiveColor = parent.color;
-            currentParentId = parent.parentId;
-          } else {
-            break;
-          }
+      let effectiveIcon = category.icon;
+      let currentParentId: string | null = category.parentId;
+      while (
+        currentParentId !== null &&
+        (effectiveColor === null || effectiveIcon === null)
+      ) {
+        const parent: Category | null = await repo.findOne({
+          where: { id: currentParentId, userId },
+          select: ["id", "color", "icon", "parentId"],
+        });
+        if (!parent) {
+          break;
         }
+        effectiveColor = effectiveColor ?? parent.color;
+        effectiveIcon = effectiveIcon ?? parent.icon;
+        currentParentId = parent.parentId;
       }
 
-      return { ...category, effectiveColor };
+      return { ...category, effectiveColor, effectiveIcon };
     });
   }
 

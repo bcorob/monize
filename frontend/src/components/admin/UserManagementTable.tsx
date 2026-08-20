@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { useDateFormat } from '@/hooks/useDateFormat';
 import { usePreferencesStore } from '@/store/preferencesStore';
 import { formatTime } from '@/lib/utils';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 interface UserManagementTableProps {
   users: AdminUser[];
@@ -170,9 +171,7 @@ export function UserManagementTable({
       </table>
 
       {sortedUsers.length === 0 && (
-        <div className="text-center py-12 text-gray-500 dark:text-gray-400">
-          {t('userTable.noUsers')}
-        </div>
+        <EmptyState title={t('userTable.noUsers')} />
       )}
     </div>
   );

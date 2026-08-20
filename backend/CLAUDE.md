@@ -127,6 +127,31 @@ transactionDate: string;
 
 **Raw selects bypass both transformers.** `getRawOne`/`getRawMany` return driver values, not entity-hydrated ones, so a DATE column comes back as a JS `Date` and a numeric as a string -- regardless of the transformer on the entity. Select a DATE as text in SQL (`TO_CHAR(col, 'YYYY-MM-DD')`) and pass a numeric through `Number()` before it reaches a DTO that declares `string`/`number`. `main.ts` installs a global DATE string parser, which hides the DATE half of this in the running server but not in tests, jobs, or any other process -- so do not rely on it. `payee-detail.service.ts` is the worked example; its `test/payee-detail.e2e-spec.ts` is what caught it, because a unit spec with mocked query builders cannot.
 
+**A hand-written column name is checked by nobody -- so a scan checks it.** A
+mocked `manager.query` records the string and resolves, which makes every raw
+statement's column names untested by construction. `AutoBackupService`'s claim
+ended `RETURNING id`, `auto_backup_settings` has no `id` (its primary key is
+`user_id`), and the spec beside it asserted
+`expect(sql).toContain("RETURNING id")` -- so the mistake was not merely
+uncaught, it was pinned. In production every hourly sweep raised
+`column "id" does not exist` (42703) and no user's automatic backup ran.
+`src/common/db/raw-sql-columns.spec.ts` now checks every `RETURNING` list,
+`INSERT` column list and `UPDATE ... SET` target in `src/` against
+`database/schema.sql`, with the grammar in `raw-sql-columns.ts` unit-tested
+separately. Assert the *column*, not the substring: a mock cannot tell a real
+column from a plausible one.
+
+**A per-user loop in a cron isolates each user, including the steps before the
+work starts.** The auto-backup sweep's `try` began *below* the claim, so an
+error while deciding whether to run -- the maintenance pre-check, the claim's
+own `UPDATE` -- left the whole handler and every remaining user was skipped,
+with nothing recorded as failed. Wrap the entire per-user body, record the
+failure on the row so the surface that shows a last-run status tells the truth,
+and record it through a path that cannot itself throw (the outcome write is a
+database call, and whatever broke the work can break the recording of it).
+`enrollManagedUsers` in the same file already had the rule; the loop below it
+did not.
+
 ## DTO Conventions
 
 ### An optional field with a format validator needs `@ValidateIf`, not just `@IsOptional`
@@ -334,6 +359,23 @@ cannot recover from the sign of a column they are looking at in a spreadsheet.
 Its twin is `transferCsvLabel` in `frontend/src/lib/transfer-label.ts`; the QIF
 export keeps Quicken's `L[Account]` form and is deliberately untouched.
 
+## A blank transfer payee is stored blank and resolved at read time
+
+A transfer created without a payee persists `payee_name` as NULL (issue #1214);
+the display label ("Transfer to Savings") is resolved per read from the linked
+leg's account -- its CURRENT name, in the reader's language -- so renames and
+language switches reach every historical row. The English form for
+machine-facing surfaces (CSV/QIF export, AI/MCP rows, custom reports) lives
+only in `src/transactions/transfer-payee-label.util.ts`, and
+`transfer-payee-stamp.guard.spec.ts` fails on a `Transfer to/from ${...}`
+template anywhere else in `src/`. Migration 161 blanked the rows the old
+writers stamped (exact match against the counterpart's current name only);
+`updateTransfer` heals a surviving legacy stamp to NULL when it recognises
+one, and never regenerates it. A read surface that joins
+`linkedTransaction.account` for this must mask or restrict cross-owner
+counterparts the reader cannot read -- the account export masks, the custom
+report query restricts the join to same-owner legs.
+
 The guard also asks what a value *is* rather than what it starts with, matching
 its twin in `frontend/src/lib/csv-export.ts`: a value a spreadsheet reads as a
 number is data, and prefixing one stops the column adding up (issue #1134).
@@ -359,6 +401,37 @@ over its real inputs the broken escape and the correct one agree exactly; only a
 synthetic prefix can tell them apart (`buildPlainRootedPathPattern`). Do not
 escape `-`: outside a character class it is literal, and `\-` is a SyntaxError
 under the `u` flag -- so never interpolate the result *inside* a class.
+
+## A cached brand favicon is four columns, one fetcher, and one export rule
+
+Institutions and payees both resolve a website's favicon server-side and cache
+the bytes so the browser never contacts a third party. Everything shared lives
+in `src/common/favicon/`: `FaviconService` (the gstatic fetch, with its
+timeout, size cap and image-only content-type check) and `brandLogoColumns`,
+which turns a fetch result into the four columns
+(`logo_data`, `logo_content_type`, `has_logo`, `logo_fetched_at`). A third
+entity imports `FaviconModule`; it does not copy the fetcher.
+
+Four rules the two implementations share, each of which has a test:
+
+- **The fetch stays outside the transaction.** It is best-effort -- a favicon
+  that could not be resolved never fails the create or update around it -- and
+  a slow remote host must not hold a database connection open.
+- **Re-resolve only when the address actually changed.** The form resends the
+  current website on every save, and a re-fetch that failed would clear a
+  perfectly good icon. Clearing the address clears the icon with it.
+- **The flag and the bytes move together.** `has_logo` is what every list read
+  answers "is there an icon?" with, because the bytes are `select: false` and
+  never serialized; they leave only through that entity's `GET /:id/logo`,
+  which 404s so the client can draw its own badge. `logo_fetched_at` stamps the
+  *attempt*, so null means never looked for.
+- **A bytea column breaks `SELECT *`.** The driver returns a Buffer, which JSON
+  cannot carry and the restore's `decode(..., 'base64')` cannot read, so the
+  table's export query must list its columns and wrap the bytes in
+  `encode(logo_data, 'base64')` -- `export-driver-values.spec.ts` is what
+  catches the omission. The support backup drops the bytes and forces
+  `has_logo` to false, because a brand icon re-identifies a payee whose name
+  was masked.
 
 ## Rejection happens before the write
 
@@ -775,6 +848,14 @@ per-client and dynamic, so it cannot be enumerated. Do not "fix" this by
 loosening the global Helmet `form-action` -- only this page needs it.
 
 `node-oidc-provider` prints its own `oidc-provider NOTICE:`/`WARNING:` lines with bare `console.info`/`console.warn`, outside the Nest `Logger`. The library exposes no logger hook, so `oauth/oidc-provider-log-bridge.ts` -- installed at the top of `main.ts`, before anything can instantiate the provider -- re-routes exactly those lines to a `[OidcProvider]` logger and passes any other console output through untouched. That fixes the formatting only: every such notice still means a config option was left at its default, so fix the config rather than treating the bridge as the answer. In particular, `ttl` needs an explicit number for every artifact the provider can issue (`AccessToken`, `AuthorizationCode`, `IdToken`, `RefreshToken`, `Grant`, `Interaction`, `Session`); the guard test in `src/oauth/oauth-provider.service.spec.ts` fails when one is missing.
+
+## Money investment mapping is finalized after both mappers run
+
+`mapInvestments` cannot know whether `mapTransactions` will preserve or
+collapse a cash split. Reconcile generated investment companions only after
+cash-source mapping: when a redemption remains embedded, its preserved sibling
+is the interest record, so the generated companion and mutual link must not be
+written as a second representation of that income.
 
 ## Automatic backups are an operator setting, not a user preference
 

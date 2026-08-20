@@ -5549,7 +5549,7 @@ describe("TransactionsService", () => {
       );
     });
 
-    it("updates accounts and auto-updates payee names", async () => {
+    it("updates accounts without writing payee names (issue #1214)", async () => {
       const newToAccount = {
         ...mockAccount,
         id: "account-3",
@@ -5568,16 +5568,18 @@ describe("TransactionsService", () => {
         toAccountId: "account-3",
       });
 
-      // The from transaction should get updated payeeName
+      // No payee write (issue #1214): blank stays blank and the display
+      // resolves the label from the new linked account at read time.
+      for (const call of transactionsRepository.update.mock.calls) {
+        expect(call[1]).not.toHaveProperty("payeeName");
+      }
       expect(transactionsRepository.update).toHaveBeenCalledWith(
-        "tx-from",
-        expect.objectContaining({
-          payeeName: "Transfer to Investment",
-        }),
+        "tx-to",
+        expect.objectContaining({ accountId: "account-3" }),
       );
     });
 
-    it("updates from account and auto-updates to transaction payee name", async () => {
+    it("updates the from account without writing the to leg payee (issue #1214)", async () => {
       const newFromAccount = {
         ...mockAccount,
         id: "account-3",
@@ -5596,12 +5598,14 @@ describe("TransactionsService", () => {
         fromAccountId: "account-3",
       });
 
-      // The to transaction should get updated payeeName
+      // No payee write (issue #1214): blank stays blank and the display
+      // resolves the label from the new linked account at read time.
+      for (const call of transactionsRepository.update.mock.calls) {
+        expect(call[1]).not.toHaveProperty("payeeName");
+      }
       expect(transactionsRepository.update).toHaveBeenCalledWith(
-        "tx-to",
-        expect.objectContaining({
-          payeeName: "Transfer from Business",
-        }),
+        "tx-from",
+        expect.objectContaining({ accountId: "account-3" }),
       );
     });
 
@@ -6936,6 +6940,80 @@ describe("TransactionsService", () => {
       const plain = result.transactions.find((r) => r.id === "t-plain");
       expect(plain).not.toHaveProperty("originalCurrencyCode");
       expect(plain).not.toHaveProperty("originalAmount");
+    });
+
+    it("resolves a blank transfer payee from the counterpart account (issue #1214)", async () => {
+      // A blank-payee transfer leg is stored with payeeName null; the model
+      // must see the same "Transfer to/from <account>" label the register
+      // resolves, or it would describe the row as having no payee.
+      categoriesRepository.find.mockResolvedValue([]);
+      jest.spyOn(service, "findAll").mockResolvedValue({
+        data: [
+          {
+            id: "t-out",
+            transactionDate: "2026-02-01",
+            payeeName: null,
+            category: null,
+            amount: -250,
+            account: { name: "Chequing" },
+            isTransfer: true,
+            linkedTransaction: { account: { name: "Savings" } },
+            description: null,
+            status: "cleared",
+            isSplit: false,
+          },
+          {
+            id: "t-in",
+            transactionDate: "2026-02-01",
+            payeeName: null,
+            category: null,
+            amount: 250,
+            account: { name: "Savings" },
+            isTransfer: true,
+            linkedTransaction: { account: { name: "Chequing" } },
+            description: null,
+            status: "cleared",
+            isSplit: false,
+          },
+          {
+            id: "t-legacy",
+            transactionDate: "2026-02-02",
+            // A legacy stamped row (or a custom label) keeps its stored text.
+            payeeName: "Transfer to Old Name",
+            category: null,
+            amount: -10,
+            account: { name: "Chequing" },
+            isTransfer: true,
+            linkedTransaction: { account: { name: "Savings" } },
+            description: null,
+            status: "cleared",
+            isSplit: false,
+          },
+          {
+            id: "t-orphan",
+            transactionDate: "2026-02-03",
+            // Counterpart deleted: nothing to resolve from, payee stays null.
+            payeeName: null,
+            category: null,
+            amount: -10,
+            account: { name: "Chequing" },
+            isTransfer: true,
+            linkedTransaction: null,
+            description: null,
+            status: "cleared",
+            isSplit: false,
+          },
+        ],
+        pagination: { total: 4, hasMore: false },
+      } as any);
+
+      const result = await service.getLlmTransactionRows("user-1", {});
+
+      const byId = new Map(result.transactions.map((r) => [r.id, r]));
+      expect(byId.get("t-out")?.payeeName).toBe("Transfer to Savings");
+      expect(byId.get("t-in")?.payeeName).toBe("Transfer from Chequing");
+      expect(byId.get("t-legacy")?.payeeName).toBe("Transfer to Old Name");
+      expect(byId.get("t-orphan")?.payeeName).toBeNull();
     });
 
     it("returns every split line, not only the ones a category filter matched", async () => {

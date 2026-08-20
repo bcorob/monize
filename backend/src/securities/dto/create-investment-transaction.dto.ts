@@ -68,6 +68,17 @@ export class CreateInvestmentTransactionDto {
   @ApiProperty({
     required: false,
     description:
+      "Accrued interest paid out with a REDEEM, recorded as a linked INTEREST transaction and included in the single cash movement. Refused on any other action.",
+    default: 0,
+  })
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 4 })
+  @Min(0)
+  accruedInterest?: number;
+
+  @ApiProperty({
+    required: false,
+    description:
       "Exchange rate used to convert the total amount from the security's currency into the cash account's currency. If omitted, the most recent market rate is used. Defaults to 1 when both currencies match.",
   })
   @IsOptional()

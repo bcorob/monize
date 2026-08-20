@@ -154,6 +154,37 @@ describe('sortReconcileRows', () => {
   });
 });
 
+describe('sortReconcileRows with a payee label resolver (issue #1214)', () => {
+  it('sorts a blank-payee transfer by the label the table displays', () => {
+    // The reconcile table resolves "Transfer to <account>" at render time and
+    // hands the same resolver to the sort, so the Payee column orders by
+    // exactly the text on screen rather than treating the row as unnamed.
+    const transfer = row({
+      id: 'transfer',
+      isTransfer: true,
+      amount: '-100.0000' as unknown as number,
+      linkedTransaction: { account: { name: 'Savings' } } as never,
+    });
+    const rows = [
+      row({ id: 'z', payeeName: 'Zeta' }),
+      transfer,
+      row({ id: 'a', payeeName: 'Alpha' }),
+    ];
+    const resolver = (r: Transaction) =>
+      r.payeeName ?? (r.isTransfer ? 'Transfer to Savings' : null);
+
+    expect(
+      sortReconcileRows(rows, 'payee', 'asc', resolver).map((r) => r.id),
+    ).toEqual(['a', 'transfer', 'z']);
+    // Without the resolver the transfer sorts as empty text, first.
+    expect(sortReconcileRows(rows, 'payee', 'asc').map((r) => r.id)).toEqual([
+      'transfer',
+      'a',
+      'z',
+    ]);
+  });
+});
+
 describe('groupReconcileRows', () => {
   const rows = [
     row({ id: 'in', amount: '3000.0000' as unknown as number }),

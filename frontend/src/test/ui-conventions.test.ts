@@ -1111,3 +1111,466 @@ describe("the bar above a table is the shared ListTopToolbar", () => {
     expect(SLOT.test(pagination)).toBe(true);
   });
 });
+
+describe("a panel card is the shared Card surface", () => {
+  /**
+   * `CARD_CLASS` in `components/ui/Card.tsx` is the one card surface --
+   * background, radius, shadow and (new with it) the border that keeps a card
+   * legible on the colour themes where the weakest shadow disappears. Before
+   * it existed the same trio was inlined hundreds of times, in at least three
+   * different orderings, and no two surfaces could be restyled together.
+   *
+   * The scan keys on the fingerprint every ordering shares: one className line
+   * carrying `bg-white dark:bg-gray-800`, `rounded-lg` and a `shadow`. A menu
+   * or tooltip on `rounded-md` is deliberately out of scope.
+   *
+   * The baseline is **shrink-only**: each entry predates the primitive.
+   * Converting a file to `Card` / `CARD_CLASS` means deleting its line here.
+   * New code takes the primitive from the start.
+   */
+  const CARD = "/src/components/ui/Card.tsx";
+  const CARD_FINGERPRINT = (line: string) =>
+    line.includes("bg-white dark:bg-gray-800") &&
+    line.includes("rounded-lg") &&
+    line.includes("shadow");
+
+  const BASELINE: ReadonlyArray<string> = [
+    "/src/app/accounts/[id]/page.tsx",
+    "/src/app/bills/page.tsx",
+    "/src/app/budgets/[id]/edit/page.tsx",
+    "/src/app/budgets/[id]/page.tsx",
+    "/src/app/budgets/create/page.tsx",
+    "/src/app/budgets/page.tsx",
+    "/src/app/dashboard/loading.tsx",
+    "/src/app/investments/page.tsx",
+    "/src/app/reconcile/page.tsx",
+    "/src/app/reports/[reportId]/page.tsx",
+    "/src/app/reports/loading.tsx",
+    "/src/app/reports/page.tsx",
+    "/src/app/settings/emergency-access/page.tsx",
+    "/src/app/settings/loading.tsx",
+    "/src/app/settings/page.tsx",
+    "/src/components/accounts/asset-detail/AssetDetailView.tsx",
+    "/src/components/accounts/asset-detail/EquityPanel.tsx",
+    "/src/components/accounts/banking-detail/BankingDetailView.tsx",
+    "/src/components/accounts/banking-detail/CashFlowMiniReport.tsx",
+    "/src/components/accounts/credit-card-detail/CreditCardDetailView.tsx",
+    "/src/components/accounts/credit-card-detail/InterestAndFeesPanel.tsx",
+    "/src/components/accounts/credit-card-detail/PayoffCalculator.tsx",
+    "/src/components/accounts/credit-card-detail/SpendingBreakdown.tsx",
+    "/src/components/accounts/credit-card-detail/StatementPanel.tsx",
+    "/src/components/accounts/investment-detail/InvestmentIncomePanel.tsx",
+    "/src/components/accounts/loan-detail/AmortizationScheduleTable.tsx",
+    "/src/components/accounts/loan-detail/ComparisonSummaryCards.tsx",
+    "/src/components/accounts/loan-detail/LineOfCreditView.tsx",
+    "/src/components/accounts/loan-detail/OverpaymentSimulator.tsx",
+    "/src/components/accounts/loan-detail/PayoffComparisonChart.tsx",
+    "/src/components/accounts/loan-detail/RateHistorySidebar.tsx",
+    "/src/components/accounts/loan-detail/ScenarioComparisonChart.tsx",
+    "/src/components/accounts/shared/ForeignCurrencyFeeChart.tsx",
+    "/src/components/accounts/shared/ForeignCurrencyFeesSection.tsx",
+    "/src/components/accounts/shared/RecurringChargesPanel.tsx",
+    "/src/components/accounts/shared/SummaryCardGrid.tsx",
+    "/src/components/accounts/shared/TopGroupsPanel.tsx",
+    "/src/components/ai/ResultChart.tsx",
+    "/src/components/bills/CashFlowForecastChart.tsx",
+    "/src/components/budgets/Budget503020Summary.tsx",
+    "/src/components/budgets/BudgetAlertList.tsx",
+    "/src/components/budgets/BudgetCategoryList.tsx",
+    "/src/components/budgets/BudgetCategoryTrend.tsx",
+    "/src/components/budgets/BudgetFlexGroupCard.tsx",
+    "/src/components/budgets/BudgetHealthGauge.tsx",
+    "/src/components/budgets/BudgetHeatmap.tsx",
+    "/src/components/budgets/BudgetPeriodDetail.tsx",
+    "/src/components/budgets/BudgetScenarioPlanner.tsx",
+    "/src/components/budgets/BudgetTrendChart.tsx",
+    "/src/components/budgets/BudgetUpcomingBills.tsx",
+    "/src/components/budgets/BudgetVelocityWidget.tsx",
+    "/src/components/budgets/BudgetWizardCategories.tsx",
+    "/src/components/budgets/BudgetWizardReview.tsx",
+    "/src/components/budgets/BudgetWizardStrategy.tsx",
+    "/src/components/budgets/BudgetZeroBasedBar.tsx",
+    "/src/components/dashboard/AssetsVsLiabilities.tsx",
+    "/src/components/dashboard/BudgetStatusWidget.tsx",
+    "/src/components/dashboard/ExpensesPieChart.tsx",
+    "/src/components/dashboard/FavouriteAccounts.tsx",
+    "/src/components/dashboard/FavouriteReportsWidget.tsx",
+    "/src/components/dashboard/FavouriteSecurities.tsx",
+    "/src/components/dashboard/GettingStarted.tsx",
+    "/src/components/dashboard/IncomeExpensesBarChart.tsx",
+    "/src/components/dashboard/InsightsWidget.tsx",
+    "/src/components/dashboard/NetWorthChart.tsx",
+    "/src/components/dashboard/TopMovers.tsx",
+    "/src/components/dashboard/UpcomingBills.tsx",
+    "/src/components/import/CompleteStep.tsx",
+    "/src/components/import/CsvColumnMappingStep.tsx",
+    "/src/components/import/MapAccountsStep.tsx",
+    "/src/components/import/MapCategoriesStep.tsx",
+    "/src/components/import/MapSecuritiesStep.tsx",
+    "/src/components/import/ReviewStep.tsx",
+    "/src/components/import/SelectAccountStep.tsx",
+    "/src/components/import/UploadStep.tsx",
+    "/src/components/investments/AssetAllocationChart.tsx",
+    "/src/components/investments/GroupedHoldingsList.tsx",
+    "/src/components/investments/HoldingsList.tsx",
+    "/src/components/investments/InvestmentRegisterPanel.tsx",
+    "/src/components/investments/InvestmentTransactionList.tsx",
+    "/src/components/investments/InvestmentValueChart.tsx",
+    "/src/components/investments/PortfolioSummaryCard.tsx",
+    "/src/components/layout/ActionHistoryPanel.tsx",
+    "/src/components/payees/detail/PayeeRecurringPanel.tsx",
+    "/src/components/reconcile/ReconciliationReminderBadge.tsx",
+    "/src/components/reports/AccountBalancesReport.tsx",
+    "/src/components/reports/BillPaymentHistoryReport.tsx",
+    "/src/components/reports/BudgetHealthScoreReport.tsx",
+    "/src/components/reports/BudgetSeasonalPatternsReport.tsx",
+    "/src/components/reports/BudgetTrendReport.tsx",
+    "/src/components/reports/BudgetVsActualReport.tsx",
+    "/src/components/reports/CashFlowReport.tsx",
+    "/src/components/reports/CategoryPerformanceReport.tsx",
+    "/src/components/reports/ChartTooltip.tsx",
+    "/src/components/reports/CreditUtilizationReport.tsx",
+    "/src/components/reports/CurrencyExposureReport.tsx",
+    "/src/components/reports/CustomReportForm.tsx",
+    "/src/components/reports/CustomReportViewer.tsx",
+    "/src/components/reports/DebtPayoffTimelineReport.tsx",
+    "/src/components/reports/DividendIncomeReport.tsx",
+    "/src/components/reports/DividendYieldGrowthReport.tsx",
+    "/src/components/reports/DuplicateTransactionReport.tsx",
+    "/src/components/reports/FlexGroupAnalysisReport.tsx",
+    "/src/components/reports/ForeignCurrencyFeesReport.tsx",
+    "/src/components/reports/GeographicAllocationReport.tsx",
+    "/src/components/reports/HealthScoreHistoryReport.tsx",
+    "/src/components/reports/IncomeBySourceReport.tsx",
+    "/src/components/reports/IncomeVsExpensesReport.tsx",
+    "/src/components/reports/InvestmentPerformanceReport.tsx",
+    "/src/components/reports/InvestmentReportForm.tsx",
+    "/src/components/reports/InvestmentReportViewer.tsx",
+    "/src/components/reports/InvestmentTransactionHistoryReport.tsx",
+    "/src/components/reports/LoanAmortizationReport.tsx",
+    "/src/components/reports/LoanOverpaymentSimulatorReport.tsx",
+    "/src/components/reports/MonteCarloChartParts.tsx",
+    "/src/components/reports/MonteCarloReport.tsx",
+    "/src/components/reports/MonteCarloResultsTable.tsx",
+    "/src/components/reports/MonthlyCategoryBreakdownReport.tsx",
+    "/src/components/reports/MonthlyComparisonReport.tsx",
+    "/src/components/reports/MonthlySpendingTrendReport.tsx",
+    "/src/components/reports/NetWorthReport.tsx",
+    "/src/components/reports/PortfolioValueReport.tsx",
+    "/src/components/reports/RealizedGainsReport.tsx",
+    "/src/components/reports/RecurringExpensesReport.tsx",
+    "/src/components/reports/ReportChart.tsx",
+    "/src/components/reports/ReportError.tsx",
+    "/src/components/reports/SavingsRateReport.tsx",
+    "/src/components/reports/SeasonalSpendingMapReport.tsx",
+    "/src/components/reports/SectorWeightingsReport.tsx",
+    "/src/components/reports/SecurityComparisonChart.tsx",
+    "/src/components/reports/SecurityPerformanceReport.tsx",
+    "/src/components/reports/SecurityTypeAllocationReport.tsx",
+    "/src/components/reports/SpendingAnomaliesReport.tsx",
+    "/src/components/reports/SpendingByCategoryReport.tsx",
+    "/src/components/reports/SpendingByPayeeReport.tsx",
+    "/src/components/reports/TaxSummaryReport.tsx",
+    "/src/components/reports/UncategorizedTransactionsReport.tsx",
+    "/src/components/reports/UpcomingBillsReport.tsx",
+    "/src/components/reports/WeekendVsWeekdayReport.tsx",
+    "/src/components/reports/YearOverYearReport.tsx",
+    "/src/components/reports/account-balances/AccountBalancesControls.tsx",
+    "/src/components/reports/monte-carlo/CompareMetricTable.tsx",
+    "/src/components/reports/monte-carlo/CompareScenariosView.tsx",
+    "/src/components/scheduled-transactions/BillsFilterPanel.tsx",
+    "/src/components/settings/AboutSection.tsx",
+    "/src/components/settings/ApiAccessSection.tsx",
+    "/src/components/settings/AutoBackupSection.tsx",
+    "/src/components/settings/BackupRestoreSection.tsx",
+    "/src/components/settings/DangerZoneSection.tsx",
+    "/src/components/settings/HelpSection.tsx",
+    "/src/components/settings/NotificationsSection.tsx",
+    "/src/components/settings/PreferencesSection.tsx",
+    "/src/components/settings/ProfileSection.tsx",
+    "/src/components/settings/SecuritySection.tsx",
+    "/src/components/settings/SettingsNav.tsx",
+    "/src/components/settings/SharedAccessSection.tsx",
+    "/src/components/settings/TourCatalog.tsx",
+    "/src/components/settings/ai/AiBubbleToggle.tsx",
+    "/src/components/settings/ai/ProviderList.tsx",
+    "/src/components/settings/ai/UsageDashboard.tsx",
+    "/src/components/transactions/AccountBalancesBarChart.tsx",
+    "/src/components/transactions/AccountInfoWidget.tsx",
+    "/src/components/transactions/BalanceHistoryChart.tsx",
+    "/src/components/transactions/CategoryInfoWidget.tsx",
+    "/src/components/transactions/CategoryPayeeBarChart.tsx",
+    "/src/components/transactions/PayeeInfoWidget.tsx",
+    "/src/components/transactions/TagKeyBreakdownChart.tsx",
+    "/src/components/transactions/TransactionFilterPanel.tsx",
+    "/src/components/ui/CalendarPopover.tsx",
+    "/src/components/ui/LoadingSkeleton.tsx",
+    "/src/components/ui/Modal.tsx",
+    "/src/components/ui/Pagination.tsx",
+  ];
+
+  function filesWithInlineCard(): string[] {
+    return productionSources()
+      .filter(([path]) => path !== CARD)
+      .filter(([, content]) => content.split("\n").some(CARD_FINGERPRINT))
+      .map(([path]) => path);
+  }
+
+  it("has no inline card surface outside the recorded baseline", () => {
+    const allowed = new Set(BASELINE);
+    const offenders = filesWithInlineCard().filter((path) => !allowed.has(path));
+    expect(offenders).toEqual([]);
+  });
+
+  it("keeps the baseline shrink-only", () => {
+    const offending = new Set(filesWithInlineCard());
+    expect(BASELINE.filter((file) => !offending.has(file))).toEqual([]);
+  });
+
+  it("still finds the shared surface, so the rule cannot pass by accident", () => {
+    const card = sources[CARD];
+    expect(card, `${CARD} not found -- update CARD in this test`).toBeTruthy();
+    expect(card.split("\n").some(CARD_FINGERPRINT)).toBe(true);
+  });
+});
+
+describe("an auth page renders inside AuthShell", () => {
+  /**
+   * The centered logo-plus-form shell used to be duplicated across every auth
+   * branch -- six near-identical copies, each drifting on its own -- and the
+   * form sat bare on the page background, the one surface in the app without
+   * a card. `AuthShell` (components/auth/AuthShell.tsx) is the single shell:
+   * transparent brand mark (the boxed logo bakes in a white rect and rendered
+   * as a white square in dark mode), title, notices, and the shared Card
+   * around the body.
+   */
+  const SHELL = "/src/components/auth/AuthShell.tsx";
+  const AUTH_ROUTES = [
+    "/src/app/login/page.tsx",
+    "/src/app/register/page.tsx",
+    "/src/app/forgot-password/page.tsx",
+    "/src/app/reset-password/page.tsx",
+    "/src/app/change-password/page.tsx",
+    "/src/app/verify-email/page.tsx",
+    "/src/app/setup-2fa/page.tsx",
+  ];
+  const HAND_ROLLED_SHELL = "min-h-screen flex items-center justify-center";
+
+  it("imports AuthShell on every auth route", () => {
+    const missing = AUTH_ROUTES.filter(
+      (path) => !sources[path]?.includes("components/auth/AuthShell"),
+    );
+    expect(missing).toEqual([]);
+  });
+
+  it("has no hand-rolled centered shell on an auth route", () => {
+    const offenders = AUTH_ROUTES.filter((path) =>
+      sources[path]?.includes(HAND_ROLLED_SHELL),
+    );
+    // A new branch that rebuilds the wrapper is the drift this rule exists to
+    // stop -- render the branch through AuthShell (plain, if it has no card).
+    expect(offenders).toEqual([]);
+  });
+
+  it("still finds the shell, so the rule cannot pass by accident", () => {
+    const shell = sources[SHELL];
+    expect(shell, `${SHELL} not found -- update SHELL in this test`).toBeTruthy();
+    expect(shell.includes(HAND_ROLLED_SHELL)).toBe(true);
+    expect(shell.includes("monize-logo-transparent")).toBe(true);
+  });
+});
+
+describe("nav links and their icons come from lib/nav-links", () => {
+  /**
+   * The link arrays and the per-route icon map live together in
+   * `lib/nav-links.ts`, so `nav-links.test.ts` can hold "every nav route has
+   * an icon". A nav surface that declares its own links (or reaches for
+   * Heroicons directly per row) re-opens the drift this closed: a route added
+   * in one place, bare in the other.
+   */
+  const NAV_SOURCES = [
+    "/src/components/layout/AppHeader.tsx",
+    "/src/components/layout/MobileNavDrawer.tsx",
+  ];
+
+  it("keeps both nav surfaces on the shared module", () => {
+    const missing = NAV_SOURCES.filter(
+      (path) => !sources[path]?.includes("@/lib/nav-links"),
+    );
+    expect(missing).toEqual([]);
+  });
+
+  it("still finds the module, so the rule cannot pass by accident", () => {
+    const mod = sources["/src/lib/nav-links.ts"];
+    expect(mod, "lib/nav-links.ts not found -- update this test").toBeTruthy();
+    expect(mod.includes("NAV_ICONS")).toBe(true);
+  });
+});
+
+describe("account-type colours and icons come from lib/account-type-meta", () => {
+  /**
+   * The type-to-pill-colour switch lived inside `AccountList` and the type had
+   * no icon anywhere; any other surface wanting the treatment had to copy the
+   * switch. `lib/account-type-meta.tsx` is the one mapping now (pill class +
+   * icon per type). A second mapping drifts the moment either changes.
+   *
+   * Fingerprint: an AccountType literal within reach of a `bg-*-100
+   * text-*-800` pill class, in either order.
+   */
+  const MODULE = "/src/lib/account-type-meta.tsx";
+  const SECOND_MAPPING =
+    /\bCHEQUING\b[\s\S]{0,600}bg-\w+-100 text-\w+-800|bg-\w+-100 text-\w+-800[\s\S]{0,600}\bCHEQUING\b/;
+
+  it("has no second account-type colour mapping", () => {
+    const offenders = productionSources()
+      .filter(([path]) => path !== MODULE)
+      .filter(([, content]) => SECOND_MAPPING.test(content))
+      .map(([path]) => path);
+    expect(offenders).toEqual([]);
+  });
+
+  it("still finds the mapping, so the rule cannot pass by accident", () => {
+    const mod = sources[MODULE];
+    expect(mod, `${MODULE} not found -- update MODULE in this test`).toBeTruthy();
+    expect(SECOND_MAPPING.test(mod)).toBe(true);
+  });
+});
+
+describe("an empty state is the shared EmptyState", () => {
+  /**
+   * The centered grey-glyph empty block was hand-rolled in fourteen files,
+   * each drifting on its own (some with a heading, some a bare paragraph,
+   * three different text tones). `components/ui/EmptyState.tsx` is the one
+   * layout now; the fingerprint of a hand-rolled copy is its container
+   * class.
+   */
+  const EMPTY_STATE = "/src/components/ui/EmptyState.tsx";
+  const FINGERPRINT = "text-center py-12";
+
+  it("has no hand-rolled empty-state container", () => {
+    const offenders = productionSources()
+      .filter(([path]) => path !== EMPTY_STATE)
+      .filter(([, content]) => content.includes(FINGERPRINT))
+      .map(([path]) => path);
+    expect(offenders).toEqual([]);
+  });
+
+  it("still finds the shared component, so the rule cannot pass by accident", () => {
+    const component = sources[EMPTY_STATE];
+    expect(component, `${EMPTY_STATE} not found -- update this test`).toBeTruthy();
+    expect(component.includes(FINGERPRINT)).toBe(true);
+  });
+});
+
+describe("a brand logo keeps the display mode its badge centres with", () => {
+  /**
+   * `BrandLogo`'s fallback badge centres its letter with `inline-flex` +
+   * `items-center justify-center`. The caller's `className` is appended last,
+   * so a display utility in it wins: `hidden sm:block` on the payee list left
+   * every letter jammed against the top-left of its circle, which reads as a
+   * rendering fault rather than a class conflict. Responsive hiding is spelled
+   * `hidden sm:inline-flex`.
+   */
+  const LOGO_TAGS = /<(?:BrandLogo|PayeeLogo|InstitutionLogo)\b[\s\S]{0,400}?\/>/g;
+  /** A display utility, at any breakpoint, inside that element's className. */
+  const DISPLAY_UTILITY =
+    /className="[^"]*\b(?:[a-z]+:)?(?:block|grid|inline-block|flow-root)\b[^"]*"/;
+
+  it("has no call site whose className overrides the badge's display", () => {
+    const offenders: string[] = [];
+    for (const [path, content] of productionSources()) {
+      for (const match of content.matchAll(LOGO_TAGS)) {
+        if (DISPLAY_UTILITY.test(match[0])) {
+          offenders.push(path);
+        }
+      }
+    }
+    expect([...new Set(offenders)]).toEqual([]);
+  });
+
+  it("still finds the badge's centring, so the rule cannot pass by accident", () => {
+    const brandLogo = sources["/src/components/ui/BrandLogo.tsx"];
+    expect(brandLogo, "BrandLogo.tsx not found -- update this test").toBeTruthy();
+    expect(brandLogo).toContain("inline-flex items-center justify-center");
+  });
+
+  it("recognises the shape it is looking for", () => {
+    // Were the tag regex to stop matching, the scan above would police an
+    // empty set.
+    const sample = '<PayeeLogo payee={p} size={20} className="hidden sm:block" />';
+    const [found] = [...sample.matchAll(LOGO_TAGS)];
+    expect(found).toBeTruthy();
+    expect(DISPLAY_UTILITY.test(found[0])).toBe(true);
+    expect(
+      DISPLAY_UTILITY.test('<PayeeLogo className="hidden sm:inline-flex" />'),
+    ).toBe(false);
+  });
+});
+
+describe("an icon name is never rendered as text", () => {
+  /**
+   * `category.icon` (and `tag.icon`) hold an icon *name* -- "shopping-cart" --
+   * that `getIconComponent` turns into an SVG. A surface that puts one in a
+   * text position renders the literal string beside the category name, which
+   * reads as a typo rather than as a missing feature. It happened three times
+   * before this scan existed: the detail header, the subcategory table, and
+   * the transactions page's category sidebar.
+   *
+   * Two shapes are policed, and only one of them can be caught generally:
+   *
+   *  - **Inside a template literal.** Always wrong whatever the property
+   *    holds: a name renders as text, and a ReactNode icon stringifies to
+   *    "[object Object]". Zero false positives, so it is scanned everywhere.
+   *  - **As a bare JSX child** (`{category.icon}`). Only wrong for the
+   *    entities whose `icon` is a name string -- `report.icon`, `card.icon`
+   *    and `step.icon` are genuine ReactNodes and are correct that way -- so
+   *    this half is limited to the identifiers that carry names.
+   *
+   * Draw them with `CategoryGlyph`, or with `getIconComponent` where a bespoke
+   * wrapper is genuinely needed.
+   */
+  const ICON_IN_TEMPLATE_LITERAL = /\$\{[^}]*\.icon\b[^}]*\}/;
+  /** Identifiers whose `.icon` is an icon *name*, not a ReactNode. */
+  const NAME_CARRYING = [
+    "category",
+    "parentCategory",
+    "subcategory",
+    "child",
+    "cat",
+    "tag",
+  ];
+  const NAME_ICON_AS_JSX_CHILD = new RegExp(
+    `(?<![=\\w])\\{\\s*(?:${NAME_CARRYING.join("|")})\\.icon\\s*\\}`,
+  );
+
+  it("never interpolates an icon into a template literal", () => {
+    const offenders = productionSources()
+      .filter(([, content]) => ICON_IN_TEMPLATE_LITERAL.test(content))
+      .map(([path]) => path);
+
+    expect(offenders).toEqual([]);
+  });
+
+  it("never renders a name-carrying icon as a bare JSX child", () => {
+    const offenders = productionSources()
+      .filter(([, content]) => NAME_ICON_AS_JSX_CHILD.test(content))
+      .map(([path]) => path);
+
+    expect(offenders).toEqual([]);
+  });
+
+  it("still catches both shapes, so the rules cannot pass by accident", () => {
+    // The exact line this scan was written for, plus the JSX-child form.
+    expect(
+      ICON_IN_TEMPLATE_LITERAL.test("{category.icon ? `${category.icon} ` : ''}"),
+    ).toBe(true);
+    expect(NAME_ICON_AS_JSX_CHILD.test("<h3>{category.icon}</h3>")).toBe(true);
+    // ...and leaves the legitimate shapes alone.
+    expect(NAME_ICON_AS_JSX_CHILD.test("<Glyph icon={category.icon} />")).toBe(
+      false,
+    );
+    expect(NAME_ICON_AS_JSX_CHILD.test("<span>{report.icon}</span>")).toBe(
+      false,
+    );
+  });
+});

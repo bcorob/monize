@@ -13,6 +13,7 @@ import {
   categoryColors,
 } from '@/components/reports/report-definitions';
 import { createLogger } from '@/lib/logger';
+import { WidgetHeading } from './widget-meta';
 
 const logger = createLogger('FavouriteReportsWidget');
 
@@ -95,12 +96,9 @@ export function FavouriteReportsWidget({ isLoading: parentLoading }: FavouriteRe
   }, [favouriteReportIds, managedFavourites]);
 
   const sectionTitle = (
-    <button
-      onClick={() => router.push('/reports')}
-      className="text-lg font-semibold text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 transition-colors mb-4"
-    >
+    <WidgetHeading id="favourite-reports" onClick={() => router.push('/reports')} className="mb-4">
       {t('favouriteReports.title')}
-    </button>
+    </WidgetHeading>
   );
 
   if (parentLoading || isLoadingManaged) {

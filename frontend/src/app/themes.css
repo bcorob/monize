@@ -9,7 +9,9 @@
  *   - the gray ramp (surfaces, borders, text -- shared by light and dark
  *     mode, which simply pick different steps of the same ramp)
  *   - the blue ramp (the app's accent colour)
- *   - sky-500/600 (form focus rings and checkboxes in globals.css)
+ *   - sky-500/600 (legacy accent aliases -- focus rings and checkboxes now
+ *     use the blue ramp directly, but a few components still render sky
+ *     utilities, so themes keep overriding both ramps)
  *   - --color-white where the theme wants tinted "paper" cards
  *   - the --chart-* tokens that don't already follow gray/blue automatically
  *

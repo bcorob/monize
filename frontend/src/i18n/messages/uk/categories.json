@@ -58,6 +58,8 @@
     "colourInherit": "Успадкувати від батьківської",
     "colourNone": "Без кольору",
     "colourInheritedFrom": "Колір успадкований від батьківської ({name})",
+    "iconLabel": "Іконка",
+    "iconNone": "Без іконки",
     "descriptionLabel": "Опис (необов'язково)",
     "submitCreate": "Створити категорію",
     "submitUpdate": "Оновити категорію"

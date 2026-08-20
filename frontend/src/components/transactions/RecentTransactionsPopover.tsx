@@ -8,6 +8,7 @@ import { transactionsApi } from '@/lib/transactions';
 import { Transaction } from '@/types/transaction';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
 import { useDateFormat } from '@/hooks/useDateFormat';
+import { usePayeeDisplay } from '@/hooks/usePayeeDisplay';
 import { usePreferencesStore } from '@/store/preferencesStore';
 import { createLogger } from '@/lib/logger';
 
@@ -47,6 +48,7 @@ export function RecentTransactionsPopover({
   onClose,
 }: RecentTransactionsPopoverProps) {
   const t = useTranslations('transactions');
+  const payeeDisplay = usePayeeDisplay();
   const popoverRef = useRef<HTMLDivElement>(null);
   const { formatDate } = useDateFormat();
   const { formatCurrency } = useNumberFormat();
@@ -131,7 +133,7 @@ export function RecentTransactionsPopover({
         {!isLoading && !error && transactions.length > 0 && (
           <ul>
             {transactions.map((tx) => {
-              const payeeLabel = tx.payeeName || tx.payee?.name || t('recentPopover.noPayee');
+              const payeeLabel = payeeDisplay(tx) || t('recentPopover.noPayee');
               const categoryLabel = tx.isSplit
                 ? formatSplitCategoryLabel(tx)
                 : tx.category?.name || t('recentPopover.uncategorized');

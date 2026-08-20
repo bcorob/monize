@@ -26,6 +26,9 @@ vi.mock('@/lib/payees', () => ({
   payeesApi: {
     delete: (...args: any[]) => mockPayeesApi.delete(...args),
   },
+  // The row's brand badge builds its src from this; the real helper is a pure
+  // string builder, so the mock mirrors it rather than stubbing it away.
+  payeeLogoUrl: (id: string) => `/api/v1/payees/${id}/logo`,
 }));
 
 vi.mock('@/lib/logger', () => ({
@@ -43,6 +46,8 @@ function makePayee(overrides: Partial<Payee> & { id: string; name: string }): Pa
     defaultCategory: null,
     notes: null,
     website: null,
+    hasLogo: false,
+    logoFetchedAt: null,
     isActive: true,
     createdAt: '2026-01-01T00:00:00Z',
     transactionCount: 0,
@@ -115,7 +120,7 @@ describe('PayeeList', () => {
           description: null,
           icon: null,
           color: '#22c55e',
-          effectiveColor: '#22c55e',
+          effectiveColor: '#22c55e', effectiveIcon: null,
           isIncome: false,
           isSystem: false,
           createdAt: '2026-01-01T00:00:00Z',
@@ -142,7 +147,7 @@ describe('PayeeList', () => {
           description: null,
           icon: null,
           color: '#22c55e',
-          effectiveColor: '#22c55e',
+          effectiveColor: '#22c55e', effectiveIcon: null,
           isIncome: false,
           isSystem: false,
           createdAt: '2026-01-01T00:00:00Z',
@@ -178,7 +183,7 @@ describe('PayeeList', () => {
           description: null,
           icon: null,
           color: '#22c55e',
-          effectiveColor: '#22c55e',
+          effectiveColor: '#22c55e', effectiveIcon: null,
           isIncome: false,
           isSystem: false,
           createdAt: '2026-01-01T00:00:00Z',
@@ -444,7 +449,7 @@ describe('PayeeList', () => {
         name: 'Walmart',
         defaultCategory: {
           id: 'cat-1', userId: 'u', parentId: null, parent: null, children: [],
-          name: 'Groceries', description: null, icon: null, color: null, effectiveColor: null,
+          name: 'Groceries', description: null, icon: null, color: null, effectiveColor: null, effectiveIcon: null,
           isIncome: false, isSystem: false, createdAt: '',
         },
       }),
@@ -467,7 +472,7 @@ describe('PayeeList', () => {
         name: 'Walmart',
         defaultCategory: {
           id: 'cat-1', userId: 'u', parentId: 'zoo', parent: null, children: [],
-          name: 'Apples', description: null, icon: null, color: null, effectiveColor: null,
+          name: 'Apples', description: null, icon: null, color: null, effectiveColor: null, effectiveIcon: null,
           isIncome: false, isSystem: false, createdAt: '',
         },
       }),
@@ -476,7 +481,7 @@ describe('PayeeList', () => {
         name: 'Netflix',
         defaultCategory: {
           id: 'cat-2', userId: 'u', parentId: 'animals', parent: null, children: [],
-          name: 'Zebra', description: null, icon: null, color: null, effectiveColor: null,
+          name: 'Zebra', description: null, icon: null, color: null, effectiveColor: null, effectiveIcon: null,
           isIncome: false, isSystem: false, createdAt: '',
         },
       }),
@@ -497,7 +502,7 @@ describe('PayeeList', () => {
     fireEvent.click(screen.getByText('Default Category'));
 
     const names = Array.from(container.querySelectorAll('tbody tr')).map(
-      (row) => row.querySelector('td')?.textContent?.trim(),
+      (row) => row.querySelector('td button')?.textContent?.trim(),
     );
     // Ascending by full label: "Animals: Zebra" (Netflix) < "Zoo: Apples" (Walmart)
     expect(names[0]).toBe('Netflix');
@@ -526,7 +531,7 @@ describe('PayeeList', () => {
 
     const { container } = render(<PayeeList payees={payees} onEdit={onEdit} onRefresh={onRefresh} />);
     const rows = container.querySelectorAll('tbody tr');
-    const names = Array.from(rows).map(row => row.querySelector('td')?.textContent?.trim());
+    const names = Array.from(rows).map(row => row.querySelector('td button')?.textContent?.trim());
 
     // Default sort is name asc; case-insensitive means Apple < banana < cherry
     expect(names[0]).toBe('Apple');
@@ -672,14 +677,14 @@ describe('PayeeList', () => {
         name: 'Walmart',
         defaultCategory: {
           id: 'cat-1', userId: 'u', parentId: null, parent: null, children: [],
-          name: 'Groceries', description: null, icon: null, color: '#ef4444', effectiveColor: '#ef4444',
+          name: 'Groceries', description: null, icon: null, color: '#ef4444', effectiveColor: '#ef4444', effectiveIcon: null,
           isIncome: false, isSystem: false, createdAt: '',
         },
       }),
     ];
 
     render(<PayeeList payees={payees} onEdit={onEdit} onRefresh={onRefresh} />);
-    const categoryBadge = screen.getByText('Groceries');
+    const categoryBadge = screen.getByText('Groceries').parentElement as HTMLElement;
     expect(categoryBadge).toBeInTheDocument();
     // Should have color-mix styles applied
     expect(categoryBadge.getAttribute('style')).toContain('#ef4444');
@@ -838,7 +843,7 @@ describe('PayeeList', () => {
         name: 'Walmart',
         defaultCategory: {
           id: 'cat-1', userId: 'u', parentId: null, parent: null, children: [],
-          name: 'Groceries', description: null, icon: null, color: null, effectiveColor: null,
+          name: 'Groceries', description: null, icon: null, color: null, effectiveColor: null, effectiveIcon: null,
           isIncome: false, isSystem: false, createdAt: '',
         },
       }),
@@ -849,7 +854,7 @@ describe('PayeeList', () => {
     const badge = screen.getByText('Groceries');
     // dense mode applies px-1.5 py-0.5
     expect(badge).toBeInTheDocument();
-    expect(badge.className).toContain('px-1.5');
+    expect((badge.parentElement as HTMLElement).className).toContain('px-1.5');
   });
 
   it('shows regular category badge in normal mode', () => {
@@ -859,7 +864,7 @@ describe('PayeeList', () => {
         name: 'Walmart',
         defaultCategory: {
           id: 'cat-1', userId: 'u', parentId: null, parent: null, children: [],
-          name: 'Groceries', description: null, icon: null, color: null, effectiveColor: null,
+          name: 'Groceries', description: null, icon: null, color: null, effectiveColor: null, effectiveIcon: null,
           isIncome: false, isSystem: false, createdAt: '',
         },
       }),
@@ -867,7 +872,7 @@ describe('PayeeList', () => {
 
     useDensityStore.setState({ densities: { payees: 'normal' } });
     render(<PayeeList payees={payees} onEdit={onEdit} onRefresh={onRefresh} />);
-    const badge = screen.getByText('Groceries');
+    const badge = screen.getByText('Groceries').parentElement as HTMLElement;
     expect(badge.className).toContain('px-2');
   });
 
@@ -883,8 +888,8 @@ describe('PayeeList', () => {
     fireEvent.click(screen.getByText('Aliases'));
     // With desc sort on aliases: Amazon (5) first, Walmart (2) second
     const rows = container.querySelectorAll('tbody tr');
-    expect(rows[0].querySelector('td')?.textContent?.trim()).toBe('Amazon');
-    expect(rows[1].querySelector('td')?.textContent?.trim()).toBe('Walmart');
+    expect(rows[0].querySelector('td button')?.textContent?.trim()).toBe('Amazon');
+    expect(rows[1].querySelector('td button')?.textContent?.trim()).toBe('Walmart');
   });
 
   it('sorts by lastUsed when Last Used header is clicked', () => {
@@ -920,12 +925,12 @@ describe('PayeeList', () => {
     const { container } = render(<PayeeList payees={payees} onEdit={onEdit} onRefresh={onRefresh} />);
     // Initial order: Apple, banana (asc)
     let rows = container.querySelectorAll('tbody tr');
-    expect(rows[0].querySelector('td')?.textContent?.trim()).toBe('Apple');
+    expect(rows[0].querySelector('td button')?.textContent?.trim()).toBe('Apple');
 
     // Click Name again — toggles to desc
     fireEvent.click(screen.getByText('Name'));
     rows = container.querySelectorAll('tbody tr');
-    expect(rows[0].querySelector('td')?.textContent?.trim()).toBe('banana');
+    expect(rows[0].querySelector('td button')?.textContent?.trim()).toBe('banana');
   });
 
   it('resets direction to desc when switching to a count field', () => {
@@ -939,8 +944,8 @@ describe('PayeeList', () => {
     fireEvent.click(screen.getByText('Count'));
     // With desc sort on count: Walmart (10) first, Amazon (5) second
     const rows = container.querySelectorAll('tbody tr');
-    expect(rows[0].querySelector('td')?.textContent?.trim()).toBe('Walmart');
-    expect(rows[1].querySelector('td')?.textContent?.trim()).toBe('Amazon');
+    expect(rows[0].querySelector('td button')?.textContent?.trim()).toBe('Walmart');
+    expect(rows[1].querySelector('td button')?.textContent?.trim()).toBe('Amazon');
   });
 
   it('resets direction to asc when switching to category field', () => {
@@ -949,7 +954,7 @@ describe('PayeeList', () => {
         id: 'p1', name: 'Walmart',
         defaultCategory: {
           id: 'cat-1', userId: 'u', parentId: null, parent: null, children: [],
-          name: 'Zoning', description: null, icon: null, color: null, effectiveColor: null,
+          name: 'Zoning', description: null, icon: null, color: null, effectiveColor: null, effectiveIcon: null,
           isIncome: false, isSystem: false, createdAt: '',
         },
       }),
@@ -961,8 +966,8 @@ describe('PayeeList', () => {
     fireEvent.click(screen.getByText('Default Category'));
     // With asc sort on category: '' (Amazon/None) < 'Zoning' (Walmart)
     const rows = container.querySelectorAll('tbody tr');
-    expect(rows[0].querySelector('td')?.textContent?.trim()).toBe('Amazon');
-    expect(rows[1].querySelector('td')?.textContent?.trim()).toBe('Walmart');
+    expect(rows[0].querySelector('td button')?.textContent?.trim()).toBe('Amazon');
+    expect(rows[1].querySelector('td button')?.textContent?.trim()).toBe('Walmart');
   });
 
   // lastUsedDate and createdAt display
@@ -1013,7 +1018,7 @@ describe('PayeeList', () => {
         name: 'Walmart',
         defaultCategory: {
           id: 'cat-1', userId: 'u', parentId: null, parent: null, children: [],
-          name: 'Groceries', description: null, icon: null, color: '#000000', effectiveColor: '#000000',
+          name: 'Groceries', description: null, icon: null, color: '#000000', effectiveColor: '#000000', effectiveIcon: null,
           isIncome: false, isSystem: false, createdAt: '',
         },
       }),
@@ -1028,7 +1033,7 @@ describe('PayeeList', () => {
         categoryColorMap={categoryColorMap}
       />,
     );
-    const badge = screen.getByText('Groceries');
+    const badge = screen.getByText('Groceries').parentElement as HTMLElement;
     // Should use the map color (#ff0000), not the category color (#000000)
     expect(badge.getAttribute('style')).toContain('#ff0000');
   });
@@ -1040,7 +1045,7 @@ describe('PayeeList', () => {
         name: 'Walmart',
         defaultCategory: {
           id: 'cat-1', userId: 'u', parentId: null, parent: null, children: [],
-          name: 'Groceries', description: null, icon: null, color: '#123456', effectiveColor: '#123456',
+          name: 'Groceries', description: null, icon: null, color: '#123456', effectiveColor: '#123456', effectiveIcon: null,
           isIncome: false, isSystem: false, createdAt: '',
         },
       }),
@@ -1055,7 +1060,7 @@ describe('PayeeList', () => {
         categoryColorMap={categoryColorMap}
       />,
     );
-    const badge = screen.getByText('Groceries');
+    const badge = screen.getByText('Groceries').parentElement as HTMLElement;
     expect(badge.getAttribute('style')).toContain('#123456');
   });
 
@@ -1066,7 +1071,7 @@ describe('PayeeList', () => {
         name: 'Walmart',
         defaultCategory: {
           id: 'cat-1', userId: 'u', parentId: null, parent: null, children: [],
-          name: 'Groceries', description: null, icon: null, color: '#abcdef', effectiveColor: '#abcdef',
+          name: 'Groceries', description: null, icon: null, color: '#abcdef', effectiveColor: '#abcdef', effectiveIcon: null,
           isIncome: false, isSystem: false, createdAt: '',
         },
       }),
@@ -1085,6 +1090,70 @@ describe('PayeeList', () => {
     const badge = screen.getByText('Groceries');
     // When map returns null, defaultCategoryColor = null, so uses var(--category-bg-base)
     expect(badge).toBeInTheDocument();
+  });
+
+  // categoryIconMap lookup -- the Default Category pill draws the category's glyph
+  const withCategory = (over: Record<string, unknown>) => makePayee({
+    id: 'p1',
+    name: 'Walmart',
+    defaultCategory: {
+      id: 'cat-1', userId: 'u', parentId: null, parent: null, children: [],
+      name: 'Groceries', description: null, icon: null, color: '#22c55e',
+      effectiveColor: '#22c55e', effectiveIcon: null,
+      isIncome: false, isSystem: false, createdAt: '',
+      ...over,
+    },
+  });
+
+  it("renders the default category's own icon in the pill", () => {
+    render(
+      <PayeeList
+        payees={[withCategory({ icon: 'shopping-cart', effectiveIcon: 'shopping-cart' })]}
+        onEdit={onEdit}
+        onRefresh={onRefresh}
+      />,
+    );
+    const pill = screen.getByText('Groceries').parentElement as HTMLElement;
+    expect(pill.querySelector('svg')).toBeTruthy();
+  });
+
+  it('prefers the inherited icon from categoryIconMap over the joined row', () => {
+    // A joined defaultCategory carries only its own `icon`, so a child filed
+    // under an icon-bearing parent has none -- the map supplies the effective one.
+    render(
+      <PayeeList
+        payees={[withCategory({})]}
+        onEdit={onEdit}
+        onRefresh={onRefresh}
+        categoryIconMap={new Map([['cat-1', 'shopping-cart']])}
+      />,
+    );
+    const pill = screen.getByText('Groceries').parentElement as HTMLElement;
+    expect(pill.querySelector('svg')).toBeTruthy();
+  });
+
+  it('renders no glyph when the category has no icon anywhere', () => {
+    render(
+      <PayeeList
+        payees={[withCategory({})]}
+        onEdit={onEdit}
+        onRefresh={onRefresh}
+        categoryIconMap={new Map<string, string | null>([['cat-1', null]])}
+      />,
+    );
+    const pill = screen.getByText('Groceries').parentElement as HTMLElement;
+    expect(pill.querySelector('svg')).toBeNull();
+  });
+
+  it('never renders the icon name as text', () => {
+    render(
+      <PayeeList
+        payees={[withCategory({ icon: 'shopping-cart', effectiveIcon: 'shopping-cart' })]}
+        onEdit={onEdit}
+        onRefresh={onRefresh}
+      />,
+    );
+    expect(screen.queryByText(/shopping-cart/)).toBeNull();
   });
 
   // Odd/even row striping in non-normal density
@@ -1200,7 +1269,35 @@ describe('PayeeList', () => {
 
     const rows = container.querySelectorAll('tbody tr');
     // Should maintain the order given — no local re-sorting
-    expect(rows[0].querySelector('td')?.textContent?.trim()).toBe('Zulu');
-    expect(rows[1].querySelector('td')?.textContent?.trim()).toBe('Alpha');
+    expect(rows[0].querySelector('td button')?.textContent?.trim()).toBe('Zulu');
+    expect(rows[1].querySelector('td button')?.textContent?.trim()).toBe('Alpha');
+  });
+  describe('brand favicon', () => {
+    it('renders the payee icon beside the name when one is cached', () => {
+      const { container } = render(
+        <PayeeList
+          payees={[makePayee({ id: 'p-logo', name: 'Starbucks', hasLogo: true })]}
+          onEdit={onEdit}
+          onRefresh={onRefresh}
+        />,
+      );
+
+      const img = container.querySelector('tbody tr td img') as HTMLImageElement;
+      expect(img).toBeTruthy();
+      expect(img.getAttribute('src')).toBe('/api/v1/payees/p-logo/logo');
+    });
+
+    it('requests no image for a payee with no cached icon', () => {
+      // hasLogo is what spares every row in a long list a guaranteed 404.
+      const { container } = render(
+        <PayeeList
+          payees={[makePayee({ id: 'p-none', name: 'Cash' })]}
+          onEdit={onEdit}
+          onRefresh={onRefresh}
+        />,
+      );
+
+      expect(container.querySelector('tbody tr td img')).toBeNull();
+    });
   });
 });

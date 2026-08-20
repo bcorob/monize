@@ -8,6 +8,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Input } from '@/components/ui/Input';
 import { Combobox } from '@/components/ui/Combobox';
+import { IconPicker } from '@/components/ui/IconPicker';
 import { Select } from '@/components/ui/Select';
 import { useFormSubmitRef } from '@/hooks/useFormSubmitRef';
 import { useFormDirtyNotify } from '@/hooks/useFormDirtyNotify';
@@ -19,6 +20,7 @@ const buildCategorySchema = (t: (key: string) => string) => z.object({
   parentId: z.string().optional(),
   description: z.string().optional(),
   color: z.string().optional(),
+  icon: z.string().optional(),
   isIncome: z.boolean(),
 });
 
@@ -61,6 +63,7 @@ export function CategoryForm({ category, categories, onSubmit, onCancel, onDirty
           parentId: category.parentId || '',
           description: category.description || '',
           color: category.color || '',
+          icon: category.icon || '',
           isIncome: category.isIncome,
         }
       : {
@@ -74,6 +77,7 @@ export function CategoryForm({ category, categories, onSubmit, onCancel, onDirty
   useFormSubmitRef(submitRef, handleSubmit, onSubmit);
 
   const watchedColor = useWatch({ control, name: 'color' });
+  const watchedIcon = useWatch({ control, name: 'icon' });
   const watchedParentId = useWatch({ control, name: 'parentId' });
   const watchedIsIncome = useWatch({ control, name: 'isIncome' });
 
@@ -259,6 +263,17 @@ export function CategoryForm({ category, categories, onSubmit, onCancel, onDirty
             </p>
           )}
         </div>
+      </div>
+
+      <div>
+        <input type="hidden" {...register('icon')} />
+        <IconPicker
+          label={t('form.iconLabel')}
+          value={watchedIcon || null}
+          onChange={(icon) => setValue('icon', icon, { shouldDirty: true })}
+          onClear={() => setValue('icon', '', { shouldDirty: true })}
+          clearLabel={t('form.iconNone')}
+        />
       </div>
 
       <Input

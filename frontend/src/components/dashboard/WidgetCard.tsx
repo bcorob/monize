@@ -4,6 +4,10 @@ import { ReactNode, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
+import { Cog6ToothIcon } from '@heroicons/react/24/outline';
+import { WidgetIconPuck } from './widget-meta';
+import type { DashboardWidgetId } from './widget-registry';
 import { useWidgetConfig } from '@/hooks/useWidgetConfig';
 import {
   WidgetIdentityConfig,
@@ -71,19 +75,23 @@ export function WidgetCard({
   const hasGear = !!configControls || identityEnabled;
 
   return (
-    <div
-      className={`bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-4 sm:p-6 ${minHeightClass} flex flex-col h-full ${className}`}
+    <Card
+      padding="md"
+      className={`${minHeightClass} flex flex-col h-full ${className}`}
     >
       <div className="flex items-start justify-between gap-2 mb-4">
-        <div className="min-w-0">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 truncate">
-            {displayTitle}
-          </h3>
-          {description && (
-            <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400 line-clamp-2">
-              {description}
-            </p>
-          )}
+        <div className="flex min-w-0 items-start gap-2.5">
+          {widgetId && <WidgetIconPuck id={widgetId as DashboardWidgetId} />}
+          <div className="min-w-0">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 truncate">
+              {displayTitle}
+            </h3>
+            {description && (
+              <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400 line-clamp-2">
+                {description}
+              </p>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           {headerRight}
@@ -94,10 +102,7 @@ export function WidgetCard({
               aria-label={t('widgets.configure', { name: title })}
               className="p-1.5 rounded-md text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
             >
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
+              <Cog6ToothIcon aria-hidden className="h-4 w-4" />
             </button>
           )}
         </div>
@@ -133,7 +138,7 @@ export function WidgetCard({
           </div>
         </Modal>
       )}
-    </div>
+    </Card>
   );
 }
 

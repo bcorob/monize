@@ -154,7 +154,10 @@ test.describe('Delegation (shared access)', () => {
       expect(frozenView.linkedTransaction?.account?.name).toBe(
         'Hidden account',
       );
-      expect(frozenView.payeeName).toBe('Transfer to Hidden account');
+      // The stored payee is blank (issue #1214): the display resolves
+      // "Transfer to <account>" from the masked linked account above, so the
+      // payee field has nothing to leak.
+      expect(frozenView.payeeName).toBeNull();
 
       // Structural edits are locked...
       const locked = await rawApiRequest(

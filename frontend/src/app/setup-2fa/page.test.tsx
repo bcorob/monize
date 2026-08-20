@@ -45,7 +45,9 @@ describe('Setup2FAPage', () => {
 
   it('renders setup page title', () => {
     render(<Setup2FAPage />);
-    expect(screen.getByText('Set Up Two-Factor Authentication')).toBeInTheDocument();
+    // The page reads the shared auth.register.twoFactor catalog instead of
+    // the hardcoded literals it used to carry.
+    expect(screen.getByText('Secure Your Account')).toBeInTheDocument();
   });
 
   it('renders the description text', () => {

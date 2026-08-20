@@ -58,6 +58,8 @@
     "colourInherit": "親から継承する",
     "colourNone": "色なし",
     "colourInheritedFrom": "親（{name}）から色を継承",
+    "iconLabel": "アイコン",
+    "iconNone": "アイコンなし",
     "descriptionLabel": "説明（任意）",
     "submitCreate": "カテゴリを作成",
     "submitUpdate": "カテゴリを更新"

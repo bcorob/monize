@@ -30,7 +30,8 @@ import { transactionsApi } from '@/lib/transactions';
 import { scheduledTransactionsApi } from '@/lib/scheduled-transactions';
 import { categoriesApi } from '@/lib/categories';
 import { getNextScheduled } from '@/lib/scheduled-utils';
-import { buildCategoryColorMap, buildCategoryLabelMap } from '@/lib/categoryUtils';
+import { buildCategoryColorMap,
+  buildCategoryIconMap, buildCategoryLabelMap } from '@/lib/categoryUtils';
 import { getErrorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/logger';
 import {
@@ -355,6 +356,7 @@ function PayeeDetailContent() {
 
   const categoryLabelMap = useMemo(() => buildCategoryLabelMap(categories), [categories]);
   const categoryColorMap = useMemo(() => buildCategoryColorMap(categories), [categories]);
+  const categoryIconMap = useMemo(() => buildCategoryIconMap(categories), [categories]);
 
   // Category rows aggregated across currencies into the display currency, with
   // the hierarchy-aware labels the rest of the app uses.
@@ -734,6 +736,7 @@ function PayeeDetailContent() {
                   refreshKey={refreshKey}
                   categoryLabelMap={categoryLabelMap}
                   categoryColorMap={categoryColorMap}
+                  categoryIconMap={categoryIconMap}
                   onChanged={loadData}
                   onViewInRegister={() => goToRegister()}
                   onSelectDate={(date) =>

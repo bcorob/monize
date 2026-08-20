@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { TopMover } from '@/types/investment';
+import { WidgetHeading } from './widget-meta';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
 import { usePreferencesStore } from '@/store/preferencesStore';
 
@@ -106,12 +107,9 @@ export function TopMovers({ movers, isLoading, hasInvestmentAccounts, onRefresh,
     return (
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-3 sm:p-6 lg:min-h-[500px]">
         <div className="flex items-center justify-between mb-4">
-          <button
-            onClick={() => router.push('/investments')}
-            className="text-lg font-semibold text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-          >
+          <WidgetHeading id="top-movers" onClick={() => router.push('/investments')}>
             {t('topMovers.title')}
-          </button>
+          </WidgetHeading>
           <div className="flex items-center gap-2">
             <RefreshButton onRefresh={onRefresh} isRefreshing={isRefreshing} refreshTitle={t('topMovers.refreshPrices')} />
             <span className="text-sm text-gray-500 dark:text-gray-400">{t('topMovers.dailyChange')}</span>
@@ -130,12 +128,9 @@ export function TopMovers({ movers, isLoading, hasInvestmentAccounts, onRefresh,
     return (
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-3 sm:p-6 lg:min-h-[500px]">
         <div className="flex items-center justify-between mb-4">
-          <button
-            onClick={() => router.push('/investments')}
-            className="text-lg font-semibold text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-          >
+          <WidgetHeading id="top-movers" onClick={() => router.push('/investments')}>
             {t('topMovers.title')}
-          </button>
+          </WidgetHeading>
           <RefreshButton onRefresh={onRefresh} isRefreshing={isRefreshing} refreshTitle={t('topMovers.refreshPrices')} />
         </div>
         <p className="text-gray-500 dark:text-gray-400 text-sm">
@@ -160,12 +155,9 @@ export function TopMovers({ movers, isLoading, hasInvestmentAccounts, onRefresh,
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-3 sm:p-6 lg:min-h-[500px]">
       <div className="flex items-center justify-between mb-4">
-        <button
-          onClick={() => router.push('/investments')}
-          className="text-lg font-semibold text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-        >
+        <WidgetHeading id="top-movers" onClick={() => router.push('/investments')}>
           {t('topMovers.title')}
-        </button>
+        </WidgetHeading>
         <div className="flex items-center gap-2">
           <RefreshButton onRefresh={onRefresh} isRefreshing={isRefreshing} refreshTitle={t('topMovers.refreshPrices')} />
           <span className="text-sm text-gray-500 dark:text-gray-400">{t('topMovers.dailyChange')}</span>

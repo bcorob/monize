@@ -11,6 +11,7 @@ import Link from 'next/link';
 import { useDateFormat } from '@/hooks/useDateFormat';
 import { usePreferencesStore } from '@/store/preferencesStore';
 import { formatTime } from '@/lib/utils';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 const logger = createLogger('InsightsList');
 
@@ -272,22 +273,20 @@ export function InsightsList() {
 
       {/* Insights list */}
       {insights.length === 0 ? (
-        <div className="text-center py-12">
-          <p className="text-gray-500 dark:text-gray-400 mb-4">
-            {total === 0
-              ? t('list.emptyNoInsights')
-              : t('list.emptyFiltered')}
-          </p>
-          {total === 0 && !aiNotConfigured && (
-            <button
-              onClick={handleGenerate}
-              disabled={isGenerating}
-              className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-            >
-              {isGenerating ? t('list.generating') : t('list.generateButton')}
-            </button>
-          )}
-        </div>
+        <EmptyState
+          title={total === 0 ? t('list.emptyNoInsights') : t('list.emptyFiltered')}
+          action={
+            total === 0 && !aiNotConfigured ? (
+              <button
+                onClick={handleGenerate}
+                disabled={isGenerating}
+                className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              >
+                {isGenerating ? t('list.generating') : t('list.generateButton')}
+              </button>
+            ) : undefined
+          }
+        />
       ) : (
         <div className="space-y-3">
           {insights.map((insight) => (

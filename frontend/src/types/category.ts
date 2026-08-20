@@ -8,7 +8,13 @@ export interface Category {
   description: string | null;
   icon: string | null;
   color: string | null;
+  /**
+   * The colour and icon actually shown: this category's own, or the nearest
+   * ancestor's when it sets none. Resolved server-side in one walk up the
+   * ancestry so every surface inherits identically.
+   */
   effectiveColor: string | null;
+  effectiveIcon: string | null;
   isIncome: boolean;
   isSystem: boolean;
   createdAt: string;

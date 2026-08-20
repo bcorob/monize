@@ -58,6 +58,8 @@
     "colourInherit": "Inherit from parent",
     "colourNone": "No colour",
     "colourInheritedFrom": "Colour inherited from parent ({name})",
+    "iconLabel": "Icon",
+    "iconNone": "No icon",
     "descriptionLabel": "Description (optional)",
     "submitCreate": "Create Category",
     "submitUpdate": "Update Category"

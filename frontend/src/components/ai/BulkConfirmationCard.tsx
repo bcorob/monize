@@ -191,9 +191,11 @@ export function BulkConfirmationCard({
       return { primary, secondary: parts.join(' · ') };
     }
     if (isPayee) {
+      // The row has two slots, so the category and the website share the
+      // second one rather than the website going unshown.
       return {
         primary: row.name || '',
-        secondary: row.categoryName || '',
+        secondary: [row.categoryName, row.website].filter(Boolean).join(' · '),
       };
     }
     if (isSecurity) {

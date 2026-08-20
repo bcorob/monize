@@ -16,6 +16,7 @@ import {
   createScopedDbMocks,
   DataSourceMock,
 } from "../test-helpers/scoped-db-testing";
+import { FaviconService } from "../common/favicon/favicon.service";
 
 jest.mock("../common/db/scoped-db", () =>
   jest.requireActual("../test-helpers/scoped-db-testing").scopedDbMockModule(),
@@ -41,6 +42,10 @@ describe("PayeesService", () => {
     defaultCategoryId: "cat-1",
     notes: "Coffee shop",
     website: null,
+    logoData: null,
+    logoContentType: null,
+    hasLogo: false,
+    logoFetchedAt: null,
     defaultCategory: { id: "cat-1", name: "Food & Drink" } as any,
     isActive: true,
     createdAt: new Date("2025-01-01"),
@@ -53,6 +58,10 @@ describe("PayeesService", () => {
     defaultCategoryId: null,
     notes: "" as any,
     website: null,
+    logoData: null,
+    logoContentType: null,
+    hasLogo: false,
+    logoFetchedAt: null,
     defaultCategory: null as any,
     isActive: true,
     createdAt: new Date("2025-01-02"),
@@ -60,8 +69,12 @@ describe("PayeesService", () => {
 
   let queryBuilderMock: Record<string, jest.Mock>;
   let categoryQueryBuilderMock: Record<string, jest.Mock>;
+  // Typed against the real service so a signature change breaks the double
+  // rather than leaving it describing a contract nothing has any more.
+  let faviconService: jest.Mocked<Pick<FaviconService, "fetchFavicon">>;
 
   beforeEach(async () => {
+    faviconService = { fetchFavicon: jest.fn().mockResolvedValue(null) };
     queryBuilderMock = {
       where: jest.fn().mockReturnThis(),
       andWhere: jest.fn().mockReturnThis(),
@@ -178,6 +191,7 @@ describe("PayeesService", () => {
           provide: ActionHistoryService,
           useValue: { record: jest.fn().mockResolvedValue(null) },
         },
+        { provide: FaviconService, useValue: faviconService },
       ],
     }).compile();
 
@@ -494,10 +508,12 @@ describe("PayeesService", () => {
       mockUpdateLookups();
       await service.update(userId, "payee-1", { website: "starbucks.com" });
 
+      // Giving a payee an address it did not have is a change, so the brand
+      // icon is resolved alongside it (see the "brand favicon" block).
       expect(mockQueryRunner.manager.update).toHaveBeenCalledWith(
         Payee,
         { id: "payee-1", userId },
-        { website: "https://starbucks.com" },
+        expect.objectContaining({ website: "https://starbucks.com" }),
       );
     });
 
@@ -2425,6 +2441,272 @@ describe("PayeesService", () => {
           }),
         ).rejects.toThrow();
       });
+    });
+  });
+  // ─── brand favicon ───────────────────────────────────────────────────
+
+  describe("brand favicon", () => {
+    const logo = { data: Buffer.from([1, 2, 3]), contentType: "image/png" };
+
+    it("resolves the favicon for a new payee's website", async () => {
+      payeesRepository.findOne.mockResolvedValue(null);
+      faviconService.fetchFavicon.mockResolvedValue(logo);
+
+      await service.create(userId, {
+        name: "Starbucks",
+        website: "starbucks.com",
+      } as any);
+
+      // The schemeless address the form allows is normalised before it reaches
+      // the resolver.
+      expect(faviconService.fetchFavicon).toHaveBeenCalledWith(
+        "https://starbucks.com",
+      );
+      expect(payeesRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          website: "https://starbucks.com",
+          logoData: logo.data,
+          logoContentType: "image/png",
+          hasLogo: true,
+        }),
+      );
+    });
+
+    it("creates the payee anyway when the favicon cannot be fetched", async () => {
+      payeesRepository.findOne.mockResolvedValue(null);
+      faviconService.fetchFavicon.mockResolvedValue(null);
+
+      const result = await service.create(userId, {
+        name: "Starbucks",
+        website: "starbucks.com",
+      } as any);
+
+      expect(result).toBeDefined();
+      expect(payeesRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ hasLogo: false, logoData: null }),
+      );
+    });
+
+    it("never looks for an icon when the payee has no website", async () => {
+      payeesRepository.findOne.mockResolvedValue(null);
+
+      await service.create(userId, { name: "Cash" } as any);
+
+      expect(faviconService.fetchFavicon).not.toHaveBeenCalled();
+      // Not attempted is not the same as attempted and failed, so the columns
+      // are left at their defaults rather than stamped.
+      expect(payeesRepository.create).toHaveBeenCalledWith(
+        expect.not.objectContaining({ logoFetchedAt: expect.anything() }),
+      );
+    });
+
+    it("re-resolves the icon when the website changes", async () => {
+      payeesRepository.findOne.mockResolvedValue({
+        ...mockPayee,
+        website: "https://old.example",
+      });
+      faviconService.fetchFavicon.mockResolvedValue(logo);
+
+      await service.update(userId, "payee-1", { website: "new.example" });
+
+      expect(faviconService.fetchFavicon).toHaveBeenCalledWith(
+        "https://new.example",
+      );
+      expect(txManager.update).toHaveBeenCalledWith(
+        Payee,
+        { id: "payee-1", userId },
+        expect.objectContaining({
+          website: "https://new.example",
+          logoData: logo.data,
+          hasLogo: true,
+        }),
+      );
+    });
+
+    it("leaves a cached icon alone when the form resends the same website", async () => {
+      payeesRepository.findOne.mockResolvedValue({
+        ...mockPayee,
+        website: "https://starbucks.com",
+        hasLogo: true,
+      });
+
+      await service.update(userId, "payee-1", { website: "starbucks.com" });
+
+      // A re-fetch that failed would clear a perfectly good icon, and the form
+      // resends the current address on every save.
+      expect(faviconService.fetchFavicon).not.toHaveBeenCalled();
+      expect(txManager.update).toHaveBeenCalledWith(
+        Payee,
+        { id: "payee-1", userId },
+        expect.not.objectContaining({ hasLogo: expect.anything() }),
+      );
+    });
+
+    it("clears the icon when the website is emptied", async () => {
+      payeesRepository.findOne.mockResolvedValue({
+        ...mockPayee,
+        website: "https://starbucks.com",
+        hasLogo: true,
+      });
+
+      await service.update(userId, "payee-1", { website: "" });
+
+      expect(faviconService.fetchFavicon).not.toHaveBeenCalled();
+      expect(txManager.update).toHaveBeenCalledWith(
+        Payee,
+        { id: "payee-1", userId },
+        expect.objectContaining({
+          website: null,
+          logoData: null,
+          hasLogo: false,
+        }),
+      );
+    });
+
+    describe("getLogo", () => {
+      // getLogo asks the Payee repository for a builder (it needs addSelect
+      // to defeat the entity's `select: false` on the bytes).
+      const withLogoQuery = (payee: unknown) => {
+        payeesRepository.createQueryBuilder.mockImplementation(() => ({
+          ...queryBuilderMock,
+          getOne: jest.fn().mockResolvedValue(payee),
+        }));
+      };
+
+      it("returns the cached bytes", async () => {
+        withLogoQuery({
+          ...mockPayee,
+          hasLogo: true,
+          logoData: logo.data,
+          logoContentType: "image/png",
+        });
+
+        await expect(service.getLogo(userId, "payee-1")).resolves.toEqual({
+          data: logo.data,
+          contentType: "image/png",
+        });
+      });
+
+      it("defaults a missing content type to image/png", async () => {
+        withLogoQuery({
+          ...mockPayee,
+          hasLogo: true,
+          logoData: logo.data,
+          logoContentType: null,
+        });
+
+        await expect(service.getLogo(userId, "payee-1")).resolves.toEqual({
+          data: logo.data,
+          contentType: "image/png",
+        });
+      });
+
+      it("throws NotFound when the payee does not exist", async () => {
+        withLogoQuery(null);
+
+        await expect(service.getLogo(userId, "payee-1")).rejects.toThrow(
+          NotFoundException,
+        );
+      });
+
+      it("throws NotFound when the payee has no cached icon", async () => {
+        // The client renders its own fallback badge from this 404.
+        withLogoQuery({ ...mockPayee, hasLogo: false, logoData: null });
+
+        await expect(service.getLogo(userId, "payee-1")).rejects.toThrow(
+          NotFoundException,
+        );
+      });
+    });
+
+    describe("refreshLogo", () => {
+      it("re-fetches for the stored website and persists the result", async () => {
+        payeesRepository.findOne.mockResolvedValue({
+          ...mockPayee,
+          website: "https://starbucks.com",
+        });
+        faviconService.fetchFavicon.mockResolvedValue(logo);
+
+        await service.refreshLogo(userId, "payee-1");
+
+        expect(faviconService.fetchFavicon).toHaveBeenCalledWith(
+          "https://starbucks.com",
+        );
+        expect(txManager.update).toHaveBeenCalledWith(
+          Payee,
+          { id: "payee-1", userId },
+          expect.objectContaining({ hasLogo: true, logoData: logo.data }),
+        );
+      });
+
+      it("clears the icon for a payee with no website", async () => {
+        payeesRepository.findOne.mockResolvedValue({
+          ...mockPayee,
+          website: null,
+          hasLogo: true,
+        });
+
+        await service.refreshLogo(userId, "payee-1");
+
+        expect(faviconService.fetchFavicon).not.toHaveBeenCalled();
+        expect(txManager.update).toHaveBeenCalledWith(
+          Payee,
+          { id: "payee-1", userId },
+          expect.objectContaining({ hasLogo: false, logoData: null }),
+        );
+      });
+    });
+  });
+  describe("preview website (AI/MCP confirmation cards)", () => {
+    it("normalises a bare domain so the card shows what will be stored", async () => {
+      // A preview computes what the commit will do: the card must not show
+      // "acme.com" for a save that writes "https://acme.com".
+      payeesRepository.findOne.mockResolvedValue(null);
+
+      const preview = await service.previewCreate(userId, {
+        name: "Acme",
+        website: "acme.com",
+      });
+
+      expect(preview.website).toBe("https://acme.com");
+    });
+
+    it("leaves the website undefined when the request said nothing about it", async () => {
+      payeesRepository.findOne.mockResolvedValue(null);
+
+      const preview = await service.previewCreate(userId, { name: "Acme" });
+
+      expect(preview.website).toBeUndefined();
+    });
+
+    it("previews an edit that clears the website as null", async () => {
+      payeesRepository.findOne.mockResolvedValue({
+        ...mockPayee,
+        website: "https://acme.com",
+      });
+
+      const preview = await service.previewUpdatePayee(userId, {
+        name: "Starbucks",
+        website: "",
+      });
+
+      // "" is the clear instruction; null is what the commit will store.
+      expect(preview.website).toBeNull();
+    });
+
+    it("leaves an edit's website undefined when it was not mentioned", async () => {
+      payeesRepository.findOne.mockResolvedValue({
+        ...mockPayee,
+        website: "https://acme.com",
+      });
+
+      // The rename path is exercised elsewhere; here the point is only that
+      // an edit which never names the website leaves it untouched.
+      const preview = await service.previewUpdatePayee(userId, {
+        name: "Starbucks",
+      });
+
+      expect(preview.website).toBeUndefined();
     });
   });
 });

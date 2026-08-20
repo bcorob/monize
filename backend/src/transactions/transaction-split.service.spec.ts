@@ -621,7 +621,7 @@ describe("TransactionSplitService", () => {
       expect(accountsService.updateBalance).not.toHaveBeenCalled();
     });
 
-    it("uses default payee name when parentPayeeName is null", async () => {
+    it("persists a null payee when parentPayeeName is null (issue #1214)", async () => {
       accountsService.findOne
         .mockResolvedValueOnce({
           id: "account-2",
@@ -656,10 +656,12 @@ describe("TransactionSplitService", () => {
         null,
       );
 
+      // Blank stays blank (issue #1214): no stamped "Transfer from
+      // <account>" -- the display resolves the label from the linked parent.
       expect(transactionsRepository.create).toHaveBeenCalledWith(
         expect.objectContaining({
           payeeId: null,
-          payeeName: "Transfer from Checking",
+          payeeName: null,
         }),
       );
     });

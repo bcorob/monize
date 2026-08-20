@@ -24,6 +24,7 @@ import { PayeesService } from "../payees/payees.service";
 import { NetWorthService } from "../net-worth/net-worth.service";
 import { TransactionSplitService } from "./transaction-split.service";
 import { applyRegisterOrder } from "./register-order";
+import { transferPayeeLabel } from "./transfer-payee-label.util";
 import {
   assertVoidTransitionAllowedOnRow,
   applyVoidTransitionToMirrorLeg,
@@ -3291,7 +3292,19 @@ export class TransactionsService {
               {
                 id: t.id,
                 date: t.transactionDate,
-                payeeName: t.payeeName,
+                // A blank transfer payee resolves to "Transfer to/from
+                // <account>" from the counterpart's current name (issue
+                // #1214) -- the same label the register shows the user, so
+                // the model and the screen describe the row identically. The
+                // mask above already rewrote unreadable counterpart names.
+                payeeName:
+                  t.payeeName ??
+                  (t.isTransfer && t.linkedTransaction?.account?.name
+                    ? transferPayeeLabel(
+                        t.amount,
+                        t.linkedTransaction.account.name,
+                      )
+                    : t.payeeName),
                 categoryName: nameOf(t.category),
                 amount: Number(t.amount),
                 accountName: t.account?.name,

@@ -8,6 +8,7 @@ import type { TourAnchorId } from "@/lib/tours/anchors";
 import { chartColors } from "@/lib/chart-colors";
 import { cn } from "@/lib/utils";
 import { isKnown } from "@/lib/gem-strategy-view";
+import { CARD_CLASS } from "@/components/ui/Card";
 
 /**
  * Small building blocks shared by the GEM report cards. They compose the
@@ -18,9 +19,7 @@ import { isKnown } from "@/lib/gem-strategy-view";
  * cue.
  */
 
-const CARD_BASE =
-  "bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 " +
-  "border border-gray-200 dark:border-gray-700";
+const CARD_BASE = CARD_CLASS;
 
 interface GemCardProps {
   /** Card heading. Rendered as the section label in small caps. */

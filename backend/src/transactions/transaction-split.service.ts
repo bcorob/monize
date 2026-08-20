@@ -483,7 +483,10 @@ export class TransactionSplitService {
         isTransfer: true,
         status: options?.parentStatus,
         payeeId: parentPayeeId || null,
-        payeeName: parentPayeeName || `Transfer from ${sourceAccount.name}`,
+        // A blank payee is persisted blank (issue #1214): the display resolves
+        // "Transfer from <source>" from the linked parent's account at read
+        // time, so it follows renames and the reader's language.
+        payeeName: parentPayeeName || null,
       });
 
       const savedLinkedTransaction = await m.save(linkedTransaction);
@@ -1051,7 +1054,8 @@ export class TransactionSplitService {
           // locked parent, not the caller's snapshot (FV4-002).
           status: transaction.status,
           payeeId: parent.payeeId || null,
-          payeeName: parent.payeeName || `Transfer from ${sourceAccount.name}`,
+          // Blank stays blank (issue #1214): the label resolves at read time.
+          payeeName: parent.payeeName || null,
         });
 
         const savedLinkedTransaction = await m.save(linkedTransaction);

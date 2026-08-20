@@ -182,3 +182,42 @@ describe('CategoryForm', () => {
     expect(redSwatch.className).toContain('ring-2');
   });
 });
+
+describe('CategoryForm icon field', () => {
+  const categories = [
+    { id: 'c1', name: 'Food', parentId: null, isIncome: false },
+  ] as any[];
+  const onSubmit = vi.fn().mockResolvedValue(undefined);
+  const onCancel = vi.fn();
+
+  it('renders the icon picker', () => {
+    render(<CategoryForm categories={categories} onSubmit={onSubmit} onCancel={onCancel} />);
+    expect(screen.getByText('Icon')).toBeInTheDocument();
+  });
+
+  it('writes a picked icon into the form state', async () => {
+    const { container } = render(
+      <CategoryForm categories={categories} onSubmit={onSubmit} onCancel={onCancel} />,
+    );
+    const trigger = screen.getByText('Icon').parentElement!.querySelector('button')!;
+    await act(async () => { fireEvent.click(trigger); });
+    await act(async () => { fireEvent.click(screen.getByTitle('shopping cart')); });
+    const hidden = container.querySelector('input[name="icon"]') as HTMLInputElement;
+    expect(hidden.value).toBe('shopping-cart');
+  });
+
+  it('clears the icon back to none', async () => {
+    const category = {
+      id: 'c1', name: 'Food', parentId: null, isIncome: false,
+      description: '', color: '', icon: 'shopping-cart',
+    } as any;
+    const { container } = render(
+      <CategoryForm category={category} categories={categories} onSubmit={onSubmit} onCancel={onCancel} />,
+    );
+    const trigger = screen.getByText('Icon').parentElement!.querySelector('button')!;
+    await act(async () => { fireEvent.click(trigger); });
+    await act(async () => { fireEvent.click(screen.getByText('No icon')); });
+    const hidden = container.querySelector('input[name="icon"]') as HTMLInputElement;
+    expect(hidden.value).toBe('');
+  });
+});

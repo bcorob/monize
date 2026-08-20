@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import { Transaction } from '@/types/transaction';
 import { Category } from '@/types/category';
 import { Modal } from '@/components/ui/Modal';
+import { usePayeeDisplay } from '@/hooks/usePayeeDisplay';
 
 interface TransactionActionSheetProps {
   isOpen: boolean;
@@ -41,6 +42,7 @@ export function TransactionActionSheet({
   categoryLabelMap,
 }: TransactionActionSheetProps) {
   const t = useTranslations('transactions');
+  const payeeDisplay = usePayeeDisplay();
   // The list query joins a category's own row but not its parent, so fall back
   // to the bare name when the full-path label isn't available.
   const categoryLabel = useCallback(
@@ -121,7 +123,8 @@ export function TransactionActionSheet({
       <div className="py-2">
         <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-700">
           <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
-            {transaction?.payeeName || t('actionSheet.defaultTitle')}
+            {(transaction && payeeDisplay(transaction)) ||
+              t('actionSheet.defaultTitle')}
           </p>
           <p className="text-xs text-gray-500 dark:text-gray-400">
             {transaction && formatDate(transaction.transactionDate)}

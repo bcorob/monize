@@ -4,7 +4,7 @@ import { withScopedDb } from "../common/db/scoped-db";
 
 import { withSystemContext } from "../common/db/with-context";
 import { SeedService } from "./seed.service";
-import { InstitutionLogoService } from "../institutions/institution-logo.service";
+import { FaviconService } from "../common/favicon/favicon.service";
 import { demoAccounts } from "./demo-seed-data/accounts";
 import { demoInstitutions } from "./demo-seed-data/institutions";
 import { demoPayees } from "./demo-seed-data/payees";
@@ -24,7 +24,7 @@ export class DemoSeedService {
   constructor(
     private dataSource: DataSource,
     private seedService: SeedService,
-    private logoService: InstitutionLogoService,
+    private logoService: FaviconService,
   ) {}
 
   /**

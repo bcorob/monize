@@ -9,6 +9,7 @@ import {
   Query,
   UseGuards,
   Request,
+  Res,
   ParseUUIDPipe,
   ParseIntPipe,
   ParseFloatPipe,
@@ -23,6 +24,7 @@ import {
   ApiQuery,
 } from "@nestjs/swagger";
 import { AuthGuard } from "@nestjs/passport";
+import { Response } from "express";
 import { assertStringParam } from "../common/query-param-utils";
 import { PayeesService } from "./payees.service";
 import { PayeeDetailService } from "./payee-detail.service";
@@ -471,6 +473,42 @@ export class PayeesController {
     @Param("id", ParseUUIDPipe) id: string,
   ): Promise<PayeeDetailDto> {
     return this.payeeDetailService.getDetail(req.user.id, id);
+  }
+
+  @Get(":id/logo")
+  @AllowDelegate()
+  @ApiOperation({ summary: "Stream the cached brand favicon for a payee" })
+  @ApiResponse({ status: 200, description: "Logo image bytes" })
+  @ApiResponse({ status: 404, description: "Payee or logo not found" })
+  async getLogo(
+    @Request() req,
+    @Param("id", ParseUUIDPipe) id: string,
+    @Res() res: Response,
+  ): Promise<void> {
+    const { data, contentType } = await this.payeesService.getLogo(
+      req.user.id,
+      id,
+    );
+    res.set({
+      "Content-Type": contentType,
+      "Content-Length": String(data.length),
+      // Per-user cached image; safe to cache in the browser for a day.
+      "Cache-Control": "private, max-age=86400",
+    });
+    res.end(data);
+  }
+
+  @Post(":id/refresh-logo")
+  @AllowDelegate()
+  @DelegateRequiresCapability("payees", "edit")
+  @ApiOperation({ summary: "Re-fetch the payee's brand favicon" })
+  @ApiResponse({ status: 200, description: "Payee with refreshed logo state" })
+  @ApiResponse({ status: 404, description: "Payee not found" })
+  refreshLogo(
+    @Request() req,
+    @Param("id", ParseUUIDPipe) id: string,
+  ): Promise<Payee> {
+    return this.payeesService.refreshLogo(req.user.id, id);
   }
 
   @Get("inactive/match")

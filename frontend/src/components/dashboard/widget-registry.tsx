@@ -15,41 +15,40 @@ import { FavouriteSecurities } from './FavouriteSecurities';
 import { InsightsWidget } from './InsightsWidget';
 import { BudgetStatusWidget } from './BudgetStatusWidget';
 import { FavouriteReportsWidget } from './FavouriteReportsWidget';
+import { Card } from '@/components/ui/Card';
 
+/** Placeholder card while a lazy widget's chunk loads; matches WidgetCard's shell. */
+const widgetSkeleton = (minHeight = 'lg:min-h-[540px]') =>
+  function WidgetSkeleton() {
+    return <Card padding="md" className={minHeight} />;
+  };
 const ExpensesPieChart = dynamic(() => import('./ExpensesPieChart').then(m => m.ExpensesPieChart), {
   ssr: false,
-  loading: () => <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-6 lg:min-h-[540px]" />,
+  loading: widgetSkeleton(),
 });
 const IncomeExpensesBarChart = dynamic(() => import('./IncomeExpensesBarChart').then(m => m.IncomeExpensesBarChart), {
   ssr: false,
-  loading: () => <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-3 sm:p-6 lg:min-h-[540px]" />,
+  loading: widgetSkeleton(),
 });
 const NetWorthChart = dynamic(() => import('./NetWorthChart').then(m => m.NetWorthChart), {
   ssr: false,
-  loading: () => <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-3 sm:p-6 lg:min-h-[500px]" />,
+  loading: widgetSkeleton('lg:min-h-[500px]'),
 });
 const AssetsVsLiabilities = dynamic(() => import('./AssetsVsLiabilities').then(m => m.AssetsVsLiabilities), {
   ssr: false,
-  loading: () => <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-3 sm:p-6 lg:min-h-[500px]" />,
+  loading: widgetSkeleton('lg:min-h-[500px]'),
 });
-
-// Report-derived chart widgets (opt-in). Each self-fetches from the report APIs
-// and persists its own settings via the cross-device `dashboardWidgetConfig`
-// preference, so they are lazy-loaded to keep them off the default bundle.
-const widgetSkeleton = () => (
-  <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-4 sm:p-6 lg:min-h-[540px]" />
-);
-const PortfolioValueWidget = dynamic(() => import('./PortfolioValueWidget').then(m => m.PortfolioValueWidget), { ssr: false, loading: widgetSkeleton });
-const SpendingByPayeeWidget = dynamic(() => import('./SpendingByPayeeWidget').then(m => m.SpendingByPayeeWidget), { ssr: false, loading: widgetSkeleton });
-const MonthlySpendingTrendWidget = dynamic(() => import('./MonthlySpendingTrendWidget').then(m => m.MonthlySpendingTrendWidget), { ssr: false, loading: widgetSkeleton });
-const IncomeBySourceWidget = dynamic(() => import('./IncomeBySourceWidget').then(m => m.IncomeBySourceWidget), { ssr: false, loading: widgetSkeleton });
-const CreditUtilizationAccountsWidget = dynamic(() => import('./CreditUtilizationAccountsWidget').then(m => m.CreditUtilizationAccountsWidget), { ssr: false, loading: widgetSkeleton });
-const CreditUtilizationTotalWidget = dynamic(() => import('./CreditUtilizationTotalWidget').then(m => m.CreditUtilizationTotalWidget), { ssr: false, loading: widgetSkeleton });
-const SectorWeightingsWidget = dynamic(() => import('./SectorWeightingsWidget').then(m => m.SectorWeightingsWidget), { ssr: false, loading: widgetSkeleton });
-const SecurityTypeAllocationWidget = dynamic(() => import('./SecurityTypeAllocationWidget').then(m => m.SecurityTypeAllocationWidget), { ssr: false, loading: widgetSkeleton });
-const GeographicAllocationWidget = dynamic(() => import('./GeographicAllocationWidget').then(m => m.GeographicAllocationWidget), { ssr: false, loading: widgetSkeleton });
-const RecurringExpensesWidget = dynamic(() => import('./RecurringExpensesWidget').then(m => m.RecurringExpensesWidget), { ssr: false, loading: widgetSkeleton });
-const WeekendVsWeekdayWidget = dynamic(() => import('./WeekendVsWeekdayWidget').then(m => m.WeekendVsWeekdayWidget), { ssr: false, loading: widgetSkeleton });
+const PortfolioValueWidget = dynamic(() => import('./PortfolioValueWidget').then(m => m.PortfolioValueWidget), { ssr: false, loading: widgetSkeleton() });
+const SpendingByPayeeWidget = dynamic(() => import('./SpendingByPayeeWidget').then(m => m.SpendingByPayeeWidget), { ssr: false, loading: widgetSkeleton() });
+const MonthlySpendingTrendWidget = dynamic(() => import('./MonthlySpendingTrendWidget').then(m => m.MonthlySpendingTrendWidget), { ssr: false, loading: widgetSkeleton() });
+const IncomeBySourceWidget = dynamic(() => import('./IncomeBySourceWidget').then(m => m.IncomeBySourceWidget), { ssr: false, loading: widgetSkeleton() });
+const CreditUtilizationAccountsWidget = dynamic(() => import('./CreditUtilizationAccountsWidget').then(m => m.CreditUtilizationAccountsWidget), { ssr: false, loading: widgetSkeleton() });
+const CreditUtilizationTotalWidget = dynamic(() => import('./CreditUtilizationTotalWidget').then(m => m.CreditUtilizationTotalWidget), { ssr: false, loading: widgetSkeleton() });
+const SectorWeightingsWidget = dynamic(() => import('./SectorWeightingsWidget').then(m => m.SectorWeightingsWidget), { ssr: false, loading: widgetSkeleton() });
+const SecurityTypeAllocationWidget = dynamic(() => import('./SecurityTypeAllocationWidget').then(m => m.SecurityTypeAllocationWidget), { ssr: false, loading: widgetSkeleton() });
+const GeographicAllocationWidget = dynamic(() => import('./GeographicAllocationWidget').then(m => m.GeographicAllocationWidget), { ssr: false, loading: widgetSkeleton() });
+const RecurringExpensesWidget = dynamic(() => import('./RecurringExpensesWidget').then(m => m.RecurringExpensesWidget), { ssr: false, loading: widgetSkeleton() });
+const WeekendVsWeekdayWidget = dynamic(() => import('./WeekendVsWeekdayWidget').then(m => m.WeekendVsWeekdayWidget), { ssr: false, loading: widgetSkeleton() });
 
 export type DashboardWidgetId =
   | 'favourite-accounts'

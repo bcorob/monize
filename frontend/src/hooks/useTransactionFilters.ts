@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { isInvestmentBrokerageAccount } from '@/lib/account-utils';
 import {
   buildCategoryColorMap,
+  buildCategoryIconMap,
   buildCategoryLabelMap,
   buildCategoryFilterOptions,
   resolveSelectedCategories,
@@ -297,6 +298,7 @@ export function useTransactionFilters({ accounts, categories, payees, tags, week
   );
 
   const categoryColorMap = useMemo(() => buildCategoryColorMap(categories), [categories]);
+  const categoryIconMap = useMemo(() => buildCategoryIconMap(categories), [categories]);
   const categoryLabelMap = useMemo(() => buildCategoryLabelMap(categories), [categories]);
 
   const accountFilterOptions = useMemo(() => {
@@ -865,6 +867,7 @@ export function useTransactionFilters({ accounts, categories, payees, tags, week
     payeeFilterOptions,
     tagFilterOptions,
     categoryColorMap,
+    categoryIconMap,
     categoryLabelMap,
 
     // Filter handlers

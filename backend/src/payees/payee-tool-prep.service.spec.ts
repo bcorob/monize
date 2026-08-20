@@ -137,4 +137,80 @@ describe("PayeeToolPrepService", () => {
       expect(d.previewRows[0]).toMatchObject({ status: "error", name: null });
     });
   });
+  describe("website", () => {
+    it("passes a create row's website to the preview", async () => {
+      payees.previewCreatePayee.mockResolvedValue({
+        name: "Acme",
+        defaultCategoryId: null,
+        defaultCategoryName: null,
+        website: "https://acme.com",
+      });
+
+      await prep.prepareCreatePayeeSingle(USER, {
+        name: "Acme",
+        website: "acme.com",
+      });
+
+      expect(payees.previewCreatePayee).toHaveBeenCalledWith(USER, {
+        name: "Acme",
+        categoryName: undefined,
+        website: "acme.com",
+      });
+    });
+
+    it("passes an update row's website to the preview", async () => {
+      payees.previewUpdatePayee.mockResolvedValue({
+        payeeId: "p1",
+        name: "Acme",
+        defaultCategoryId: null,
+        defaultCategoryName: null,
+        website: "https://acme.com",
+      });
+
+      await prep.prepareUpdatePayeeSingle(USER, {
+        name: "Acme",
+        website: "acme.com",
+      });
+
+      expect(payees.previewUpdatePayee).toHaveBeenCalledWith(USER, {
+        name: "Acme",
+        newName: undefined,
+        categoryName: undefined,
+        website: "acme.com",
+      });
+    });
+
+    it("carries the normalised website onto the signed batch rows", () => {
+      // The row is what the confirmed action writes, so a website resolved at
+      // preview time has to survive into it or approving the card would save
+      // the payee without one.
+      expect(
+        PayeeToolPrepService.createToBatchRow({
+          name: "Acme",
+          defaultCategoryId: null,
+          defaultCategoryName: null,
+          website: "https://acme.com",
+        }),
+      ).toEqual({
+        name: "Acme",
+        defaultCategoryId: null,
+        website: "https://acme.com",
+      });
+
+      expect(
+        PayeeToolPrepService.updateToBatchRow({
+          payeeId: "p1",
+          name: "Acme",
+          defaultCategoryId: null,
+          defaultCategoryName: null,
+          website: null,
+        }),
+      ).toEqual({
+        payeeId: "p1",
+        name: "Acme",
+        defaultCategoryId: null,
+        website: null,
+      });
+    });
+  });
 });

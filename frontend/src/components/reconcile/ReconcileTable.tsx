@@ -10,6 +10,7 @@ import type { RowAction } from '@/components/ui/row-actions/rowAction';
 import { useDateFormat } from '@/hooks/useDateFormat';
 import type { SortDirection } from '@/hooks/useSortableTable';
 import { classifyStaleRow, type StaleUnreconciledReason } from '@/lib/stale-reconciliation';
+import { usePayeeDisplay } from '@/hooks/usePayeeDisplay';
 import {
   groupReconcileRows,
   sortReconcileRows,
@@ -70,14 +71,18 @@ export function ReconcileTable({
   const t = useTranslations('reconcile');
   const tc = useTranslations('common');
   const { formatDate } = useDateFormat();
+  // Blank-payee transfer legs resolve "Transfer to/from <account>" at render
+  // time (issue #1214); the sort below is handed the same resolver so the
+  // Payee column orders by exactly the text it shows.
+  const payeeDisplay = usePayeeDisplay();
 
   const groups = useMemo(
     () =>
       groupReconcileRows(
-        sortReconcileRows(transactions, sortField, sortDirection),
+        sortReconcileRows(transactions, sortField, sortDirection, payeeDisplay),
         groupByFlow,
       ),
-    [transactions, sortField, sortDirection, groupByFlow],
+    [transactions, sortField, sortDirection, groupByFlow, payeeDisplay],
   );
 
   const staleByRow = useMemo(() => {
@@ -220,8 +225,7 @@ export function ReconcileTable({
                       onChange={() => onToggle(transaction.id)}
                       onClick={(e) => e.stopPropagation()}
                       aria-label={t('list.selectRow', {
-                        payee:
-                          transaction.payee?.name || transaction.payeeName || '',
+                        payee: payeeDisplay(transaction) || '',
                       })}
                       className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800"
                     />
@@ -246,7 +250,7 @@ export function ReconcileTable({
                     </span>
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
-                    {transaction.payee?.name || transaction.payeeName || '-'}
+                    {payeeDisplay(transaction) || '-'}
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
                     {transaction.category?.name || '-'}

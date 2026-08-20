@@ -42,6 +42,20 @@ describe("buildTransactionSearchClause", () => {
     expect(clause).toContain("transaction_split_tags");
   });
 
+  it("matches a transfer leg by its counterpart account's name (issue #1214)", () => {
+    // A blank-payee transfer displays "Transfer to/from <counterpart>"
+    // resolved at read time, so searching the counterpart's name has to find
+    // the leg the way searching the stamped payee text used to.
+    const clause = buildTransactionSearchClause({
+      transaction: "transaction",
+      splits: "splits",
+    });
+
+    expect(clause).toContain(
+      "EXISTS (SELECT 1 FROM transactions search_lt JOIN accounts search_la ON search_la.id = search_lt.account_id WHERE search_lt.id = transaction.linked_transaction_id AND transaction.is_transfer = true AND search_la.name ILIKE :search)",
+    );
+  });
+
   it("emits guarded, cast exact-amount terms for parent and split", () => {
     const clause = buildTransactionSearchClause({
       transaction: "transaction",

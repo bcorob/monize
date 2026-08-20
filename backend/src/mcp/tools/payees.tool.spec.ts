@@ -156,6 +156,37 @@ describe("McpPayeesTools", () => {
       expect(parsed.count).toBe(1);
     });
 
+    it("passes a website through to the prep layer and the write", async () => {
+      resolve.mockReturnValue({ userId: "u1", scopes: "read,write" });
+      prepService.prepareCreatePayeeSingle.mockResolvedValue({
+        name: "Acme",
+        defaultCategoryId: null,
+        defaultCategoryName: null,
+        website: "https://acme.com",
+      });
+
+      await handlers["manage_payees"](
+        {
+          operation: "create",
+          items: [{ name: "Acme", website: "acme.com" }],
+        },
+        { sessionId: "s1" },
+      );
+
+      expect(prepService.prepareCreatePayeeSingle).toHaveBeenCalledWith("u1", {
+        name: "Acme",
+        categoryName: undefined,
+        website: "acme.com",
+      });
+      // The normalised address from the preview is what gets stored, so the
+      // saved payee matches the card the user approved.
+      expect(payeesService.create).toHaveBeenCalledWith("u1", {
+        name: "Acme",
+        defaultCategoryId: undefined,
+        website: "https://acme.com",
+      });
+    });
+
     it("updates a single payee on success", async () => {
       resolve.mockReturnValue({ userId: "u1", scopes: "read,write" });
       const result = await handlers["manage_payees"](

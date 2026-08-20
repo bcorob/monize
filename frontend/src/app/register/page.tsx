@@ -8,7 +8,6 @@ import '@/lib/zodConfig';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import Link from 'next/link';
-import Image from 'next/image';
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { Input } from '@/components/ui/Input';
@@ -18,7 +17,7 @@ import { authApi, AuthMethods } from '@/lib/auth';
 import { buildPasswordSchema, buildEmailSchema } from '@/lib/zod-helpers';
 import { TwoFactorSetup } from '@/components/auth/TwoFactorSetup';
 import { OnboardingPreferencesScreen } from '@/components/auth/OnboardingPreferencesScreen';
-import { AuthLanguagePicker } from '@/components/auth/AuthLanguagePicker';
+import { AuthShell } from '@/components/auth/AuthShell';
 import { createLogger } from '@/lib/logger';
 
 const logger = createLogger('Register');
@@ -188,72 +187,62 @@ export default function RegisterPage() {
 
   if (isLoadingMethods || !authMethods.local || !authMethods.registration) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-        <div className="text-gray-500 dark:text-gray-400">{tc('loading')}</div>
-      </div>
+      <AuthShell plain>
+        <div className="text-center text-gray-500 dark:text-gray-400">{tc('loading')}</div>
+      </AuthShell>
     );
   }
 
   if (verificationEmail) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-md w-full space-y-8">
-          <div className="text-center">
-            <Image src="/icons/monize-logo.svg" alt="Monize" width={96} height={96} className="mx-auto rounded-xl" priority />
-            <h2 className="mt-4 text-3xl font-extrabold text-gray-900 dark:text-gray-100">
-              {t('checkEmail.title')}
-            </h2>
-          </div>
+      <AuthShell
+        title={t('checkEmail.title')}
+        notices={
           <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg p-4 text-center">
             <p className="text-sm text-blue-800 dark:text-blue-200">
               {t('checkEmail.body', { email: verificationEmail })}
             </p>
           </div>
-          <div className="space-y-3">
-            <Button
-              type="button"
-              variant="outline"
-              size="lg"
-              isLoading={isResending}
-              onClick={handleResendVerification}
-              className="w-full"
-            >
-              {t('checkEmail.resendButton')}
-            </Button>
-            <Link
-              href="/login"
-              className="block text-center font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300"
-            >
-              {t('checkEmail.backToSignIn')}
-            </Link>
-          </div>
+        }
+      >
+        <div className="space-y-3">
+          <Button
+            type="button"
+            variant="outline"
+            size="lg"
+            isLoading={isResending}
+            onClick={handleResendVerification}
+            className="w-full"
+          >
+            {t('checkEmail.resendButton')}
+          </Button>
+          <Link
+            href="/login"
+            className="block text-center font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300"
+          >
+            {t('checkEmail.backToSignIn')}
+          </Link>
         </div>
-      </div>
+      </AuthShell>
     );
   }
 
   if (showTwoFactorSetup) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-md w-full space-y-8">
-          <div className="text-center">
-            <Image src="/icons/monize-logo.svg" alt="Monize" width={96} height={96} className="mx-auto rounded-xl" priority />
-            <h2 className="mt-4 text-3xl font-extrabold text-gray-900 dark:text-gray-100">
-              {t('twoFactor.title')}
-            </h2>
-            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-              {authMethods.force2fa
-                ? t('twoFactor.requiredSubtitle')
-                : t('twoFactor.optionalSubtitle')}
-            </p>
-          </div>
-          <TwoFactorSetup
-            onComplete={() => { setShowTwoFactorSetup(false); setShowPreferencesSetup(true); }}
-            onSkip={authMethods.force2fa ? undefined : () => { setShowTwoFactorSetup(false); setShowPreferencesSetup(true); }}
-            isForced={authMethods.force2fa}
-          />
-        </div>
-      </div>
+      <AuthShell
+        title={t('twoFactor.title')}
+        subtitle={
+          authMethods.force2fa
+            ? t('twoFactor.requiredSubtitle')
+            : t('twoFactor.optionalSubtitle')
+        }
+      >
+        <TwoFactorSetup
+          onComplete={() => { setShowTwoFactorSetup(false); setShowPreferencesSetup(true); }}
+          onSkip={authMethods.force2fa ? undefined : () => { setShowTwoFactorSetup(false); setShowPreferencesSetup(true); }}
+          isForced={authMethods.force2fa}
+        />
+      </AuthShell>
     );
   }
 
@@ -275,25 +264,22 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        <div>
-          <Image src="/icons/monize-logo.svg" alt="Monize" width={96} height={96} className="mx-auto rounded-xl" priority />
-          <h2 className="mt-4 text-center text-3xl font-extrabold text-gray-900 dark:text-gray-100">
-            {t('title')}
-          </h2>
-          <p className="mt-2 text-center text-sm text-gray-600 dark:text-gray-400">
-            {t('orPrefix')}{' '}
-            <Link
-              href="/login"
-              className="font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300"
-            >
-              {t('signInLink')}
-            </Link>
-          </p>
-        </div>
-
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit(onSubmit)}>
+    <AuthShell
+      title={t('title')}
+      subtitle={
+        <p>
+          {t('orPrefix')}{' '}
+          <Link
+            href="/login"
+            className="font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300"
+          >
+            {t('signInLink')}
+          </Link>
+        </p>
+      }
+      languagePicker
+    >
+      <form className="space-y-6" onSubmit={handleSubmit(onSubmit)}>
           <div className="space-y-4">
             <Input
               label={t('emailLabel')}
@@ -397,7 +383,7 @@ export default function RegisterPage() {
                     <div className="w-full border-t border-gray-300 dark:border-gray-700" />
                   </div>
                   <div className="relative flex justify-center text-sm">
-                    <span className="px-2 bg-gray-50 dark:bg-gray-900 text-gray-500 dark:text-gray-400">
+                    <span className="px-2 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400">
                       {t('orContinueWith')}
                     </span>
                   </div>
@@ -442,10 +428,7 @@ export default function RegisterPage() {
               ),
             })}
           </p>
-        </form>
-
-        <AuthLanguagePicker />
-      </div>
-    </div>
+      </form>
+    </AuthShell>
   );
 }

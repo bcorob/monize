@@ -22,7 +22,24 @@ import {
 } from '@/types/payee';
 import { dedupe, invalidateCache } from './apiCache';
 
+/**
+ * Same-origin URL for a payee's cached brand favicon. Rendered directly in an
+ * <img>; the request carries the auth cookie and never contacts a third party.
+ * Returns 404 when no logo is cached, so callers should provide a fallback
+ * (handled by the PayeeLogo component's onError).
+ */
+export function payeeLogoUrl(id: string): string {
+  return `/api/v1/payees/${id}/logo`;
+}
+
 export const payeesApi = {
+  // Re-fetch the payee's brand favicon from its current website
+  refreshLogo: async (id: string): Promise<Payee> => {
+    const response = await apiClient.post<Payee>(`/payees/${id}/refresh-logo`);
+    invalidateCache('payees:');
+    return response.data;
+  },
+
   // Create payee
   create: async (data: CreatePayeeData): Promise<Payee> => {
     const response = await apiClient.post<Payee>('/payees', data);

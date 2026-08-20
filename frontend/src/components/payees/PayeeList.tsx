@@ -19,6 +19,9 @@ import { RowActions } from '@/components/ui/row-actions/RowActions';
 import { RowActionSheet } from '@/components/ui/row-actions/RowActionSheet';
 import type { RowAction } from '@/components/ui/row-actions/rowAction';
 import { DensityToggleBar } from '@/components/ui/DensityToggle';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { PayeeLogo } from '@/components/payees/PayeeLogo';
+import { CategoryPill } from '@/components/transactions/CategoryPill';
 
 const logger = createLogger('PayeeList');
 
@@ -96,6 +99,8 @@ interface PayeeListProps {
   sortDirection?: SortDirection;
   onSort?: (field: SortField) => void;
   categoryColorMap?: Map<string, string | null>;
+  /** Inherited-aware icon per category id; see buildCategoryIconMap. */
+  categoryIconMap?: Map<string, string | null>;
   categoryLabelMap?: Map<string, string>;
   /** Payee id to flash/scroll to (e.g. arriving from a deep link). */
   highlightId?: string | null;
@@ -113,6 +118,8 @@ interface PayeeRowProps {
   showStatusColumn: boolean;
   index: number;
   categoryColorMap?: Map<string, string | null>;
+  /** Inherited-aware icon per category id; see buildCategoryIconMap. */
+  categoryIconMap?: Map<string, string | null>;
   categoryLabelMap?: Map<string, string>;
   formatDate: (date: string) => string;
   getRowHandlers: (payee: Payee) => LongPressRowHandlers;
@@ -131,6 +138,7 @@ const PayeeRow = memo(function PayeeRow({
   showStatusColumn,
   index,
   categoryColorMap,
+  categoryIconMap,
   categoryLabelMap,
   formatDate,
   getRowHandlers,
@@ -144,6 +152,9 @@ const PayeeRow = memo(function PayeeRow({
     : null;
   const defaultCategoryLabel = payee.defaultCategory
     ? (categoryLabelMap?.get(payee.defaultCategory.id) ?? payee.defaultCategory.name)
+    : null;
+  const defaultCategoryIcon = payee.defaultCategory
+    ? (categoryIconMap?.get(payee.defaultCategory.id) ?? payee.defaultCategory.icon)
     : null;
   const actions = useMemo(
     () => buildPayeeActions(
@@ -162,6 +173,9 @@ const PayeeRow = memo(function PayeeRow({
     >
       <td className={`${cellPadding} whitespace-nowrap`}>
         <div className="flex flex-col items-start gap-0.5 sm:flex-row sm:items-center sm:gap-2">
+          {density !== 'dense' && (
+            <PayeeLogo payee={payee} size={20} className="hidden sm:inline-flex" />
+          )}
           <button
             onClick={(e) => { e.stopPropagation(); onViewTransactions(payee); }}
             className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline text-left"
@@ -180,20 +194,13 @@ const PayeeRow = memo(function PayeeRow({
         </div>
       </td>
       <td className={`${cellPadding} whitespace-nowrap hidden sm:table-cell`}>
-        {payee.defaultCategory ? (
-          <span
-            className={`inline-flex text-xs leading-5 font-semibold rounded-full ${density === 'dense' ? 'px-1.5 py-0.5' : 'px-2 py-1'}`}
-            style={{
-              backgroundColor: defaultCategoryColor
-                ? `color-mix(in srgb, ${defaultCategoryColor} 15%, var(--category-bg-base, #e5e7eb))`
-                : 'var(--category-bg-base, #e5e7eb)',
-              color: defaultCategoryColor
-                ? `color-mix(in srgb, ${defaultCategoryColor} 85%, var(--category-text-mix, #000))`
-                : 'var(--category-text-base, #6b7280)',
-            }}
-          >
-            {defaultCategoryLabel}
-          </span>
+        {payee.defaultCategory && defaultCategoryLabel ? (
+          <CategoryPill
+            name={defaultCategoryLabel}
+            color={defaultCategoryColor}
+            icon={defaultCategoryIcon}
+            density={density}
+          />
         ) : (
           <span className="text-sm text-gray-400 dark:text-gray-500">{t('list.noCategory')}</span>
         )}
@@ -249,6 +256,7 @@ export function PayeeList({
   sortDirection: propSortDirection,
   onSort,
   categoryColorMap,
+  categoryIconMap,
   categoryLabelMap,
   highlightId,
 }: PayeeListProps) {
@@ -344,23 +352,15 @@ export function PayeeList({
 
   if (payees.length === 0) {
     return (
-      <div className="text-center py-12">
-        <svg
-          className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
-          />
-        </svg>
-        <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">{t('list.empty.title')}</h3>
-        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{t('list.empty.subtitle')}</p>
-      </div>
+      <EmptyState
+        icon={
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+          </svg>
+        }
+        title={t('list.empty.title')}
+        description={t('list.empty.subtitle')}
+      />
     );
   }
 
@@ -437,6 +437,7 @@ export function PayeeList({
                 showStatusColumn={showStatusColumn}
                 index={index}
                 categoryColorMap={categoryColorMap}
+                categoryIconMap={categoryIconMap}
                 categoryLabelMap={categoryLabelMap}
                 formatDate={formatDate}
                 getRowHandlers={getRowHandlers}

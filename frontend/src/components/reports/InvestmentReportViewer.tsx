@@ -28,6 +28,7 @@ import { exportToCsv } from '@/lib/csv-export';
 import { createLogger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/errors';
 import { useTranslations } from 'next-intl';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 const logger = createLogger('InvestmentReportViewer');
 
@@ -230,12 +231,14 @@ export function InvestmentReportViewer({ reportId }: InvestmentReportViewerProps
 
   if (!report) {
     return (
-      <div className="text-center py-12">
-        <p className="text-gray-500 dark:text-gray-400">{t('investmentReportViewer.notFound')}</p>
-        <Button variant="outline" onClick={() => router.push('/reports')} className="mt-4">
-          {t('detailHeader.backToReports')}
-        </Button>
-      </div>
+      <EmptyState
+        title={t('investmentReportViewer.notFound')}
+        action={
+          <Button variant="outline" onClick={() => router.push('/reports')}>
+            {t('detailHeader.backToReports')}
+          </Button>
+        }
+      />
     );
   }
 

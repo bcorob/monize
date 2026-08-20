@@ -35,6 +35,7 @@ function transaction(
     isTransfer: false,
     linkedTransactionId: null,
     splits: [],
+    collapsedTradeHandle: null,
     ...overrides,
   };
 }

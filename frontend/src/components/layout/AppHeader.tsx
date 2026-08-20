@@ -21,33 +21,31 @@ import {
   clearTransactionFilterStorage,
   type HeaderSearchEventDetail,
 } from '@/hooks/useTransactionFilters';
+import { NAV_LINKS, TOOLS_LINKS, AI_LINKS, NAV_ICONS } from '@/lib/nav-links';
 import toast from 'react-hot-toast';
 
 // Labels are translation keys in the `navigation` namespace, resolved at
-// render time. The href doubles as the route and the active-state match.
-const navLinks = [
-  { href: '/transactions', labelKey: 'transactions' },
-  { href: '/bills', labelKey: 'bills' },
-  { href: '/investments', labelKey: 'investments' },
-  { href: '/accounts', labelKey: 'accounts' },
-  { href: '/budgets', labelKey: 'budgets' },
-  { href: '/reports', labelKey: 'reports' },
-];
+// render time. The href doubles as the route, the active-state match, and
+// the icon lookup; the arrays and NAV_ICONS live together in lib/nav-links.
+const navLinks = NAV_LINKS;
+const toolsLinks = TOOLS_LINKS;
+const aiLinks = AI_LINKS;
 
-const toolsLinks: { href: string; labelKey: string; badge?: string }[] = [
-  { href: '/categories', labelKey: 'categories' },
-  { href: '/payees', labelKey: 'payees' },
-  { href: '/institutions', labelKey: 'institutions' },
-  { href: '/tags', labelKey: 'tags' },
-  { href: '/securities', labelKey: 'securities' },
-  { href: '/currencies', labelKey: 'currencies' },
-  { href: '/import', labelKey: 'import' },
-];
-
-const aiLinks: { href: string; labelKey: string }[] = [
-  { href: '/insights', labelKey: 'insights' },
-  { href: '/ai', labelKey: 'aiAssistant' },
-];
+/** Leading icon on a dropdown/menu row; the top-bar pills stay text-only. */
+function NavItemIcon({ href, active }: { href: string; active: boolean }) {
+  const Icon = NAV_ICONS[href];
+  if (!Icon) return null;
+  return (
+    <Icon
+      aria-hidden
+      className={`h-5 w-5 flex-shrink-0 ${
+        active
+          ? 'text-blue-600 dark:text-blue-300'
+          : 'text-gray-400 dark:text-gray-500'
+      }`}
+    />
+  );
+}
 
 // Guided-tour anchors for the desktop nav, keyed by route. Attached in exactly
 // one place (here) so the anchor-uniqueness test stays satisfied; the mobile
@@ -276,7 +274,7 @@ export function AppHeader() {
               onClick={() => router.push('/dashboard')}
               className="hidden xl:flex items-center gap-2 text-2xl font-bold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
             >
-              <Image src="/icons/monize-logo.svg" alt="Monize" width={32} height={32} className="rounded" priority />
+              <Image src="/icons/monize-logo-transparent.svg" alt="Monize" width={32} height={32} className="rounded" priority />
               <span className="hidden xl:inline">Monize</span>
             </button>
             {(!isDelegateView ||
@@ -325,22 +323,26 @@ export function AppHeader() {
                 {aiOpen && (
                   <div className="absolute left-0 mt-1 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg dark:shadow-gray-700/50 border border-gray-200 dark:border-gray-700 z-50">
                     <div className="py-1">
-                      {aiLinks.map((link) => (
-                        <button
-                          key={link.href}
-                          onClick={() => {
-                            router.push(link.href);
-                            setAiOpen(false);
-                          }}
-                          className={`block w-full text-left px-4 py-2 text-sm transition-colors ${
-                            isNavSectionActive(pathname, link.href)
-                              ? 'bg-blue-50 dark:bg-blue-900/50 text-blue-700 dark:text-blue-200'
-                              : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-                          }`}
-                        >
-                          {t(link.labelKey)}
-                        </button>
-                      ))}
+                      {aiLinks.map((link) => {
+                        const active = isNavSectionActive(pathname, link.href);
+                        return (
+                          <button
+                            key={link.href}
+                            onClick={() => {
+                              router.push(link.href);
+                              setAiOpen(false);
+                            }}
+                            className={`flex w-full items-center gap-2.5 text-left px-4 py-2 text-sm transition-colors ${
+                              active
+                                ? 'bg-blue-50 dark:bg-blue-900/50 text-blue-700 dark:text-blue-200'
+                                : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                            }`}
+                          >
+                            <NavItemIcon href={link.href} active={active} />
+                            {t(link.labelKey)}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -379,27 +381,31 @@ export function AppHeader() {
                     className="absolute left-0 mt-1 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg dark:shadow-gray-700/50 border border-gray-200 dark:border-gray-700 z-50"
                   >
                     <div className="py-1">
-                      {visibleToolsLinks.map((link) => (
-                        <button
-                          key={link.href}
-                          onClick={() => {
-                            router.push(link.href);
-                            setToolsOpen(false);
-                          }}
-                          className={`block w-full text-left px-4 py-2 text-sm transition-colors ${
-                            isNavSectionActive(pathname, link.href)
-                              ? 'bg-blue-50 dark:bg-blue-900/50 text-blue-700 dark:text-blue-200'
-                              : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-                          }`}
-                        >
-                          {t(link.labelKey)}
-                          {link.badge && (
-                            <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
-                              {link.badge}
-                            </span>
-                          )}
-                        </button>
-                      ))}
+                      {visibleToolsLinks.map((link) => {
+                        const active = isNavSectionActive(pathname, link.href);
+                        return (
+                          <button
+                            key={link.href}
+                            onClick={() => {
+                              router.push(link.href);
+                              setToolsOpen(false);
+                            }}
+                            className={`flex w-full items-center gap-2.5 text-left px-4 py-2 text-sm transition-colors ${
+                              active
+                                ? 'bg-blue-50 dark:bg-blue-900/50 text-blue-700 dark:text-blue-200'
+                                : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                            }`}
+                          >
+                            <NavItemIcon href={link.href} active={active} />
+                            {t(link.labelKey)}
+                            {link.badge && (
+                              <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
+                                {link.badge}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                 )}

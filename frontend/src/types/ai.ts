@@ -291,6 +291,8 @@ export interface PendingActionPreview {
   currentCategoryName?: string | null;
   description?: string | null;
   name?: string | null;
+  /** Payee website, as the commit would store it. */
+  website?: string | null;
   /**
    * True when an update_transaction / delete_transaction targets a reconciled
    * transaction. The card shows a warning line so the user knows approving will
@@ -338,6 +340,8 @@ export interface PendingActionPreviewRow {
   error?: string;
   // Payee display field (batch_actions with a payee operation).
   name?: string | null;
+  /** Payee website, as the commit would store it. */
+  website?: string | null;
   accountName?: string;
   amount?: number;
   currencyCode?: string;

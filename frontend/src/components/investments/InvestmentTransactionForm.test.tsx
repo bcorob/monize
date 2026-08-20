@@ -365,6 +365,33 @@ describe('InvestmentTransactionForm', () => {
     expect(screen.queryByText('Funds From (optional)')).not.toBeInTheDocument();
   });
 
+  it('offers accrued interest for REDEEM and for no other action', async () => {
+    // The field is keyed on the raw action, not its base: REDEEM normalizes to
+    // SELL, and the backend refuses accrued interest on a sale.
+    render(<InvestmentTransactionForm accounts={accounts} />);
+    await waitFor(() => {
+      expect(screen.getByText('Brokerage Account')).toBeInTheDocument();
+    });
+
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Transaction Type'), {
+        target: { value: 'SELL' },
+      });
+    });
+    expect(
+      screen.queryByLabelText(/Accrued Interest/),
+    ).not.toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Transaction Type'), {
+        target: { value: 'REDEEM' },
+      });
+    });
+    await waitFor(() => {
+      expect(screen.getByLabelText(/Accrued Interest/)).toBeInTheDocument();
+    });
+  });
+
   it('shows Deposit To select for INTEREST and CAPITAL_GAIN actions', async () => {
     render(<InvestmentTransactionForm accounts={accounts} />);
     await waitFor(() => {

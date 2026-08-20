@@ -8,9 +8,9 @@ import '@/lib/zodConfig';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import Link from 'next/link';
-import Image from 'next/image';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
+import { AuthShell } from '@/components/auth/AuthShell';
 import { authApi } from '@/lib/auth';
 import { buildEmailSchema } from '@/lib/zod-helpers';
 
@@ -158,21 +158,10 @@ export default function VerifyEmailPage() {
   const t = useTranslations('auth.verifyEmail');
   const tc = useTranslations('common');
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        <div>
-          <Image src="/icons/monize-logo.svg" alt="Monize" width={96} height={96} className="mx-auto rounded-xl" priority />
-          <h2 className="mt-4 text-center text-3xl font-extrabold text-gray-900 dark:text-gray-100">
-            {t('title')}
-          </h2>
-          <p className="mt-2 text-center text-sm text-gray-600 dark:text-gray-400">
-            {t('subtitle')}
-          </p>
-        </div>
-        <Suspense fallback={<div className="text-center text-gray-500 dark:text-gray-400">{tc('loading')}</div>}>
-          <VerifyEmailContent />
-        </Suspense>
-      </div>
-    </div>
+    <AuthShell title={t('title')} subtitle={t('subtitle')}>
+      <Suspense fallback={<div className="text-center text-gray-500 dark:text-gray-400">{tc('loading')}</div>}>
+        <VerifyEmailContent />
+      </Suspense>
+    </AuthShell>
   );
 }

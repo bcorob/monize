@@ -439,7 +439,9 @@ export class ImportInvestmentProcessorService {
           accountId: transferAccountId,
           transactionDate: qifTx.date,
           amount: counterpart.amount,
-          payeeName: qifTx.payee || `Transfer from ${ctx.account.name}`,
+          // Blank transfer payees are persisted blank (issue #1214); the
+          // label resolves from the linked leg at read time.
+          payeeName: qifTx.payee || null,
           description: qifTx.memo || null,
           status,
           currencyCode: targetCurrency,

@@ -17,7 +17,20 @@ const TX_ROOT = __dirname;
  * The list may grow. Removing an entry means the route no longer writes to a
  * transaction, which is a change worth arguing for in the diff.
  */
-const ENFORCEMENT_SITES: { file: string; fn: string; why: string }[] = [
+/**
+ * `beforeWrite` marks a site that receives an ambient `EntityManager` rather
+ * than opening its own `withScopedDb` -- a nested handler whose transaction is
+ * opened by its caller. For those the "inside the transaction" check cannot look
+ * for `withScopedDb`, so it instead asserts the assertion appears before the
+ * named first write of the method. A site without `beforeWrite` opens its own
+ * `withScopedDb` and is checked against that.
+ */
+const ENFORCEMENT_SITES: {
+  file: string;
+  fn: string;
+  why: string;
+  beforeWrite?: string;
+}[] = [
   {
     file: "transactions.service.ts",
     fn: "async update(",
@@ -72,6 +85,18 @@ const ENFORCEMENT_SITES: { file: string; fn: string; why: string }[] = [
     file: "transaction-split.service.ts",
     fn: "async removeSplit(",
     why: "DELETE /transactions/:id/splits/:splitId",
+  },
+  {
+    file: "../action-history/action-history.service.ts",
+    fn: "private async undoTransactionUpdate(",
+    why: "undo/redo of a transaction edit restores prior field values onto the row",
+    beforeWrite: "manager.update(Transaction",
+  },
+  {
+    file: "../securities/investment-transactions.service.ts",
+    fn: "private async updateEmbeddedSplitParent(",
+    why: "editing an embedded investment rewrites the split amount and the parent's total",
+    beforeWrite: "manager.update(TransactionSplit",
   },
 ];
 
@@ -150,10 +175,17 @@ describe("the strict reconciled lock is asked on every write path", () => {
     // cannot undo a committed row (docs/financial-calculation-contract.md
     // section 7). `withScopedDb` opening before the call is the observable form
     // of that in this codebase.
-    const outside = ENFORCEMENT_SITES.filter(({ file, fn }) => {
+    const outside = ENFORCEMENT_SITES.filter(({ file, fn, beforeWrite }) => {
       const body = methodBody(sources.get(file)!, fn)!;
-      const scoped = body.indexOf("withScopedDb");
       const assertion = body.search(ASSERTION);
+      if (beforeWrite) {
+        // A nested handler: its transaction is the caller's, so "inside the
+        // transaction" is proven by the assertion preceding this method's first
+        // write rather than by a local `withScopedDb`.
+        const write = body.indexOf(beforeWrite);
+        return write === -1 || assertion === -1 || assertion > write;
+      }
+      const scoped = body.indexOf("withScopedDb");
       return scoped === -1 || assertion < scoped;
     }).map(({ file, fn }) => `${file} ${fn}`);
     expect(outside).toEqual([]);

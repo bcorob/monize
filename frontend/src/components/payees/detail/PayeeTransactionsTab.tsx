@@ -30,6 +30,7 @@ interface PayeeTransactionsTabProps {
   /** Hierarchical category labels and colours, as the register passes them. */
   categoryLabelMap: Map<string, string>;
   categoryColorMap: Map<string, string | null>;
+  categoryIconMap: Map<string, string | null>;
   /** Called after an edit or delete, so the page's cards recompute. */
   onChanged: () => void;
   /** Open the full register, filtered to this payee. */
@@ -56,6 +57,7 @@ export function PayeeTransactionsTab({
   refreshKey,
   categoryLabelMap,
   categoryColorMap,
+  categoryIconMap,
   onChanged,
   onViewInRegister,
   onSelectDate,
@@ -185,6 +187,7 @@ export function PayeeTransactionsTab({
           onPageChange={setPage}
           categoryLabelMap={categoryLabelMap}
           categoryColorMap={categoryColorMap}
+          categoryIconMap={categoryIconMap}
         />
       )}
 

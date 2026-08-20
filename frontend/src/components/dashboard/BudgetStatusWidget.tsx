@@ -6,6 +6,7 @@ import { useTranslations } from 'next-intl';
 import { budgetsApi } from '@/lib/budgets';
 import { DashboardBudgetSummary } from '@/types/budget';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
+import { WidgetHeading } from './widget-meta';
 import {
   budgetPercentColor,
   budgetProgressBarColor,
@@ -46,12 +47,9 @@ export function BudgetStatusWidget({ isLoading: parentLoading }: BudgetStatusWid
   if (isLoading || parentLoading) {
     return (
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-3 sm:p-6 lg:min-h-[390px]">
-        <button
-          onClick={() => router.push('/budgets')}
-          className="text-lg font-semibold text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 transition-colors mb-4"
-        >
+        <WidgetHeading id="budget-status" onClick={() => router.push('/budgets')} className="mb-4">
           {sectionTitle}
-        </button>
+        </WidgetHeading>
         <div className="animate-pulse space-y-3">
           <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-3/4" />
           <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded" />
@@ -64,12 +62,9 @@ export function BudgetStatusWidget({ isLoading: parentLoading }: BudgetStatusWid
   if (hasError || !summary) {
     return (
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-3 sm:p-6 lg:min-h-[390px]">
-        <button
-          onClick={() => router.push('/budgets')}
-          className="text-lg font-semibold text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 transition-colors mb-4"
-        >
+        <WidgetHeading id="budget-status" onClick={() => router.push('/budgets')} className="mb-4">
           {sectionTitle}
-        </button>
+        </WidgetHeading>
         <p className="text-gray-500 dark:text-gray-400 text-sm">
           {t('budgetStatus.noBudget')}
         </p>
@@ -86,12 +81,9 @@ export function BudgetStatusWidget({ isLoading: parentLoading }: BudgetStatusWid
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-3 sm:p-6 lg:min-h-[390px]">
       <div className="flex items-center justify-between mb-3">
-        <button
-          onClick={() => router.push(`/budgets/${summary.budgetId}`)}
-          className="text-lg font-semibold text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-        >
+        <WidgetHeading id="budget-status" onClick={() => router.push(`/budgets/${summary.budgetId}`)}>
           {sectionTitle}
-        </button>
+        </WidgetHeading>
         <span className="text-xs text-gray-500 dark:text-gray-400">
           {t('budgetStatus.daysLeft', { count: summary.daysRemaining })}
         </span>

@@ -20,6 +20,7 @@ import { PageLayout } from '@/components/layout/PageLayout';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { SummaryCard, SummaryIcons } from '@/components/ui/SummaryCard';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { CARD_CLASS } from '@/components/ui/Card';
 import { useFormModal } from '@/hooks/useFormModal';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { createLogger } from '@/lib/logger';
@@ -258,7 +259,7 @@ function CategoriesContent() {
         />
 
         {/* Categories List */}
-        <div className="bg-white dark:bg-gray-800 shadow dark:shadow-gray-700/50 rounded-lg overflow-hidden">
+        <div className={`${CARD_CLASS} overflow-hidden`}>
           {isLoading ? (
             <LoadingSpinner text={t('page.loadingText')} />
           ) : categories.length === 0 ? (

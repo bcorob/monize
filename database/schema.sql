@@ -211,6 +211,13 @@ CREATE TABLE payees (
     default_category_id UUID REFERENCES categories(id),
     notes TEXT,
     website VARCHAR(2048), -- the payee's site; stored absolute (https unless an explicit http:// was given)
+    -- Brand icon: the website's favicon, fetched server-side and cached here so
+    -- the browser never contacts a third party to render it. Same four columns
+    -- and same semantics as institutions.
+    logo_data BYTEA,
+    logo_content_type VARCHAR(100),
+    has_logo BOOLEAN NOT NULL DEFAULT false,
+    logo_fetched_at TIMESTAMP,
     is_active BOOLEAN NOT NULL DEFAULT true,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(user_id, name)

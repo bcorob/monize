@@ -1,11 +1,11 @@
-import { InstitutionLogoService } from "./institution-logo.service";
+import { FaviconService } from "./favicon.service";
 
-describe("InstitutionLogoService", () => {
-  let service: InstitutionLogoService;
+describe("FaviconService", () => {
+  let service: FaviconService;
   const originalFetch = global.fetch;
 
   beforeEach(() => {
-    service = new InstitutionLogoService();
+    service = new FaviconService();
     jest.spyOn(service["logger"], "warn").mockImplementation(() => undefined);
   });
 

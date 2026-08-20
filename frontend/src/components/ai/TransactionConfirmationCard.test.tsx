@@ -612,6 +612,41 @@ describe('TransactionConfirmationCard', () => {
       expect(screen.getByText('Utilities')).toBeInTheDocument();
     });
 
+    it('shows the website on a payee card when the action sets one', () => {
+      render(
+        <TransactionConfirmationCard
+          action={makeAction({
+            type: 'create_payee',
+            descriptor: { type: 'create_payee' },
+            preview: {
+              name: 'Hydro One',
+              categoryName: 'Utilities',
+              website: 'https://hydroone.com',
+            },
+          })}
+          onConfirm={vi.fn()}
+          onCancel={vi.fn()}
+        />,
+      );
+      expect(screen.getByText('https://hydroone.com')).toBeInTheDocument();
+    });
+
+    it('omits the website row when the edit says nothing about it', () => {
+      // A rename that left the address alone must not read as clearing it.
+      render(
+        <TransactionConfirmationCard
+          action={makeAction({
+            type: 'update_payee',
+            descriptor: { type: 'update_payee' },
+            preview: { name: 'Hydro One', categoryName: 'Utilities' },
+          })}
+          onConfirm={vi.fn()}
+          onCancel={vi.fn()}
+        />,
+      );
+      expect(screen.queryByText('Website')).toBeNull();
+    });
+
     it('deep-links the view-payees link to the created payee', () => {
       render(
         <TransactionConfirmationCard

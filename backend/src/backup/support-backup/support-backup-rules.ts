@@ -115,6 +115,12 @@ export const RULES: Record<string, TableRules> = {
     default_category_id: keep,
     notes: drop,
     website: drop, // a public URL names the payee the masked name hides
+    // A brand favicon names the payee just as its website does, so the bytes
+    // go and the flag is forced consistent with their absence.
+    logo_data: drop,
+    logo_content_type: drop,
+    has_logo: konst(false),
+    logo_fetched_at: drop,
     is_active: keep,
     created_at: keep,
   },

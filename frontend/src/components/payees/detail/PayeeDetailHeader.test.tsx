@@ -13,6 +13,8 @@ function payee(overrides: Partial<Payee> = {}): Payee {
     defaultCategory: null,
     notes: null,
     website: null,
+    hasLogo: false,
+    logoFetchedAt: null,
     isActive: true,
     createdAt: '2024-01-15T00:00:00.000Z',
     ...overrides,

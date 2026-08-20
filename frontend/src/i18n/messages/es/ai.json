@@ -83,6 +83,7 @@
     "currentCategory": "Categoría actual",
     "description": "Descripción",
     "name": "Nombre",
+    "website": "Sitio web",
     "none": "Ninguno",
     "approve": "Aprobar",
     "cancel": "Cancelar",

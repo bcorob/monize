@@ -22,12 +22,12 @@ const BulkUpdateModal = dynamic(() => import('@/components/transactions/BulkUpda
 // Reserve the chart card's height while the chunk loads so the rest of the
 // page (filter row, table) doesn't jump down when the chart hydrates.
 const ChartLoadingPlaceholder = () => (
-  <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-3 sm:p-6 mb-6 min-h-[420px]" />
+  <div className={`${CARD_CLASS} p-3 sm:p-6 mb-6 min-h-[420px]`} />
 );
 const BalanceHistoryChart = dynamic(() => import('@/components/transactions/BalanceHistoryChart').then(m => m.BalanceHistoryChart), { ssr: false, loading: ChartLoadingPlaceholder });
 const CategoryPayeeBarChart = dynamic(() => import('@/components/transactions/CategoryPayeeBarChart').then(m => m.CategoryPayeeBarChart), { ssr: false, loading: ChartLoadingPlaceholder });
 const AccountBalancesBarChart = dynamic(() => import('@/components/transactions/AccountBalancesBarChart').then(m => m.AccountBalancesBarChart), { ssr: false, loading: ChartLoadingPlaceholder });
-import { transferCsvLabel } from '@/lib/transfer-label';
+import { transferCsvLabel, transferPayeeCsvLabel } from '@/lib/transfer-label';
 import { transactionsApi } from '@/lib/transactions';
 import { accountsApi } from '@/lib/accounts';
 import { institutionsApi } from '@/lib/institutions';
@@ -64,6 +64,7 @@ import { UnsavedChangesDialog } from '@/components/ui/UnsavedChangesDialog';
 import { PageLayout } from '@/components/layout/PageLayout';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { CARD_CLASS } from '@/components/ui/Card';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { createLogger } from '@/lib/logger';
 import { showErrorToast } from '@/lib/errors';
@@ -913,7 +914,9 @@ function TransactionsContent() {
         return [
           tx.transactionDate,
           tx.account?.name ?? '',
-          tx.payee?.name ?? tx.payeeName ?? '',
+          // Blank-payee transfer legs export the same "Transfer to <account>"
+          // text the register resolves at render time (issue #1214).
+          tx.payee?.name ?? tx.payeeName ?? transferPayeeCsvLabel(tx) ?? '',
           categoryCell,
           tx.description ?? '',
           tx.tags?.map(t => t.name).join('; ') ?? '',
@@ -996,7 +999,7 @@ function TransactionsContent() {
                 ) : (
                   <div
                     data-testid="chart-zero-balances"
-                    className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-3 sm:p-6 mb-6 min-h-[420px] flex items-center justify-center"
+                    className={`${CARD_CLASS} p-3 sm:p-6 mb-6 min-h-[420px] flex items-center justify-center`}
                   >
                     <p className="text-gray-500 dark:text-gray-400 text-center max-w-md">
                       {t('charts.zeroBalances.message')}
@@ -1313,7 +1316,7 @@ function TransactionsContent() {
         />
 
         {/* Transactions List */}
-        <div className="bg-white dark:bg-gray-800 shadow dark:shadow-gray-700/50 rounded-lg overflow-hidden">
+        <div className={`${CARD_CLASS} overflow-hidden`}>
           {isLoading && transactions.length === 0 ? (
             <LoadingSpinner text={t('page.loading')} />
           ) : (
@@ -1350,6 +1353,7 @@ function TransactionsContent() {
               pageSize={PAGE_SIZE}
               onPageChange={filters.goToPage}
               categoryColorMap={filters.categoryColorMap}
+              categoryIconMap={filters.categoryIconMap}
               categoryLabelMap={filters.categoryLabelMap}
               budgetStatusMap={budgetStatusMap}
               highlightTransactionId={filters.highlightTransactionId}

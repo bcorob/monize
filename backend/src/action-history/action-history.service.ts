@@ -10,6 +10,7 @@ import { Cron } from "@nestjs/schedule";
 import { ActionHistory } from "./entities/action-history.entity";
 import { Transaction } from "../transactions/entities/transaction.entity";
 import { TransactionSplit } from "../transactions/entities/transaction-split.entity";
+import { assertReconciledRowsMutable } from "../transactions/reconciled-lock.util";
 import { Account } from "../accounts/entities/account.entity";
 import { Category } from "../categories/entities/category.entity";
 import { Payee } from "../payees/entities/payee.entity";
@@ -546,6 +547,7 @@ export class ActionHistoryService {
 
     const transaction = await manager.findOne(Transaction, {
       where: { id: action.entityId, userId: action.userId },
+      lock: { mode: "pessimistic_write" },
     });
     if (!transaction) {
       throw new ConflictException(
@@ -555,6 +557,13 @@ export class ActionHistoryService {
         ),
       );
     }
+
+    // INV-RECONCILE-001: undo/redo of an edit rewrites this row's stored fields
+    // (redo reaches here too, via `executeRedo` inverting the action), so a
+    // reconciled locked row refuses -- an undo is no more allowed to alter it
+    // than the original edit was. Runs after the row lock above and before the
+    // write below, so a refusal reverses nothing.
+    await assertReconciledRowsMutable(manager, action.userId, [transaction]);
 
     const before = action.beforeData;
 

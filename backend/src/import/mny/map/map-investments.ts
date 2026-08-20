@@ -2,6 +2,11 @@ import { randomUUID } from "node:crypto";
 import { AccountSubType } from "../../../accounts/entities/account.entity";
 import { InvestmentAction } from "../../../securities/entities/investment-transaction.entity";
 import { baseInvestmentAction } from "../../../securities/investment-replay.util";
+import {
+  disposalCashAmount,
+  proceedsExcludingAccruedInterest,
+  supportsAccruedInterest,
+} from "../../../securities/accrued-interest.util";
 import { roundMoney, roundToDecimals } from "../../../common/round.util";
 import {
   MappedAccounts,
@@ -127,6 +132,8 @@ interface MnyInvestmentDetailValues {
   readonly price: number;
   readonly quantity: number;
   readonly commission: number;
+  /** `TRN_INV.amtInt`: accrued interest, paid out with a redemption. */
+  readonly interest: number;
 }
 
 /**
@@ -159,6 +166,7 @@ function indexDetails(
       price: detail.price,
       quantity: detail.quantity,
       commission: detail.commission,
+      interest: detail.interest,
     });
   }
   return byHandle;
@@ -172,6 +180,10 @@ function indexDetails(
  * price would disagree with what Money shows by those amounts. The sign is
  * discarded and taken from the action instead, which is the same rule that
  * governs quantity.
+ *
+ * The accrued interest is then taken back out: it is income, and a redemption's
+ * total is proceeds, which is what every realized-gain fold measures against
+ * cost basis. It reaches the ledger as the linked INTEREST companion instead.
  */
 function totalAmountOf(
   row: MnyTransaction,
@@ -179,13 +191,17 @@ function totalAmountOf(
   quantity: number | null,
   price: number | null,
   commission: number,
+  accruedInterest: number,
 ): number {
   const base = baseInvestmentAction(action);
   if (ZERO_TOTAL_ACTIONS.has(base as InvestmentAction)) {
     return 0;
   }
   if (row.amount !== 0) {
-    return roundMoney(Math.abs(row.amount));
+    return proceedsExcludingAccruedInterest(
+      Math.abs(row.amount),
+      accruedInterest,
+    );
   }
   if (quantity === null || price === null) {
     return 0;
@@ -197,12 +213,18 @@ function totalAmountOf(
 }
 
 /** Signed impact on the cash sleeve. Direction comes from the action only. */
-function cashAmountOf(action: InvestmentAction, totalAmount: number): number {
+function cashAmountOf(
+  action: InvestmentAction,
+  totalAmount: number,
+  accruedInterest: number,
+): number {
   const base = baseInvestmentAction(action) as InvestmentAction;
   if (NO_CASH_ACTIONS.has(base) || totalAmount === 0) {
     return 0;
   }
-  return CASH_OUT_ACTIONS.has(base) ? -totalAmount : totalAmount;
+  // The interest arrives with the proceeds, in one movement of money.
+  const magnitude = disposalCashAmount(totalAmount, accruedInterest);
+  return CASH_OUT_ACTIONS.has(base) ? -magnitude : magnitude;
 }
 
 function positiveOrNull(value: number, decimals: number): number | null {
@@ -215,7 +237,7 @@ function mapOne(
   accountKey: string,
   action: InvestmentAction,
   context: Context,
-): MappedInvestmentTransaction {
+): MappedInvestmentTransaction[] {
   const handle = row.handle as number;
   const detail = context.detailByHandle.get(handle);
 
@@ -235,11 +257,29 @@ function mapOne(
     : null;
   const price = detail ? positiveOrNull(detail.price, PRICE_DECIMALS) : null;
   const commission = detail ? roundMoney(Math.abs(detail.commission)) : 0;
-  const totalAmount = totalAmountOf(row, action, quantity, price, commission);
-  const cashAmount = cashAmountOf(action, totalAmount);
+  // Money records accrued interest on any investment detail row, but only a
+  // redemption pays it out; anywhere else there is no action to carry it.
+  const accruedInterest =
+    detail && supportsAccruedInterest(action)
+      ? roundMoney(Math.abs(detail.interest))
+      : 0;
+  const totalAmount = totalAmountOf(
+    row,
+    action,
+    quantity,
+    price,
+    commission,
+    accruedInterest,
+  );
+  const cashAmount = cashAmountOf(action, totalAmount, accruedInterest);
+  const id = randomUUID();
+  const currencyCode =
+    context.input.accounts.currencyByHandle.get(row.account as number) ?? "";
+  const status = mapTransactionStatus(row.clearedStatus, row.flags);
+  const companionId = accruedInterest > 0 ? randomUUID() : null;
 
-  return {
-    id: randomUUID(),
+  const redemption: MappedInvestmentTransaction = {
+    id,
     handle,
     accountKey,
     cashAccountKey:
@@ -258,19 +298,44 @@ function mapOne(
     quantity,
     price,
     commission,
+    accruedInterest,
     totalAmount,
-    currencyCode:
-      context.input.accounts.currencyByHandle.get(row.account as number) ?? "",
+    currencyCode,
     // A sleeve shares its brokerage's currency, so a trade settling there needs
     // no conversion. Only an adopted funding row can make this anything else.
     exchangeRate: 1,
     cashAmount,
-    status: mapTransactionStatus(row.clearedStatus, row.flags),
+    status,
     payeeHandle: row.payee,
     categoryHandle: row.category,
     description: row.memo,
-    linkedInvestmentId: null,
+    linkedInvestmentId: companionId,
   };
+
+  if (companionId === null) {
+    return [redemption];
+  }
+
+  return [
+    redemption,
+    {
+      ...redemption,
+      id: companionId,
+      // No handle: the companion is not a `TRN` row, so nothing may adopt a
+      // banking row on its behalf (`applyInvestmentCashSources` keys on it).
+      handle: null,
+      action: InvestmentAction.INTEREST,
+      quantity: null,
+      price: accruedInterest,
+      commission: 0,
+      accruedInterest: 0,
+      totalAmount: accruedInterest,
+      // The redemption's own cash row carries the interest already.
+      cashAccountKey: null,
+      cashAmount: 0,
+      linkedInvestmentId: id,
+    },
+  ];
 }
 
 /**
@@ -526,7 +591,7 @@ export function mapInvestments(input: MapInvestmentsInput): MappedInvestments {
       });
     }
 
-    mapped.push(mapOne(row, accountKey, action, context));
+    mapped.push(...mapOne(row, accountKey, action, context));
   }
 
   const paired = pairShareTransfers(mapped);

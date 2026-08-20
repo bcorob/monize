@@ -457,6 +457,95 @@ describe("mapInvestments", () => {
     });
 
     /**
+     * `TRN_INV.amtInt` is the accrued interest inside that `TRN.amt`. It is
+     * income, not proceeds, so it comes back out of the redemption's total --
+     * which the realized-gain folds measure against cost basis -- and rides on
+     * a linked INTEREST companion instead. The cash the sleeve receives is
+     * unchanged: one movement of money, carrying both.
+     * docs/specs/redemption-accrued-interest.md section 5.
+     */
+    it("splits act=30's amtInt out of the proceeds onto a linked INTEREST row", () => {
+      const result = mapInvestments(
+        input({
+          transactions: transactionData({
+            transactions: [
+              invRow({
+                handle: 1,
+                action: MNY_ACTION.REDEEM_CD_BOND,
+                amount: 10087.5,
+              }),
+            ],
+          }),
+          investments: investmentData({
+            investmentDetails: [
+              mnyInvestmentDetail({
+                transaction: 1,
+                quantity: 10000,
+                price: 1,
+                interest: 87.5,
+              }),
+            ],
+          }),
+        }),
+      );
+
+      expect(result.transactions).toHaveLength(2);
+      const [redemption, companion] = result.transactions;
+
+      expect(redemption).toMatchObject({
+        action: InvestmentAction.REDEEM,
+        totalAmount: 10000,
+        // The interest still reaches the sleeve, in the redemption's own row.
+        cashAmount: 10087.5,
+        cashAccountKey: "acct-11",
+        linkedInvestmentId: companion.id,
+      });
+      expect(companion).toMatchObject({
+        action: InvestmentAction.INTEREST,
+        totalAmount: 87.5,
+        price: 87.5,
+        quantity: null,
+        // No second cash row, and no handle: nothing may adopt a banking row
+        // on the companion's behalf.
+        cashAmount: 0,
+        cashAccountKey: null,
+        handle: null,
+        linkedInvestmentId: redemption.id,
+      });
+    });
+
+    it("leaves accrued interest on a non-redemption alone", () => {
+      // Money records amtInt on other detail rows too, but no other action
+      // pays it out, so nothing may invent an interest row from it.
+      const result = mapInvestments(
+        input({
+          transactions: transactionData({
+            transactions: [
+              invRow({ handle: 1, action: MNY_ACTION.SELL, amount: 500 }),
+            ],
+          }),
+          investments: investmentData({
+            investmentDetails: [
+              mnyInvestmentDetail({
+                transaction: 1,
+                quantity: 5,
+                price: 100,
+                interest: 12.5,
+              }),
+            ],
+          }),
+        }),
+      );
+
+      expect(result.transactions).toHaveLength(1);
+      expect(result.transactions[0]).toMatchObject({
+        action: InvestmentAction.SELL,
+        totalAmount: 500,
+        cashAmount: 500,
+      });
+    });
+
+    /**
      * `act` 12 credits units to a plan account that no cash pays for: it never
      * has a `TRN_XFER` cash counterpart in 92 occurrences, where `act` 1 has one
      * 2,015 times in 2,029. Charging its value to the sleeve, as BUY does, left

@@ -18,6 +18,7 @@ import { useNumberFormat } from '@/hooks/useNumberFormat';
 import { useChartDateFormat } from '@/hooks/useChartDateFormat';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { ChartViewToggle } from '@/components/ui/ChartViewToggle';
+import { WidgetHeading } from './widget-meta';
 
 type YDomain = [number | ((dataMin: number) => number), number | 'auto'];
 
@@ -139,12 +140,9 @@ export function NetWorthChart({ data, isLoading }: NetWorthChartProps) {
   if (isLoading) {
     return (
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-3 sm:p-6 lg:min-h-[500px]">
-        <button
-          onClick={() => router.push('/reports/net-worth')}
-          className="text-lg font-semibold text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 transition-colors mb-4"
-        >
+        <WidgetHeading id="net-worth" onClick={() => router.push('/reports/net-worth')} className="mb-4">
           {t('netWorth.title')}
-        </button>
+        </WidgetHeading>
         <div className="animate-pulse space-y-3">
           <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-1/3" />
           <div className="h-40 bg-gray-200 dark:bg-gray-700 rounded" />
@@ -156,12 +154,9 @@ export function NetWorthChart({ data, isLoading }: NetWorthChartProps) {
   if (chartData.length === 0) {
     return (
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-3 sm:p-6 lg:min-h-[500px]">
-        <button
-          onClick={() => router.push('/reports/net-worth')}
-          className="text-lg font-semibold text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 transition-colors mb-4"
-        >
+        <WidgetHeading id="net-worth" onClick={() => router.push('/reports/net-worth')} className="mb-4">
           {t('netWorth.title')}
-        </button>
+        </WidgetHeading>
         <p className="text-gray-500 dark:text-gray-400 text-sm">
           {t('netWorth.empty')}
         </p>
@@ -174,12 +169,9 @@ export function NetWorthChart({ data, isLoading }: NetWorthChartProps) {
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-3 sm:p-6 lg:min-h-[500px] flex flex-col h-full">
       <div className="flex items-center justify-between mb-1">
-        <button
-          onClick={() => router.push('/reports/net-worth')}
-          className="text-lg font-semibold text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-        >
+        <WidgetHeading id="net-worth" onClick={() => router.push('/reports/net-worth')}>
           {t('netWorth.title')}
-        </button>
+        </WidgetHeading>
         <div className="flex items-center gap-2">
           <span className="hidden sm:inline text-sm text-gray-500 dark:text-gray-400">{t('netWorth.past12Months')}</span>
           <ChartViewToggle

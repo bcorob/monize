@@ -63,6 +63,12 @@ export function buildTransactionSearchClause(
     ` OR (CAST(:${ap} AS numeric) IS NOT NULL AND ABS(${s}.amount) = ABS(CAST(:${ap} AS numeric)))` +
     ` OR (CAST(:${dp} AS date) IS NOT NULL AND ${t}.transactionDate = CAST(:${dp} AS date))` +
     ` OR EXISTS (SELECT 1 FROM payees search_p WHERE search_p.id = ${t}.payee_id AND search_p.name ILIKE :${p})` +
+    // A transfer leg with a blank payee displays "Transfer to/from
+    // <counterpart>" resolved at read time (issue #1214), so the counterpart
+    // account's name has to be searchable the way the stamped payee text was.
+    // Restricted to transfer legs: matching every row by its own account name
+    // would make an account-name search return the whole account.
+    ` OR EXISTS (SELECT 1 FROM transactions search_lt JOIN accounts search_la ON search_la.id = search_lt.account_id WHERE search_lt.id = ${t}.linked_transaction_id AND ${t}.is_transfer = true AND search_la.name ILIKE :${p})` +
     ` OR EXISTS (SELECT 1 FROM categories search_c WHERE search_c.id = ${t}.category_id AND search_c.name ILIKE :${p})` +
     ` OR EXISTS (SELECT 1 FROM categories search_sc WHERE search_sc.id = ${s}.category_id AND search_sc.name ILIKE :${p})` +
     ` OR EXISTS (SELECT 1 FROM transaction_tags search_tt JOIN tags search_tg ON search_tg.id = search_tt.tag_id WHERE search_tt.transaction_id = ${t}.id AND search_tg.name ILIKE :${p})` +

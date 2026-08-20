@@ -291,7 +291,7 @@ lot) and `TRN_XFER` (whether Money records a cash counterpart at all).
 | 26 | L-Term Cap Gains Dist, paid to cash | ? | — | CAPITAL_GAIN_LONG + warning |
 | 27 | Reinvest S-Term CG Dist | ? | — | REINVEST_CAPITAL_GAIN_SHORT + warning |
 | 29 | Reinvest L-Term CG Dist | ? | — | REINVEST_CAPITAL_GAIN_LONG + warning |
-| 30 | Redeem CD/Bond | ? | — | REDEEM + warning, amount from `TRN.amt` |
+| 30 | Redeem CD/Bond | ? | — | REDEEM + warning; proceeds from `TRN.amt` less `TRN_INV.amtInt`, which becomes a linked INTEREST row |
 | 32 / 33 | Share transfer in / out | yes | — | TRANSFER_IN / TRANSFER_OUT |
 | -1 | Regular non-investment transaction | no | — | — |
 
@@ -456,7 +456,7 @@ identifies the whole family, and it is the only reliable handle on it.
 | `dPrice` | Price per unit |
 | `qty` | Quantity, always positive |
 | `amtCmn` | Commission |
-| `amtInt` | Accrued interest |
+| `amtInt` | Accrued interest. Read on `act` 30 only, where it is taken out of `TRN.amt` and written as the redemption's linked INTEREST transaction (`docs/specs/redemption-accrued-interest.md`) |
 
 ## TRN_SPLIT (split children)
 

@@ -126,6 +126,7 @@ function categoryFixture(overrides: Partial<Category> = {}): Category {
     icon: null,
     color: '#22c55e',
     effectiveColor: '#22c55e',
+    effectiveIcon: null,
     isIncome: false,
     isSystem: false,
     createdAt: '2024-01-15T00:00:00.000Z',
@@ -143,6 +144,7 @@ function categoryListFixture(): Category[] {
       name: 'Produce',
       color: null,
       effectiveColor: '#22c55e',
+      effectiveIcon: null,
     }),
     categoryFixture({ id: 'cat-2', name: 'Salary', isIncome: true }),
   ];

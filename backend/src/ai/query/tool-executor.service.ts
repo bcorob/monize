@@ -1051,6 +1051,7 @@ export class ToolExecutorService {
     return {
       name: item.name as string,
       categoryName: item.categoryName as string | undefined,
+      website: item.website as string | undefined,
     };
   }
 
@@ -1061,6 +1062,7 @@ export class ToolExecutorService {
       name: item.name as string,
       newName: item.newName as string | undefined,
       categoryName: item.categoryName as string | undefined,
+      website: item.website as string | undefined,
     };
   }
 
@@ -1084,7 +1086,7 @@ export class ToolExecutorService {
         );
         return {
           data: PENDING_ACTION_TOOL_RESULT,
-          summary: `Prepared to create payee "${preview.name}"${preview.defaultCategoryName ? ` with default category ${preview.defaultCategoryName}` : ""}. Awaiting user confirmation.`,
+          summary: `Prepared to create payee "${preview.name}"${preview.defaultCategoryName ? ` with default category ${preview.defaultCategoryName}` : ""}${preview.website ? ` and website ${preview.website}` : ""}. Awaiting user confirmation.`,
           sources: [],
           pendingAction: this.actionBuilder.buildCreatePayee(userId, preview),
         };
@@ -1139,7 +1141,7 @@ export class ToolExecutorService {
         );
         return {
           data: PENDING_ACTION_TOOL_RESULT,
-          summary: `Prepared an edit to payee "${preview.name}" (default category ${preview.defaultCategoryName ?? "none"}). Awaiting user confirmation.`,
+          summary: `Prepared an edit to payee "${preview.name}" (default category ${preview.defaultCategoryName ?? "none"}${preview.website !== undefined ? `, website ${preview.website ?? "cleared"}` : ""}). Awaiting user confirmation.`,
           sources: [],
           pendingAction: this.actionBuilder.buildUpdatePayee(userId, preview),
         };
@@ -1530,6 +1532,7 @@ export class ToolExecutorService {
       quantity: item.quantity as number | undefined,
       price: item.price as number | undefined,
       commission: item.commission as number | undefined,
+      accruedInterest: item.accruedInterest as number | undefined,
       fundingAccountName: item.fundingAccountName as string | undefined,
       exchangeRate: item.exchangeRate as number | undefined,
       description: item.description as string | undefined,
@@ -1547,6 +1550,7 @@ export class ToolExecutorService {
       quantity: item.quantity as number | undefined,
       price: item.price as number | undefined,
       commission: item.commission as number | undefined,
+      accruedInterest: item.accruedInterest as number | undefined,
       exchangeRate: item.exchangeRate as number | undefined,
       description: item.description as string | undefined,
     };

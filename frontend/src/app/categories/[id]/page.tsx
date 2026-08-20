@@ -35,6 +35,7 @@ import { collectTagKeys } from '@/lib/tag-key-value';
 import { getUpcomingScheduled } from '@/lib/scheduled-utils';
 import {
   buildCategoryColorMap,
+  buildCategoryIconMap,
   buildCategoryLabelMap,
   buildDescendantIdSet,
   rollupToDirectChildren,
@@ -355,6 +356,7 @@ function CategoryDetailContent() {
 
   const categoryLabelMap = useMemo(() => buildCategoryLabelMap(categories), [categories]);
   const categoryColorMap = useMemo(() => buildCategoryColorMap(categories), [categories]);
+  const categoryIconMap = useMemo(() => buildCategoryIconMap(categories), [categories]);
 
   // Payee rows aggregated across currencies into the display currency. A row
   // with no rate has an unknown magnitude and cannot be ranked in a bar panel,
@@ -737,6 +739,7 @@ function CategoryDetailContent() {
                   refreshKey={refreshKey}
                   categoryLabelMap={categoryLabelMap}
                   categoryColorMap={categoryColorMap}
+                  categoryIconMap={categoryIconMap}
                   onChanged={loadData}
                   onViewInRegister={() => goToRegister()}
                   onSelectDate={(date) =>

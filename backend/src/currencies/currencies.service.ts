@@ -395,8 +395,17 @@ export class CurrenciesService implements OnApplicationBootstrap {
       currencyCode: upperCode,
     });
 
-    // A user-created currency nothing points at any more is cleaned up. The
-    // preference row above is deleted as of this transaction, so a remaining
+    // The currency row itself is cleaned up only by its **creator**, and only
+    // when nothing anywhere still points at it (INV-CURRENCY-001). Deactivation
+    // above is every activator's own action, so a non-creator reaches here too
+    // -- but `createdByUserId !== null` ("is this a custom currency") was the
+    // wrong gate: it let user B, who had merely activated user A's custom
+    // currency, delete A's shared row out from under them once the global count
+    // hit zero. The row belongs to A; B removing their activation leaves it for
+    // A to keep or clean up. `=== userId` is the creator check, and because
+    // `userId` is never null it still skips system currencies exactly as before.
+    //
+    // The preference row above is deleted as of this transaction, so a remaining
     // reference is somebody else's -- and the check has to be able to see
     // somebody else's rows, which is what makes it a SECURITY DEFINER function
     // rather than a query here.
@@ -406,7 +415,7 @@ export class CurrenciesService implements OnApplicationBootstrap {
     // deleted: it reported zero for a code another user had activated, and the
     // ON DELETE CASCADE on `user_currency_preferences.currency_code` then took
     // that user's activation with it.
-    if (currency.createdByUserId !== null) {
+    if (currency.createdByUserId === userId) {
       if (!(await this.isInUseGlobally(manager, upperCode))) {
         await manager.getRepository(Currency).remove(currency);
       }

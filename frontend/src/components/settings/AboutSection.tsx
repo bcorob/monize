@@ -165,7 +165,7 @@ export function AboutSection() {
 
       <div className="flex items-center gap-4 mb-4">
         <Image
-          src="/icons/monize-logo.svg"
+          src="/icons/monize-logo-transparent.svg"
           alt=""
           width={56}
           height={56}

@@ -272,6 +272,11 @@ export interface InvestmentTransaction {
   price: number | null;
   commission: number | null;
   totalAmount: number;
+  // Accrued interest paid out with a REDEEM, read from its linked INTEREST
+  // transaction. `totalAmount` stays proceeds; the cash movement is the two
+  // added (`redemptionTotalWithInterest`). Absent on a backend that predates
+  // the field, which means no information -- not zero interest.
+  accruedInterest?: number;
   exchangeRate: number;
   description: string | null;
   // Same enum as regular transactions. A VOID row moves no shares and no
@@ -480,6 +485,8 @@ export interface CreateInvestmentTransactionData {
   quantity?: number;
   price?: number;
   commission?: number;
+  /** REDEEM only. Recorded as a linked INTEREST transaction, not a second cash entry. */
+  accruedInterest?: number;
   exchangeRate?: number;
   description?: string;
   status?: TransactionStatus;

@@ -1040,6 +1040,30 @@ describe("AuthController", () => {
         message: "Logged out successfully",
       });
     });
+
+    /**
+     * INV-AUTH-004: a logout reports only what it achieved. If the family revoke
+     * fails, the session is still live server-side, so presenting a completed
+     * logout to the user is a lie -- they believe they signed out and did not.
+     * The handler awaits the revoke before clearing cookies and returning
+     * success, with no try/catch, so a rejection must propagate and neither the
+     * success body nor the cookie-clearing may run. A future refactor that
+     * wrapped the revoke to "log and continue" would make this test fail.
+     */
+    it("does not report a completed logout when the revoke fails", async () => {
+      authService.revokeRefreshToken.mockRejectedValue(
+        new Error("revoke failed"),
+      );
+      const res = mockRes();
+      const expressReq = { cookies: { refresh_token: "rt-123" } } as any;
+
+      await expect(controller.logout(expressReq, res as any)).rejects.toThrow(
+        "revoke failed",
+      );
+
+      expect(res.json).not.toHaveBeenCalled();
+      expect(res.clearCookie).not.toHaveBeenCalled();
+    });
   });
 
   describe("oidcStatus", () => {

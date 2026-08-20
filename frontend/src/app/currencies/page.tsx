@@ -10,6 +10,7 @@ import { SummaryCard, SummaryIcons } from '@/components/ui/SummaryCard';
 import { Modal } from '@/components/ui/Modal';
 import { UnsavedChangesDialog } from '@/components/ui/UnsavedChangesDialog';
 import { Pagination } from '@/components/ui/Pagination';
+import { CARD_CLASS } from '@/components/ui/Card';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import dynamic from 'next/dynamic';
 import { exchangeRatesApi, CurrencyInfo, CreateCurrencyData, CurrencyUsage } from '@/lib/exchange-rates';
@@ -297,7 +298,7 @@ function CurrenciesContent() {
         <UnsavedChangesDialog {...unsavedChangesDialog} />
 
         {/* Currencies List */}
-        <div className="bg-white dark:bg-gray-800 shadow dark:shadow-gray-700/50 rounded-lg overflow-hidden">
+        <div className={`${CARD_CLASS} overflow-hidden`}>
           {isLoading ? (
             <LoadingSpinner text={t('page.loading')} />
           ) : (

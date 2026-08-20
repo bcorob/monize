@@ -58,6 +58,8 @@
     "colourInherit": "继承自父分类",
     "colourNone": "无颜色",
     "colourInheritedFrom": "颜色继承自父分类（{name}）",
+    "iconLabel": "图标",
+    "iconNone": "无图标",
     "descriptionLabel": "描述（可选）",
     "submitCreate": "创建分类",
     "submitUpdate": "更新分类"

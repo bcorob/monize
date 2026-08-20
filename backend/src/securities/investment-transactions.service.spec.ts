@@ -217,8 +217,9 @@ describe("InvestmentTransactionsService", () => {
           Promise.resolve({ ...data, id: data.id || transactionId }),
         ),
       findOne: jest.fn(),
-      find: jest.fn(),
+      find: jest.fn().mockResolvedValue([]),
       update: jest.fn().mockResolvedValue(undefined),
+      delete: jest.fn().mockResolvedValue({ affected: 1 }),
       remove: jest.fn().mockResolvedValue(undefined),
       createQueryBuilder: jest.fn(),
     };
@@ -1548,6 +1549,28 @@ describe("InvestmentTransactionsService", () => {
         total: 2,
         totalPages: 1,
         hasMore: false,
+      });
+    });
+
+    it("keeps a redemption's interest companion out of the register", async () => {
+      // The companion is not its own event: the redemption row already shows
+      // the interest, and its single cash row already carries it. Excluded
+      // before the count as well as the page, so a pair cannot straddle two
+      // pages and appear once.
+      const mockQB = createMockQueryBuilder(mockTransactions, 2);
+      investmentTransactionsRepository.createQueryBuilder.mockReturnValue(
+        mockQB,
+      );
+
+      await service.findAll(userId);
+
+      const exclusion = mockQB.andWhere.mock.calls.find(
+        ([sql]: [string]) =>
+          typeof sql === "string" && sql.includes("linked_transaction_id"),
+      );
+      expect(exclusion?.[1]).toEqual({
+        companionAction: InvestmentAction.INTEREST,
+        redeemAction: InvestmentAction.REDEEM,
       });
     });
 
@@ -7036,6 +7059,398 @@ describe("InvestmentTransactionsService", () => {
 
       expect(result.created.map((t) => t.id)).toEqual(["inv-1", "inv-3"]);
       expect(result.skipped).toEqual([{ index: 1, reason: "Oversell" }]);
+    });
+  });
+
+  /**
+   * docs/specs/redemption-accrued-interest.md. A redemption is proceeds on the
+   * REDEEM row plus a linked INTEREST companion, and ONE cash row for both --
+   * so the interest reaches the cash account without a split parent, and stays
+   * out of `totalAmount`, which every realized-gain fold reads as proceeds.
+   */
+  describe("accrued interest on a redemption", () => {
+    const companionId = "inv-tx-interest";
+    const redeemDto = (overrides: Record<string, unknown> = {}) => ({
+      accountId,
+      securityId,
+      action: InvestmentAction.REDEEM,
+      transactionDate: "2025-06-30",
+      quantity: 10,
+      price: 1000,
+      commission: 25,
+      accruedInterest: 87.5,
+      ...overrides,
+    });
+
+    const storedRedemption = (
+      overrides: Partial<InvestmentTransaction> = {},
+    ): InvestmentTransaction =>
+      ({
+        id: transactionId,
+        userId,
+        accountId,
+        securityId,
+        fundingAccountId: null,
+        transactionId: cashTransactionId,
+        linkedTransactionId: companionId,
+        transactionSplitId: null,
+        action: InvestmentAction.REDEEM,
+        status: TransactionStatus.CLEARED,
+        transactionDate: "2025-06-30",
+        quantity: 10,
+        price: 1000,
+        commission: 25,
+        totalAmount: 9975,
+        exchangeRate: 1,
+        description: null,
+        account: mockInvestmentAccount as never,
+        security: mockSecurity as never,
+        ...overrides,
+      }) as InvestmentTransaction;
+
+    const storedCompanion = (
+      overrides: Partial<InvestmentTransaction> = {},
+    ): InvestmentTransaction =>
+      ({
+        id: companionId,
+        userId,
+        accountId,
+        securityId,
+        fundingAccountId: null,
+        transactionId: null,
+        linkedTransactionId: transactionId,
+        transactionSplitId: null,
+        action: InvestmentAction.INTEREST,
+        status: TransactionStatus.CLEARED,
+        transactionDate: "2025-06-30",
+        quantity: null,
+        price: 87.5,
+        commission: 0,
+        totalAmount: 87.5,
+        exchangeRate: 1,
+        description: null,
+        ...overrides,
+      }) as InvestmentTransaction;
+
+    beforeEach(() => {
+      accountsService.findOne.mockImplementation(
+        (_uid: string, aid: string) => {
+          if (aid === accountId) return Promise.resolve(mockInvestmentAccount);
+          if (aid === cashAccountId) return Promise.resolve(mockCashAccount);
+          if (aid === fundingAccountId)
+            return Promise.resolve(mockFundingAccount);
+          return Promise.reject(new NotFoundException("Account not found"));
+        },
+      );
+      investmentTransactionsRepository.createQueryBuilder.mockReturnValue(
+        createMockQueryBuilder(storedRedemption()),
+      );
+      investmentTransactionsRepository.find.mockResolvedValue([
+        storedCompanion(),
+      ]);
+      // The companion is saved before the redemption's id is reused by the
+      // default save() double, so give it one of its own.
+      investmentTransactionsRepository.save.mockImplementation((data: any) =>
+        Promise.resolve({
+          ...data,
+          id:
+            data.id ||
+            (data.action === InvestmentAction.INTEREST
+              ? companionId
+              : transactionId),
+        }),
+      );
+    });
+
+    describe("create", () => {
+      it("stores proceeds -- not proceeds plus interest -- as totalAmount", async () => {
+        await service.create(userId, redeemDto());
+
+        // 10 * 1000 - 25. Folding the 87.50 in here would report interest as
+        // capital gain on every realized-gain surface.
+        expect(investmentTransactionsRepository.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            action: InvestmentAction.REDEEM,
+            totalAmount: 9975,
+          }),
+        );
+      });
+
+      it("writes the interest as a linked INTEREST row with no cash row of its own", async () => {
+        await service.create(userId, redeemDto());
+
+        expect(investmentTransactionsRepository.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            action: InvestmentAction.INTEREST,
+            totalAmount: 87.5,
+            price: 87.5,
+            quantity: null,
+            transactionId: null,
+            linkedTransactionId: transactionId,
+            // One event, one status.
+            status: TransactionStatus.UNRECONCILED,
+          }),
+        );
+      });
+
+      it("moves the cash once, for proceeds plus interest", async () => {
+        await service.create(userId, redeemDto());
+
+        const cashRows = transactionRepository.create.mock.calls.filter(
+          ([row]: [{ accountId: string }]) => row.accountId === cashAccountId,
+        );
+        expect(cashRows).toHaveLength(1);
+        expect(cashRows[0][0]).toEqual(
+          expect.objectContaining({ amount: 10062.5 }),
+        );
+        expect(accountsService.updateBalance).toHaveBeenCalledTimes(1);
+        expect(accountsService.updateBalance).toHaveBeenCalledWith(
+          cashAccountId,
+          10062.5,
+        );
+      });
+
+      it("writes no companion when there is no accrued interest", async () => {
+        await service.create(userId, redeemDto({ accruedInterest: 0 }));
+
+        const interestRows =
+          investmentTransactionsRepository.create.mock.calls.filter(
+            ([row]: [{ action: InvestmentAction }]) =>
+              row.action === InvestmentAction.INTEREST,
+          );
+        expect(interestRows).toHaveLength(0);
+        expect(accountsService.updateBalance).toHaveBeenCalledWith(
+          cashAccountId,
+          9975,
+        );
+      });
+
+      it("converts the combined figure at one rate", async () => {
+        currenciesService.findOne.mockResolvedValue({
+          code: "CAD",
+          decimalPlaces: 2,
+        });
+        accountsService.findOne.mockImplementation(
+          (_uid: string, aid: string) => {
+            if (aid === accountId)
+              return Promise.resolve(mockInvestmentAccount);
+            if (aid === cashAccountId)
+              return Promise.resolve({
+                ...mockCashAccount,
+                currencyCode: "CAD",
+              });
+            return Promise.reject(new NotFoundException("Account not found"));
+          },
+        );
+
+        await service.create(userId, redeemDto({ exchangeRate: 1.35 }));
+
+        // (9975 + 87.50) * 1.35 = 13,584.375 -> 13,584.38 at the cash
+        // currency's 2dp. Converting each component separately would round
+        // twice and land elsewhere.
+        expect(accountsService.updateBalance).toHaveBeenCalledWith(
+          cashAccountId,
+          13584.38,
+        );
+      });
+
+      it("creates a VOID companion for a VOID redemption and moves no balance", async () => {
+        await service.create(
+          userId,
+          redeemDto({ status: TransactionStatus.VOID }),
+        );
+
+        expect(investmentTransactionsRepository.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            action: InvestmentAction.INTEREST,
+            status: TransactionStatus.VOID,
+          }),
+        );
+        expect(accountsService.updateBalance).not.toHaveBeenCalled();
+      });
+
+      it("refuses accrued interest on an action that cannot carry it", async () => {
+        await expect(
+          service.create(
+            userId,
+            redeemDto({ action: InvestmentAction.SELL, accruedInterest: 87.5 }),
+          ),
+        ).rejects.toThrow(BadRequestException);
+
+        expect(investmentTransactionsRepository.save).not.toHaveBeenCalled();
+      });
+    });
+
+    describe("update", () => {
+      beforeEach(() => {
+        transactionRepository.findOne.mockResolvedValue({
+          id: cashTransactionId,
+          accountId: cashAccountId,
+          amount: 10062.5,
+          transactionDate: "2025-06-30",
+          status: TransactionStatus.CLEARED,
+        });
+      });
+
+      it("re-amounts the single cash row when the interest changes", async () => {
+        investmentTransactionsRepository.createQueryBuilder.mockReturnValue(
+          createMockQueryBuilder(storedRedemption()),
+        );
+        investmentTransactionsRepository.findOne.mockResolvedValue(
+          storedCompanion(),
+        );
+
+        await service.update(userId, transactionId, {
+          accruedInterest: 100,
+        } as UpdateInvestmentTransactionDto);
+
+        const cashRows = transactionRepository.create.mock.calls.filter(
+          ([row]: [{ accountId: string }]) => row.accountId === cashAccountId,
+        );
+        expect(cashRows).toHaveLength(1);
+        expect(cashRows[0][0]).toEqual(
+          expect.objectContaining({ amount: 10075 }),
+        );
+      });
+
+      it("keeps the stored interest when the edit does not mention it", async () => {
+        // The form resends the whole row, so an absent field means unchanged --
+        // reading it as zero would silently delete the interest and shrink the
+        // cash row on a description-only edit.
+        investmentTransactionsRepository.findOne.mockResolvedValue(
+          storedCompanion(),
+        );
+
+        await service.update(userId, transactionId, {
+          description: "Matured",
+        } as UpdateInvestmentTransactionDto);
+
+        const cashRows = transactionRepository.create.mock.calls.filter(
+          ([row]: [{ accountId: string }]) => row.accountId === cashAccountId,
+        );
+        expect(cashRows[0][0]).toEqual(
+          expect.objectContaining({ amount: 10062.5 }),
+        );
+      });
+
+      it("deletes the companion when the interest goes to zero", async () => {
+        investmentTransactionsRepository.findOne.mockResolvedValue(
+          storedCompanion(),
+        );
+
+        await service.update(userId, transactionId, {
+          accruedInterest: 0,
+        } as UpdateInvestmentTransactionDto);
+
+        expect(investmentTransactionsRepository.delete).toHaveBeenCalledWith({
+          id: companionId,
+          userId,
+        });
+        const cashRows = transactionRepository.create.mock.calls.filter(
+          ([row]: [{ accountId: string }]) => row.accountId === cashAccountId,
+        );
+        expect(cashRows[0][0]).toEqual(
+          expect.objectContaining({ amount: 9975 }),
+        );
+      });
+
+      it("creates a companion when interest is added to a redemption without one", async () => {
+        investmentTransactionsRepository.createQueryBuilder.mockReturnValue(
+          createMockQueryBuilder(
+            storedRedemption({ linkedTransactionId: null }),
+          ),
+        );
+
+        await service.update(userId, transactionId, {
+          accruedInterest: 42,
+        } as UpdateInvestmentTransactionDto);
+
+        expect(investmentTransactionsRepository.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            action: InvestmentAction.INTEREST,
+            totalAmount: 42,
+            linkedTransactionId: transactionId,
+          }),
+        );
+      });
+
+      it("refuses to drop the action that carries the interest while interest remains", async () => {
+        investmentTransactionsRepository.findOne.mockResolvedValue(
+          storedCompanion(),
+        );
+
+        await expect(
+          service.update(userId, transactionId, {
+            action: InvestmentAction.SELL,
+          } as UpdateInvestmentTransactionDto),
+        ).rejects.toThrow(BadRequestException);
+      });
+
+      it("refuses a direct edit of the companion", async () => {
+        investmentTransactionsRepository.createQueryBuilder.mockReturnValue(
+          createMockQueryBuilder(storedCompanion()),
+        );
+        investmentTransactionsRepository.findOne.mockResolvedValue(
+          storedRedemption(),
+        );
+
+        await expect(
+          service.update(userId, companionId, {
+            price: 500,
+          } as UpdateInvestmentTransactionDto),
+        ).rejects.toThrow(BadRequestException);
+      });
+    });
+
+    describe("delete", () => {
+      it("refuses direct deletion of the companion before changing either row", async () => {
+        investmentTransactionsRepository.createQueryBuilder.mockReturnValue(
+          createMockQueryBuilder(storedCompanion()),
+        );
+        investmentTransactionsRepository.findOne.mockResolvedValue(
+          storedRedemption(),
+        );
+
+        await expect(service.remove(userId, companionId)).rejects.toThrow(
+          BadRequestException,
+        );
+
+        expect(investmentTransactionsRepository.remove).not.toHaveBeenCalled();
+        expect(mockQueryRunner.manager.update).not.toHaveBeenCalled();
+        expect(accountsService.updateBalance).not.toHaveBeenCalled();
+        expect(holdingsService.updateHolding).not.toHaveBeenCalled();
+        expect(mockActionHistoryService.record).not.toHaveBeenCalled();
+      });
+
+      it("removes the companion with the redemption and reverses the cash once", async () => {
+        investmentTransactionsRepository.createQueryBuilder.mockReturnValue(
+          createMockQueryBuilder(storedRedemption()),
+        );
+        investmentTransactionsRepository.findOne.mockResolvedValue(
+          storedCompanion(),
+        );
+        transactionRepository.findOne.mockResolvedValue({
+          id: cashTransactionId,
+          accountId: cashAccountId,
+          amount: 10062.5,
+          transactionDate: "2025-06-30",
+          status: TransactionStatus.CLEARED,
+        });
+
+        await service.remove(userId, transactionId);
+
+        const removed = investmentTransactionsRepository.remove.mock.calls.map(
+          ([row]: [{ id: string }]) => row.id,
+        );
+        expect(removed).toEqual(
+          expect.arrayContaining([transactionId, companionId]),
+        );
+        expect(accountsService.updateBalance).toHaveBeenCalledTimes(1);
+        expect(accountsService.updateBalance).toHaveBeenCalledWith(
+          cashAccountId,
+          -10062.5,
+        );
+      });
     });
   });
 });

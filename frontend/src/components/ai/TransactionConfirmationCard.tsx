@@ -295,6 +295,14 @@ export function TransactionConfirmationCard({
       label: t('confirmAction.category'),
       value: preview.categoryName || none,
     });
+    // Only when the action says something about the address: a rename that
+    // left it alone must not imply the website is being cleared.
+    if (preview.website !== undefined) {
+      rows.push({
+        label: t('confirmAction.website'),
+        value: preview.website || none,
+      });
+    }
   }
 
   const isSecurityResult =

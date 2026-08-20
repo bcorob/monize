@@ -18,6 +18,7 @@ import { RowActions } from '@/components/ui/row-actions/RowActions';
 import { RowActionSheet } from '@/components/ui/row-actions/RowActionSheet';
 import type { RowAction } from '@/components/ui/row-actions/rowAction';
 import { DensityToggleBar } from '@/components/ui/DensityToggle';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 export type CurrencySortField = 'code' | 'name' | 'symbol' | 'decimals' | 'rate';
 export type SortDirection = 'asc' | 'desc';
@@ -283,23 +284,15 @@ export function CurrencyList({
 
   if (currencies.length === 0) {
     return (
-      <div className="text-center py-12">
-        <svg
-          className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-          />
-        </svg>
-        <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">{t('list.empty.title')}</h3>
-        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{t('list.empty.subtitle')}</p>
-      </div>
+      <EmptyState
+        icon={
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        }
+        title={t('list.empty.title')}
+        description={t('list.empty.subtitle')}
+      />
     );
   }
 

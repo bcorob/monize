@@ -71,7 +71,7 @@ export class UpdateTransferDto {
 
   @ApiPropertyOptional({
     description:
-      "Payee name (null to clear and revert to default 'Transfer to/from <Account>')",
+      "Payee name (null to clear; a blank transfer payee displays as 'Transfer to/from <Account>' resolved from the current account name)",
   })
   @IsOptional()
   @IsString()

@@ -4,6 +4,7 @@ import { memo } from 'react';
 import { useTranslations } from 'next-intl';
 import { gainLossColor } from '@/lib/format';
 import { Account, AccountType } from '@/types/account';
+import { AccountTypePill, AccountTypeIcon } from '@/lib/account-type-meta';
 import { InstitutionLogo, InstitutionLogoData } from '@/components/institutions/InstitutionLogo';
 import { RowActions } from '@/components/ui/row-actions/RowActions';
 import type { LongPressRowHandlers } from '@/hooks/useLongPress';
@@ -224,7 +225,6 @@ export interface AccountRowProps {
   /** Returns `null` when no rate for the pair is known. */
   convertToDefault: (value: number, fromCurrency: string) => number | null;
   formatAccountType: (type: AccountType) => string;
-  getAccountTypeColor: (type: AccountType) => string;
   actionLabels: AccountActionLabels;
   onDetails: (account: Account) => void;
   onEdit: (account: Account) => void;
@@ -256,7 +256,6 @@ export const AccountRow = memo(function AccountRow({
   formatCurrencyBase,
   convertToDefault,
   formatAccountType,
-  getAccountTypeColor,
   actionLabels,
   onDetails,
   onEdit,
@@ -315,7 +314,12 @@ export const AccountRow = memo(function AccountRow({
         >
           <div className="flex items-center text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300">
             {density !== 'dense' && (
-              <InstitutionLogo institution={institution} size={20} className="mr-2" fallbackGlyph="$" />
+              <InstitutionLogo
+                institution={institution}
+                size={20}
+                className="mr-2"
+                fallbackIcon={<AccountTypeIcon type={account.accountType} className="h-3.5 w-3.5" />}
+              />
             )}
             {onToggleFavourite ? (
               <button
@@ -403,18 +407,14 @@ export const AccountRow = memo(function AccountRow({
         </div>
       </td>
       <td className={`${cellPadding} whitespace-nowrap ${account.isClosed ? 'opacity-50' : ''} hidden sm:table-cell`}>
-        <span
-          className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getAccountTypeColor(
-            account.accountType
-          )}`}
-        >
+        <AccountTypePill type={account.accountType}>
           {/* A folded pair is one investment account, so it takes the plain
               type. An unfolded half still says which half it is. */}
           {isFolded ? formatAccountType(account.accountType) :
            account.accountSubType === 'INVESTMENT_BROKERAGE' ? t('row.subtypeBrokerage') :
            account.accountSubType === 'INVESTMENT_CASH' ? t('row.subtypeInvCash') :
            formatAccountType(account.accountType)}
-        </span>
+        </AccountTypePill>
       </td>
       <td className={`${cellPadding} whitespace-nowrap hidden md:table-cell w-1`}>
         <span

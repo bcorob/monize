@@ -58,6 +58,8 @@
     "colourInherit": "Warisi dari induk",
     "colourNone": "Tanpa warna",
     "colourInheritedFrom": "Warna diwarisi dari induk ({name})",
+    "iconLabel": "Ikon",
+    "iconNone": "Tanpa ikon",
     "descriptionLabel": "Deskripsi (opsional)",
     "submitCreate": "Buat Kategori",
     "submitUpdate": "Perbarui Kategori"

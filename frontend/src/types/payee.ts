@@ -12,6 +12,14 @@ export interface Payee {
    * given), so it can go straight into an anchor.
    */
   website: string | null;
+  /**
+   * Whether a brand favicon is cached for this payee. The bytes never travel
+   * in the payload -- they are served from `payeeLogoUrl(id)` -- so this flag
+   * is what a list read answers "is there an icon?" with.
+   */
+  hasLogo: boolean;
+  /** Last time the favicon was looked for, successfully or not. */
+  logoFetchedAt: string | null;
   isActive: boolean;
   createdAt: string;
   transactionCount?: number;

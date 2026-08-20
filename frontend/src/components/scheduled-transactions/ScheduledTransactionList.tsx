@@ -139,6 +139,7 @@ function scheduledOccurrenceAmount(
   return Number(transaction.amount);
 }
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 type ConfirmAction = 'post' | 'skip' | 'delete';
 
@@ -574,25 +575,16 @@ export function ScheduledTransactionList({
 
   if (transactions.length === 0) {
     return (
-      <div className="text-center py-12 bg-gray-50 dark:bg-gray-800 rounded-lg">
-        <svg
-          className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-          />
-        </svg>
-        <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">{t('list.empty.title')}</h3>
-        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          {t('list.empty.subtitle')}
-        </p>
-      </div>
+      <EmptyState
+        className="bg-gray-50 dark:bg-gray-800 rounded-lg"
+        icon={
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+        }
+        title={t('list.empty.title')}
+        description={t('list.empty.subtitle')}
+      />
     );
   }
 

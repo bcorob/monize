@@ -17,6 +17,7 @@
     "unavailable": "Release notes for this version aren't available.",
     "englishOnly": "The release notes below are in English only. Monize itself, including the guided tours, follows your language setting."
   },
+  "transferPayee": "{direction, select, to {Transfer to {name}} other {Transfer from {name}}}",
   "save": "Save",
   "cancel": "Cancel",
   "delete": "Delete",

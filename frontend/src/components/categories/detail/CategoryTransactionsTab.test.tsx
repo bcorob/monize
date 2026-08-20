@@ -75,6 +75,7 @@ async function renderTab() {
         refreshKey={0}
         categoryLabelMap={categoryLabelMap}
         categoryColorMap={categoryColorMap}
+        categoryIconMap={new Map()}
         onChanged={onChanged}
         onViewInRegister={onViewInRegister}
         onSelectDate={onSelectDate}

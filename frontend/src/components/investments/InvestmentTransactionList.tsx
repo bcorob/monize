@@ -5,6 +5,10 @@ import { useTranslations } from 'next-intl';
 import { useDateFormat } from '@/hooks/useDateFormat';
 import { DateInput } from '@/components/ui/DateInput';
 import { InvestmentTransaction } from '@/types/investment';
+import {
+  redemptionTotalWithInterest,
+  supportsAccruedInterest,
+} from '@/lib/investment-actions';
 import { TransactionStatus } from '@/types/transaction';
 import { investmentsApi } from '@/lib/investments';
 import { getErrorMessage } from '@/lib/errors';
@@ -280,7 +284,15 @@ const InvestmentTransactionRow = memo(function InvestmentTransactionRow({
         )}
       </td>
       <td className={`${cellPadding} whitespace-nowrap text-right text-sm font-medium text-gray-900 dark:text-gray-100 ${voidText}`}>
-        {formatCurrency(tx.totalAmount, tx.security?.currencyCode)}
+        {formatCurrency(
+          // A redemption's accrued interest moved with its proceeds, so the
+          // register shows what the cash account received rather than the
+          // stored proceeds, which are only part of it.
+          supportsAccruedInterest(tx.action)
+            ? redemptionTotalWithInterest(tx.totalAmount, tx.accruedInterest)
+            : tx.totalAmount,
+          tx.security?.currencyCode,
+        )}
         {tx.security?.currencyCode && tx.security.currencyCode !== defaultCurrency && (
           <span className="ml-1 font-normal">{tx.security.currencyCode}</span>
         )}

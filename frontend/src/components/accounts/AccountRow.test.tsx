@@ -82,7 +82,6 @@ function createDefaultProps(overrides: Partial<AccountRowProps> = {}): AccountRo
       };
       return labels[type] || type;
     },
-    getAccountTypeColor: () => 'bg-blue-100 text-blue-800',
     actionLabels: {
       viewTransactions: 'View Transactions',
       details: 'Details',
@@ -1012,11 +1011,15 @@ describe('AccountRow', () => {
       );
     });
 
-    it('renders a neutral fallback badge when there is no institution', () => {
+    it('renders the account-type icon as fallback when there is no institution', () => {
       const props = createDefaultProps({ institution: undefined });
-      renderAccountRow(props);
+      const { container } = renderAccountRow(props);
       expect(screen.queryByRole('img')).toBeNull();
-      expect(screen.getByText('$')).toBeInTheDocument();
+      // The generic "$" glyph gave way to the account-type icon, which says
+      // what the row is; the badge chip itself stays.
+      const badge = container.querySelector('span[aria-hidden="true"]');
+      expect(badge).toBeTruthy();
+      expect(badge?.querySelector('svg')).toBeTruthy();
     });
 
     it('hides the brand icon at dense density', () => {

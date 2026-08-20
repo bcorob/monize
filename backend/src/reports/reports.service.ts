@@ -29,6 +29,7 @@ import {
   ReportSummary,
 } from "./dto/execute-report.dto";
 import { roundMoney, sumMoney } from "../common/round.util";
+import { transferPayeeLabel } from "../transactions/transfer-payee-label.util";
 import { BudgetsService } from "../budgets/budgets.service";
 import { ActionHistoryService } from "../action-history/action-history.service";
 import {
@@ -393,6 +394,18 @@ export class ReportsService {
         .leftJoinAndSelect("splits.category", "splitCategory")
         .leftJoinAndSelect("splitCategory.parent", "splitCategoryParent")
         .leftJoinAndSelect("splits.tags", "splitTags")
+        // For a blank-payee transfer the row label resolves from the
+        // counterpart account (issue #1214). Restricted to same-owner legs in
+        // SQL: reports have no delegation mask, and an unrestricted join
+        // would leak a cross-owner counterpart's live account name after
+        // unshare. A cross-owner transfer simply falls back to its
+        // description here.
+        .leftJoinAndSelect(
+          "transaction.linkedTransaction",
+          "linkedTransaction",
+          "linkedTransaction.userId = transaction.userId",
+        )
+        .leftJoinAndSelect("linkedTransaction.account", "linkedAccount")
         .where("transaction.userId = :userId", { userId })
         .andWhere("transaction.transactionDate >= :startDate", { startDate })
         .andWhere("transaction.transactionDate <= :endDate", { endDate })
@@ -635,17 +648,32 @@ export class ReportsService {
       const result: AggregatedDataPoint[] = [];
 
       for (const tx of transactions) {
+        // A blank-payee transfer leg reads "Transfer to/from <account>"
+        // resolved from its (same-owner) linked leg, exactly as the register
+        // shows it (issue #1214). Only that fallback is new: a stored payee
+        // (or, for the label, the description) still wins as before.
+        const transferLabel =
+          !tx.payeeName &&
+          !tx.payee?.name &&
+          tx.isTransfer &&
+          tx.linkedTransaction?.account?.name
+            ? transferPayeeLabel(tx.amount, tx.linkedTransaction.account.name)
+            : undefined;
         if (tx.isSplit && tx.splits && tx.splits.length > 0) {
           for (const split of tx.splits) {
             result.push({
               id: tx.id,
               label:
-                split.memo || tx.payeeName || tx.description || "Transaction",
+                split.memo ||
+                tx.payeeName ||
+                transferLabel ||
+                tx.description ||
+                "Transaction",
               value: Math.abs(Number(split.amount)),
               count: 1,
               // Transaction-specific fields
               date: tx.transactionDate,
-              payee: tx.payeeName || tx.payee?.name || undefined,
+              payee: tx.payeeName || tx.payee?.name || transferLabel,
               description: tx.description || undefined,
               memo: split.memo || undefined,
               category: this.formatCategoryLabel(split.category),
@@ -655,12 +683,13 @@ export class ReportsService {
         } else {
           result.push({
             id: tx.id,
-            label: tx.payeeName || tx.description || "Transaction",
+            label:
+              tx.payeeName || transferLabel || tx.description || "Transaction",
             value: Math.abs(Number(tx.amount)),
             count: 1,
             // Transaction-specific fields
             date: tx.transactionDate,
-            payee: tx.payeeName || tx.payee?.name || undefined,
+            payee: tx.payeeName || tx.payee?.name || transferLabel,
             description: tx.description || undefined,
             memo: undefined, // Transactions don't have memo, only splits do
             category: this.formatCategoryLabel(tx.category),

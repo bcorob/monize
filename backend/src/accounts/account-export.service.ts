@@ -11,6 +11,7 @@ import {
 } from "../delegation/transfer-mask.util";
 import { roundMoney } from "../common/round.util";
 import { withScopedDb } from "../common/db/scoped-db";
+import { transferPayeeLabel } from "../transactions/transfer-payee-label.util";
 
 interface ExportTransaction {
   date: string;
@@ -277,7 +278,16 @@ export class AccountExportService {
     return rawTransactions.map((tx) => ({
       date: tx.transactionDate,
       referenceNumber: tx.referenceNumber || "",
-      payeeName: tx.payeeName || tx.payee?.name || "",
+      // A transfer leg with a blank payee resolves its label from the
+      // counterpart account's current name (issue #1214) -- the same string
+      // the pre-#1214 write paths stamped, so exports read unchanged. The
+      // mask above has already rewritten an unreadable counterpart's name.
+      payeeName:
+        tx.payeeName ||
+        tx.payee?.name ||
+        (tx.isTransfer && tx.linkedTransaction?.account?.name
+          ? transferPayeeLabel(tx.amount, tx.linkedTransaction.account.name)
+          : ""),
       categoryPath: tx.categoryId
         ? categoryMap.get(tx.categoryId) || tx.category?.name || ""
         : "",

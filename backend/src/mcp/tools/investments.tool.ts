@@ -64,6 +64,7 @@ interface ManageInvItem {
   quantity?: number;
   price?: number;
   commission?: number;
+  accruedInterest?: number;
   exchangeRate?: number;
   description?: string;
   // update / delete
@@ -593,6 +594,14 @@ export class McpInvestmentsTools {
                   .max(999999999999)
                   .optional()
                   .describe("Commission or fee (4 dp). Defaults to 0."),
+                accruedInterest: z
+                  .number()
+                  .min(0)
+                  .max(999999999999)
+                  .optional()
+                  .describe(
+                    "REDEEM only: accrued interest paid out with the redemption (4 dp). Recorded as a linked INTEREST transaction and included in the single cash movement, so do not record it separately. Defaults to 0.",
+                  ),
                 exchangeRate: z
                   .number()
                   .min(0)
@@ -684,6 +693,7 @@ export class McpInvestmentsTools {
       quantity: item.quantity,
       price: item.price,
       commission: item.commission,
+      accruedInterest: item.accruedInterest,
       fundingAccountName: item.fundingAccountName,
       exchangeRate: item.exchangeRate,
       description: item.description,
@@ -699,6 +709,7 @@ export class McpInvestmentsTools {
       quantity: item.quantity,
       price: item.price,
       commission: item.commission,
+      accruedInterest: item.accruedInterest,
       exchangeRate: item.exchangeRate,
       description: item.description,
     };

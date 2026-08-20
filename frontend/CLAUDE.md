@@ -108,6 +108,104 @@ This is Next.js middleware (NOT the deprecated middleware pattern from this proj
 
 Each of these exists once. Use it; do not hand-roll a second one. Every rule here was added after an agent wrote the generic version and a human had to point it out.
 
+### A panel card is `Card` / `CARD_CLASS`, never an inline class trio
+
+`components/ui/Card.tsx` is the one card surface -- background, radius,
+shadow, and the border that keeps a card legible on themes where the weakest
+shadow disappears. Use the `Card` component where a plain wrapper works
+(`padding="md"` matches the widget shell) and `CARD_CLASS` where the element
+already exists (a table shell with `overflow-hidden`). The old inline
+`bg-white dark:bg-gray-800 rounded-lg shadow` trio survives in a recorded,
+shrink-only baseline in `ui-conventions.test.ts`; converting a file means
+deleting its baseline line, and new code takes the primitive from the start.
+Everything in it stays on the gray ramp so the colour themes re-skin it --
+never add a literal hex or an off-ramp hue to a card.
+
+### A category's colour and icon are inherited, and drawn by `CategoryGlyph`
+
+A category shows its own colour and icon, or the nearest ancestor's when it
+sets none. Both are resolved server-side in one walk up the ancestry
+(`effectiveColor` / `effectiveIcon`), so read `category.effectiveIcon ??
+category.icon` rather than `category.icon` -- the raw column is only what this
+row set, which is null for most leaves.
+
+`components/categories/CategoryGlyph.tsx` draws the result: the icon when
+there is one, the colour dot otherwise, dimmed when the value came from an
+ancestor. Never interpolate `category.icon` into text -- it is a name like
+`shopping-cart`, so `{category.icon} {name}` renders the name of the icon
+instead of the icon, which reads as a typo rather than a missing feature. That
+is what the detail header and the subcategory table both did.
+
+A surface holding a *joined* category row (a transaction, a payee's default
+category) has no inherited value at all, so it reads
+`buildCategoryIconMap` / `buildCategoryColorMap` (`lib/categoryUtils.ts`) built
+from the full category list, exactly as the register does.
+
+### A brand favicon is `BrandLogo`, addressed by its entity's wrapper
+
+`components/ui/BrandLogo.tsx` renders a cached favicon with the neutral badge
+fallback, and owns the one rule that matters: the bytes always come from our
+own backend, never a third party, so drawing a logo cannot leak which
+institutions or payees a user has. `InstitutionLogo` and `PayeeLogo` are thin
+wrappers that only say which `/:id/logo` route to read, gated on the entity's
+`hasLogo` so a list of icon-less rows issues no requests at all. A 404 (no icon
+cached, or the fetch failed) lands on `onError` and shows the same badge, so the
+two "no image" states look identical to the reader. Adding the treatment to a
+third entity means a wrapper, not a second component.
+
+### An empty list renders `EmptyState`
+
+`components/ui/EmptyState.tsx` (glyph, title, optional description and
+action) replaced fourteen hand-rolled `text-center py-12` blocks in three
+drifting variants. `ui-conventions.test.ts` bans the container fingerprint
+outside the component, with no grandfathered baseline.
+
+### An auth screen renders inside `AuthShell`
+
+`components/auth/AuthShell.tsx` is the single shell for login, register,
+forgot/reset/change-password, verify-email and setup-2fa: transparent brand
+mark, title/subtitle, a notices slot, and the shared `Card` around the body
+(`plain` for a bare status line). The language picker and version line are
+opt-in props. Use `/icons/monize-logo-transparent.svg` everywhere in the UI
+-- the boxed `monize-logo.svg` bakes in a white background rect and renders
+as a white square in dark mode. Guarded in `ui-conventions.test.ts`.
+
+### Navigation links and their icons live in `lib/nav-links.ts`
+
+The header's link arrays and the per-route Heroicon map are declared side by
+side so `nav-links.test.ts` can hold "every nav route has an icon". The
+mobile drawer and the header dropdowns render `NAV_ICONS[href]`; the desktop
+top-bar pills stay text-only on purpose (the bar collapses at `xl`, and six
+leading icons overflow 1280-1440px laptops). A new route means one entry in
+the array and one in the map, in the same file.
+
+### Account-type colour and icon come from `lib/account-type-meta.tsx`
+
+`ACCOUNT_TYPE_META` maps each account type to its pill classes and Heroicon;
+render `AccountTypePill` / `AccountTypeIcon` rather than re-deriving either.
+`ui-conventions.test.ts` fails on a second type-to-pill-class mapping. An
+account with no institution shows its type icon in the brand-badge slot
+(`InstitutionLogo`'s `fallbackIcon`), not a generic glyph.
+
+### A register's category chip is `CategoryPill`
+
+`components/transactions/CategoryPill.tsx` owns the colour-mix pill and the
+category's optional icon (drawn via `getIconComponent`, the same way tag
+chips do). Categories carry `icon` end-to-end -- `CategoryForm` collects it
+through the shared `IconPicker` (whose `onClear`/`clearLabel` props make "no
+icon" a real state) -- so a surface that shows a category name with its
+colour should show its icon too, and an unset icon renders nothing, never a
+default glyph.
+
+### A dashboard widget header carries its icon from `widget-meta.tsx`
+
+`WIDGET_ICONS` gives every registered widget a distinct Heroicon
+(`widget-meta.test.tsx` enforces coverage), rendered as the tinted
+`WidgetIconPuck` -- blue ramp only, so the themes re-tint it. Widgets on
+`WidgetCard` get it from their `widgetId`; a widget that draws its own
+header uses `WidgetHeading`, which also owns the title-button markup the
+core widgets used to duplicate per loading/empty/loaded branch.
+
 ### Date entry -- `DateInput`, never a raw `<input type="date">`
 
 `components/ui/DateInput.tsx` is the only place a raw date input is allowed, and `ui-conventions.test.ts` fails the build if another appears. It carries the lenient parsing of what someone typed, the keyboard shortcuts, and `CalendarPopover` -- the custom picker whose icon is the only one on screen, because the desktop field is no longer a native date input at all. A bare `<input type="date">` gets none of that, and hands the user the browser's segment-jumping entry instead. 32 components use `DateInput`; yours should too.
@@ -767,6 +865,20 @@ new `? 'to' : 'from'` outside the helper.
 
 Coerce before comparing: `'-67.9900' < 0` is false, and a decimal string is what
 the API sends, so a hand-rolled comparison labels every debit backwards.
+
+### A transaction's payee display is `usePayeeDisplay`, never a bare `payeeName` read
+
+A transfer created with a blank payee is PERSISTED blank (issue #1214) --
+nothing stamps "Transfer to Savings" into the row any more, and migration 161
+blanked the rows the old writers stamped. The label is resolved at render
+time: `usePayeeDisplay()` (`hooks/usePayeeDisplay.ts`) returns the stored
+payee when there is one and otherwise, for a transfer leg, the localized
+`common.transferPayee` string built from `linkedTransaction.account.name` --
+the counterpart's CURRENT name, so an account rename or a language switch
+updates every historical row at once. A surface that reads
+`tx.payeeName || tx.payee?.name` directly shows those transfers as unnamed.
+English CSV exports use `transferPayeeCsvLabel` (`lib/transfer-label.ts`), the
+byte-identical twin of the backend's `transferPayeeLabel`.
 
 ### A CSV file is written by `exportToCsv`, and a number in it is a number
 

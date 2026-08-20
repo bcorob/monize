@@ -18,6 +18,7 @@ import { investmentsApi } from '@/lib/investments';
 import { Security, CreateSecurityData, Holding } from '@/types/investment';
 const SecurityForm = dynamic(() => import('@/components/securities/SecurityForm').then(m => m.SecurityForm), { ssr: false });
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { CARD_CLASS } from '@/components/ui/Card';
 import { SecurityList, type SecurityHoldings, type SecurityTransactions, type SecuritySortField, type SortDirection } from '@/components/securities/SecurityList';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { createLogger } from '@/lib/logger';
@@ -358,7 +359,7 @@ function SecuritiesContent() {
         <UnsavedChangesDialog {...unsavedChangesDialog} />
 
         {/* Securities List */}
-        <div className="bg-white dark:bg-gray-800 shadow dark:shadow-gray-700/50 rounded-lg overflow-hidden">
+        <div className={`${CARD_CLASS} overflow-hidden`}>
           {isLoading ? (
             <LoadingSpinner text={t('page.loading')} />
           ) : (

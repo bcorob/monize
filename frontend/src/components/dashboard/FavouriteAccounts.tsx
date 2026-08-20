@@ -14,6 +14,7 @@ import { accountsApi } from '@/lib/accounts';
 import { InfoTooltip } from '@/components/ui/InfoTooltip';
 import { getOrdinal } from '@/lib/ordinal';
 import { useDragReorder, DropIndicatorLine } from '@/hooks/useDragReorder';
+import { WidgetHeading } from './widget-meta';
 
 interface FavouriteAccountsProps {
   accounts: Account[];
@@ -140,9 +141,9 @@ export function FavouriteAccounts({ accounts, brokerageMarketValues, unpricedHol
   if (isLoading) {
     return (
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-3 sm:p-6 lg:self-start">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
+        <WidgetHeading id="favourite-accounts" className="mb-4">
           {t('favouriteAccounts.title')}
-        </h3>
+        </WidgetHeading>
         <div className="animate-pulse space-y-3">
           {[1, 2, 3].map((i) => (
             <div key={i} className="h-12 bg-gray-200 dark:bg-gray-700 rounded" />
@@ -155,9 +156,9 @@ export function FavouriteAccounts({ accounts, brokerageMarketValues, unpricedHol
   if (favouriteAccounts.length === 0) {
     return (
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-3 sm:p-6 lg:self-start">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
+        <WidgetHeading id="favourite-accounts" className="mb-4">
           {t('favouriteAccounts.title')}
-        </h3>
+        </WidgetHeading>
         <p className="text-gray-500 dark:text-gray-400 text-sm">
           {t('favouriteAccounts.empty')}
         </p>
@@ -168,9 +169,9 @@ export function FavouriteAccounts({ accounts, brokerageMarketValues, unpricedHol
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-3 sm:p-6 lg:self-start">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+        <WidgetHeading id="favourite-accounts">
           {t('favouriteAccounts.title')}
-        </h3>
+        </WidgetHeading>
         {favouriteAccounts.length > 1 && (
           <button
             onClick={() => setReordering(!reordering)}

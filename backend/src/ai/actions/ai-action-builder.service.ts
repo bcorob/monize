@@ -100,6 +100,7 @@ export function payeePreviewRow(
     status: "ok",
     name: preview.name,
     categoryName: preview.defaultCategoryName,
+    website: preview.website,
   };
 }
 
@@ -277,6 +278,7 @@ export class AiActionBuilderService {
       expiresAt,
       name: preview.name,
       defaultCategoryId: preview.defaultCategoryId,
+      website: preview.website,
     };
     return {
       actionId,
@@ -287,6 +289,7 @@ export class AiActionBuilderService {
       preview: {
         name: preview.name,
         categoryName: preview.defaultCategoryName,
+        website: preview.website,
       },
     };
   }
@@ -304,6 +307,7 @@ export class AiActionBuilderService {
       payeeId: preview.payeeId,
       name: preview.name,
       defaultCategoryId: preview.defaultCategoryId,
+      website: preview.website,
     };
     return {
       actionId,
@@ -314,6 +318,7 @@ export class AiActionBuilderService {
       preview: {
         name: preview.name,
         categoryName: preview.defaultCategoryName,
+        website: preview.website,
       },
     };
   }

@@ -25,6 +25,7 @@ import { mapInvestments } from "./map-investments";
 import {
   applyInvestmentCashSources,
   investmentWritesOwnCashRow,
+  reconcileEmbeddedAccruedInterest,
   tradesByHandle,
 } from "./investment-cash";
 
@@ -123,9 +124,11 @@ function mapAll(
     cashKeyByAccountKey: cashKeyByAccountKey(mappedAccounts),
     tradesByHandle: tradesByHandle(mappedInvestments),
   });
-  const investments = applyInvestmentCashSources(
-    mappedInvestments,
-    banking.investmentCashSources,
+  const investments = reconcileEmbeddedAccruedInterest(
+    applyInvestmentCashSources(
+      mappedInvestments,
+      banking.investmentCashSources,
+    ),
   );
 
   /** Every row a given account's register will hold, from both writers. */
@@ -542,5 +545,164 @@ describe("a split with a leg paying for a trade (issue #1211)", () => {
     expect(sleeveRows).toHaveLength(1);
     expect(banking.transactions.map((row) => row.handle)).toEqual([20]);
     expect(balances.get("acct-6")).toBe(SLEEVE_OPENING - 2_500);
+  });
+});
+
+/**
+ * A CD redemption that paid accrued interest. Money writes it as a split in the
+ * cash account -- principal in the investment leg, interest in a sibling -- and
+ * Monize records the interest on the redemption's own INTEREST companion
+ * instead, so the split has nothing left to hold and the parent becomes the
+ * redemption's single cash row.
+ * docs/specs/redemption-accrued-interest.md section 5.
+ */
+describe("a redemption whose interest Money put in a sibling split leg", () => {
+  const PRINCIPAL = 10_000;
+  const INTEREST = 87.5;
+  const PAYOUT = PRINCIPAL + INTEREST;
+
+  const redemptionRows = (legs: { amount: number; handle: number }[]) =>
+    transactionData({
+      transactions: [
+        mnyTransaction({ handle: 20, account: SLEEVE, amount: PAYOUT }),
+        ...legs.map((leg) =>
+          mnyTransaction({
+            handle: leg.handle,
+            account: SLEEVE,
+            amount: leg.amount,
+          }),
+        ),
+        mnyTransaction({
+          handle: 23,
+          account: BROKERAGE,
+          amount: PAYOUT,
+          security: SECURITY,
+          action: MNY_ACTION.REDEEM_CD_BOND,
+        }),
+      ],
+      splits: legs.map((leg, position) =>
+        mnySplit({ parent: 20, child: leg.handle, position }),
+      ),
+      transfers: [mnyTransfer({ from: 21, to: 23 })],
+    });
+
+  const redemptionDetail = investmentData({
+    securities: [mnySecurity({ handle: SECURITY, symbol: "VOO" })],
+    investmentDetails: [
+      mnyInvestmentDetail({
+        transaction: 23,
+        price: 1_000,
+        quantity: 10,
+        interest: INTEREST,
+      }),
+    ],
+  });
+
+  const twoLegs = () =>
+    redemptionRows([
+      { handle: 21, amount: PRINCIPAL },
+      { handle: 22, amount: INTEREST },
+    ]);
+
+  it("collapses the split into one cash row the redemption adopts", () => {
+    const { banking, investments } = mapAll(twoLegs(), redemptionDetail);
+
+    const parent = banking.transactions.find((row) => row.handle === 20);
+    expect(parent?.splits).toEqual([]);
+    expect(parent?.collapsedTradeHandle).toBe(23);
+    expect(parent?.amount).toBe(PAYOUT);
+
+    const redemption = investments.transactions.find(
+      (row) => row.action === InvestmentAction.REDEEM,
+    );
+    expect(redemption).toMatchObject({
+      // Proceeds, so the realized-gain folds are unaffected by the interest.
+      totalAmount: PRINCIPAL,
+      cashTransactionId: parent?.id,
+      transactionSplitId: null,
+      fundingAccountKey: "acct-6",
+    });
+  });
+
+  it("leaves the sleeve holding one row for the whole payout", () => {
+    const { sleeveRows, balances } = mapAll(twoLegs(), redemptionDetail);
+
+    // The defect this guards: registering no cash source makes the trade write
+    // its own sleeve row beside Money's, and the account gains the payout twice.
+    expect(sleeveRows).toHaveLength(1);
+    expect(balances.get("acct-6")).toBe(SLEEVE_OPENING + PAYOUT);
+  });
+
+  it("records the interest once, as a linked INTEREST row", () => {
+    const { investments } = mapAll(twoLegs(), redemptionDetail);
+
+    const companions = investments.transactions.filter(
+      (row) => row.action === InvestmentAction.INTEREST,
+    );
+    expect(companions).toHaveLength(1);
+    expect(companions[0]).toMatchObject({
+      totalAmount: INTEREST,
+      cashAmount: 0,
+      cashAccountKey: null,
+    });
+  });
+
+  it("keeps a split whose sibling is not the accrued interest", () => {
+    // Only the shape Money writes for this one thing is rewritten. A leg that
+    // records something else is the user's data, and it stays a split.
+    const { banking, investments } = mapAll(
+      redemptionRows([
+        { handle: 21, amount: PRINCIPAL },
+        { handle: 22, amount: INTEREST + 10 },
+      ]),
+      redemptionDetail,
+    );
+
+    const parent = banking.transactions.find((row) => row.handle === 20);
+    expect(parent?.splits).toHaveLength(2);
+    expect(parent?.collapsedTradeHandle).toBeNull();
+    expect(
+      investments.transactions.find(
+        (row) => row.action === InvestmentAction.REDEEM,
+      ),
+    ).toMatchObject({
+      transactionSplitId: parent?.splits[0].id,
+      linkedInvestmentId: null,
+      accruedInterest: 0,
+    });
+    expect(
+      investments.transactions.filter(
+        (row) => row.action === InvestmentAction.INTEREST,
+      ),
+    ).toHaveLength(0);
+  });
+
+  it("keeps a three-leg split", () => {
+    const { banking, investments } = mapAll(
+      redemptionRows([
+        { handle: 21, amount: PRINCIPAL },
+        { handle: 22, amount: INTEREST },
+        { handle: 24, amount: 25 },
+      ]),
+      redemptionDetail,
+    );
+
+    const parent = banking.transactions.find((row) => row.handle === 20);
+    expect(parent?.splits).toHaveLength(3);
+    expect(parent?.collapsedTradeHandle).toBeNull();
+    expect(
+      investments.transactions.find(
+        (row) => row.action === InvestmentAction.REDEEM,
+      ),
+    ).toMatchObject({
+      transactionSplitId: parent?.splits[0].id,
+      linkedInvestmentId: null,
+      accruedInterest: 0,
+    });
+    expect(
+      investments.transactions.filter(
+        (row) => row.action === InvestmentAction.INTEREST,
+      ),
+    ).toHaveLength(0);
   });
 });

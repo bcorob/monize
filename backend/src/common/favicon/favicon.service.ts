@@ -6,14 +6,19 @@ export interface FetchedLogo {
 }
 
 /**
- * Resolves a financial institution's brand icon by fetching the website's
- * favicon from Google's faviconV2 (gstatic) endpoint -- the same resolver
- * Chrome uses -- entirely server-side. The bytes are cached in the database so
- * the user's browser never has to contact a third party to render the logo.
+ * Resolves a brand icon for any entity that carries a website -- an
+ * institution, a payee -- by fetching that site's favicon from Google's
+ * faviconV2 (gstatic) endpoint, the same resolver Chrome uses, entirely
+ * server-side. The bytes are cached in the caller's own table so the user's
+ * browser never has to contact a third party to render the logo.
+ *
+ * The outbound host is the hardcoded gstatic endpoint and the user's website
+ * only ever appears URL-encoded in a query parameter, so a hostile address
+ * cannot steer the request at an internal host.
  */
 @Injectable()
-export class InstitutionLogoService {
-  private readonly logger = new Logger(InstitutionLogoService.name);
+export class FaviconService {
+  private readonly logger = new Logger(FaviconService.name);
 
   private static readonly TIMEOUT_MS = 6000;
   // Favicons at 256px are a few KB; cap generously to guard against a
@@ -41,7 +46,7 @@ export class InstitutionLogoService {
     const controller = new AbortController();
     const timer = setTimeout(
       () => controller.abort(),
-      InstitutionLogoService.TIMEOUT_MS,
+      FaviconService.TIMEOUT_MS,
     );
 
     try {
@@ -67,7 +72,7 @@ export class InstitutionLogoService {
       }
 
       const data = Buffer.from(await response.arrayBuffer());
-      if (data.length === 0 || data.length > InstitutionLogoService.MAX_BYTES) {
+      if (data.length === 0 || data.length > FaviconService.MAX_BYTES) {
         this.logger.warn(
           `Favicon fetch for ${website} returned ${data.length} bytes (rejected)`,
         );

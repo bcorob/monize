@@ -2,6 +2,7 @@
 
 import Image from 'next/image';
 import { isNavSectionActive } from '@/lib/nav-section';
+import { NAV_ICONS } from '@/lib/nav-links';
 import { useTranslations } from 'next-intl';
 import { Modal } from '@/components/ui/Modal';
 
@@ -64,20 +65,33 @@ export function MobileNavDrawer({
         : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
     }`;
 
-  const renderLink = (link: NavLink, active: boolean) => (
-    <button
-      key={link.href}
-      onClick={() => onNavigate(link.href)}
-      className={itemClass(active)}
-    >
-      {link.label}
-      {link.badge && (
-        <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
-          {link.badge}
-        </span>
-      )}
-    </button>
-  );
+  const renderLink = (link: NavLink, active: boolean) => {
+    const Icon = NAV_ICONS[link.href];
+    return (
+      <button
+        key={link.href}
+        onClick={() => onNavigate(link.href)}
+        className={itemClass(active)}
+      >
+        {Icon && (
+          <Icon
+            aria-hidden
+            className={`mr-4 h-5 w-5 flex-shrink-0 ${
+              active
+                ? 'text-blue-600 dark:text-blue-300'
+                : 'text-gray-400 dark:text-gray-500'
+            }`}
+          />
+        )}
+        {link.label}
+        {link.badge && (
+          <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
+            {link.badge}
+          </span>
+        )}
+      </button>
+    );
+  };
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} variant="drawer-left">
@@ -89,7 +103,7 @@ export function MobileNavDrawer({
             className="flex items-center gap-2 text-xl font-bold text-blue-600 dark:text-blue-400"
           >
             <Image
-              src="/icons/monize-logo.svg"
+              src="/icons/monize-logo-transparent.svg"
               alt="Monize"
               width={28}
               height={28}

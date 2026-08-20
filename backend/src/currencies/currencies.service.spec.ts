@@ -626,6 +626,35 @@ describe("CurrenciesService", () => {
       expect(mockCurrencyRepo.remove).toHaveBeenCalledWith(userCurrency);
     });
 
+    /**
+     * INV-CURRENCY-001, authorization clause: a shared custom currency row is
+     * deleted only by its creator. A non-creator who activated the code may
+     * deactivate it (remove their own preference), but must never take the row
+     * itself -- even when the global count has since hit zero. The old gate
+     * (`createdByUserId !== null`) checked "is this custom" instead of "am I the
+     * creator", so this exact call deleted another user's currency.
+     */
+    it("does not delete another user's custom currency, even when globally unreferenced", async () => {
+      const othersCurrency = {
+        ...mockCurrency,
+        createdByUserId: "other-user",
+      };
+      mockCurrencyRepo.findOne!.mockResolvedValue(othersCurrency);
+      answering({ inUseByUser: false, inUseGlobally: false });
+      mockPrefRepo.delete!.mockResolvedValue(undefined);
+      mockCurrencyRepo.remove!.mockResolvedValue(undefined);
+
+      await service.remove(userId, "CAD");
+
+      // Deactivation still happens...
+      expect(mockPrefRepo.delete).toHaveBeenCalledWith({
+        userId,
+        currencyCode: "CAD",
+      });
+      // ...but the creator's row is left standing.
+      expect(mockCurrencyRepo.remove).not.toHaveBeenCalled();
+    });
+
     it("does not delete system currency row even when preference is removed", async () => {
       mockCurrencyRepo.findOne!.mockResolvedValue(mockCurrency);
       mockDataSource.query.mockResolvedValue([{ inUse: false }]);

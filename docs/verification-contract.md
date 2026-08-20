@@ -74,6 +74,8 @@ adds value but proves nothing on its own. `--` means not applicable.
 | INV-HOLDING-001 holding replay | supporting | -- | required | **required** | optional | required | -- | optional |
 | INV-HOLDING-002 one reducer | required | **required** | supporting | -- | -- | -- | -- | required |
 | INV-TRANSFER-001 both legs | required | -- | required | optional | -- | -- | -- | required |
+| INV-REDEEM-001 accrued interest | required | **required** | required | -- | -- | -- | -- | optional |
+| INV-RECONCILE-001 reconciled lock | supporting | **required** | required | required | -- | -- | -- | optional |
 | INV-FX-001 no 1:1 fallback | **required** | **required** | required | -- | -- | required | optional | required |
 | INV-OCCURRENCE-001 one effect | supporting | -- | required | required | **required** | required | -- | required |
 | INV-OCCURRENCE-002 override price | required | -- | -- | -- | -- | -- | -- | required |
@@ -98,7 +100,14 @@ invariant is unverified no matter how many others pass. `INV-PROFILE-001`'s is a
 source scan rather than a unit test because the defect arrives via a change to a
 different file: a new entity column. `INV-FX-001` and `INV-HOLDING-002` need
 scans for the same reason -- both are scattered across call sites, and every
-previous fix corrected one and left the others.
+previous fix corrected one and left the others. `INV-RECONCILE-001` is the same
+shape: the strict lock is only as strong as its least-guarded entry point -- a
+single-row refusal was once walked around by `bulkUpdate` -- so
+`reconciled-lock.guard.spec.ts` scanning every write path is the load-bearing
+kind, not any one service test. `INV-REDEEM-001` too: proceeds and accrued
+interest are added in exactly one place, and `accrued-interest.guard.spec.ts`
+failing a hand-rolled addition anywhere else is what keeps the cash from being
+moved twice.
 
 `INV-IMPORT-002`'s load-bearing kind is a **failpoint**, and it is worth
 understanding why the other columns cannot substitute. The MNY import has real
@@ -143,14 +152,16 @@ because they all need a real database. That makes it the single most important
 job in the pipeline and the one whose silent failure is most costly -- which
 brings us to the next point.
 
-**That job can currently pass having run nothing.** `test:integration` carries an
-unconditional `--passWithNoTests`, so a renamed directory or an edited
-`testPathPatterns` regex turns a discovery failure into a green check across all
-six kinds at once. `docs/release-integrity.md` REL-001 and REL-002 cover this;
-it is repeated here because the consequence is a verification consequence, not
-merely a CI hygiene one. There are 21 suites under
-`backend/test/integration/` today, and nothing asserts that number does not
-shrink.
+**That job no longer passes having run nothing -- but nothing asserts its suite
+count.** `test:integration` previously carried an unconditional
+`--passWithNoTests`, so a renamed directory or an edited `testPathPatterns` regex
+turned a discovery failure into a green check across all six kinds at once. That
+flag has since been removed from `backend/package.json`, so an empty match now
+exits non-zero and fails the job. What is still owed is the weaker guard against a
+regex that matches *some* suites but silently drops a class: nothing asserts that
+the number of suites under `backend/test/integration/` does not shrink.
+`docs/release-integrity.md` REL-001 and REL-002 cover the history and the
+consequence, which is a verification one, not merely CI hygiene.
 
 ## 5. Known-wrong tests
 
@@ -166,26 +177,26 @@ asserting the violation and correct them in the same change -- they are why the
 defect survived.
 ```
 
-### Located in the current suites
+### Located in the current suites -- both since corrected
 
-These were found by reading the suites, and each is cited so it can be checked
-rather than taken on trust. Correcting the invariant means correcting these in
-the same change.
+Two known-wrong tests were found here and have since been corrected, in the same
+work that moved their invariants to `enforced`. They are recorded rather than
+deleted, because the rule they illustrate (VER-004) is the point, and a reader
+should be able to confirm the correction rather than take it on trust.
 
-| Test | Asserts | Protects the violation of |
+| Test | Asserted (now corrected) | Was protecting |
 | --- | --- | --- |
-| `backend/src/net-worth/net-worth.service.spec.ts` around lines 516 and 2664 | Additive stock-split replay. The comment spells the arithmetic out: `95 - TRANSFER_OUT 5 + SPLIT 90 = 180 shares`, and a second case `BUY 100, SELL 30, TRANSFER_OUT 20, SPLIT 50 = 100 shares`. Under the correct multiplicative rule a SPLIT row of 90 applied to 90 shares is 8,100, not 180. | INV-HOLDING-002 |
-| `frontend/src/components/settings/BackupRestoreSection.test.tsx`, `frontend/src/components/settings/DangerZoneSection.test.tsx`, `backend/src/users/users.service.spec.ts`, `backend/src/backup/backup.service.spec.ts` | `oidcIdToken: 'oidc-session-confirmed'` accepted as proof of re-authentication. | INV-AUTH-003 |
+| `backend/src/net-worth/net-worth.service.spec.ts` | Additive stock-split replay (`... + SPLIT 90 = 180 shares`). The suite now applies the **multiplicative** rule -- a 2-for-1 split multiplies the position (50 shares -> 100), and the comment records that the old additive fixture was replaced. | INV-HOLDING-002 |
+| `frontend/src/components/settings/BackupRestoreSection.test.tsx`, `frontend/src/components/settings/DangerZoneSection.test.tsx`, `backend/src/users/users.service.spec.ts`, `backend/src/backup/backup.service.spec.ts` | `oidcIdToken: 'oidc-session-confirmed'` accepted as proof. The suites now send the real signed reauth artifact and **reject** the sentinel (and any non-empty string); the literal survives only in comments describing the old defect. | INV-AUTH-003 |
 
-The second is the clearest case of the category: the sentinel string is asserted
-on both sides, so the tests do not merely tolerate the defect -- they specify it.
-Implementing a real OIDC round trip must change them, and that friction is what
-makes the defect look like a decision.
+The AUTH-003 case is the clearest of the category: the sentinel was asserted on
+both sides, so the tests did not merely tolerate the defect -- they specified it,
+and a real OIDC round trip could not land until they changed.
 
-The first is the more instructive one. It reads as a careful test: five actions,
-three months, arithmetic worked out in a comment. The arithmetic is simply the
-wrong rule, applied consistently. A reviewer checking whether the code matches
-the test would find that it does.
+The HOLDING-002 case is the more instructive one. It read as a careful test: five
+actions, three months, arithmetic worked out in a comment -- and the arithmetic
+was simply the wrong rule, applied consistently, which a reviewer checking code
+against test would have found to match.
 
 ### Reported but not located
 
@@ -219,31 +230,27 @@ failed, either the change is a no-op or the suite had no case for it. Say which
 in the change description, and if it is the second, add the case in the same
 commit.
 
-### The scans this document requires do not exist yet
+### The load-bearing source scans now exist
 
 Section 3 marks a source scan as load-bearing for INV-FX-001, INV-HOLDING-002,
-INV-PROFILE-001, INV-CURRENCY-001 and INV-CACHE-001. **None of them is written.**
-Each would be a handful of lines in the pattern of
-`frontend/src/test/ui-conventions.test.ts`:
+INV-PROFILE-001, INV-CURRENCY-001 and INV-CACHE-001. Each was owed when this
+document was first written; each is now written, in the pattern of
+`frontend/src/test/ui-conventions.test.ts`, alongside the fix to the invariant it
+scans:
 
-| Scan owed | Fails on |
-| --- | --- |
-| FX fallback | a `: 1` else-branch beside a rate lookup, or `?? amount` beside a conversion |
-| Share replay | a `SPLIT` case outside the single shared reducer |
-| Profile response | an entity column absent from the response allowlist |
-| Currency references | an FK to `currency_code` in `schema.sql` that the in-use check does not cover |
-| Cache families | a cache prefix in `src/` that declares itself neither transaction-derived nor reference data |
+| Scan | Fails on | File |
+| --- | --- | --- |
+| FX fallback | a `: 1` else-branch beside a rate lookup, or `?? amount` beside a conversion | `backend/src/common/fx-fallback.guard.spec.ts` |
+| Share replay | a `SPLIT` case outside the single shared reducer | `backend/src/securities/investment-replay.guard.spec.ts` |
+| Profile response | an entity column absent from the response allowlist | `backend/src/users/user-profile.spec.ts` |
+| Currency references | an FK to `currency_code` in `schema.sql` that the in-use check does not cover | `backend/src/currencies/currency-references.spec.ts` |
+| Cache families | a cache prefix in `src/` that declares itself neither transaction-derived nor reference data | `frontend/src/lib/cache-prefix-classification.guard.test.ts` |
 
-They are not written here because each would fail immediately against `main` --
-the defects they scan for are present, which is the point of the scan. A guard
-introduced in the same change that fixes its violations is verifiable; one
-introduced alone either breaks the suite or has to be born with a
-baseline-exception list, which is a decision about how much known-wrong code to
-bless and belongs to whoever fixes the underlying invariant.
-
-That is a reason for sequencing, not an excuse. Until these exist, INV-FX-001 and
-INV-HOLDING-002 in particular are guarded only by prose, and both have already
-been fixed at one call site while siblings stayed live.
+Each had to be born with the fix rather than alone: a guard introduced against
+still-broken code either breaks the suite or needs a baseline-exception list,
+which is a decision about how much known-wrong code to bless. They landed the
+right way -- with the fix, so no exception list -- which is why INV-FX-001 and
+INV-HOLDING-002 are no longer guarded only by prose.
 
 The corollary for this document: a test you have never seen fail protects
 nothing. When adding a required test from section 3, run it against the

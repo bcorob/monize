@@ -18,6 +18,8 @@ import { BulkCreateSkip, bulkSkipReason } from "../common/bulk-create.types";
 export interface ManageCreatePayeeRow {
   name: string;
   categoryName?: string;
+  /** Absent leaves it unset; a bare domain is normalised to https. */
+  website?: string;
 }
 
 /** Update-row input for manage_payees (identified by current name). */
@@ -25,6 +27,8 @@ export interface ManageUpdatePayeeRow {
   name: string;
   newName?: string;
   categoryName?: string;
+  /** Absent leaves the stored address alone; an empty string clears it. */
+  website?: string;
 }
 
 /** Delete-row input for manage_payees (identified by name). */
@@ -70,7 +74,11 @@ export class PayeeToolPrepService {
   constructor(private readonly payeesService: PayeesService) {}
 
   static createToBatchRow(preview: CreatePayeePreview): BatchCreatePayeeRow {
-    return { name: preview.name, defaultCategoryId: preview.defaultCategoryId };
+    return {
+      name: preview.name,
+      defaultCategoryId: preview.defaultCategoryId,
+      website: preview.website,
+    };
   }
 
   static updateToBatchRow(preview: UpdatePayeePreview): BatchUpdatePayeeRow {
@@ -78,6 +86,7 @@ export class PayeeToolPrepService {
       payeeId: preview.payeeId,
       name: preview.name,
       defaultCategoryId: preview.defaultCategoryId,
+      website: preview.website,
     };
   }
 
@@ -88,6 +97,7 @@ export class PayeeToolPrepService {
     return this.payeesService.previewCreatePayee(userId, {
       name: row.name,
       categoryName: row.categoryName,
+      website: row.website,
     });
   }
 
@@ -99,6 +109,7 @@ export class PayeeToolPrepService {
       name: row.name,
       newName: row.newName,
       categoryName: row.categoryName,
+      website: row.website,
     });
   }
 

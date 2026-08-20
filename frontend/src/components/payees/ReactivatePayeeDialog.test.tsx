@@ -15,6 +15,8 @@ describe('ReactivatePayeeDialog', () => {
     defaultCategory: null,
     notes: null,
     website: null,
+    hasLogo: false,
+    logoFetchedAt: null,
     isActive: false,
     createdAt: '2024-01-01',
   };

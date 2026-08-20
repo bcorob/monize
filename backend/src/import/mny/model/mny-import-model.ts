@@ -167,6 +167,14 @@ export interface MappedTransaction {
   /** The other side of a `TRN_XFER` pair. Exact -- never name-matched. */
   readonly linkedTransactionId: string | null;
   readonly splits: readonly MappedSplit[];
+  /**
+   * `TRN.htrn` of a trade whose cash this row records outright, having been
+   * collapsed from the two-leg split Money wrote for it. Null everywhere else.
+   * The trade adopts this row as its cash leg exactly as it adopts an external
+   * funding row, and the interest leg is gone because the redemption's own
+   * INTEREST companion records it.
+   */
+  readonly collapsedTradeHandle: number | null;
 }
 
 export interface MappedTransactions {
@@ -258,6 +266,12 @@ export interface MnyImportedTrade {
   /** Signed cash the trade moves; 0 for the share-only actions. */
   readonly cashAmount: number;
   /**
+   * Accrued interest riding on that cash (redemptions only, else 0). The
+   * transaction mapper needs it to recognize the interest leg of the split
+   * Money wrote, which is the leg the collapse removes.
+   */
+  readonly accruedInterest: number;
+  /**
    * So a funding row adopted as this trade's cash leg cannot claim the money
    * moved when the trade says it did not. Only the VOID boundary is shared;
    * reconciliation states stay per-row.
@@ -343,6 +357,13 @@ export interface MappedInvestmentTransaction {
   readonly quantity: number | null;
   readonly price: number | null;
   readonly commission: number;
+  /**
+   * Accrued interest Money recorded on the row (`TRN_INV.amtInt`), taken out of
+    * `totalAmount`. Mapping-time metadata: it becomes the linked INTEREST
+    * companion when the cash split collapses, or is cleared when a preserved
+    * sibling split leg already records the interest. There is no column here.
+   */
+  readonly accruedInterest: number;
   /** Positive magnitude of the transaction, in the account's currency. */
   readonly totalAmount: number;
   readonly currencyCode: string;
@@ -360,7 +381,11 @@ export interface MappedInvestmentTransaction {
   readonly payeeHandle: number | null;
   readonly categoryHandle: number | null;
   readonly description: string | null;
-  /** The other leg of an `act` 15/16 share transfer. */
+  /**
+   * The row this one is linked to: the other leg of an `act` 15/16 share
+   * transfer, or a redemption's accrued-interest companion and back. Written to
+   * `investment_transactions.linked_transaction_id` by the back-patch pass.
+   */
   readonly linkedInvestmentId: string | null;
 }
 

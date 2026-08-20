@@ -23,6 +23,7 @@ import { useDateFormat } from '@/hooks/useDateFormat';
 import { useExchangeRates } from '@/hooks/useExchangeRates';
 import { createLogger } from '@/lib/logger';
 import { PartialTotal } from '@/components/ui/PartialTotal';
+import { CategoryGlyph } from '@/components/categories/CategoryGlyph';
 import {
   WidgetFilterParams,
   buildDisplayCurrencyStrategy,
@@ -209,6 +210,9 @@ export function CategoryInfoWidget({
 
   const headlineTotal = totals ? netEntityTotal(totals, category.isIncome) : null;
   const swatchColor = category.effectiveColor ?? category.color;
+  // Same inheritance the list and the detail header use: show this category's
+  // own icon, or the nearest ancestor's.
+  const glyphIcon = category.effectiveIcon ?? category.icon;
   const budgetPercent = budgetStatus ? Math.min(budgetStatus.percentUsed, 100) : 0;
   const budgetBarColor = budgetStatus
     ? budgetStatus.percentUsed >= 100
@@ -222,16 +226,15 @@ export function CategoryInfoWidget({
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-4 sm:p-6 mb-6 lg:mb-0 lg:absolute lg:inset-x-0 lg:top-0 lg:bottom-6 lg:overflow-y-auto flex flex-col">
       <div className="flex items-start justify-between gap-2 mb-4">
         <div className="flex items-center gap-3 min-w-0">
-          {swatchColor && (
-            <span
-              className="flex-shrink-0 h-4 w-4 rounded"
-              style={{ backgroundColor: swatchColor }}
-              aria-hidden
-            />
-          )}
+          <CategoryGlyph
+            icon={glyphIcon}
+            color={swatchColor}
+            inherited={!category.icon && !category.color}
+            size={16}
+            className="flex-shrink-0"
+          />
           <div className="min-w-0">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 truncate">
-              {category.icon ? `${category.icon} ` : ''}
               {category.name}
             </h3>
             <div className="flex items-center gap-2 min-w-0">

@@ -979,7 +979,10 @@ describe("TransactionTransferService", () => {
       expect(toCreateCall.payeeName).toBe("My Transfer");
     });
 
-    it("generates default payeeName from account names when not provided", async () => {
+    it("persists a blank payeeName as null when not provided (issue #1214)", async () => {
+      // No stamped "Transfer to/from <account>": the label is resolved at
+      // read time from the linked leg's account, so it follows renames and
+      // the reader's language.
       transactionsRepository.save
         .mockReset()
         .mockResolvedValueOnce({ id: "from-tx-id" })
@@ -993,8 +996,8 @@ describe("TransactionTransferService", () => {
 
       const fromCreateCall = transactionsRepository.create.mock.calls[0][0];
       const toCreateCall = transactionsRepository.create.mock.calls[1][0];
-      expect(fromCreateCall.payeeName).toBe("Transfer to Savings");
-      expect(toCreateCall.payeeName).toBe("Transfer from Checking");
+      expect(fromCreateCall.payeeName).toBeNull();
+      expect(toCreateCall.payeeName).toBeNull();
     });
 
     it("triggers net worth recalc for both accounts (debounced)", async () => {
@@ -2505,7 +2508,7 @@ describe("TransactionTransferService", () => {
       ).rejects.toThrow(/must match the account currency/);
     });
 
-    it("updates account IDs and adjusts payee names", async () => {
+    it("updates account IDs without writing payee names (issue #1214)", async () => {
       const newToAccount = {
         id: "new-to-account",
         name: "Investment",
@@ -2537,13 +2540,15 @@ describe("TransactionTransferService", () => {
         mockFindOne,
       );
 
-      // from-tx should get updated payeeName
-      expect(transactionsRepository.update).toHaveBeenCalledWith(
-        "from-tx",
-        expect.objectContaining({
-          payeeName: "Transfer to Investment",
-        }),
+      // A leg with no stored payee gets no payee write: blank stays blank and
+      // the display resolves the label from the new linked account. Here the
+      // from-leg has nothing else to change either, so no update reaches it.
+      const fromCall = transactionsRepository.update.mock.calls.find(
+        (c: any[]) => c[0] === "from-tx",
       );
+      if (fromCall) {
+        expect(fromCall[1]).not.toHaveProperty("payeeName");
+      }
 
       // to-tx should get new accountId
       expect(transactionsRepository.update).toHaveBeenCalledWith(
@@ -2885,7 +2890,7 @@ describe("TransactionTransferService", () => {
       );
     });
 
-    it("regenerates default payeeName for both transactions when payeeName is explicitly cleared with null", async () => {
+    it("persists a cleared payeeName as null on both legs (issue #1214)", async () => {
       mockFindOne
         .mockResolvedValueOnce(fromTransaction)
         .mockResolvedValueOnce(toTransaction)
@@ -2899,24 +2904,25 @@ describe("TransactionTransferService", () => {
         mockFindOne,
       );
 
-      // Default payee names regenerated from account names
+      // No restamped "Transfer to/from <account>": blank is the persisted
+      // state and the label is resolved at read time from the linked leg.
       expect(transactionsRepository.update).toHaveBeenCalledWith(
         "from-tx",
         expect.objectContaining({
           payeeId: null,
-          payeeName: "Transfer to Savings",
+          payeeName: null,
         }),
       );
       expect(transactionsRepository.update).toHaveBeenCalledWith(
         "to-tx",
         expect.objectContaining({
           payeeId: null,
-          payeeName: "Transfer from Checking",
+          payeeName: null,
         }),
       );
     });
 
-    it("regenerates default payeeName when payeeName is cleared with empty string", async () => {
+    it("persists an empty-string payeeName as null on both legs (issue #1214)", async () => {
       mockFindOne
         .mockResolvedValueOnce(fromTransaction)
         .mockResolvedValueOnce(toTransaction)
@@ -2932,11 +2938,11 @@ describe("TransactionTransferService", () => {
 
       expect(transactionsRepository.update).toHaveBeenCalledWith(
         "from-tx",
-        expect.objectContaining({ payeeName: "Transfer to Savings" }),
+        expect.objectContaining({ payeeName: null }),
       );
       expect(transactionsRepository.update).toHaveBeenCalledWith(
         "to-tx",
-        expect.objectContaining({ payeeName: "Transfer from Checking" }),
+        expect.objectContaining({ payeeName: null }),
       );
     });
 
@@ -2960,10 +2966,11 @@ describe("TransactionTransferService", () => {
       expect(fromCall[1]).not.toHaveProperty("description");
     });
 
-    it("regenerates auto-generated payeeName when destination account changes and frontend re-sends the old auto-generated value", async () => {
-      // Simulates the frontend behavior: when editing a transfer, the form
-      // always re-sends payeeName (the previous auto-generated value), so
-      // payeeName !== undefined but should still be regenerated.
+    it("clears a legacy auto-generated payeeName when destination account changes and frontend re-sends the old value (issue #1214)", async () => {
+      // Simulates the frontend behavior: when editing a legacy stamped
+      // transfer, the form re-sends payeeName (the old auto-generated value).
+      // The row is healed to null rather than restamped -- the display then
+      // resolves the label from the linked leg's current account name.
       const newToAccount = {
         id: "new-to-account",
         name: "Investment",
@@ -3012,11 +3019,78 @@ describe("TransactionTransferService", () => {
 
       expect(transactionsRepository.update).toHaveBeenCalledWith(
         "from-tx",
-        expect.objectContaining({ payeeName: "Transfer to Investment" }),
+        expect.objectContaining({ payeeName: null }),
       );
     });
 
-    it("regenerates auto-generated payeeName on the to-side when source account changes", async () => {
+    it("heals a legacy stamped payee to null on an ordinary edit (issue #1214)", async () => {
+      // A pre-#1214 row still carries "Transfer to <account>" in payee_name
+      // (e.g. restored from a backup taken before migration 161). Any edit
+      // that reaches the leg clears the stamp -- the display resolves the
+      // identical label from the linked account, so nothing changes on
+      // screen, but the row stops going stale on the next rename.
+      const fromWithAutoPayee = {
+        ...fromTransaction,
+        payeeId: null,
+        payeeName: "Transfer to Savings",
+      } as unknown as Transaction;
+      const toWithAutoPayee = {
+        ...toTransaction,
+        payeeId: null,
+        payeeName: "Transfer from Checking",
+      } as unknown as Transaction;
+
+      mockFindOne
+        .mockResolvedValueOnce(fromWithAutoPayee)
+        .mockResolvedValueOnce(toWithAutoPayee)
+        .mockResolvedValueOnce(fromWithAutoPayee)
+        .mockResolvedValueOnce(toWithAutoPayee);
+
+      await service.updateTransfer(
+        "user-1",
+        "from-tx",
+        { description: "note" },
+        mockFindOne,
+      );
+
+      expect(transactionsRepository.update).toHaveBeenCalledWith(
+        "from-tx",
+        expect.objectContaining({ payeeName: null }),
+      );
+      expect(transactionsRepository.update).toHaveBeenCalledWith(
+        "to-tx",
+        expect.objectContaining({ payeeName: null }),
+      );
+    });
+
+    it("leaves a stale stamp (renamed account) untouched -- indistinguishable from a custom payee", async () => {
+      const fromWithStaleStamp = {
+        ...fromTransaction,
+        payeeId: null,
+        // Stamped against a name the destination account no longer has.
+        payeeName: "Transfer to Old Savings",
+      } as unknown as Transaction;
+
+      mockFindOne
+        .mockResolvedValueOnce(fromWithStaleStamp)
+        .mockResolvedValueOnce(toTransaction)
+        .mockResolvedValueOnce(fromWithStaleStamp)
+        .mockResolvedValueOnce(toTransaction);
+
+      await service.updateTransfer(
+        "user-1",
+        "from-tx",
+        { description: "note" },
+        mockFindOne,
+      );
+
+      const fromCall = transactionsRepository.update.mock.calls.find(
+        (c: any[]) => c[0] === "from-tx",
+      );
+      expect(fromCall[1]).not.toHaveProperty("payeeName");
+    });
+
+    it("clears a legacy auto-generated payeeName on the to-side when source account changes", async () => {
       const newFromAccount = {
         id: "new-from-account",
         name: "Brokerage",
@@ -3064,7 +3138,7 @@ describe("TransactionTransferService", () => {
 
       expect(transactionsRepository.update).toHaveBeenCalledWith(
         "to-tx",
-        expect.objectContaining({ payeeName: "Transfer from Brokerage" }),
+        expect.objectContaining({ payeeName: null }),
       );
     });
 
@@ -4096,16 +4170,19 @@ describe("TransactionTransferService", () => {
             actor,
           );
 
-          // Both persisted rows follow the new amount.
+          // Both persisted rows follow the new amount. The legacy stamped
+          // payee on each leg is healed to null (issue #1214) -- the label
+          // resolves at read time from the linked leg's account.
           expect(transactionsRepository.update).toHaveBeenCalledWith(
             "own-leg",
             {
               amount: -600,
+              payeeName: null,
             },
           );
           expect(transactionsRepository.update).toHaveBeenCalledWith(
             "foreign-leg",
-            { amount: 600 },
+            { amount: 600, payeeName: null },
           );
           // The acting leg is excluded, so its account never moves.
           expect(accountsService.updateBalance).not.toHaveBeenCalledWith(
@@ -4170,6 +4247,7 @@ describe("TransactionTransferService", () => {
             "own-leg",
             {
               amount: -600,
+              payeeName: null,
             },
           );
           expect(accountsService.updateBalance).not.toHaveBeenCalled();
@@ -4205,10 +4283,11 @@ describe("TransactionTransferService", () => {
         expect(mockedWithSystemContext).toHaveBeenCalled();
         expect(transactionsRepository.update).toHaveBeenCalledWith("own-leg", {
           amount: -600,
+          payeeName: null,
         });
         expect(transactionsRepository.update).toHaveBeenCalledWith(
           "foreign-leg",
-          { amount: 600 },
+          { amount: 600, payeeName: null },
         );
         // Old amounts reversed, new applied.
         expect(accountsService.updateBalance).toHaveBeenCalledWith(

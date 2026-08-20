@@ -1,5 +1,6 @@
 import { InvestmentAction } from "./entities/investment-transaction.entity";
 import { baseInvestmentAction } from "./investment-replay.util";
+import { disposalCashAmount } from "./accrued-interest.util";
 
 export const EMBEDDED_INVESTMENT_SPLIT_ACTIONS: ReadonlySet<InvestmentAction> =
   new Set([
@@ -38,6 +39,8 @@ export function computeInvestmentCashImpact(
   quantity: number,
   price: number,
   commission: number,
+  /** Accrued interest paid out with a redemption; see `disposalCashAmount`. */
+  accruedInterest: number = 0,
 ): number {
   const q = Number(quantity) || 0;
   const p = Number(price) || 0;
@@ -47,7 +50,7 @@ export function computeInvestmentCashImpact(
     case InvestmentAction.BUY:
       return -(q * p + c);
     case InvestmentAction.SELL:
-      return q * p - c;
+      return disposalCashAmount(q * p - c, accruedInterest);
     case InvestmentAction.DIVIDEND:
     case InvestmentAction.INTEREST:
     case InvestmentAction.CAPITAL_GAIN:

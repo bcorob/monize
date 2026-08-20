@@ -101,7 +101,11 @@ vi.mock('@/lib/payees', () => ({
   },
 }));
 
-vi.mock('@/lib/categoryUtils', () => ({
+// Spread the real module: these are pure helpers, and a hand-listed mock
+// silently omits every one added later -- adding `buildCategoryIconMap` to the
+// page broke all 52 cases here with "No export is defined on the mock".
+vi.mock('@/lib/categoryUtils', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/categoryUtils')>()),
   buildCategoryColorMap: () => new Map(),
   buildCategoryLabelMap: () => new Map(),
   buildCategoryTree: () => [],

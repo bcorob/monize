@@ -222,6 +222,66 @@ describe("AccountExportService", () => {
       expect(lines[1].split(",")[3]).toBe("Transfer To Savings");
     });
 
+    it("resolves a blank transfer payee from the counterpart account (issue #1214)", async () => {
+      // A transfer stored with no payee (the persisted state since #1214)
+      // exports the same "Transfer to <account>" text the old writers used to
+      // stamp, resolved from the counterpart's current name -- so an export
+      // taken before and after the migration reads identically.
+      const transactions = [buildTransferTransaction()];
+      const qb = createMockQueryBuilder(transactions);
+      mockTransactionRepo.createQueryBuilder.mockReturnValue(qb);
+
+      const csv = await service.exportCsv(userId, accountId);
+      const lines = csv.split("\n");
+
+      expect(lines[1].split(",")[2]).toBe("Transfer to Savings");
+    });
+
+    it("resolves the receiving leg's blank payee as Transfer from (issue #1214)", async () => {
+      const transactions = [{ ...buildTransferTransaction(), amount: 200 }];
+      const qb = createMockQueryBuilder(transactions);
+      mockTransactionRepo.createQueryBuilder.mockReturnValue(qb);
+
+      const csv = await service.exportCsv(userId, accountId);
+
+      expect(csv.split("\n")[1].split(",")[2]).toBe("Transfer from Savings");
+    });
+
+    it("resolves a blank transfer payee into the QIF P line (issue #1214)", async () => {
+      const transactions = [buildTransferTransaction()];
+      const qb = createMockQueryBuilder(transactions);
+      mockTransactionRepo.createQueryBuilder.mockReturnValue(qb);
+
+      const qif = await service.exportQif(userId, accountId);
+
+      expect(qif).toContain("PTransfer to Savings");
+    });
+
+    it("masks the resolved payee of an unreadable cross-owner counterpart (issue #1214)", async () => {
+      // The mask rewrites the linked account's name before the label is
+      // resolved, so a blank-payee cross-owner transfer exports the stub, not
+      // the counterpart's live account name.
+      const transfer = {
+        ...buildTransferTransaction(),
+        userId,
+        payeeName: "",
+        linkedTransaction: {
+          id: "tx-4",
+          userId: "owner-2",
+          accountId: "account-2",
+          account: { id: "account-2", name: "Savings" },
+        },
+      };
+      const qb = createMockQueryBuilder([transfer]);
+      mockTransactionRepo.createQueryBuilder.mockReturnValue(qb);
+
+      const csv = await service.exportCsv(userId, accountId);
+      const lines = csv.split("\n");
+
+      expect(lines[1].split(",")[2]).toBe("Transfer to Hidden account");
+      expect(csv).not.toContain("Savings");
+    });
+
     it("labels the receiving leg of a transfer From its counterpart", async () => {
       // The same transfer read from the other account is money arriving. Both
       // legs are correct and they read differently; the sign is what decides.

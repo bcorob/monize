@@ -10,6 +10,7 @@ import { useDateFormat } from '@/hooks/useDateFormat';
 import { parseLocalDate } from '@/lib/utils';
 import { toSafeExternalUrl } from '@/lib/external-url';
 import type { Payee } from '@/types/payee';
+import { PayeeLogo } from '@/components/payees/PayeeLogo';
 import { PayeeSwitcher } from './PayeeSwitcher';
 
 interface PayeeDetailHeaderProps {
@@ -78,6 +79,7 @@ export function PayeeDetailHeader({
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
           <div className="flex min-w-0 items-center gap-1">
+            <PayeeLogo payee={payee} size={28} className="mr-2" />
             <h1 className="truncate text-2xl font-bold text-gray-900 dark:text-gray-100">
               {payee.name}
             </h1>

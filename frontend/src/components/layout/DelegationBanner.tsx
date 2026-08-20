@@ -134,7 +134,7 @@ export function DelegationBanner() {
         onChange={(e) => {
           if (e.target.value) void switchTo(e.target.value);
         }}
-        className="ml-auto flex-shrink-0 rounded-md border border-amber-300 dark:border-amber-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm px-2.5 py-1.5 shadow-sm focus:border-sky-500 focus:ring-1 focus:ring-sky-500 disabled:cursor-not-allowed disabled:opacity-60"
+        className="ml-auto flex-shrink-0 rounded-md border border-amber-300 dark:border-amber-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm px-2.5 py-1.5 shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
       >
         {availableContexts.map((c) => (
           <option key={c.userId} value={c.userId}>

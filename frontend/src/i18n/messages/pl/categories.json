@@ -58,6 +58,8 @@
     "colourInherit": "Dziedzicz z kategorii nadrzednej",
     "colourNone": "Brak koloru",
     "colourInheritedFrom": "Kolor dziedziczony z kategorii nadrzednej ({name})",
+    "iconLabel": "Ikona",
+    "iconNone": "Brak ikony",
     "descriptionLabel": "Opis (opcjonalnie)",
     "submitCreate": "Utworz kategorie",
     "submitUpdate": "Zaktualizuj kategorie"

@@ -83,6 +83,7 @@
     "currentCategory": "Mevcut kategori",
     "description": "Açıklama",
     "name": "Ad",
+    "website": "Web sitesi",
     "none": "Yok",
     "approve": "Onayla",
     "cancel": "İptal",

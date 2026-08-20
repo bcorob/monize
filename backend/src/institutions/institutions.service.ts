@@ -14,10 +14,8 @@ import {
 } from "../accounts/entities/account.entity";
 import { CreateInstitutionDto } from "./dto/create-institution.dto";
 import { UpdateInstitutionDto } from "./dto/update-institution.dto";
-import {
-  InstitutionLogoService,
-  FetchedLogo,
-} from "./institution-logo.service";
+import { FaviconService, FetchedLogo } from "../common/favicon/favicon.service";
+import { brandLogoColumns } from "../common/favicon/brand-logo.columns";
 import { ActionHistoryService } from "../action-history/action-history.service";
 import { withScopedDb } from "../common/db/scoped-db";
 import { normalizeWebsite } from "../common/normalize-website";
@@ -46,7 +44,7 @@ export class InstitutionsService {
 
   constructor(
     private dataSource: DataSource,
-    private logoService: InstitutionLogoService,
+    private logoService: FaviconService,
     private actionHistoryService: ActionHistoryService,
   ) {}
 
@@ -82,17 +80,7 @@ export class InstitutionsService {
   }
 
   private applyLogo(institution: Institution, logo: FetchedLogo | null): void {
-    if (logo) {
-      institution.logoData = logo.data;
-      institution.logoContentType = logo.contentType;
-      institution.hasLogo = true;
-      institution.logoFetchedAt = new Date();
-    } else {
-      institution.logoData = null;
-      institution.logoContentType = null;
-      institution.hasLogo = false;
-      institution.logoFetchedAt = new Date();
-    }
+    Object.assign(institution, brandLogoColumns(logo));
   }
 
   /**

@@ -17,6 +17,7 @@ import {
 } from '@/lib/scheduled-kind';
 import { sumConverted } from '@/lib/currency-total';
 import { PartialTotal } from '@/components/ui/PartialTotal';
+import { WidgetHeading } from './widget-meta';
 
 const LIABILITY_TYPES = new Set(['CREDIT_CARD', 'LOAN', 'MORTGAGE', 'LINE_OF_CREDIT']);
 
@@ -162,12 +163,9 @@ export function UpcomingBills({ scheduledTransactions, accounts, isLoading, maxI
   if (isLoading) {
     return (
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-3 sm:p-6 lg:self-start">
-        <button
-          onClick={() => router.push('/bills')}
-          className="text-lg font-semibold text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 transition-colors mb-4"
-        >
+        <WidgetHeading id="upcoming-bills" onClick={() => router.push('/bills')} className="mb-4">
           {sectionTitle}
-        </button>
+        </WidgetHeading>
         <div className="animate-pulse space-y-3">
           {[1, 2, 3].map((i) => (
             <div key={i} className="h-12 bg-gray-200 dark:bg-gray-700 rounded" />
@@ -180,12 +178,9 @@ export function UpcomingBills({ scheduledTransactions, accounts, isLoading, maxI
   if (upcomingItems.length === 0) {
     return (
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-3 sm:p-6 lg:self-start">
-        <button
-          onClick={() => router.push('/bills')}
-          className="text-lg font-semibold text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 transition-colors mb-4"
-        >
+        <WidgetHeading id="upcoming-bills" onClick={() => router.push('/bills')} className="mb-4">
           {sectionTitle}
-        </button>
+        </WidgetHeading>
         <p className="text-gray-500 dark:text-gray-400 text-sm">
           {t('upcomingBills.empty')}
         </p>
@@ -219,12 +214,9 @@ export function UpcomingBills({ scheduledTransactions, accounts, isLoading, maxI
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-3 sm:p-6 lg:self-start">
       <div className="flex items-center justify-between mb-4">
-        <button
-          onClick={() => router.push('/bills')}
-          className="text-lg font-semibold text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-        >
+        <WidgetHeading id="upcoming-bills" onClick={() => router.push('/bills')}>
           {sectionTitle}
-        </button>
+        </WidgetHeading>
         <span className="hidden sm:inline text-sm text-gray-500 dark:text-gray-400">{t('upcomingBills.perReminderSettings')}</span>
       </div>
       <div className="space-y-2 sm:space-y-3">

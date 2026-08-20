@@ -57,7 +57,10 @@ export interface CategoryDetailStats {
  * `categoryIds=[id]`.
  */
 export interface CategoryDetailDto {
-  category: Category & { effectiveColor: string | null };
+  category: Category & {
+    effectiveColor: string | null;
+    effectiveIcon: string | null;
+  };
   stats: CategoryDetailStats;
   accounts: CategoryAccountBreakdownRow[];
   largestTransaction: CategoryLargestTransaction | null;

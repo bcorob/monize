@@ -44,6 +44,7 @@ function investment(
     quantity: 10,
     price: 100,
     commission: 9.99,
+    accruedInterest: 0,
     totalAmount: 1009.99,
     currencyCode: "USD",
     exchangeRate: 1,
@@ -557,6 +558,97 @@ describe("writeInvestments", () => {
       expect(investments.insert.mock.calls[0][0][0]).toMatchObject({
         exchangeRate: 1.3652,
       });
+    });
+  });
+
+  /**
+   * Money's "Redeem CD/Bond" (`act` 30) is a REDEEM, and the code map asserting
+   * that is not enough on its own: what the user sees is the row this writer
+   * persists. The companion carrying the accrued interest is written beside it
+   * with no cash row of its own, and the pair is linked by the same back-patch
+   * pass a share transfer uses.
+   */
+  describe("a redemption carrying accrued interest", () => {
+    const REDEMPTION = "22222222-2222-2222-2222-222222222222";
+    const COMPANION = "33333333-3333-3333-3333-333333333333";
+
+    const pair = (): MappedInvestmentTransaction[] => [
+      investment({
+        id: REDEMPTION,
+        action: InvestmentAction.REDEEM,
+        quantity: 10,
+        price: 1000,
+        commission: 25,
+        totalAmount: 9975,
+        cashAmount: 10062.5,
+        linkedInvestmentId: COMPANION,
+      }),
+      investment({
+        id: COMPANION,
+        handle: null,
+        action: InvestmentAction.INTEREST,
+        quantity: null,
+        price: 87.5,
+        commission: 0,
+        totalAmount: 87.5,
+        cashAccountKey: null,
+        cashAmount: 0,
+        linkedInvestmentId: REDEMPTION,
+      }),
+    ];
+
+    it("persists act=30 as REDEEM, not as a sale", async () => {
+      const { manager, investments } = doubles();
+
+      await writeInvestments(manager, "user-1", {
+        ...baseInput,
+        transactions: pair(),
+      });
+
+      const rows = investments.insert.mock.calls[0][0];
+      expect(rows[0]).toMatchObject({
+        id: REDEMPTION,
+        action: InvestmentAction.REDEEM,
+        totalAmount: 9975,
+      });
+    });
+
+    it("writes one cash row, for the proceeds plus the interest", async () => {
+      const { manager, transactions, investments } = doubles();
+
+      const result = await writeInvestments(manager, "user-1", {
+        ...baseInput,
+        transactions: pair(),
+      });
+
+      expect(result.cashTransactionsCreated).toBe(1);
+      expect(transactions.insert.mock.calls[0][0]).toHaveLength(1);
+      expect(transactions.insert.mock.calls[0][0][0]).toMatchObject({
+        accountId: "aaaaaaaa-0000-0000-0000-000000000011",
+        amount: 10062.5,
+      });
+      expect(investments.insert.mock.calls[0][0][1]).toMatchObject({
+        action: InvestmentAction.INTEREST,
+        totalAmount: 87.5,
+        transactionId: null,
+      });
+    });
+
+    it("links the pair through the back-patch pass", async () => {
+      const { manager, query } = doubles();
+
+      const result = await writeInvestments(manager, "user-1", {
+        ...baseInput,
+        transactions: pair(),
+      });
+
+      expect(result.linksApplied).toBe(2);
+      const linkCall = query.mock.calls.find(([sql]: [string]) =>
+        String(sql).includes("linked_transaction_id"),
+      );
+      expect(linkCall?.[1]).toEqual(
+        expect.arrayContaining([REDEMPTION, COMPANION]),
+      );
     });
   });
 

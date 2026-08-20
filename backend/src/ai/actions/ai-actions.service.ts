@@ -443,6 +443,7 @@ export class AiActionsService {
           quantity: r.quantity ?? undefined,
           price: r.price ?? undefined,
           commission: r.commission,
+          accruedInterest: r.accruedInterest,
           exchangeRate: r.exchangeRate,
           description: r.description ?? undefined,
         });
@@ -466,6 +467,7 @@ export class AiActionsService {
         const dto = await this.toValidatedDto(CreatePayeeDto, {
           name: r.name,
           defaultCategoryId: r.defaultCategoryId ?? undefined,
+          website: r.website,
         });
         const payee = await this.payeesService.create(userId, dto);
         return payee.id;
@@ -475,6 +477,7 @@ export class AiActionsService {
         const dto = await this.toValidatedDto(UpdatePayeeDto, {
           name: r.name,
           defaultCategoryId: r.defaultCategoryId,
+          website: r.website,
         });
         const payee = await this.payeesService.update(userId, r.payeeId, dto);
         return payee.id;
@@ -716,6 +719,7 @@ export class AiActionsService {
     const dto = await this.toValidatedDto(CreatePayeeDto, {
       name: descriptor.name,
       defaultCategoryId: descriptor.defaultCategoryId ?? undefined,
+      website: descriptor.website,
     });
     const payee = await this.payeesService.create(userId, dto);
     return { type: "create_payee", id: payee.id };
@@ -728,6 +732,8 @@ export class AiActionsService {
     const dto = await this.toValidatedDto(UpdatePayeeDto, {
       name: descriptor.name,
       defaultCategoryId: descriptor.defaultCategoryId,
+      // Raw: undefined leaves the stored address alone, null clears it.
+      website: descriptor.website,
     });
     const payee = await this.payeesService.update(
       userId,

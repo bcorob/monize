@@ -46,12 +46,27 @@ const STATUS_RANK: Record<TransactionStatus, number> = {
   [TransactionStatus.VOID]: 3,
 };
 
-function sortValue(row: Transaction, field: ReconcileSortField): unknown {
+/**
+ * How the payee column reads a row. The table passes `usePayeeDisplay`'s
+ * resolver so a blank-payee transfer leg sorts by the "Transfer to/from
+ * <account>" text it displays (issue #1214); the default is the stored-payee
+ * half of the same rule, for callers with no i18n context.
+ */
+export type PayeeLabelResolver = (row: Transaction) => string | null;
+
+const storedPayeeLabel: PayeeLabelResolver = (row) =>
+  row.payee?.name || row.payeeName || null;
+
+function sortValue(
+  row: Transaction,
+  field: ReconcileSortField,
+  payeeLabelOf: PayeeLabelResolver,
+): unknown {
   switch (field) {
     case 'date':
       return row.transactionDate;
     case 'payee':
-      return row.payee?.name || row.payeeName || '';
+      return payeeLabelOf(row) || '';
     case 'category':
       return row.category?.name || '';
     case 'amount':
@@ -81,10 +96,14 @@ export function sortReconcileRows(
   rows: readonly Transaction[],
   field: ReconcileSortField,
   direction: SortDirection,
+  payeeLabelOf: PayeeLabelResolver = storedPayeeLabel,
 ): Transaction[] {
   const sign = direction === 'asc' ? 1 : -1;
   return [...rows].sort((a, b) => {
-    const primary = compareValues(sortValue(a, field), sortValue(b, field));
+    const primary = compareValues(
+      sortValue(a, field, payeeLabelOf),
+      sortValue(b, field, payeeLabelOf),
+    );
     if (primary !== 0) return primary * sign;
     const byDate = compareValues(a.transactionDate, b.transactionDate);
     if (byDate !== 0) return byDate * sign;

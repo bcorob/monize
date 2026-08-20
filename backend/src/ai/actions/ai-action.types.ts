@@ -214,6 +214,8 @@ export interface CreatePayeeDescriptor extends BaseDescriptor {
   type: "create_payee";
   name: string;
   defaultCategoryId: string | null;
+  /** Normalised at preview time; absent means the request set no address. */
+  website?: string | null;
 }
 
 /**
@@ -225,6 +227,8 @@ export interface UpdatePayeeDescriptor extends BaseDescriptor {
   payeeId: string;
   name: string;
   defaultCategoryId: string | null;
+  /** Absent leaves the stored address alone; null clears it. */
+  website?: string | null;
 }
 
 /** Delete an existing payee (identified only; confirm re-checks ownership). */
@@ -508,6 +512,8 @@ export interface BatchUpdateInvestmentTransactionRow {
   quantity: number | null;
   price: number | null;
   commission: number;
+  /** REDEEM only; applied through the linked INTEREST companion. */
+  accruedInterest: number;
   exchangeRate: number;
   description: string | null;
 }
@@ -521,6 +527,7 @@ export interface BatchDeleteInvestmentTransactionRow {
 export interface BatchCreatePayeeRow {
   name: string;
   defaultCategoryId: string | null;
+  website?: string | null;
 }
 
 /** One resolved payee edit inside a `batch_actions` envelope (operation `update_payee`). */
@@ -528,6 +535,7 @@ export interface BatchUpdatePayeeRow {
   payeeId: string;
   name: string;
   defaultCategoryId: string | null;
+  website?: string | null;
 }
 
 /** One payee deletion inside a `batch_actions` envelope (operation `delete_payee`). */
@@ -667,6 +675,8 @@ export interface AiActionPreview {
   currentCategoryName?: string | null;
   description?: string | null;
   name?: string | null;
+  /** Payee website, as the commit would store it (create_payee/update_payee). */
+  website?: string | null;
   /**
    * True when an update/delete targets a reconciled transaction. The
    * confirmation card surfaces a warning so the user knows approving will
@@ -726,8 +736,9 @@ export interface AiActionPreviewRow {
   status: "ok" | "error";
   /** Human-readable reason the row was dropped, when status is "error". */
   error?: string;
-  // Payee display field (batch_actions with a payee operation).
+  // Payee display fields (batch_actions with a payee operation).
   name?: string | null;
+  website?: string | null;
   // Shared / cash-transaction display fields.
   accountName?: string;
   amount?: number;

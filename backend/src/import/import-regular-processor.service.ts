@@ -613,9 +613,13 @@ export class ImportRegularProcessorService {
       accountId: splitTransferAccountId,
       transactionDate: qifTx.date,
       amount: linkedAmount,
+      // A plain transfer leg with no QIF payee is persisted blank (issue
+      // #1214) -- the display resolves "Transfer from <account>" from the
+      // linked leg at read time. The loan-payment stamp stays: "Loan Payment"
+      // is information the linkage alone cannot reproduce.
       payeeName: isLoanPayment
         ? qifTx.payee || `Loan Payment from ${ctx.account.name}`
-        : qifTx.payee || `Transfer from ${ctx.account.name}`,
+        : qifTx.payee || null,
       description: split.memo || qifTx.memo,
       status,
       currencyCode: ctx.account.currencyCode,
@@ -762,9 +766,11 @@ export class ImportRegularProcessorService {
     }
 
     if (existingPendingTransfer) {
+      // Same rule as the split path above: blank transfer payees stay blank
+      // (issue #1214); only the loan-payment stamp survives.
       const linkedPayeeName = isLoanPaymentTx
         ? qifTx.payee || `Loan Payment from ${ctx.account.name}`
-        : qifTx.payee || `Transfer from ${ctx.account.name}`;
+        : qifTx.payee || null;
       await ctx.manager.update(Transaction, existingPendingTransfer.id, {
         linkedTransactionId: savedTx.id,
         payeeName: linkedPayeeName,
@@ -786,7 +792,7 @@ export class ImportRegularProcessorService {
 
     const linkedPayeeName = isLoanPaymentTx
       ? qifTx.payee || `Loan Payment from ${ctx.account.name}`
-      : qifTx.payee || `Transfer from ${ctx.account.name}`;
+      : qifTx.payee || null;
     const linkedTx = ctx.manager.create(Transaction, {
       userId: ctx.userId,
       accountId: transferAccountId,

@@ -127,6 +127,8 @@ function detailFixture(overrides: Partial<PayeeDetail> = {}): PayeeDetail {
       } as PayeeDetail['payee']['defaultCategory'],
       notes: null,
       website: null,
+      hasLogo: false,
+      logoFetchedAt: null,
       isActive: true,
       createdAt: '2024-01-15T00:00:00.000Z',
     },

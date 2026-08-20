@@ -7,6 +7,7 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { chartColors } from '@/lib/chart-colors';
 import { MonthlyNetWorth } from '@/types/net-worth';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
+import { WidgetHeading } from './widget-meta';
 
 interface AssetsVsLiabilitiesProps {
   data: MonthlyNetWorth[];
@@ -65,9 +66,9 @@ export function AssetsVsLiabilities({ data, isLoading }: AssetsVsLiabilitiesProp
   if (isLoading) {
     return (
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-3 sm:p-6 lg:min-h-[500px]">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
+        <WidgetHeading id="assets-liabilities" className="mb-4">
           {t('assetsVsLiabilities.title')}
-        </h3>
+        </WidgetHeading>
         <div className="h-64 flex items-center justify-center">
           <div className="animate-pulse w-48 h-48 rounded-full bg-gray-200 dark:bg-gray-700" />
         </div>
@@ -78,9 +79,9 @@ export function AssetsVsLiabilities({ data, isLoading }: AssetsVsLiabilitiesProp
   if (chartData.length === 0) {
     return (
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-3 sm:p-6 lg:min-h-[500px]">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
+        <WidgetHeading id="assets-liabilities" className="mb-4">
           {t('assetsVsLiabilities.title')}
-        </h3>
+        </WidgetHeading>
         <p className="text-gray-500 dark:text-gray-400 text-sm">
           {t('assetsVsLiabilities.empty')}
         </p>
@@ -91,12 +92,9 @@ export function AssetsVsLiabilities({ data, isLoading }: AssetsVsLiabilitiesProp
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-3 sm:p-6 lg:min-h-[500px] flex flex-col h-full">
       <div className="flex items-center justify-between mb-1">
-        <button
-          onClick={() => router.push('/reports/net-worth')}
-          className="text-lg font-semibold text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-        >
+        <WidgetHeading id="assets-liabilities" onClick={() => router.push('/reports/net-worth')}>
           {t('assetsVsLiabilities.title')}
-        </button>
+        </WidgetHeading>
         <span className="text-sm text-gray-500 dark:text-gray-400">{t('assetsVsLiabilities.current')}</span>
       </div>
       <div className="flex-1 min-h-[16rem]">

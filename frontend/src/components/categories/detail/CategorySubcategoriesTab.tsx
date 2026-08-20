@@ -3,6 +3,7 @@
 import { useMemo } from 'react';
 import { useTranslations } from 'next-intl';
 import { ChevronRightIcon } from '@heroicons/react/24/outline';
+import { CategoryGlyph } from '@/components/categories/CategoryGlyph';
 import { useLongPress } from '@/hooks/useLongPress';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
 import type { SubcategoryShare } from '@/lib/categoryUtils';
@@ -91,6 +92,7 @@ export function CategorySubcategoriesTab({
         <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
           {rows.map(({ child, share }) => {
             const swatchColor = child.effectiveColor ?? child.color;
+            const glyphIcon = child.effectiveIcon ?? child.icon;
             return (
               <tr
                 key={child.id}
@@ -99,15 +101,13 @@ export function CategorySubcategoriesTab({
               >
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2">
-                    {swatchColor && (
-                      <span
-                        className="h-3 w-3 shrink-0 rounded"
-                        style={{ backgroundColor: swatchColor }}
-                        aria-hidden
-                      />
-                    )}
+                    <CategoryGlyph
+                      icon={glyphIcon}
+                      color={swatchColor}
+                      inherited={!child.icon && !child.color}
+                      size={14}
+                    />
                     <span className="text-sm text-gray-900 dark:text-gray-100">
-                      {child.icon ? `${child.icon} ` : ''}
                       {child.name}
                     </span>
                   </div>

@@ -18,6 +18,7 @@ import { RowActions } from '@/components/ui/row-actions/RowActions';
 import { RowActionSheet } from '@/components/ui/row-actions/RowActionSheet';
 import type { RowAction } from '@/components/ui/row-actions/rowAction';
 import { DensityToggleBar } from '@/components/ui/DensityToggle';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 const logger = createLogger('InstitutionList');
 
@@ -87,9 +88,7 @@ export function InstitutionList({
 
   if (institutions.length === 0) {
     return (
-      <div className="text-center py-12">
-        <p className="text-gray-500 dark:text-gray-400">{t('list.empty')}</p>
-      </div>
+      <EmptyState title={t('list.empty')} />
     );
   }
 

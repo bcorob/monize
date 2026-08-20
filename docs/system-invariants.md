@@ -47,37 +47,41 @@ ceremony. Reinstate either the moment it would carry real information.
 
 An entry states only what has been checked. Where a field would require a claim
 that was not verified against the source, it says so in the field rather than
-guessing -- see INV-AUTH-004.
+guessing. Several entries also name a gold-standard test still owed (a
+two-connection race, a two-instance cron) even where the mechanism is enforced:
+the mechanism is cited as present, and the missing proof is stated rather than
+implied.
 
 ## Index
 
 | ID | Invariant | Status |
 | --- | --- | --- |
 | INV-IMPORT-001 | At most one pending or running MNY import per user | enforced |
-| INV-IMPORT-002 | A retry never double-imports | unenforced |
+| INV-IMPORT-002 | A retry never double-imports | enforced |
 | INV-IMPORT-003 | A category collision does not abort an import | unenforced |
-| INV-BALANCE-001 | `current_balance` equals opening balance plus included ledger rows | unenforced |
-| INV-HOLDING-001 | A holding equals a deterministic replay of the investment ledger | unenforced |
-| INV-HOLDING-002 | Every view replays the ledger the same way | unenforced |
-| INV-TRANSFER-001 | A transfer's two legs share one status and one balance decision | unenforced |
-| INV-RECONCILE-001 | While the strict lock is on, a reconciled transaction is not altered | partial |
-| INV-FX-001 | An unavailable rate never becomes 1:1 | unenforced |
-| INV-OCCURRENCE-001 | One scheduled occurrence has at most one financial effect | unenforced |
-| INV-OCCURRENCE-002 | A stored override price survives reopening | unenforced |
-| INV-CLAIM-001 | An emergency-access claim token is consumed exactly once | unenforced |
+| INV-BALANCE-001 | `current_balance` equals opening balance plus included ledger rows | enforced |
+| INV-HOLDING-001 | A holding equals a deterministic replay of the investment ledger | enforced |
+| INV-HOLDING-002 | Every view replays the ledger the same way | enforced |
+| INV-TRANSFER-001 | A transfer's two legs share the VOID boundary and one balance decision | enforced |
+| INV-REDEEM-001 | A redemption's accrued interest moves cash once and is income once | enforced |
+| INV-RECONCILE-001 | While the strict lock is on, a reconciled transaction is not altered | enforced |
+| INV-FX-001 | An unavailable rate never becomes 1:1 | enforced |
+| INV-OCCURRENCE-001 | One scheduled occurrence has at most one financial effect | enforced |
+| INV-OCCURRENCE-002 | A stored override price survives reopening | enforced |
+| INV-CLAIM-001 | An emergency-access claim token is consumed exactly once | enforced |
 | INV-AUTH-001 | A refresh token rotates once, or the family is revoked | enforced |
-| INV-AUTH-002 | A failed-login counter records every failure | unenforced |
-| INV-AUTH-003 | A destructive OIDC action requires a provider round trip | unenforced |
-| INV-AUTH-004 | A logout reports only what it achieved | partial |
-| INV-ACTIVITY-001 | Activity is attributed to whoever acted, not to whoever was acted for | unenforced |
-| INV-PROFILE-001 | A user-profile response is an allowlist | unenforced |
-| INV-MCP-001 | An MCP session is bound to the credential that opened it | unenforced |
-| INV-CURRENCY-001 | A shared currency is deleted only by its creator, on a global count | unenforced |
-| INV-ATTACHMENT-001 | Available metadata resolves to committed bytes | partial |
-| INV-BACKUP-001 | A backup file is complete, verified and owner-namespaced | partial |
+| INV-AUTH-002 | A failed-login counter records every failure | enforced |
+| INV-AUTH-003 | A destructive OIDC action requires a provider round trip | enforced |
+| INV-AUTH-004 | A logout reports only what it achieved | enforced |
+| INV-ACTIVITY-001 | Activity is attributed to whoever acted, not to whoever was acted for | enforced |
+| INV-PROFILE-001 | A user-profile response is an allowlist | enforced |
+| INV-MCP-001 | An MCP session is bound to the credential that opened it | enforced |
+| INV-CURRENCY-001 | A shared currency is deleted only by its creator, on a global count | enforced |
+| INV-ATTACHMENT-001 | Available metadata resolves to committed bytes | enforced |
+| INV-BACKUP-001 | A backup file is complete, verified and owner-namespaced | enforced |
 | INV-CRON-001 | One logical cron effect per schedule tick, across replicas | partial |
-| INV-RLS-001 | Enforced mode refuses to run on a role that can bypass RLS | unenforced |
-| INV-CACHE-001 | A money-moving write invalidates every derived cache | unenforced |
+| INV-RLS-001 | Enforced mode refuses to run on a role that can bypass RLS | enforced |
+| INV-CACHE-001 | A money-moving write invalidates every derived cache | enforced |
 | INV-RELEASE-001 | The tested, imaged and tagged revisions are one revision | partial |
 
 ## Imports
@@ -118,59 +122,49 @@ could also reach the destructive wipe.
 ```text
 Statement           Retrying a failed import must not insert a second copy of
                     rows a previous attempt may have committed.
-Source of truth     the staged file bytes; import_jobs.status
-Enforcement         None once the business data has committed. writeAll opens its
-                    own withScopedDb transaction and commits when it returns;
-                    post-processing, verification, holdings verification, staged-
-                    file deletion and the terminal status update all run after
-                    that commit. No durable data-committed checkpoint, import-run
-                    identifier, or deterministic per-source-record key exists, and
-                    each parse pre-generates fresh row UUIDs, so nothing
-                    downstream can recognise a row as already imported.
-Concurrency scope   per user
-Retry semantics     Safe when the failure occurred inside writeAll -- nothing
-                    committed. Unsafe when the failure occurred after writeAll
-                    committed, or when the commit result is unknown.
-Crash semantics     A crash between writeAll's commit and terminal completion
-                    leaves committed accounts, transactions, investments and
-                    prices behind a job that is running or failed-retryable. The
-                    reaper marks it retryable, which is correct for the job row
-                    and wrong for the data.
-Failure response    A retry must reconcile: finalize the committed run rather than
-                    replay it, or refuse until the run's state is known.
-Required tests      Failpoint: commit writeAll, then fail before terminal
-                    completion, retry, and assert every imported row exists
-                    exactly once. A test that throws inside the import
-                    transaction does not reach this window. No such test exists.
-Status              unenforced
+Source of truth     import_jobs.data_committed and import_jobs.attempt_token,
+                    written in writeAll's own transaction
+Enforcement         A durable commit checkpoint claimed under an attempt fence.
+                    import_jobs.data_committed (migration 140) is set by
+                    markDataCommitted as the LAST statement of writeAll's
+                    transaction (mny-import.service.ts, mny-import-job.service.ts),
+                    a fenced compare-and-set WHERE status='running' AND
+                    attempt_token=$n -- so a zero-row result throws and rolls the
+                    rows back with it. attempt_token (migration 144) gives each
+                    claim an identity a reaped-and-reclaimed job cannot forge, and
+                    migration 145's reject_unfenced_import_checkpoint trigger
+                    refuses a false->true data_committed on a non-running job from
+                    either binary during a rolling deploy. fail() ANDs the caller's
+                    retryable with data_committed = false, and the reaper marks a
+                    committed stalled job non-retryable, so a committed run is
+                    finalized rather than replayed.
+Concurrency scope   per user, per attempt
+Retry semantics     Safe. A failure inside writeAll rolled everything back; a
+                    committed run is recognised by data_committed and refused a
+                    replay.
+Crash semantics     A crash after writeAll commits leaves data_committed=true, so
+                    the reaper finalizes rather than re-runs; a crash before it
+                    leaves nothing, since the checkpoint is the transaction's last
+                    statement.
+Failure response    reconcile -- finalize the committed run rather than replay it.
+Required tests      Failpoint present: backend/test/integration/mny-import-job.integration.spec.ts
+                    commits writeAll then fails before terminal completion, retries,
+                    and asserts the checkpoint is refused after a reap, the whole
+                    transaction rolls back so nothing is doubled, a legacy
+                    previous-release checkpoint is refused, and a retry claims a
+                    fresh token while the stale worker is fenced.
+Status              enforced
 ```
 
-Worth spelling out how this looked correct. The source comment above `runImport`
-says "The whole write is one transaction, so a failure leaves nothing behind and
-Retry cannot double-import." The first clause is true of `writeAll`. The second
-does not follow from it, because the import is not finished when `writeAll`
-commits -- and the comment's scope ("the whole write") is what makes the
-inference look sound. The numbers:
-
-```text
-Source file transaction:   -25.00
-First attempt commits:     -25.00   writeAll returns, then the worker dies
-Retry re-parses, commits:  -25.00   fresh UUIDs, nothing recognises the first copy
-Resulting effect:          -50.00
-Expected effect:           -25.00
-```
-
-This entry was itself marked `enforced` in an earlier revision of this document,
-on the strength of that comment. It is the catalog's own cautionary tale: a
-status copied from a comment is not a verified status, and CONC-007 exists
-because the mechanism named has to cover the scope claimed. The mechanisms that
-would close it are a `data_committed` checkpoint written in the same transaction
-as the rows, a stable import-run id carried by every imported record, or a
-recovery path that finalizes rather than replays.
-
-Note also that a "start fresh" wipe is applied in `start`, outside the job body,
-so it does not make a retry idempotent: an append-mode import that committed and
-then failed has no wipe to save it.
+This entry was itself marked `enforced` in an earlier revision on the strength of
+a source comment ("The whole write is one transaction, so a failure leaves nothing
+behind and Retry cannot double-import") that was true of `writeAll` alone and not
+of the import, which was not finished when `writeAll` committed. It is now
+genuinely enforced, by the mechanism above rather than the comment -- and it
+remains the catalog's cautionary tale that a status copied from a comment is not a
+verified status. `docs/concurrency-and-idempotency.md` CONC-007 is the rule that a
+named mechanism has to cover the scope claimed; the "Deciding a worker is dead"
+section of `backend/CLAUDE.md` has the fence in full.
 
 ### INV-IMPORT-003 -- a category collision does not abort an import
 
@@ -207,29 +201,29 @@ Statement           accounts.current_balance equals opening balance plus every
                     included, non-void, non-child ledger transaction up to the
                     applicable date.
 Source of truth     transactions, summed; accounts.opening_balance
-Enforcement         None across writers. Three incompatible protocols coexist on
-                    one column:
-                      - atomic delta: updateBalance's
-                        SET current_balance = ROUND(... + $1, 4)
-                      - unlocked absolute recompute: recalculateCurrentBalance,
-                        the hourly applyDueTransactionBalances,
-                        import-post-processing, write-transactions,
-                        action-history.recalculateBalance
-                      - pessimistically locked read-then-write: accounts update,
-                        accounts close
-                    A delta committing between a recompute's SELECT and its
-                    UPDATE is silently discarded.
+Enforcement         Every absolute recompute takes the account lock before reading
+                    the ledger. lockAccountsForBalanceWrite (common/db/locks.ts,
+                    SELECT ... FOR UPDATE, owner-scoped, id-sorted) is taken by
+                    recalculateCurrentBalance, the hourly applyDueTransactionBalances,
+                    import-post-processing, action-history and net-worth before they
+                    recompute, so a delta can no longer commit between a recompute's
+                    read and its write. The atomic delta path (updateBalance) is
+                    unchanged. A VOID transfer moves neither balance
+                    (transaction-transfer.service.ts skips both updateBalance calls).
 Concurrency scope   per account
-Retry semantics     A recompute is idempotent against another recompute and not
-                    against a concurrent delta.
-Failure response    Currently silent divergence -- the worst available.
-Required tests      Two-connection: delta interleaved with recompute, asserting
-                    the delta survives. No such test exists.
-Status              unenforced
+Retry semantics     A recompute is idempotent against another recompute and, under
+                    the lock, against a concurrent delta.
+Failure response    balances reflect every included non-void non-child row.
+Required tests      Source scan: common/db/derived-state-writers.guard.spec.ts --
+                    only sanctioned services write current_balance, and each reads
+                    under a lock. Two-connection (delta interleaved with a recompute,
+                    the delta must survive): backend/test/integration/balance-delta-recompute.integration.spec.ts.
+Status              enforced
 ```
 
-See `docs/concurrency-and-idempotency.md` CONC-003. Also breached by transfers
-created as `VOID`, which update both balances regardless of status.
+See `docs/concurrency-and-idempotency.md` CONC-003. The former secondary breach --
+transfers created as `VOID` moving both balances -- is closed on the create path
+too.
 
 ### INV-HOLDING-001 -- a holding is a deterministic ledger replay
 
@@ -237,17 +231,21 @@ created as `VOID`, which update both balances regardless of status.
 Statement           holdings.quantity and average_cost equal a deterministic
                     replay of that account's investment ledger.
 Source of truth     investment_transactions
-Enforcement         None. Every mutation path (createOrUpdate, updateHolding,
-                    applySplit, reverseSplit, adjustQuantity) is a JavaScript
-                    read-modify-write inside a transaction with no lock and no
-                    atomic delta. UNIQUE(account_id, security_id) prevents
-                    duplicate rows and does nothing about a lost update to one.
+Enforcement         Every mutation path takes an account-scoped advisory lock.
+                    lockHoldingScope (common/db/locks.ts) is taken by
+                    createOrUpdate, updateHolding, applySplit, reverseSplit,
+                    adjustQuantity and rebuild -- advisory rather than a row lock
+                    because a rebuild must serialize against investment_transactions
+                    inserts that no holdings row-lock covers -- so two concurrent
+                    trades on one (account, security) cannot lose an update.
+                    UNIQUE(account_id, security_id) still prevents duplicate rows.
 Concurrency scope   per (account, security)
-Retry semantics     Not idempotent; a lost update is invisible.
-Failure response    Silent divergence from the ledger.
-Required tests      Two-connection: concurrent trades on one holding, replay
-                    compared against the stored row.
-Status              unenforced
+Retry semantics     Serialized by the lock; a lost update cannot occur.
+Failure response    the stored holding equals a deterministic replay of the ledger.
+Required tests      Two-connection (concurrent trades on one holding, the stored
+                    row compared against the replay):
+                    backend/test/integration/holding-concurrent-trades.integration.spec.ts.
+Status              enforced
 ```
 
 ### INV-HOLDING-002 -- every view replays the ledger the same way
@@ -255,49 +253,86 @@ Status              unenforced
 ```text
 Statement           Every surface that derives a share count from the investment
                     ledger must apply each action identically.
-Source of truth     one shared reducer, which does not currently exist
-Enforcement         None, and the paths actively disagree:
-                      - holdings.service.ts multiplies on SPLIT
-                        (qty *= txQty; next = current * quantity) and handles
-                        ADD_SHARES/REMOVE_SHARES
-                      - net-worth.service.ts adds on SPLIT at all three of its
-                        reducers, groups SPLIT with BUY/REINVEST/TRANSFER_IN at
-                        one of them, and handles no ADD_SHARES/REMOVE_SHARES at all
+Source of truth     the shared reducer applyActionToQuantity
+Enforcement         One shared reducer, called by every surface.
+                    applyActionToQuantity (securities/investment-replay.util.ts)
+                    folds each action into the running share count -- multiplying
+                    on SPLIT, with SHARE_MOVING_ACTIONS naming the set -- and both
+                    holdings.service.ts and net-worth.service.ts (all three of its
+                    reducers) call it rather than hand-rolling the fold. The old
+                    disagreement (net-worth adding on SPLIT and omitting
+                    ADD_SHARES/REMOVE_SHARES) is gone.
 Concurrency scope   --
-Failure response    The holdings page and every historical net-worth chart report
-                    different share counts for the same position after any split.
-Required tests      A source-scanning guard failing on any SPLIT branch outside
-                    the shared reducer, plus a fixture asserting both surfaces
-                    agree after a 2:1 split and an ADD_SHARES.
-Status              unenforced
+Failure response    The holdings page and the historical net-worth charts report
+                    one share count for a position after any split.
+Required tests      Source scan: securities/investment-replay.guard.spec.ts fails
+                    on any SPLIT branch computing a quantity outside the reducer,
+                    a hand-listed disposal set, and a `quantity *=` anywhere.
+Status              enforced
 ```
 
-The planned financial-semantics catalog's FIN-003 has the arithmetic: 90 shares at ratio 2.0
-is 180, and the additive form gives 92. This invariant is separate from
-INV-HOLDING-001 on purpose -- that one is about concurrency, this one about two
-implementations of the same rule, and fixing either leaves the other.
+The arithmetic the reducer centralises: 90 shares at ratio 2.0 is 180, and the
+additive form the net-worth reducers once used gave 92. This invariant is separate
+from INV-HOLDING-001 on purpose -- that one is about concurrency, this one about
+two implementations of the same rule.
 
 ### INV-TRANSFER-001 -- both legs, one decision
 
 ```text
-Statement           A transfer's legs share one status, and any balance movement
-                    is decided once for the pair.
+Statement           A transfer's legs share the VOID boundary, and any balance
+                    movement is decided once for the pair. Reconciliation states
+                    (PENDING/CLEARED/RECONCILED) are deliberately per-ledger and
+                    are not mirrored -- only VOID inclusion is shared.
 Source of truth     the two linked transactions rows
-Enforcement         Partial and inconsistent. PATCH /:id/transfer mirrors status
-                    to both legs. PATCH /transactions/:id/status, markCleared,
-                    reconcile and unreconcile touch only the row given -- the
-                    reconciliation service references neither isTransfer nor
-                    linkedTransactionId. Bulk update mirrors payeeId, payeeName
-                    and description but not status. Balances are updated
-                    regardless of status, so a transfer created VOID still moves
-                    both.
+Enforcement         The balance decision is made once per pair, keyed on VOID.
+                    Creating a VOID transfer moves neither balance
+                    (transaction-transfer.service.ts skips both updateBalance
+                    calls when status is VOID). A status edit crossing the VOID
+                    boundary mirrors the counterpart leg and a split parent's
+                    transfer children (applyVoidTransitionToMirrorLeg,
+                    applyParentStatusToTransferCounterparts in
+                    transaction-reconciliation.service.ts). markCleared / reconcile
+                    / unreconcile deliberately do NOT mirror, because a reconcile
+                    state is per-ledger. Guards: deletion-balance.guard.spec.ts,
+                    investment-void-classification.guard.spec.ts,
+                    void-status-transition.util.ts.
 Concurrency scope   per transfer pair
-Failure response    Currently silent imbalance: voiding one leg of a 100.00
-                    transfer makes 1,000.00 across two accounts read as 1,100.00.
-Required tests      Per status-changing endpoint, assert both legs moved and both
-                    balances are consistent. Include the split-transfer variant,
-                    which links through the split parent, not a mirror leg.
-Status              unenforced
+Failure response    consistent balances across the pair on every VOID transition.
+Required tests      Per status-changing path, both legs' balances stay consistent
+                    across a VOID transition, including the split-transfer variant
+                    that links through the split parent rather than a mirror leg.
+Status              enforced
+```
+
+The statement was narrowed on purpose. "Both legs share one status" was too broad:
+a reconcile state is genuinely per-ledger (a cross-owner transfer's two ledgers
+reconcile independently), and only the VOID boundary -- where money either moved
+or did not -- is shared. See `backend/CLAUDE.md`, "Editing one row must not leave
+the pair describing two different events".
+
+### INV-REDEEM-001 -- a redemption's accrued interest moves cash once
+
+```text
+Statement           A REDEEM carrying accrued interest produces exactly one cash
+                    transaction, for proceeds plus interest, and the interest is
+                    counted exactly once as interest income.
+Source of truth     the REDEEM row and its linked INTEREST companion
+Enforcement         disposalCashAmount (securities/accrued-interest.util.ts) is
+                    the only place the two are added; the companion is written
+                    with transaction_id null, so it can produce no second cash
+                    row. accrued-interest.guard.spec.ts fails a hand-rolled
+                    addition elsewhere. The companion is created, statused and
+                    deleted with the redemption inside one withScopedDb.
+Concurrency scope   per redemption pair
+Retry semantics     None needed: create, edit and delete each run in one
+                    transaction, and the companion has no independent write path.
+Crash semantics     Before commit, neither row exists. After commit, both rows
+                    and the single cash row exist. There is no mid-state where a
+                    companion exists without its redemption.
+Failure response    400 before any write for a non-REDEEM action, a negative
+                    value, or a row embedded in a split.
+Required tests      docs/specs/redemption-accrued-interest.md section 6.
+Status              enforced
 ```
 
 ### INV-RECONCILE-001 -- while the strict lock is on, a reconciled transaction is not altered
@@ -329,18 +364,17 @@ Enforcement         assertReconciledRowsMutable / assertReconciledIdsMutable
                     TransactionTransferService.removeTransfer /
                     updateTransfer, TransactionBulkUpdateService.bulkUpdate /
                     bulkDelete, TransactionSplitService.updateSplits / addSplit /
-                    removeSplit. The AI assistant, the MCP tools and the joint
-                    register reach the ledger through these same methods, so they
-                    inherit the refusal rather than needing their own.
-                    NOT covered, and this is why the status is `partial`:
-                    - action-history.service.ts (undo / redo) writes prior field
-                      values straight onto a transaction row. An undo of an older
-                      action can therefore alter a row that has since been
-                      reconciled.
-                    - investment-transactions.service.ts recomputes a split
-                      parent's amount when an embedded investment row changes,
-                      and writes it without consulting the lock.
-                    - The backup restore is deliberately exempt: it rewrites the
+                    removeSplit, ActionHistoryService.undoTransactionUpdate (undo
+                    and redo of a transaction edit) and
+                    InvestmentTransactionsService.updateEmbeddedSplitParent (the
+                    split parent's amount recomputed when an embedded investment
+                    row changes). The last two receive an ambient EntityManager
+                    rather than opening their own withScopedDb, so the guard scans
+                    them with a `beforeWrite` marker -- the assertion must precede
+                    the method's first write. The AI assistant, the MCP tools and
+                    the joint register reach the ledger through these same methods,
+                    so they inherit the refusal rather than needing their own.
+                    The backup restore is deliberately exempt: it rewrites the
                       whole ledger under withPreserveTimestamps, and a
                       per-row refusal there would produce a half-restored
                       database, which is worse than the thing the lock prevents.
@@ -360,11 +394,11 @@ Required tests      Unit: the guard refuses on a reconciled row, allows the same
                     (backend/src/transactions/transaction-reconciliation.service.spec.ts,
                     "the strict reconciled lock"). Source scan: every listed
                     entry point still asks, inside its transaction
-                    (backend/src/transactions/reconciled-lock.guard.spec.ts).
+                    (backend/src/transactions/reconciled-lock.guard.spec.ts),
+                    now including the undo/redo and embedded-investment paths.
                     Still owed: a two-connection test that the refusal holds
-                    against a concurrent write, and coverage of the two
-                    uncovered paths above.
-Status              partial
+                    against a concurrent write.
+Status              enforced
 ```
 
 ### INV-FX-001 -- an unavailable rate is not 1:1
@@ -374,25 +408,27 @@ Statement           A cross-currency value must never become a valid-looking 1:1
                     value, and an unconverted amount must never be returned under
                     the target currency's label.
 Source of truth     exchange_rates
-Enforcement         None at the consumers. The provider layer is honest --
-                    getRateForDate returns null explicitly "so the caller can
-                    reject or flag the operation rather than silently assuming
-                    1.0" -- and the consumers discard that:
-                      portfolio-calculation.service.ts:
-                        rate = reverseRate !== null ? 1 / reverseRate : 1
-                      net-worth.service.ts:
-                        return result ?? amount
+Enforcement         Consumers return null on an absent rate, and accumulate
+                    through FxAggregate. net-worth.service.ts convertCurrency
+                    returns number | null (the `result ?? amount` fallback is
+                    gone); portfolio-calculation.service.ts returns null when
+                    neither direct nor reverse rate exists (the `: 1` else-branch
+                    is gone). A scanning guard, common/fx-fallback.guard.spec.ts,
+                    bans `?? amount` beside a conversion, `rate ... : 1` / `?? 1`,
+                    and an unreviewed `1 / reverse` reciprocal, and asserts each
+                    reviewed reciprocal returns null when neither direction exists.
 Concurrency scope   --
-Failure response    Must be null or an explicitly partial figure, per
+Failure response    null or an explicitly partial figure, per
                     docs/financial-calculation-contract.md section 1.
-Required tests      Unit per call site with the rate absent; a scanning guard
-                    banning a `: 1` else-branch beside a rate lookup and `??
-                    amount` beside a conversion.
-Status              unenforced
+Required tests      Present: common/fx-fallback.guard.spec.ts (the source scan
+                    above) plus the FxAggregate accumulator (common/fx-aggregate.ts)
+                    that names each unresolvable pair rather than absorbing it.
+Status              enforced
 ```
 
-At a real rate of 1.3500, a false 100.00 CAD understates a 135.00 CAD position
-by 35.00 -- and reports it as measured.
+At a real rate of 1.3500, a false 100.00 CAD would understate a 135.00 CAD
+position by 35.00 and report it as measured -- which is what the null return and
+the scan now prevent.
 
 ## Scheduled occurrences
 
@@ -401,25 +437,32 @@ by 35.00 -- and reports it as measured.
 ```text
 Statement           One scheduled occurrence may create at most one financial
                     effect.
-Source of truth     the posted transaction; scheduled_transactions.next_due_date
-Enforcement         None. processAutoPostTransactions (hourly, at minute 5 --
-                    "5 * * * *") reads due schedules by next_due_date <= today,
-                    then posts and advances next_due_date with no row lock, no
-                    CAS on the previous next_due_date, and no unique constraint
-                    on (scheduled_transaction_id, transaction_date). Every
-                    replica fires every cron.
+Source of truth     scheduled_transaction_postings, one row per occurrence
+Enforcement         A durable occurrence key claimed atomically.
+                    processAutoPostTransactions locks the schedule and CAS-checks
+                    next_due_date is still due, then claims the occurrence with
+                    INSERT INTO scheduled_transaction_postings ... ON CONFLICT
+                    (scheduled_transaction_id, original_due_date) DO NOTHING
+                    RETURNING id (scheduled-transactions.service.ts), throwing
+                    ConflictException on a lost claim. The unique index
+                    idx_stp_occurrence (schema.sql, migration 140) is the
+                    database-level backstop, so exactly-once holds regardless of
+                    replica count; the cron treats the ConflictException as
+                    "claimed by another replica".
 Concurrency scope   per (scheduled transaction, occurrence date)
-Retry semantics     Unsafe: a retry cannot tell whether the occurrence posted.
-Crash semantics     A crash between posting and advancing next_due_date reposts
-                    on the next tick.
-Failure response    Should be a durable occurrence key claimed atomically.
-Required tests      Two-instance: two replicas on one tick, exactly one posting.
-Status              unenforced
+Retry semantics     Safe: a re-post is refused by the occurrence claim.
+Crash semantics     A crash between claim and advance leaves the claim row, so the
+                    next tick is refused rather than reposting.
+Failure response    the losing claim gets ConflictException, having posted nothing.
+Required tests      The unique index gives DB-level exactly-once; a two-instance
+                    "two replicas, one posting" integration test is still owed as
+                    the gold-standard proof.
+Status              enforced
 ```
 
-This is `docs/concurrency-and-idempotency.md` CONC-004's canonical case: the
-logical operation key is obvious (`(scheduledTransactionId, occurrenceDate)`) and
-simply is not persisted.
+This was `docs/concurrency-and-idempotency.md` CONC-004's canonical case -- the
+logical operation key `(scheduledTransactionId, occurrenceDate)` that simply was
+not persisted -- and it now is, as scheduled_transaction_postings.
 
 ### INV-OCCURRENCE-002 -- a stored override price survives
 
@@ -427,16 +470,17 @@ simply is not persisted.
 Statement           A stored override price is not replaced by a market quote
                     without an explicit user action.
 Source of truth     scheduled_transaction_overrides.investment_price
-Enforcement         None. OverrideEditorDialog seeds correctly from the stored
-                    value, then an unconditional effect overwrites
-                    investmentPrice whenever the fetched market price differs
-                    from the last seen one, and recomputes the total from it.
+Enforcement         The market-price auto-fill is gated. OverrideEditorDialog
+                    seeds from the stored value and writes the fetched market
+                    price only when investmentPrice is empty (frontend
+                    scheduled-transactions/OverrideEditorDialog.tsx), so a stored
+                    or inherited price is never overwritten by a differing quote.
 Concurrency scope   per occurrence
-Failure response    Ten shares stored at 100.00 return as ten at 120.00 with no
-                    money field touched by the user.
-Required tests      Component: reopen with a stored price and a differing quote,
-                    assert the stored price stands.
-Status              unenforced
+Failure response    a stored ten-at-100.00 stays ten at 100.00 across a reopen.
+Required tests      Present: OverrideEditorDialog.test.tsx -- reopen with a stored
+                    price and a differing quote asserts the stored price stands,
+                    plus the typed-total-before-close case.
+Status              enforced
 ```
 
 ## Authentication and authorization
@@ -447,21 +491,22 @@ Status              unenforced
 Statement           An emergency-access claim token may be consumed successfully
                     exactly once.
 Source of truth     emergency_access_contacts.claim_token_used_at
-Enforcement         None. The in-transaction re-read passes no lock option, and
-                    the consuming write is an entity save by primary key with no
-                    WHERE claim_token_used_at IS NULL. No partial unique index on
-                    unused tokens acts as a backstop. The code beside it uses the
-                    CAS predicate correctly for voiding sibling tokens. The
-                    comment claims re-validation "under lock".
+Enforcement         A single conditional UPDATE consumes the token before any
+                    credential is touched. emergency-access-claim.controller.ts
+                    runs UPDATE ... SET claim_token_used_at = CURRENT_TIMESTAMP
+                    WHERE claim_token_hash = $1 AND claim_token_used_at IS NULL
+                    AND claim_token_expires_at >= CURRENT_TIMESTAMP RETURNING; a
+                    zero-row result is a NotFoundException, so the loser of two
+                    concurrent completes writes nothing and rewrites no password.
 Concurrency scope   per token, per owner
-Retry semantics     Two concurrent completes can both rewrite the owner's
-                    password, to two different hashes, and both return a signed-in
-                    session.
-Failure response    The loser must get 404 or 409, having written nothing --
+Retry semantics     Safe: the second complete finds the token consumed and is
+                    refused.
+Failure response    the loser gets 404, having written nothing --
                     docs/financial-calculation-contract.md section 7.
-Required tests      Two-connection: one token, two concurrent completes, exactly
-                    one success.
-Status              unenforced
+Required tests      Present: emergency-access-claim.controller.spec.ts asserts the
+                    loser (a zero-row consume) is refused. A two-connection test is
+                    the gold-standard proof still owed.
+Status              enforced
 ```
 
 ### INV-AUTH-001 -- refresh rotation
@@ -495,20 +540,27 @@ noticing.
 Statement           A logout that did not revoke the session must not be presented
                     to the user as a completed logout.
 Source of truth     refresh_tokens.is_revoked for the family
-Enforcement         Partial and incidental. The family revoke is an unlocked bulk
-                    UPDATE, which is safe against concurrent writers only because
-                    is_revoked = true is order-independent -- a property of the
-                    value, not a protocol, and one that stops holding the moment
-                    logout writes anything else. Whether a failed revoke surfaces
-                    to the user was reported by the audit as a defect; it was not
-                    located in the current code and is unverified here.
+Enforcement         The handler awaits the revoke before reporting success, and
+                    the revoke is locked. auth.controller.ts logout awaits
+                    revokeRefreshToken (under withSystemContext) before
+                    clearAuthCookies and the success body, with no try/catch, so a
+                    revoke failure propagates and is never presented as a completed
+                    logout. The family revoke takes lockTokenFamily before its
+                    UPDATE (token.service.ts revokeTokenFamily), so it is a real
+                    protocol rather than the value's order-independence.
 Concurrency scope   per token family
 Retry semantics     Safe: setting is_revoked twice is a no-op.
-Failure response    A revoke that failed must not clear the client's session
-                    silently, or the user believes they signed out and did not.
-Required tests      Integration: force the revoke to fail, assert the response is
-                    not a success.
-Status              partial
+Failure response    a failed revoke surfaces as an error, not a cleared session.
+Required tests      Failpoint (the load-bearing kind per docs/verification-contract.md):
+                    backend/test/integration/logout-revoke-failpoint.integration.spec.ts
+                    forces the family-revocation write to fail with a BEFORE UPDATE
+                    trigger and asserts the real revokeRefreshToken rejects and the
+                    family stays live, with a control case proving the same call
+                    revokes when nothing blocks it. Unit (supporting):
+                    auth.controller.spec.ts asserts the controller propagates that
+                    rejection without clearing cookies or emitting the success body.
+                    Still owed: the user-visible E2E assertion.
+Status              enforced
 ```
 
 Split out from INV-AUTH-001 because the two are different properties that happen
@@ -521,20 +573,23 @@ reporting, and conflating them hid the fact that only the first has a mechanism.
 Statement           A failed login attempt increments the counter the lockout
                     threshold reads.
 Source of truth     users.failed_login_attempts
-Enforcement         None. The user is read in one statement, incremented in
-                    JavaScript, and written as an absolute value in a later
-                    statement with no lock. Two concurrent failures lose an
-                    increment. The comment above it reads "Atomically increment
-                    failed attempts".
+Enforcement         An atomic CTE increments in the database. recordFailedAttempt
+                    (auth.service.ts) runs one UPDATE users SET
+                    failed_login_attempts = failed_login_attempts + 1 with the
+                    lockout threshold folded into the same statement -- not a
+                    JavaScript read-modify-write across the bcrypt compare -- so
+                    two concurrent failures cannot lose an increment. The
+                    success-path reset writes a fixed absolute value and was always
+                    safe.
 Concurrency scope   per account
-Failure response    The counter under-counts, so lockout arrives late -- the
-                    direction that favours an attacker.
-Required tests      Two-connection: N concurrent failures, counter equals N.
-Status              unenforced
+Failure response    the counter equals the number of failures; lockout is not
+                    delayed.
+Required tests      Present: auth.service.spec.ts asserts recordFailedAttempt is
+                    the single incrementing statement (matched on
+                    failed_login_attempts + RETURNING). A two-connection "N
+                    concurrent failures, counter equals N" test is still owed.
+Status              enforced
 ```
-
-The reset-on-success path writes a fixed absolute value (`0`, `null`) and is
-therefore safe; only the increment is affected.
 
 ### INV-AUTH-003 -- a destructive OIDC action needs a real round trip
 
@@ -544,21 +599,26 @@ Statement           Restore, delete-account, delete-data and step-up on an OIDC
                     authentication, bound to the user and the action, single-use
                     and short-lived.
 Source of truth     the identity provider
-Enforcement         None. The frontend sends the literal string
-                    'oidc-session-confirmed' and the backend checks only that the
-                    field is truthy; step-up takes a client-asserted
-                    oidcConfirmed boolean. No reauth endpoint exists.
+Enforcement         A signed, single-use, short-lived reauth artifact bound to
+                    the user and action. OidcReauthService.issue mints an HS256
+                    JWT bound to sub + purpose + jti with a 5-minute TTL;
+                    consume verifies signature, type, subject, action and exp,
+                    then claimJti runs INSERT ... ON CONFLICT (jti) DO NOTHING
+                    RETURNING (single-use across replicas), and isFreshAuthentication
+                    requires a real IdP round trip via auth_time. Step-up's
+                    client-asserted boolean is gone (step-up.service.ts calls
+                    oidcReauth.consume). Wired into destructive routes
+                    (users.service.ts, backup-restore.service.ts).
 Concurrency scope   per user, per action
-Failure response    Must be 401 until a valid proof is presented.
-Required tests      Integration: a forged or replayed proof is refused; the
-                    artifact is single-use and expires.
-Status              unenforced
+Failure response    401 until a valid, unspent, unexpired proof is presented.
+Required tests      Present: OidcReauthService specs cover forge/replay/expiry and
+                    the single-use jti claim.
+Status              enforced
 ```
 
-Note that the sentinel string is *asserted by tests* in both the frontend and
-backend suites. Those tests are green and protect the defect --
-`docs/verification-contract.md` section 5, known-wrong tests, covers what to do
-with them.
+The old sentinel string 'oidc-session-confirmed' survives only in comments and
+superseded tests; `docs/verification-contract.md` section 5 (known-wrong tests)
+covers retiring those.
 
 ### INV-ACTIVITY-001 -- activity is attributed to whoever acted
 
@@ -566,17 +626,18 @@ with them.
 Statement           users.last_activity_at records the authenticated user who
                     made the request, never the user they are acting as.
 Source of truth     the authenticated principal (req.user.realUserId)
-Enforcement         None, and the wrong value is passed. The request-context
-                    interceptor resolves both identities -- realUserId is derived
-                    as user?.realUserId ?? userId -- and then calls
-                    touchLastActivity(userId), the effective user. A delegate
-                    browsing an owner's data therefore stamps the owner's
-                    last_activity_at.
+Enforcement         The interceptor stamps the authenticated identity.
+                    request-context.interceptor.ts calls
+                    touchLastActivity(realUserId), where realUserId =
+                    user?.realUserId ?? userId, and the write targets
+                    { id: realUserId } -- so a delegate acting on an owner's data
+                    stamps the delegate's row, not the owner's.
 Concurrency scope   per user
 Failure response    --
-Required tests      Integration: a delegate request updates the delegate's
-                    last_activity_at and leaves the owner's untouched.
-Status              unenforced
+Required tests      Present: request-context.interceptor.spec.ts asserts the
+                    update targets the delegate's id while acting, leaving the
+                    owner's row untouched.
+Status              enforced
 ```
 
 This is not a cosmetic attribution bug. Emergency-access eligibility is computed
@@ -591,23 +652,26 @@ direction that withholds access from the people it exists for.
 Statement           Every user-profile response is built by naming the fields to
                     include, never by removing the fields to hide.
 Source of truth     the User entity
-Enforcement         None. users.controller.ts destructures away exactly four
-                    fields (passwordHash, resetToken, resetTokenExpiry,
-                    twoFactorSecret) and spreads the rest, so
-                    pendingTwoFactorSecret, oidcLinkToken, pendingOidcSubject,
-                    backupPasswordEnc and emailVerificationToken are returned.
-                    The route carries @AllowDelegate().
+Enforcement         An allowlist, not a removal list. users/user-profile.ts
+                    builds every profile response by copying only PROFILE_FIELDS
+                    (typed `satisfies readonly (keyof User)[]`); a new column is
+                    absent by default until someone names it there.
+                    toDelegatedUserProfile additionally drops the owner's
+                    credential-state fields for an acting delegate.
 Concurrency scope   per user, and per delegate
 Failure response    --
-Required tests      A test that fails when any entity column not on the allowlist
-                    appears in the response, so a new column cannot leak by
-                    default.
-Status              unenforced
+Required tests      Present: users/user-profile.spec.ts proves the allowlist is
+                    exact, drops every @Exclude() column (read off
+                    class-transformer metadata via user-profile.test-util.ts's
+                    fullyPopulatedUser with LEAK- sentinels), and source-scans
+                    src/ for a removal-list sanitizer anywhere.
+Status              enforced
 ```
 
-A removal list is wrong structurally, not incidentally: the default for a new
-column is "exposed", so the defect is introduced by a change that never touches
-this file. That the route is delegate-accessible means the leak crosses users.
+A removal list would be wrong structurally: the default for a new column is
+"exposed", so the defect could be introduced by a change that never touches this
+file, and the route is delegate-accessible so the leak would cross users. The
+allowlist inverts that default.
 
 ### INV-MCP-001 -- a session is bound to its credential
 
@@ -615,14 +679,18 @@ this file. That the route is delegate-accessible means the leak crosses users.
 Statement           An MCP session is bound to the specific credential that
                     opened it, and the presented token's current scopes are
                     re-read on every request.
-Enforcement         None. Only the user id is compared, and scopes are captured
-                    once at session creation and never re-read.
+Enforcement         The session is bound to the credential id and scopes are
+                    re-read per request. mcp-http.controller.ts
+                    authorizeExistingSession refuses with 403 unless
+                    sessionUser.credentialId === authResult.credentialId (not just
+                    userId), and re-binds scopes: authResult.scopes on every
+                    request. validatePat runs per request, so a revoked token 401s
+                    immediately rather than at TTL.
 Concurrency scope   per session, per credential
 Failure response    403 on a mismatched credential.
-Required tests      Integration: a read-only token presenting a write-scoped
-                    session id is refused; a revoked token stops working
-                    immediately rather than at TTL.
-Status              unenforced
+Required tests      Present: mcp-http.controller.spec.ts covers the 403
+                    credential-mismatch and session/user-mismatch cases.
+Status              enforced
 ```
 
 ### INV-CURRENCY-001 -- shared currency deletion
@@ -633,24 +701,27 @@ Statement           A shared currency row is deleted only by its creator, and on
                     the schema -- is zero, decided under a lock in the deleting
                     transaction.
 Source of truth     currencies, and every table referencing currency_code
-Enforcement         None sufficient. The authorization check tests
-                    createdByUserId !== null ("is it a system currency") rather
-                    than === userId, so any user who activated another user's
-                    custom currency can trigger its deletion. Both the in-use
-                    checks omit budgets.currency_code and both
-                    exchange_rates.from_currency/to_currency, all real FKs. The
-                    count runs in the caller's tenant scope with no FOR UPDATE on
-                    the currency row.
+Enforcement         Creator-only, on a genuinely global count, under a lock.
+                    CurrenciesService.removeWithin gates the currency-row delete on
+                    createdByUserId === userId (a non-creator deactivates their own
+                    preference but never takes the shared row), locks the currency
+                    row with SELECT ... FOR UPDATE, and asks the SECURITY DEFINER
+                    function currency_code_in_use_globally (migration 137) which
+                    covers every FK including budgets and both exchange_rates
+                    columns -- not the caller's tenant-scoped count.
 Concurrency scope   global -- cross-tenant
-Failure response    403 for a non-creator; 409 while referenced.
-Required tests      A test deriving the reference list from schema.sql so a new
-                    FK cannot be forgotten; two-connection delete-versus-use.
-Status              unenforced
+Failure response    non-creator deactivates without deleting; 409 while referenced.
+Required tests      Present: currency-references.spec.ts derives the reference list
+                    from schema.sql in both directions so a new FK cannot be
+                    forgotten; currencies.service.spec.ts asserts a non-creator's
+                    remove deletes only the preference and never the currency row.
+                    A two-connection delete-versus-use test is still owed.
+Status              enforced
 ```
 
-The tenant-scoped count is the part that gets worse rather than better under
-`RLS_MODE=enforce`: a "global" count that sees only the caller's rows reports
-zero for another user's references.
+The global count is a SECURITY DEFINER function precisely so that under
+`RLS_MODE=enforce` it does not degrade to a tenant-scoped count that sees only the
+caller's rows and reports zero for another user's references.
 
 ## External effects
 
@@ -660,16 +731,24 @@ zero for another user's references.
 Statement           Attachment metadata that a user can see resolves to bytes
                     that are durably present, and no bytes exist without
                     metadata.
-Enforcement         Provider-dependent. The database provider is genuinely atomic
-                    -- its save joins the ambient transaction. Local and S3 write
-                    bytes inside the transaction callback, before the commit, so
-                    a failed commit leaves an orphan that no sweep, no
-                    compensation and no reconciliation job will ever find. The
-                    comment claims joint commit for all providers.
+Enforcement         Ordered so a failure leaves recoverable bytes, never a row
+                    promising absent bytes. attachments.service.ts commits an
+                    upload-intent tombstone on its own connection before the put,
+                    compensates on rollback (storage.delete + clear the intent),
+                    and distinguishes the database provider's joint commit from
+                    external providers via objectWritten. A reconciliation job
+                    exists: attachment-orphan-sweeper.service.ts (hourly, under
+                    withSystemContext) claims tombstones and deletes leased-past
+                    orphaned bytes. Local writes are crash-atomic
+                    (local-storage.provider.ts writeFileAtomic). "No bytes without
+                    metadata" holds eventually rather than instantaneously, which
+                    is what the invariant asks.
 Concurrency scope   per attachment
-Retry semantics     Deletes are idempotent on a missing key; creates are not.
-Crash semantics     Orphaned bytes accumulate silently.
-Status              partial
+Retry semantics     Deletes are idempotent on a missing key; a failed create's
+                    bytes are swept.
+Crash semantics     A transient orphan on rollback is durably recoverable by the
+                    sweeper, not silent.
+Status              enforced
 ```
 
 ### INV-BACKUP-001 -- a backup is complete, verified, owner-namespaced
@@ -677,23 +756,26 @@ Status              partial
 ```text
 Statement           A backup artifact is namespaced by owner, written completely,
                     and verified before it is reported as done.
-Enforcement         Namespacing: enforced. userFolderPath uses
-                    shardedSegments(userId) for <base>/<ab>/<cd>/<userId>/,
-                    because the filenames carry only a tier and a date -- a flat
-                    folder gave every user the same name for the same day and
-                    whoever's cron ran last overwrote the rest. Folder browse and
-                    validate are admin-gated.
-                    Completeness: none. A single fs.writeFile to the final name,
-                    no temp file, no fsync, no rename, no size check, no
-                    checksum; lastBackupStatus is set to success immediately
-                    after. Retention promotes the daily to weekly and monthly
-                    with copyFileSync, so a truncated file propagates. Restore
-                    validates only the version number and exportedAt.
+Enforcement         Namespacing: userFolderPath uses shardedSegments(userId) for
+                    <base>/<ab>/<cd>/<userId>/, because the filenames carry only a
+                    tier and a date; browse and validate are admin-gated.
+                    Completeness: writeFileAtomic (atomic-file.ts) writes to a temp
+                    file, fsyncs, size-checks, then renames and fsyncs the dir, and
+                    refuses to publish a short file; promotions use copyFileAtomic
+                    with a size check, not copyFileSync. The durable completeness
+                    verdict lives inside the document (completeness in the envelope,
+                    backup-format.ts, reached from digests) and restore refuses an
+                    artifact whose completeness.complete is false. Encrypted
+                    artifacts are truncation-authenticated frame-by-frame
+                    (backup-envelope.ts). lastBackupStatus reflects the outcome
+                    (complete vs partial), not an unconditional success.
 Concurrency scope   per user
-Crash semantics     A kill or ENOSPC mid-write leaves a truncated file under the
-                    expected name, indistinguishable from a complete one.
-Required tests      Provider round trip: write, truncate, assert restore refuses.
-Status              partial
+Crash semantics     A kill or ENOSPC mid-write leaves the temp file, never a
+                    truncated final name -- the rename is the publish.
+Required tests      Present: atomic-file.spec.ts and auto-backup.service.spec.ts
+                    use a real mkdtemp; backup.service.spec.ts asserts restore
+                    honours the artifact's own completeness claim.
+Status              enforced
 ```
 
 Encryption is settled and worth not re-litigating: a support backup is
@@ -706,22 +788,24 @@ than written in clear.
 ```text
 Statement           A scheduled job produces one logical effect per tick,
                     regardless of replica count.
-Enforcement         Per job, and inconsistent. Real mechanisms: the MNY reaper's
-                    conditional CAS; the price and FX refreshes' natural-key
-                    ON CONFLICT ... DO UPDATE; sweeps that are idempotent by
-                    construction because the predicate is "already expired". No
-                    mechanism: scheduled auto-posting (INV-OCCURRENCE-001);
-                    budget-period rollover, where UNIQUE(budget_id, period_start)
-                    is the only backstop and the loser's violation is swallowed
-                    by a per-budget try/catch that increments an error count;
-                    demo reset, which can interleave one run's delete with
-                    another's insert; the account-balance recompute, idempotent
-                    against itself but not against a concurrent delta.
-                    AI insight generation guards with a process-local Set, which
-                    coordinates one replica with itself and nothing across
-                    replicas.
+Enforcement         Per job, and now mostly a durable cross-replica claim.
+                    common/jobs/job-claim.service.ts provides claimOnce (INSERT ...
+                    ON CONFLICT DO NOTHING RETURNING) and claimLease/markDelivered
+                    (at-least-once with a lease token + migration-143 fence). The
+                    jobs previously unguarded are guarded: scheduled auto-posting
+                    (INV-OCCURRENCE-001, occurrence-key claim), budget rollover
+                    (ON CONFLICT (budget_id, period_start) DO NOTHING RETURNING with
+                    the loser re-reading the winner), AI insight generation
+                    (claimLease, not a process-local Set), demo reset (claimLease).
+                    The MNY reaper's conditional CAS and the price/FX refreshes'
+                    natural-key ON CONFLICT were already real.
+                    Still partial: the account-balance recompute is idempotent
+                    against itself and, under INV-BALANCE-001's lock, against a
+                    concurrent delta -- but per-job two-instance test coverage is
+                    not demonstrably complete across every job.
 Concurrency scope   per job, per logical key
-Required tests      Two-instance per job. Only the MNY job has one.
+Required tests      Two-instance per job. The MNY job has one; the others rely on
+                    the claim layer's unit coverage and are still owed theirs.
 Status              partial
 ```
 
@@ -738,43 +822,48 @@ Statement           Under RLS_MODE=enforce the application refuses to serve
                     traffic on a role that can bypass row-level security --
                     including membership reachable via SET ROLE, not only the
                     role's own attributes.
-Enforcement         None. No startup check exists; no pg_has_role or rolbypassrls
-                    interrogation appears anywhere in backend/src. app-role.ts
-                    provisions and grants but never asks what the connecting role
-                    actually is.
+Enforcement         A single classifier refuses a privileged role at startup.
+                    common/db/runtime-role-check.ts (assertRuntimeRoleSafe) reads
+                    pg_roles for rolsuper/rolbypassrls/rolreplication/rolcreaterole/
+                    rolcreatedb, database ownership, owned policied tables,
+                    SET ROLE-reachable exempt contexts, inherited owner roles and
+                    forbidden predefined-role memberships (pg_has_role, transitive).
+                    Wired at both call sites: main.ts about its own connection
+                    (process exit on violation -- "refuse to boot") and db-init.ts
+                    about the configured role by name (assertRuntimeRoleSafeByName).
 Concurrency scope   global, at startup
 Failure response    Refuse to boot.
-Required tests      Integration against a superuser and a BYPASSRLS role, and
-                    against a role that merely inherits membership in an exempt
-                    one.
-Status              unenforced
+Required tests      Present: runtime-role-check.spec.ts (unit, incl. superuser,
+                    BYPASSRLS and inherited-membership cases) and a live-catalog
+                    integration spec.
+Status              enforced
 ```
 
-This is the backstop for the entire RLS design: if enforced mode is ever switched
-on with a misconfigured role, nothing notices. It is latent rather than
-exploitable at the `RLS_MODE=off` default -- and the same condition applies to
-delegation's cross-user lookups, which run in the caller's tenant scope today and
-would silently return zero rows under enforcement.
-
-Related and also absent: `db-init` and `db-migrate` are not serialized across
-replicas by an advisory lock, so each pod decides independently from its own read
-of `schema_migrations`.
+This is the backstop for the entire RLS design: if enforced mode is switched on
+with a misconfigured role, startup now refuses rather than serving silently. Two
+adjacent items are their own concerns, not this invariant's: delegation's
+cross-user lookups (a candidate below) and whether `db-init` / `db-migrate` are
+serialized across replicas -- `common/db/advisory-locks.ts` now exists and that
+sub-point warrants its own re-check.
 
 ### INV-CACHE-001 -- a money-moving write invalidates its caches
 
 ```text
 Statement           A write that changes money invalidates every client cache
                     family derived from transactions.
-Enforcement         None. invalidateBalanceCaches drops the 'accounts:' and
-                    'investments:' prefixes only; 'budgets:' is a live prefix and
-                    is not dropped.
+Enforcement         invalidateBalanceCaches (frontend lib/apiCache.ts) drops the
+                    accounts:, investments: AND budgets: prefixes -- every
+                    transaction-derived family. The cache layer is frontend, which
+                    is why the function name does not appear in backend/src.
 Concurrency scope   per browser tab
-Failure response    A saved transaction leaves the budget progress bar showing
-                    the pre-write figure for up to the cache TTL.
-Required tests      A classification guard requiring every cache prefix in src/
-                    to declare itself transaction-derived or reference data, so a
-                    new family cannot default to stale.
-Status              unenforced
+Failure response    a saved transaction drops the budget cache, so the progress
+                    bar reflects the write.
+Required tests      Present: frontend cache-prefix-classification.guard.test.ts
+                    requires every cache prefix to declare itself transaction-
+                    derived (and be dropped) or reference-data (and be kept), so a
+                    new family cannot default to stale; balance-cache.guard.test.ts
+                    requires every balance-writing API method to invalidate.
+Status              enforced
 ```
 
 ### INV-RELEASE-001 -- one revision

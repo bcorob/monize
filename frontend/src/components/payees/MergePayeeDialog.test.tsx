@@ -25,6 +25,8 @@ const sourcePayee: Payee = {
   defaultCategory: null,
   notes: null,
   website: null,
+  hasLogo: false,
+  logoFetchedAt: null,
   isActive: true,
   createdAt: '2025-01-01',
   transactionCount: 5,
@@ -38,6 +40,8 @@ const targetPayee: Payee = {
   defaultCategory: { id: 'c1', name: 'Food & Drink' } as any,
   notes: null,
   website: null,
+  hasLogo: false,
+  logoFetchedAt: null,
   isActive: true,
   createdAt: '2025-01-01',
 };

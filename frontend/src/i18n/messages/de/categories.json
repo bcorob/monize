@@ -58,6 +58,8 @@
     "colourInherit": "Von übergeordneter Kategorie übernehmen",
     "colourNone": "Keine Farbe",
     "colourInheritedFrom": "Farbe von übergeordneter Kategorie übernommen ({name})",
+    "iconLabel": "Symbol",
+    "iconNone": "Kein Symbol",
     "descriptionLabel": "Beschreibung (optional)",
     "submitCreate": "Kategorie erstellen",
     "submitUpdate": "Kategorie aktualisieren"

@@ -18,7 +18,7 @@ import { UnsavedChangesDialog } from '@/components/ui/UnsavedChangesDialog';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { payeesApi } from '@/lib/payees';
 import { categoriesApi } from '@/lib/categories';
-import { buildCategoryColorMap, buildCategoryLabelMap } from '@/lib/categoryUtils';
+import { buildCategoryColorMap, buildCategoryIconMap, buildCategoryLabelMap } from '@/lib/categoryUtils';
 import { MergePayeeDialog } from '@/components/payees/MergePayeeDialog';
 import { Payee, PayeeStatusFilter, PayeeCategoryFilter } from '@/types/payee';
 import { Category } from '@/types/category';
@@ -27,6 +27,7 @@ import { PageLayout } from '@/components/layout/PageLayout';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { SummaryCard, SummaryIcons } from '@/components/ui/SummaryCard';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { CARD_CLASS } from '@/components/ui/Card';
 import { useFormModal } from '@/hooks/useFormModal';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { createLogger } from '@/lib/logger';
@@ -147,6 +148,7 @@ function PayeesContent() {
   };
 
   const categoryColorMap = useMemo(() => buildCategoryColorMap(categories), [categories]);
+  const categoryIconMap = useMemo(() => buildCategoryIconMap(categories), [categories]);
   const categoryLabelMap = useMemo(() => buildCategoryLabelMap(categories), [categories]);
 
   // Payees that have a default category set but still have uncategorized
@@ -426,7 +428,7 @@ function PayeesContent() {
         <UnsavedChangesDialog {...unsavedChangesDialog} />
 
         {/* Payees List */}
-        <div className="bg-white dark:bg-gray-800 shadow dark:shadow-gray-700/50 rounded-lg overflow-hidden">
+        <div className={`${CARD_CLASS} overflow-hidden`}>
           {isLoading ? (
             <LoadingSpinner text={t('page.loading')} />
           ) : (
@@ -442,6 +444,7 @@ function PayeesContent() {
               sortDirection={sortDirection}
               onSort={handleSort}
               categoryColorMap={categoryColorMap}
+              categoryIconMap={categoryIconMap}
               categoryLabelMap={categoryLabelMap}
               highlightId={highlightId}
             />
