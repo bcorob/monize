@@ -457,7 +457,7 @@ identifies the whole family, and it is the only reliable handle on it.
 | `dPrice` | Price per unit |
 | `qty` | Quantity, always positive |
 | `amtCmn` | Commission |
-| `amtInt` | Accrued interest. Read on `act` 30 only, where it is taken out of `TRN.amt` and written as the redemption's linked INTEREST transaction (`docs/specs/redemption-accrued-interest.md`) |
+| `amtInt` | Accrued interest. On `act` 30 it is taken out of the gross `TRN.amt`; Money Plus can also store a Redeem CD/Bond activity as `act` 2 with `TRN.amt` already equal to proceeds. Both become a REDEEM with a linked INTEREST transaction (`docs/specs/redemption-accrued-interest.md`). |
 
 ## TRN_SPLIT (split children)
 

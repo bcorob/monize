@@ -4,9 +4,10 @@ import { InvestmentAction } from "./entities/investment-transaction.entity";
 /**
  * The actions that may carry accrued interest.
  *
- * REDEEM only. A bond sold between coupon dates accrues interest too, but
- * Microsoft Money emits it only on `act` 30 (Redeem CD/Bond), so a SELL field
- * would be a manual-entry-only path with no import evidence behind it. See
+ * REDEEM only in Monize's stored model and public API. Microsoft Money Plus can
+ * encode a register activity displayed as "Redeem CD/Bond" as SELL plus a
+ * positive `TRN_INV.amtInt`; the importer normalizes that measured variant to
+ * REDEEM before it reaches this boundary. See
  * `docs/specs/redemption-accrued-interest.md` section 1.2.
  */
 export const ACCRUED_INTEREST_ACTIONS: ReadonlySet<InvestmentAction> = new Set([

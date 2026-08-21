@@ -561,7 +561,10 @@ describe("a redemption whose interest Money put in a sibling split leg", () => {
   const INTEREST = 87.5;
   const PAYOUT = PRINCIPAL + INTEREST;
 
-  const redemptionRows = (legs: { amount: number; handle: number }[]) =>
+  const redemptionRows = (
+    legs: { amount: number; handle: number }[],
+    trade: { action?: number; amount?: number } = {},
+  ) =>
     transactionData({
       transactions: [
         mnyTransaction({ handle: 20, account: SLEEVE, amount: PAYOUT }),
@@ -575,9 +578,9 @@ describe("a redemption whose interest Money put in a sibling split leg", () => {
         mnyTransaction({
           handle: 23,
           account: BROKERAGE,
-          amount: PAYOUT,
+          amount: trade.amount ?? PAYOUT,
           security: SECURITY,
-          action: MNY_ACTION.REDEEM_CD_BOND,
+          action: trade.action ?? MNY_ACTION.REDEEM_CD_BOND,
         }),
       ],
       splits: legs.map((leg, position) =>
@@ -645,6 +648,39 @@ describe("a redemption whose interest Money put in a sibling split leg", () => {
       cashAmount: 0,
       cashAccountKey: null,
     });
+  });
+
+  it("collapses the SELL-shaped redemption variant from a real Money file", () => {
+    const { banking, investments, sleeveRows, balances } = mapAll(
+      redemptionRows(
+        [
+          { handle: 21, amount: PRINCIPAL },
+          { handle: 22, amount: INTEREST },
+        ],
+        { action: MNY_ACTION.SELL, amount: -PRINCIPAL },
+      ),
+      redemptionDetail,
+    );
+
+    const parent = banking.transactions.find((row) => row.handle === 20);
+    expect(parent).toMatchObject({
+      amount: PAYOUT,
+      splits: [],
+      collapsedTradeHandle: 23,
+    });
+    expect(
+      investments.transactions.find(
+        (row) => row.action === InvestmentAction.REDEEM,
+      ),
+    ).toMatchObject({
+      accruedInterest: INTEREST,
+      totalAmount: PRINCIPAL,
+      cashAmount: PAYOUT,
+      cashTransactionId: parent?.id,
+      transactionSplitId: null,
+    });
+    expect(sleeveRows).toHaveLength(1);
+    expect(balances.get("acct-6")).toBe(SLEEVE_OPENING + PAYOUT);
   });
 
   it("keeps a split whose sibling is not the accrued interest", () => {

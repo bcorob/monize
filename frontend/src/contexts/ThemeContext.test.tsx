@@ -1,13 +1,23 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
 import { renderHook } from '@testing-library/react';
+import Cookies from 'js-cookie';
 import { ThemeProvider, useTheme } from '@/contexts/ThemeContext';
+import { THEME_SWATCHES } from '@/lib/theme-swatches';
+
+vi.mock('js-cookie', () => ({
+  default: { set: vi.fn(), get: vi.fn(), remove: vi.fn() },
+}));
 
 describe('ThemeContext', () => {
   beforeEach(() => {
     localStorage.clear();
+    vi.mocked(Cookies.set).mockClear();
     document.documentElement.classList.remove('dark');
     document.documentElement.removeAttribute('data-theme');
+    document
+      .querySelectorAll('meta[name="theme-color"]')
+      .forEach((el) => el.remove());
     vi.mocked(window.matchMedia).mockImplementation((query: string) => ({
       matches: false,
       media: query,
@@ -235,6 +245,61 @@ describe('ThemeContext', () => {
       changeHandler?.();
     });
     expect(result.current.resolvedTheme).toBe('dark');
+  });
+
+  it('mirrors the resolved theme and palette into cookies for the boot surfaces', () => {
+    const { result } = renderHook(() => useTheme(), { wrapper: ThemeProvider });
+
+    expect(Cookies.set).toHaveBeenCalledWith('monize-resolved-theme', 'light', {
+      sameSite: 'lax',
+      expires: 365,
+    });
+    expect(Cookies.set).toHaveBeenCalledWith('monize-color-theme', 'default', {
+      sameSite: 'lax',
+      expires: 365,
+    });
+
+    act(() => {
+      result.current.setTheme('dark');
+    });
+    expect(Cookies.set).toHaveBeenCalledWith('monize-resolved-theme', 'dark', {
+      sameSite: 'lax',
+      expires: 365,
+    });
+
+    act(() => {
+      result.current.setColorTheme('nord');
+    });
+    expect(Cookies.set).toHaveBeenCalledWith('monize-color-theme', 'nord', {
+      sameSite: 'lax',
+      expires: 365,
+    });
+  });
+
+  it('pins the theme-color metas to the active palette page colour', () => {
+    const meta = document.createElement('meta');
+    meta.name = 'theme-color';
+    meta.content = '#ffffff';
+    document.head.appendChild(meta);
+
+    const { result } = renderHook(() => useTheme(), { wrapper: ThemeProvider });
+    expect(meta.getAttribute('content')).toBe(THEME_SWATCHES.default.light.page);
+
+    act(() => {
+      result.current.setColorTheme('nord');
+    });
+    expect(meta.getAttribute('content')).toBe(THEME_SWATCHES.nord.light.page);
+
+    act(() => {
+      result.current.setTheme('dark');
+    });
+    expect(meta.getAttribute('content')).toBe(THEME_SWATCHES.nord.dark.page);
+  });
+
+  it('creates a theme-color meta when none was rendered', () => {
+    renderHook(() => useTheme(), { wrapper: ThemeProvider });
+    const meta = document.querySelector('meta[name="theme-color"]');
+    expect(meta?.getAttribute('content')).toBe(THEME_SWATCHES.default.light.page);
   });
 
   it('does not change resolvedTheme on system change when in non-system mode', () => {

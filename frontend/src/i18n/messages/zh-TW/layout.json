@@ -135,5 +135,15 @@
   "pageHeader": {
     "helpAriaLabel": "開啟 Monize Wiki 以取得此區段的說明",
     "helpTooltip": "開啟 Monize Wiki 以取得此區段的說明"
+  },
+  "bootSplash": {
+    "loading": "正在載入 Monize",
+    "slowMessage": "載入時間比預期長。請檢查您的網路連線。",
+    "reload": "重新載入應用程式"
+  },
+  "offlineFallback": {
+    "title": "無法連線",
+    "message": "Monize 無法連線至伺服器。請檢查您的網路連線後再試一次。",
+    "retry": "再試一次"
   }
 }

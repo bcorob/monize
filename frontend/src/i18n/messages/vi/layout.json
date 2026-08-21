@@ -135,5 +135,15 @@
   "pageHeader": {
     "helpAriaLabel": "Mở wiki Monize để được trợ giúp về phần này",
     "helpTooltip": "Mở wiki Monize để được trợ giúp về phần này"
+  },
+  "bootSplash": {
+    "loading": "Đang tải Monize",
+    "slowMessage": "Quá trình này lâu hơn dự kiến. Hãy kiểm tra kết nối của bạn.",
+    "reload": "Tải lại ứng dụng"
+  },
+  "offlineFallback": {
+    "title": "Không thể kết nối",
+    "message": "Monize không thể kết nối đến máy chủ. Hãy kiểm tra kết nối của bạn và thử lại.",
+    "retry": "Thử lại"
   }
 }

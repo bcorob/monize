@@ -1,7 +1,13 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import Cookies from 'js-cookie';
 import { ColorTheme, isColorTheme } from '@/lib/color-themes';
+import {
+  COLOR_THEME_COOKIE,
+  RESOLVED_THEME_COOKIE,
+  bootPageColor,
+} from '@/lib/pwa-theme';
 
 type Theme = 'light' | 'dark' | 'system';
 
@@ -71,7 +77,10 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     return () => mediaQuery.removeEventListener('change', handleChange);
   }, [theme]);
 
-  // Apply dark class to html element
+  // Apply dark class to html element, and mirror the resolved theme into a
+  // cookie so the server-rendered boot surfaces (the dark class layout.tsx
+  // stamps pre-hydration, the PWA manifest's splash palette) can read it --
+  // they paint before this provider mounts and cannot see localStorage.
   useEffect(() => {
     if (!mounted) return;
 
@@ -81,9 +90,15 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     } else {
       root.classList.remove('dark');
     }
+    Cookies.set(RESOLVED_THEME_COOKIE, resolvedTheme, {
+      sameSite: 'lax',
+      expires: 365,
+    });
   }, [resolvedTheme, mounted]);
 
-  // Apply data-theme attribute to html element ('default' = no attribute)
+  // Apply data-theme attribute to html element ('default' = no attribute),
+  // and mirror the palette into a cookie for the same server-rendered boot
+  // surfaces the resolved-theme cookie serves.
   useEffect(() => {
     if (!mounted) return;
 
@@ -93,7 +108,31 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     } else {
       root.setAttribute('data-theme', colorTheme);
     }
+    Cookies.set(COLOR_THEME_COOKIE, colorTheme, {
+      sameSite: 'lax',
+      expires: 365,
+    });
   }, [colorTheme, mounted]);
+
+  // Keep the theme-color meta on the active palette's page colour so the
+  // browser / installed-PWA chrome follows both the mode and the palette.
+  // The SSR metas are media-split on the system preference, which is wrong
+  // once the user forces a mode, so every tag is pinned to the resolved
+  // colour rather than left to the media query.
+  useEffect(() => {
+    if (!mounted) return;
+
+    const page = bootPageColor(colorTheme, resolvedTheme);
+    const metas = document.querySelectorAll('meta[name="theme-color"]');
+    if (metas.length === 0) {
+      const meta = document.createElement('meta');
+      meta.name = 'theme-color';
+      meta.content = page;
+      document.head.appendChild(meta);
+    } else {
+      metas.forEach((el) => el.setAttribute('content', page));
+    }
+  }, [resolvedTheme, colorTheme, mounted]);
 
   const setTheme = (newTheme: Theme) => {
     setThemeState(newTheme);

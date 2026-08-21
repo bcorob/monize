@@ -38,6 +38,7 @@ describe("readMnyTables", () => {
     money2002: ["CRNC.hidden"],
     money2008: [],
     money2008Pwd: [],
+    sampleCdRedemption: [],
   };
 
   it.each(ALL_FIXTURES)("resolves the expected columns for %s", (fixture) => {

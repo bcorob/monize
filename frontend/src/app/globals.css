@@ -90,7 +90,7 @@ html {
   @apply bg-gray-50;
 }
 
-.dark html {
+html.dark {
   @apply bg-gray-900;
 }
 

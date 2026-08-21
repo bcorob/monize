@@ -516,14 +516,53 @@ describe("mapInvestments", () => {
       });
     });
 
-    it("leaves accrued interest on a non-redemption alone", () => {
+    it("maps SELL with amtInt as Money's split redemption variant", () => {
+      const result = mapInvestments(
+        input({
+          transactions: transactionData({
+            transactions: [
+              invRow({
+                handle: 1,
+                action: MNY_ACTION.SELL,
+                amount: -1234.56,
+              }),
+            ],
+          }),
+          investments: investmentData({
+            investmentDetails: [
+              mnyInvestmentDetail({
+                transaction: 1,
+                quantity: 1234.56,
+                price: 1,
+                interest: 5.44,
+              }),
+            ],
+          }),
+        }),
+      );
+
+      expect(result.transactions).toHaveLength(2);
+      expect(result.transactions[0]).toMatchObject({
+        action: InvestmentAction.REDEEM,
+        accruedInterest: 5.44,
+        totalAmount: 1234.56,
+        cashAmount: 1240.00,
+      });
+      expect(result.transactions[1]).toMatchObject({
+        action: InvestmentAction.INTEREST,
+        totalAmount: 5.44,
+        cashAmount: 0,
+      });
+    });
+
+    it("leaves accrued interest on a non-disposal alone", () => {
       // Money records amtInt on other detail rows too, but no other action
       // pays it out, so nothing may invent an interest row from it.
       const result = mapInvestments(
         input({
           transactions: transactionData({
             transactions: [
-              invRow({ handle: 1, action: MNY_ACTION.SELL, amount: 500 }),
+              invRow({ handle: 1, action: MNY_ACTION.BUY, amount: -500 }),
             ],
           }),
           investments: investmentData({
@@ -541,9 +580,9 @@ describe("mapInvestments", () => {
 
       expect(result.transactions).toHaveLength(1);
       expect(result.transactions[0]).toMatchObject({
-        action: InvestmentAction.SELL,
+        action: InvestmentAction.BUY,
         totalAmount: 500,
-        cashAmount: 500,
+        cashAmount: -500,
       });
     });
 

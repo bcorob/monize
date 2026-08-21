@@ -76,6 +76,7 @@ credentials/
 *.docx
 *.pdf
 *.mny
+!backend/src/import/mny/__fixtures__/sample*.mny
 
 # Claude Code
 .claude/worktrees/

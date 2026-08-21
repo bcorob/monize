@@ -8,10 +8,12 @@ import { createLogger } from '@/lib/logger';
 
 const logger = createLogger('PwaLifecycle');
 
-// If the PWA was hidden longer than this, force a hard reload on resume.
+// If the PWA was hidden longer than this, re-validate the session on resume.
 // iOS frequently keeps the WebView alive in BFCache, which can leave the
-// app stuck on the splash screen with stale auth state when the session
-// has expired. A hard reload guarantees a clean boot.
+// app showing stale authenticated state when the session has expired; a
+// resume past this threshold (or any BFCache restore) re-checks the profile
+// and, only when that check comes back an auth failure, forces a hard
+// replace to /login for a clean boot.
 const STALE_THRESHOLD_MS = 5 * 60 * 1000;
 
 export function PwaLifecycleHandler() {

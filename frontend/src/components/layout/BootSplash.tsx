@@ -1,0 +1,123 @@
+import { BOOT_BACKGROUND, BOOT_FOREGROUND, type ResolvedTheme } from '@/lib/pwa-theme';
+
+export const BOOT_SPLASH_ID = 'monize-boot-splash';
+
+// How long the boot screen waits before admitting something is wrong. Long
+// enough that a slow-but-working boot never shows it, short enough that a
+// user staring at a hung PWA gets a way out without force-closing the app.
+const SLOW_REVEAL_SECONDS = 12;
+
+export interface BootSplashStrings {
+  loading: string;
+  slowMessage: string;
+  reload: string;
+}
+
+interface BootSplashProps {
+  // The resolved theme from the monize-resolved-theme cookie, or null when
+  // the cookie is absent -- in which case the palette follows the system
+  // preference via prefers-color-scheme.
+  bootTheme: ResolvedTheme | null;
+  strings: BootSplashStrings;
+}
+
+// The first thing the server paints, rendered in the root layout *outside*
+// ThemeProvider. ThemeProvider returns null until it has read localStorage,
+// so everything inside it ships as an empty body and nothing paints until
+// the full JS bundle has loaded, hydrated and mounted -- on a flaky network
+// that is an indefinite blank screen, which in the installed PWA is
+// indistinguishable from being stuck on the OS splash. This overlay paints
+// immediately with zero JS, and after SLOW_REVEAL_SECONDS a pure-CSS delayed
+// animation reveals a reload link so a hung boot always leaves the user an
+// exit that is not force-closing the app. BootSplashHider hides it (never
+// detaches it -- this node is React-owned) once the app tree has actually
+// mounted.
+//
+// Everything here is self-contained (inline styles, no app CSS, no JS) so it
+// still works when static assets are unreachable. The colours read the
+// palette tokens (layout.tsx stamps data-theme from the cookie, so the
+// active colour theme's ramp is live before hydration) and fall back to the
+// stock palette when the app stylesheet never arrived.
+export function BootSplash({ bootTheme, strings }: BootSplashProps) {
+  const darkRules =
+    `background: var(--color-gray-900, ${BOOT_BACKGROUND.dark}); ` +
+    `color: var(--color-gray-100, ${BOOT_FOREGROUND.dark});`;
+  const css = `
+#${BOOT_SPLASH_ID} {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  padding: calc(env(safe-area-inset-top) + 16px) 24px calc(env(safe-area-inset-bottom) + 16px);
+  text-align: center;
+  font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+  background: var(--color-gray-50, ${BOOT_BACKGROUND.light});
+  color: var(--color-gray-900, ${BOOT_FOREGROUND.light});
+}
+html.dark #${BOOT_SPLASH_ID} { ${darkRules} }
+@media (prefers-color-scheme: dark) {
+  #${BOOT_SPLASH_ID}[data-boot-theme='system'] { ${darkRules} }
+}
+#${BOOT_SPLASH_ID} .boot-splash-logo { width: 72px; height: 72px; }
+#${BOOT_SPLASH_ID} .boot-splash-spinner {
+  width: 28px;
+  height: 28px;
+  border-radius: 9999px;
+  border: 3px solid currentColor;
+  border-top-color: transparent;
+  opacity: 0.4;
+  animation: monize-boot-spin 0.9s linear infinite;
+}
+#${BOOT_SPLASH_ID} .boot-splash-slow {
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  bottom: calc(env(safe-area-inset-bottom) + 48px);
+  font-size: 14px;
+  line-height: 1.5;
+  opacity: 0;
+  visibility: hidden;
+  animation: monize-boot-reveal 0.4s ease-out ${SLOW_REVEAL_SECONDS}s forwards;
+}
+#${BOOT_SPLASH_ID} .boot-splash-slow a {
+  color: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+}
+@keyframes monize-boot-spin { to { transform: rotate(360deg); } }
+@keyframes monize-boot-reveal { to { opacity: 1; visibility: visible; } }
+@media (prefers-reduced-motion: reduce) {
+  #${BOOT_SPLASH_ID} .boot-splash-spinner { display: none; }
+}
+`;
+
+  return (
+    <div
+      id={BOOT_SPLASH_ID}
+      data-boot-theme={bootTheme ?? 'system'}
+      role="status"
+      aria-label={strings.loading}
+    >
+      <style>{css}</style>
+      {/* eslint-disable-next-line @next/next/no-img-element -- next/image needs
+          the JS runtime; this overlay must render before (or without) it */}
+      <img
+        src="/icons/monize-logo-transparent.svg"
+        alt=""
+        className="boot-splash-logo"
+      />
+      <div className="boot-splash-spinner" aria-hidden="true" />
+      <p className="boot-splash-slow">
+        {strings.slowMessage}{' '}
+        {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- a
+            plain anchor is the point: this link exists for when the JS
+            runtime never arrived, so it cannot depend on next/link */}
+        <a href="/">{strings.reload}</a>
+      </p>
+    </div>
+  );
+}

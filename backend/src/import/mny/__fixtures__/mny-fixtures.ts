@@ -25,6 +25,10 @@ const FIXTURES = {
     password: "Test12345",
     tableCount: 83,
   },
+  sampleCdRedemption: {
+    file: "sample-cd-redemption.mny",
+    tableCount: 83,
+  },
 } as const;
 
 export type MnyFixtureName = keyof typeof FIXTURES;

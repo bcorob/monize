@@ -68,7 +68,13 @@ describe('AuthLanguagePicker', () => {
       fireEvent.change(getSelect(), { target: { value: 'en' } });
     });
 
-    expect(Cookies.set).not.toHaveBeenCalled();
+    // ThemeProvider (in the test wrapper) writes its own boot-surface
+    // cookies on mount, so the assertion is scoped to the locale cookie.
+    expect(Cookies.set).not.toHaveBeenCalledWith(
+      'NEXT_LOCALE',
+      expect.anything(),
+      expect.anything(),
+    );
     expect(sessionStorage.getItem('preLoginLocale')).toBeNull();
     expect(mockRefresh).not.toHaveBeenCalled();
   });

@@ -1358,7 +1358,7 @@ describe("mny writers (integration)", () => {
     }
 
     async function runImport(
-      fixture: "money2002" | "money2008",
+      fixture: "money2002" | "money2008" | "sampleCdRedemption",
       options?: Parameters<typeof importService.start>[1]["options"],
     ) {
       const staged = await withUserContext(userId, () =>
@@ -1665,6 +1665,62 @@ describe("mny writers (integration)", () => {
      * along with their price history.
      */
     describe("investments", () => {
+      it("imports a CD redemption with accrued interest as one activity", async () => {
+        const job = await runImport("sampleCdRedemption");
+
+        expect(job.status).toBe("completed");
+        const security = await dataSource
+          .getRepository(Security)
+          .findOneByOrFail({ userId, name: "Sample 3-month CD" });
+        const rows = await dataSource
+          .getRepository(InvestmentTransaction)
+          .find({
+            where: { userId, securityId: security.id },
+            order: { transactionDate: "ASC", createdAt: "ASC" },
+          });
+
+        expect(rows).toHaveLength(6);
+        expect(
+          rows.slice(0, 4).map((row) => ({
+            action: row.action,
+            quantity: row.quantity,
+            totalAmount: row.totalAmount,
+          })),
+        ).toEqual([
+          { action: "BUY", quantity: 5000, totalAmount: 5000 },
+          { action: "REINVEST_INTEREST", quantity: 20, totalAmount: 20 },
+          { action: "REINVEST_INTEREST", quantity: 20, totalAmount: 20 },
+          { action: "REINVEST_INTEREST", quantity: 20, totalAmount: 20 },
+        ]);
+
+        const redemption = rows.find((row) => row.action === "REDEEM");
+        const accruedInterest = rows.find((row) => row.action === "INTEREST");
+        expect(redemption).toMatchObject({
+          quantity: 5060,
+          price: 1,
+          totalAmount: 5060,
+          transactionSplitId: null,
+          linkedTransactionId: accruedInterest?.id,
+        });
+        expect(accruedInterest).toMatchObject({
+          quantity: null,
+          price: 1,
+          totalAmount: 1,
+          transactionId: null,
+          transactionSplitId: null,
+          linkedTransactionId: redemption?.id,
+        });
+
+        const cashRow = await dataSource
+          .getRepository(Transaction)
+          .findOneByOrFail({ id: redemption!.transactionId! });
+        expect(cashRow).toMatchObject({
+          isSplit: false,
+          isTransfer: false,
+        });
+        expect(Number(cashRow.amount)).toBe(5061);
+      });
+
       it("creates the securities the file shows activity for", async () => {
         const job = await runImport("money2002");
 

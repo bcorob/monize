@@ -19,7 +19,7 @@ export default defineConfig({
         'src/test/**',
         'src/**/*.d.ts',
         'src/app/layout.tsx',
-        'src/app/manifest.ts',
+        'src/app/manifest.webmanifest/route.ts',
         'src/proxy.ts',
         'src/types/**',
       ],

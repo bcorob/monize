@@ -135,5 +135,15 @@
   "pageHeader": {
     "helpAriaLabel": "Buka wiki Monize untuk bantuan dengan bagian ini",
     "helpTooltip": "Buka wiki Monize untuk bantuan dengan bagian ini"
+  },
+  "bootSplash": {
+    "loading": "Memuat Monize",
+    "slowMessage": "Ini memakan waktu lebih lama dari yang diharapkan. Periksa koneksi Anda.",
+    "reload": "Muat ulang aplikasi"
+  },
+  "offlineFallback": {
+    "title": "Tidak dapat terhubung",
+    "message": "Monize tidak dapat menjangkau server. Periksa koneksi Anda dan coba lagi.",
+    "retry": "Coba lagi"
   }
 }

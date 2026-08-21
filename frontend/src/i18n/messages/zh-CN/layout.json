@@ -135,5 +135,15 @@
   "pageHeader": {
     "helpAriaLabel": "打开 Monize 维基以获取此部分的帮助",
     "helpTooltip": "打开 Monize 维基以获取此部分的帮助"
+  },
+  "bootSplash": {
+    "loading": "正在加载 Monize",
+    "slowMessage": "加载时间比预期长。请检查您的网络连接。",
+    "reload": "重新加载应用"
+  },
+  "offlineFallback": {
+    "title": "无法连接",
+    "message": "Monize 无法连接到服务器。请检查您的网络连接后重试。",
+    "retry": "重试"
   }
 }

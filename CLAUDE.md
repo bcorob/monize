@@ -322,6 +322,13 @@ internally consistent, which is why nothing failed. Cost goes through
 row. `investment-replay.guard.spec.ts` scans for a new hand-rolled fold in either
 the `case` or the `if` form.
 
+**A Money activity label is not always its raw `TRN.act` code.** Money Plus has
+stored a register activity displayed as "Redeem CD/Bond" as `act = 2` (SELL)
+with positive `TRN_INV.amtInt`, while older redemptions use `act = 30`. The
+importer normalizes SELL plus accrued interest to REDEEM, keeps that SELL row's
+`TRN.amt` as proceeds, and takes the gross payout from the principal-plus-interest
+split; do not gate accrued-interest import on raw `act = 30` alone.
+
 ### VOID means no balance moved -- on every path that writes one
 
 A `VOID` row records something that did not happen, and

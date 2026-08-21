@@ -135,5 +135,15 @@
   "pageHeader": {
     "helpAriaLabel": "Bu bölümde yardım için Monize wiki'yi açın",
     "helpTooltip": "Bu bölümde yardım için Monize wiki'yi açın"
+  },
+  "bootSplash": {
+    "loading": "Monize yükleniyor",
+    "slowMessage": "Bu beklenenden uzun sürüyor. Bağlantınızı kontrol edin.",
+    "reload": "Uygulamayı yeniden yükle"
+  },
+  "offlineFallback": {
+    "title": "Bağlanılamıyor",
+    "message": "Monize sunucuya ulaşamadı. Bağlantınızı kontrol edip yeniden deneyin.",
+    "retry": "Yeniden dene"
   }
 }

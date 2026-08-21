@@ -135,5 +135,15 @@
   "pageHeader": {
     "helpAriaLabel": "[XX-Open the Monize wiki for help with this section-XX]",
     "helpTooltip": "[XX-Open the Monize wiki for help with this section-XX]"
+  },
+  "bootSplash": {
+    "loading": "[XX-Loading Monize-XX]",
+    "slowMessage": "[XX-This is taking longer than expected. Check your connection.-XX]",
+    "reload": "[XX-Reload the app-XX]"
+  },
+  "offlineFallback": {
+    "title": "[XX-Unable to connect-XX]",
+    "message": "[XX-Monize could not reach the server. Check your connection and try again.-XX]",
+    "retry": "[XX-Try again-XX]"
   }
 }

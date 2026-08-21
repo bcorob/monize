@@ -135,5 +135,15 @@
   "pageHeader": {
     "helpAriaLabel": "このセクションのヘルプは Monize Wiki を開いてください",
     "helpTooltip": "このセクションのヘルプは Monize Wiki を開いてください"
+  },
+  "bootSplash": {
+    "loading": "Monize を読み込んでいます",
+    "slowMessage": "予想より時間がかかっています。接続を確認してください。",
+    "reload": "アプリを再読み込み"
+  },
+  "offlineFallback": {
+    "title": "接続できません",
+    "message": "Monize はサーバーに到達できませんでした。接続を確認して、もう一度お試しください。",
+    "retry": "再試行"
   }
 }

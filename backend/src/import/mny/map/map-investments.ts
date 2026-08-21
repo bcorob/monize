@@ -175,15 +175,17 @@ function indexDetails(
 /**
  * The magnitude of the transaction.
  *
- * `TRN.amt` is Money's own cash figure and wins where it has one: it already
- * carries commission and any accrued interest, so recomputing from quantity and
- * price would disagree with what Money shows by those amounts. The sign is
- * discarded and taken from the action instead, which is the same rule that
- * governs quantity.
+ * `TRN.amt` is Money's own figure and wins where it has one: recomputing from
+ * quantity and price would disagree with what Money shows. On `act` 30 it is
+ * the gross cash figure including accrued interest; on Money Plus's
+ * SELL-shaped redemption variant it is proceeds and the split parent carries
+ * the gross payout. The sign is discarded and taken from the action instead,
+ * which is the same rule that governs quantity.
  *
- * The accrued interest is then taken back out: it is income, and a redemption's
- * total is proceeds, which is what every realized-gain fold measures against
- * cost basis. It reaches the ledger as the linked INTEREST companion instead.
+ * Accrued interest included in the row amount is taken back out: it is income,
+ * and a redemption's total is proceeds, which is what every realized-gain fold
+ * measures against cost basis. It reaches the ledger as the linked INTEREST
+ * companion instead.
  */
 function totalAmountOf(
   row: MnyTransaction,
@@ -192,16 +194,16 @@ function totalAmountOf(
   price: number | null,
   commission: number,
   accruedInterest: number,
+  rowAmountIncludesAccruedInterest: boolean,
 ): number {
   const base = baseInvestmentAction(action);
   if (ZERO_TOTAL_ACTIONS.has(base as InvestmentAction)) {
     return 0;
   }
   if (row.amount !== 0) {
-    return proceedsExcludingAccruedInterest(
-      Math.abs(row.amount),
-      accruedInterest,
-    );
+    return rowAmountIncludesAccruedInterest
+      ? proceedsExcludingAccruedInterest(Math.abs(row.amount), accruedInterest)
+      : roundMoney(Math.abs(row.amount));
   }
   if (quantity === null || price === null) {
     return 0;
@@ -257,21 +259,26 @@ function mapOne(
     : null;
   const price = detail ? positiveOrNull(detail.price, PRICE_DECIMALS) : null;
   const commission = detail ? roundMoney(Math.abs(detail.commission)) : 0;
-  // Money records accrued interest on any investment detail row, but only a
-  // redemption pays it out; anywhere else there is no action to carry it.
-  const accruedInterest =
-    detail && supportsAccruedInterest(action)
-      ? roundMoney(Math.abs(detail.interest))
-      : 0;
+  const detailInterest = detail ? roundMoney(Math.abs(detail.interest)) : 0;
+  // Money Plus can store a register activity displayed as "Redeem CD/Bond" as
+  // SELL when its cash payout is split into principal and accrued interest.
+  const mappedAction =
+    action === InvestmentAction.SELL && detailInterest > 0
+      ? InvestmentAction.REDEEM
+      : action;
+  const accruedInterest = supportsAccruedInterest(mappedAction)
+    ? detailInterest
+    : 0;
   const totalAmount = totalAmountOf(
     row,
-    action,
+    mappedAction,
     quantity,
     price,
     commission,
     accruedInterest,
+    supportsAccruedInterest(action),
   );
-  const cashAmount = cashAmountOf(action, totalAmount, accruedInterest);
+  const cashAmount = cashAmountOf(mappedAction, totalAmount, accruedInterest);
   const id = randomUUID();
   const currencyCode =
     context.input.accounts.currencyByHandle.get(row.account as number) ?? "";
@@ -293,7 +300,7 @@ function mapOne(
     cashTransactionId: null,
     transactionSplitId: null,
     securityHandle: row.security as number,
-    action,
+    action: mappedAction,
     transactionDate: row.date as string,
     quantity,
     price,

@@ -135,5 +135,15 @@
   "pageHeader": {
     "helpAriaLabel": "Open de Monize-wiki voor hulp bij dit gedeelte",
     "helpTooltip": "Open de Monize-wiki voor hulp bij dit gedeelte"
+  },
+  "bootSplash": {
+    "loading": "Monize wordt geladen",
+    "slowMessage": "Dit duurt langer dan verwacht. Controleer je verbinding.",
+    "reload": "App opnieuw laden"
+  },
+  "offlineFallback": {
+    "title": "Kan geen verbinding maken",
+    "message": "Monize kon de server niet bereiken. Controleer je verbinding en probeer het opnieuw.",
+    "retry": "Opnieuw proberen"
   }
 }

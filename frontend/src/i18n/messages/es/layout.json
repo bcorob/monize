@@ -135,5 +135,15 @@
   "pageHeader": {
     "helpAriaLabel": "Abrir la wiki de Monize para obtener ayuda con esta sección",
     "helpTooltip": "Abrir la wiki de Monize para obtener ayuda con esta sección"
+  },
+  "bootSplash": {
+    "loading": "Cargando Monize",
+    "slowMessage": "Esto está tardando más de lo esperado. Comprueba tu conexión.",
+    "reload": "Recargar la aplicación"
+  },
+  "offlineFallback": {
+    "title": "No se puede conectar",
+    "message": "Monize no pudo conectar con el servidor. Comprueba tu conexión e inténtalo de nuevo.",
+    "retry": "Reintentar"
   }
 }

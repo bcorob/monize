@@ -42,10 +42,12 @@ display and for the cash row, and is stored in neither row's `total_amount`.
 
 ### 1.2 Scope
 
-`REDEEM` only. A bond sold between coupon dates accrues interest too, but Money
-emits accrued interest only on `act` 30, so `SELL` would be a manual-entry-only
-path with no import evidence behind it. Accrued interest on any other action is
-refused (section 2, invariant 6).
+`REDEEM` only in Monize's stored model and public API. Real Money Plus data has
+two encodings for a register activity displayed as "Redeem CD/Bond": `act` 30,
+and `act` 2 (`SELL`) with positive `TRN_INV.amtInt` and a principal-plus-interest
+cash split. The importer normalizes the measured SELL-shaped variant to REDEEM;
+it does not broaden the API to accept accrued interest on a native SELL.
+Accrued interest on any other action is refused (section 2, invariant 6).
 
 ## 2. Invariants
 
@@ -119,15 +121,16 @@ introduced twice.
   not an interest payment. Readers resolve the companion from the redemption,
   never the reverse.
 
-## 5. Microsoft Money import (`act` 30)
+## 5. Microsoft Money import
 
 `TRN_INV.amtInt` is the accrued interest and is already parsed as
 `MnyInvestmentDetail.interest` by `backend/src/import/mny/tables/read-investments.ts`;
 today `indexDetails` in `backend/src/import/mny/map/map-investments.ts` drops it.
 
-1. `TRN.amt` is Money's cash figure and carries the accrued interest, so the
-   redemption's `total_amount` is `TRN.amt - amtInt` and the companion carries
-   `amtInt`. This keeps the invariant in section 1.1 with Money's own numbers.
+1. For `act` 30, `TRN.amt` is Money's gross cash figure and carries the accrued
+   interest, so the redemption's `total_amount` is `TRN.amt - amtInt`. For the
+   SELL-shaped variant, `TRN.amt` is already proceeds and must not have
+   `amtInt` subtracted again. In both shapes the companion carries `amtInt`.
 2. Money records the payout as a two-leg split in the cash account: the
    investment leg and an interest leg. That split is collapsed into the single
    cash row **only** when the parent has exactly two legs, one of them the
@@ -138,9 +141,10 @@ today `indexDetails` in `backend/src/import/mny/map/map-investments.ts` drops it
    the generated companion and its redemption back-link are discarded after
    cash-source mapping so income is not counted twice and an embedded row does
    not carry a state the write API refuses.
-3. `act` 30 maps to `REDEEM` in `ACTION_BY_CODE` already. That mapping is
-   asserted at the code-map level only, so this change adds a writer-level
-   regression test that a mapped `act` 30 row persists with `action = REDEEM`.
+3. `act` 30 maps directly to `REDEEM`. `act` 2 maps to `REDEEM` only when its
+   investment detail carries positive `amtInt`; an ordinary SELL remains SELL.
+   The regression matrix includes the real Money Plus shape: proceeds 5,134.09,
+   interest 5.43 and a split parent payout of 5,139.52.
 4. `REDEEM_CD_BOND` stays in `MNY_UNCONFIRMED_ACTIONS`: its `TRN_INV` shape is
    now measured against one reporter's file, but its lot behaviour is not.
 
@@ -174,6 +178,6 @@ Per `docs/verification-contract.md` and the adversarial list in
 
 - Backfilling redemptions already imported as split legs. Re-importing is the
   fix; no migration touches existing financial data.
-- Accrued interest on `SELL` (section 1.2).
+- Accepting accrued interest on a native Monize `SELL` API request (section 1.2).
 - Accrued interest inside an embedded investment split (invariant 6).
 - The QIF/CSV import path: Money's QIF export has no redeem action.
