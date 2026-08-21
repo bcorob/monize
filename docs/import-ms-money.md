@@ -86,7 +86,9 @@ and import the resulting `.mny`.
 
 - **Accounts** of every type, with opening balances, currencies, and closed and
   favourite flags. A Money investment account becomes Monize's linked cash and
-  brokerage pair, matching how Money itself stores them.
+  brokerage pair, matching how Money itself stores them. Money's watch accounts
+  ("Investments to Watch") are created excluded from net worth, since they track
+  quotes rather than money you hold.
 - **Transactions**, including splits, reference numbers, memos, and the
   cleared/reconciled status of each. Voided transactions are imported as voided
   rather than dropped.

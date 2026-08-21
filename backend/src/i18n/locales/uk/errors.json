@@ -471,6 +471,7 @@
     "invalidGroupBy": "groupBy має бути 'category' або 'payee'",
     "limitMustBePositive": "limit має бути додатним числом",
     "recurringPayeeRequired": "payeeIds є обов'язковим",
+    "recurringFilterRequired": "accountId або payeeIds є обов'язковим",
     "recurringDatesRequired": "startDate і endDate є обов'язковими",
     "statementDateFormat": "statementDate має бути у форматі YYYY-MM-DD",
     "statementBalanceMustBeNumber": "statementBalance має бути числом",

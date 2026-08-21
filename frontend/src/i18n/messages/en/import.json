@@ -381,6 +381,7 @@
       "finalBalance": "Final balance",
       "closed": "Closed",
       "favourite": "Favourite",
+      "excludedFromNetWorth": "Excluded from net worth",
       "renamedFrom": "named \"{name}\" in Money"
     },
     "optionsHeading": "Import options",

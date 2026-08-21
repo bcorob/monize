@@ -50,6 +50,7 @@ function account(overrides: Partial<MappedAccount> = {}): MappedAccount {
     closed: false,
     closedDate: null,
     favourite: false,
+    excludeFromNetWorth: false,
     description: null,
     linkedKey: null,
     ...overrides,
@@ -119,6 +120,22 @@ describe("writeAccounts", () => {
         isClosed: false,
         linkedAccountId: null,
       }),
+    );
+  });
+
+  it("writes the mapped net-worth exclusion, so a watch account imports excluded", async () => {
+    const repo = repoDouble();
+
+    await writeAccounts(managerFor(repo), "user-1", [
+      account({ excludeFromNetWorth: true }),
+      account({ key: "acct-2", handle: 2, name: "Visa" }),
+    ]);
+
+    expect(repo.insert).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "Chequing", excludeFromNetWorth: true }),
+    );
+    expect(repo.insert).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "Visa", excludeFromNetWorth: false }),
     );
   });
 

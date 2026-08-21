@@ -913,12 +913,19 @@ export class TransactionsController {
   @Get("recurring-charges")
   @ApiOperation({
     summary:
-      "Detect recurring charges (cadence and typical amount) for the given payees within a date range",
+      "Detect recurring charges (cadence and typical amount) within a date range, either on one account or for the given payees",
+  })
+  @ApiQuery({
+    name: "accountId",
+    required: false,
+    description:
+      "Detect charges recurring on this account (UUID). One of accountId or payeeIds is required.",
   })
   @ApiQuery({
     name: "payeeIds",
-    required: true,
-    description: "Payee IDs to inspect (comma-separated UUIDs)",
+    required: false,
+    description:
+      "Payee IDs to inspect (comma-separated UUIDs). One of accountId or payeeIds is required.",
   })
   @ApiQuery({
     name: "startDate",
@@ -935,18 +942,30 @@ export class TransactionsController {
     description: "Recurring charges retrieved successfully",
   })
   @ApiResponse({ status: 401, description: "Unauthorized" })
-  getRecurringCharges(
+  async getRecurringCharges(
     @Request() req,
     @Query("payeeIds") payeeIds?: string,
     @Query("startDate") startDate?: string,
     @Query("endDate") endDate?: string,
+    @Query("accountId") accountId?: string,
   ) {
     const parsedPayeeIds = parseUuids(payeeIds);
-    if (!parsedPayeeIds || parsedPayeeIds.length === 0) {
+    const hasPayeeIds = !!parsedPayeeIds && parsedPayeeIds.length > 0;
+    if (accountId !== undefined && !UUID_REGEX.test(accountId)) {
+      throw new BadRequestException(
+        tr("errors.common.invalidUuid", `Invalid UUID: ${accountId}`, {
+          id: accountId,
+        }),
+      );
+    }
+    // Neither filter means "every payee in the ledger", which is a different
+    // and far heavier question than either caller is asking; refuse rather
+    // than answer it by accident.
+    if (!hasPayeeIds && !accountId) {
       throw new BadRequestException(
         tr(
-          "errors.transactions.recurringPayeeRequired",
-          "payeeIds is required",
+          "errors.transactions.recurringFilterRequired",
+          "accountId or payeeIds is required",
         ),
       );
     }
@@ -961,11 +980,21 @@ export class TransactionsController {
     validateDateParam(startDate, "startDate");
     validateDateParam(endDate, "endDate");
 
+    // A joint account reads natively in own context but its rows belong to the
+    // owner, so detection has to run as them -- the same resolution the
+    // register uses, and the reason an accountId cannot simply be pasted into
+    // the caller's own query. `jointAccessFor` refuses an account the caller
+    // has no read grant on. A delegate never reaches this handler: there is no
+    // @AllowDelegate() here, so AccountDelegateGuard has already refused.
+    const scope = accountId
+      ? await this.resolveOwnContextJointScope(req, [accountId])
+      : null;
+
     return this.transactionsService.getRecurringCharges(
-      req.user.id,
+      scope?.userId ?? req.user.id,
       startDate,
       endDate,
-      parsedPayeeIds,
+      { payeeIds: hasPayeeIds ? parsedPayeeIds : undefined, accountId },
     );
   }
 

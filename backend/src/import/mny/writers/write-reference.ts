@@ -86,6 +86,7 @@ export async function writeAccounts(
       creditLimit: account.creditLimit,
       description: account.description,
       isFavourite: account.favourite,
+      excludeFromNetWorth: account.excludeFromNetWorth,
       isClosed: false,
       linkedAccountId: null,
     });

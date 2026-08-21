@@ -1618,12 +1618,24 @@ export class TransactionAnalyticsService {
    * keeps groups seen at least 3 times, and classifies their cadence. Pass
    * `uncategorizedLabel` to substitute a label for charges with no category
    * (the forecast aggregator uses "Uncategorized"; insights leaves it null).
+   *
+   * `accountId` narrows detection to one account's own rows, which is what a
+   * per-account panel is actually asking about: a charge that recurs on another
+   * card is not a recurring charge on this one. It is a filter on the *rows the
+   * cadence is measured from*, not a post-filter on the result, so the >= 3
+   * threshold and the amounts are the account's own. The caller must authorize
+   * the account first -- this method trusts the id it is handed, exactly as it
+   * trusts `userId`.
    */
   async getRecurringCharges(
     userId: string,
     startDate: string,
     endDate: string,
-    options: { uncategorizedLabel?: string; payeeIds?: string[] } = {},
+    options: {
+      uncategorizedLabel?: string;
+      payeeIds?: string[];
+      accountId?: string;
+    } = {},
   ): Promise<RecurringCharge[]> {
     return withScopedDb(this.dataSource, async (m) => {
       const categoryNameSelect = options.uncategorizedLabel
@@ -1682,6 +1694,12 @@ export class TransactionAnalyticsService {
       if (options.payeeIds && options.payeeIds.length > 0) {
         qb.andWhere("t.payeeId IN (:...payeeIds)", {
           payeeIds: options.payeeIds,
+        });
+      }
+
+      if (options.accountId) {
+        qb.andWhere("t.accountId = :accountId", {
+          accountId: options.accountId,
         });
       }
 

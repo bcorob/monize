@@ -56,6 +56,11 @@ export interface MappedAccount {
   readonly closed: boolean;
   readonly closedDate: string | null;
   readonly favourite: boolean;
+  /**
+   * True for Money's watch accounts (`ACCT.fWatch`): they track quotes, not
+   * money, so their Monize accounts are excluded from net worth.
+   */
+  readonly excludeFromNetWorth: boolean;
   readonly description: string | null;
   /** The other half of an investment pair, by `key`. */
   readonly linkedKey: string | null;
@@ -359,9 +364,9 @@ export interface MappedInvestmentTransaction {
   readonly commission: number;
   /**
    * Accrued interest Money recorded on the row (`TRN_INV.amtInt`), taken out of
-    * `totalAmount`. Mapping-time metadata: it becomes the linked INTEREST
-    * companion when the cash split collapses, or is cleared when a preserved
-    * sibling split leg already records the interest. There is no column here.
+   * `totalAmount`. Mapping-time metadata: it becomes the linked INTEREST
+   * companion when the cash split collapses, or is cleared when a preserved
+   * sibling split leg already records the interest. There is no column here.
    */
   readonly accruedInterest: number;
   /** Positive magnitude of the transaction, in the account's currency. */

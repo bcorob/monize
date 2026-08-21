@@ -471,6 +471,7 @@
     "invalidGroupBy": "groupBy は 'category' または 'payee' でなければなりません",
     "limitMustBePositive": "limit は正の数でなければなりません",
     "recurringPayeeRequired": "payeeIds は必須です",
+    "recurringFilterRequired": "accountId または payeeIds は必須です",
     "recurringDatesRequired": "startDate と endDate は必須です",
     "statementDateFormat": "statementDate は YYYY-MM-DD 形式でなければなりません",
     "statementBalanceMustBeNumber": "statementBalance は数値でなければなりません",

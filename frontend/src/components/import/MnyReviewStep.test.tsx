@@ -184,6 +184,24 @@ describe('MnyReviewStep', () => {
     expect(screen.getByText('Favourite')).toBeInTheDocument();
   });
 
+  it('badges a watch account as excluded from net worth', () => {
+    render(
+      <MnyReviewStep
+        {...defaultProps}
+        preview={preview({
+          accounts: [
+            account({ excludeFromNetWorth: true }),
+            account({ key: 'acct-2', handle: 2, name: 'Visa' }),
+          ],
+        })}
+      />,
+    );
+
+    // One badge: the second account (and any response predating the field,
+    // where excludeFromNetWorth is absent) draws none.
+    expect(screen.getAllByText('Excluded from net worth')).toHaveLength(1);
+  });
+
   it("shows the Money name when the account had to be renamed", () => {
     render(
       <MnyReviewStep

@@ -152,12 +152,13 @@ describe('CreditCardDetailView', () => {
   it('shows recurring charges detected on the card', async () => {
     await renderView();
     await waitFor(() => expect(screen.getByText('Netflix')).toBeInTheDocument());
-    expect(mockGetAllPages).toHaveBeenCalledWith(
+    // Detection is asked for by account. It used to be asked for by a payee
+    // list the panel built by reading the card's transactions, which is the
+    // request that outgrew the URL on a card with many payees.
+    expect(mockGetRecurringCharges).toHaveBeenCalledWith(
       expect.objectContaining({ accountId: 'cc-1' }),
     );
-    expect(mockGetRecurringCharges).toHaveBeenCalledWith(
-      expect.objectContaining({ payeeIds: ['p1'] }),
-    );
+    expect(mockGetRecurringCharges.mock.calls[0][0]).not.toHaveProperty('payeeIds');
   });
 
   it('does not offer a make-a-payment action', async () => {

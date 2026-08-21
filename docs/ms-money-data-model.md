@@ -180,6 +180,7 @@ Every tree descends from one of two roots: `INCOME` (`hcat` 130) and `EXPENSE`
 | `dtOpen` / `dtClose` | Opened / closed dates |
 | `fClosed` | Closed flag |
 | `fFavorite` | Favourite flag |
+| `fWatch` | Watch-account flag ("Investments to Watch") -- imported as excluded from net worth |
 | `hacctRel` | Linked account, meaningful for `at = 5` |
 | `mComment` | Free-text comment |
 

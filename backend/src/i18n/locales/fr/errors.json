@@ -471,6 +471,7 @@
     "invalidGroupBy": "groupBy doit être 'category' ou 'payee'",
     "limitMustBePositive": "limit doit être un nombre positif",
     "recurringPayeeRequired": "payeeIds est requis",
+    "recurringFilterRequired": "accountId ou payeeIds est requis",
     "recurringDatesRequired": "startDate et endDate sont requis",
     "statementDateFormat": "statementDate doit être au format YYYY-MM-DD",
     "statementBalanceMustBeNumber": "statementBalance doit être un nombre",

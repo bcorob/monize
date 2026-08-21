@@ -471,6 +471,7 @@
     "invalidGroupBy": "groupBy phải là 'category' hoặc 'payee'",
     "limitMustBePositive": "limit phải là số dương",
     "recurringPayeeRequired": "payeeIds là bắt buộc",
+    "recurringFilterRequired": "accountId hoặc payeeIds là bắt buộc",
     "recurringDatesRequired": "startDate và endDate là bắt buộc",
     "statementDateFormat": "statementDate phải có định dạng YYYY-MM-DD",
     "statementBalanceMustBeNumber": "statementBalance phải là số",

@@ -471,6 +471,7 @@
     "invalidGroupBy": "groupBy harus 'category' atau 'payee'",
     "limitMustBePositive": "limit harus berupa angka positif",
     "recurringPayeeRequired": "payeeIds wajib diisi",
+    "recurringFilterRequired": "accountId atau payeeIds wajib diisi",
     "recurringDatesRequired": "startDate dan endDate wajib diisi",
     "statementDateFormat": "statementDate harus dalam format YYYY-MM-DD",
     "statementBalanceMustBeNumber": "statementBalance harus berupa angka",

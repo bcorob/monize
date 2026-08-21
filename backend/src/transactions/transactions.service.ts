@@ -2826,17 +2826,22 @@ export class TransactionsService {
     );
   }
 
+  /**
+   * `payeeIds` and `accountId` are both optional here and the controller
+   * requires at least one, because an unfiltered detection over the whole
+   * ledger is a different (and much heavier) question than either caller asks.
+   */
   async getRecurringCharges(
     userId: string,
     startDate: string,
     endDate: string,
-    payeeIds: string[],
+    options: { payeeIds?: string[]; accountId?: string },
   ) {
     return this.analyticsService.getRecurringCharges(
       userId,
       startDate,
       endDate,
-      { payeeIds },
+      options,
     );
   }
 

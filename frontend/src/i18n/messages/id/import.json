@@ -381,6 +381,7 @@
       "finalBalance": "Saldo akhir",
       "closed": "Ditutup",
       "favourite": "Favorit",
+      "excludedFromNetWorth": "Dikecualikan dari kekayaan bersih",
       "renamedFrom": "diberi nama \"{name}\" di Money"
     },
     "optionsHeading": "Opsi impor",

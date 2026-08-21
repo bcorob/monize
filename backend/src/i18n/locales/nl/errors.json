@@ -471,6 +471,7 @@
     "invalidGroupBy": "groupBy moet 'category' of 'payee' zijn",
     "limitMustBePositive": "limit moet een positief getal zijn",
     "recurringPayeeRequired": "payeeIds is verplicht",
+    "recurringFilterRequired": "accountId of payeeIds is verplicht",
     "recurringDatesRequired": "startDate en endDate zijn verplicht",
     "statementDateFormat": "statementDate moet JJJJ-MM-DD zijn",
     "statementBalanceMustBeNumber": "statementBalance moet een getal zijn",

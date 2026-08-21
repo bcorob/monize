@@ -109,25 +109,24 @@ export function RecurringChargesPanel({ accountId, currencyCode }: RecurringChar
       // Kick off both loads in parallel (each call issued synchronously) with
       // independent error handling, so a failure in one never blanks the other
       // and neither is deferred behind the other's request.
+      //
+      // The account goes to the server as the filter. This used to read a year
+      // of the account's transactions, distil the distinct payee ids and send
+      // those back as a query parameter -- a request whose size grew with the
+      // account's payee count, and which stopped working entirely once the ids
+      // outgrew the URL. One account id asks the same question in constant
+      // space, and asks it more precisely: cadence is now measured from this
+      // account's own rows, so a charge that recurs on another card is no
+      // longer reported as recurring on this one.
       const [schedules, charges] = await Promise.all([
         scheduledTransactionsApi.getAll().catch((error) => {
           logger.error('Failed to load scheduled transactions:', error);
           return [] as ScheduledTransaction[];
         }),
-        transactionsApi
-          .getAllPages({ accountId, startDate, endDate })
-          .then((transactions) => {
-            const payeeIds = Array.from(
-              new Set(transactions.map((tx) => tx.payeeId).filter((id): id is string => !!id)),
-            );
-            return payeeIds.length
-              ? transactionsApi.getRecurringCharges({ payeeIds, startDate, endDate })
-              : [];
-          })
-          .catch((error) => {
-            logger.error('Failed to load recurring charges:', error);
-            return [] as RecurringChargeInfo[];
-          }),
+        transactionsApi.getRecurringCharges({ accountId, startDate, endDate }).catch((error) => {
+          logger.error('Failed to load recurring charges:', error);
+          return [] as RecurringChargeInfo[];
+        }),
       ]);
 
       if (cancelled) return;

@@ -78,6 +78,7 @@ export function mnyAccount(overrides: Partial<MnyAccount> = {}): MnyAccount {
     closedOn: null,
     closed: false,
     favourite: false,
+    watch: false,
     comment: null,
     ...overrides,
   };

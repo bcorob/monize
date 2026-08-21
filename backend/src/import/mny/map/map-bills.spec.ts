@@ -43,6 +43,7 @@ function accountsFixture(): MappedAccounts {
     closed: false,
     closedDate: null,
     favourite: false,
+    excludeFromNetWorth: false,
     description: null,
     linkedKey: null,
   }));
@@ -60,6 +61,7 @@ function accountsFixture(): MappedAccounts {
       closed: false,
       closedDate: null,
       favourite: false,
+      excludeFromNetWorth: false,
       description: null,
       linkedKey: "acct-10",
     },
@@ -76,6 +78,7 @@ function accountsFixture(): MappedAccounts {
       closed: false,
       closedDate: null,
       favourite: false,
+      excludeFromNetWorth: false,
       description: null,
       linkedKey: "acct-11",
     },

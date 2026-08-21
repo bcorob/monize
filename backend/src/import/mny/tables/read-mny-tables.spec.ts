@@ -84,14 +84,22 @@ describe("reference data", () => {
         relatedAccount: null,
         closed: false,
         favourite: false,
+        // Money's built-in watch account is the only fWatch row in the file.
+        watch: true,
         openingBalance: 0,
       }),
-      expect.objectContaining({ handle: 2, type: 5, relatedAccount: 3 }),
+      expect.objectContaining({
+        handle: 2,
+        type: 5,
+        relatedAccount: 3,
+        watch: false,
+      }),
       expect.objectContaining({
         handle: 3,
         type: 0,
         name: "None Investment (Cash)",
         relatedAccount: 2,
+        watch: false,
       }),
     ]);
   });

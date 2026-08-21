@@ -381,6 +381,7 @@
       "finalBalance": "最终余额",
       "closed": "已关闭",
       "favourite": "收藏",
+      "excludedFromNetWorth": "不计入净资产",
       "renamedFrom": "在 Money 中名为“{name}”"
     },
     "optionsHeading": "导入选项",

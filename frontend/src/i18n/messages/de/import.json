@@ -381,6 +381,7 @@
       "finalBalance": "Endsaldo",
       "closed": "Geschlossen",
       "favourite": "Favorit",
+      "excludedFromNetWorth": "Vom Nettovermögen ausgeschlossen",
       "renamedFrom": "in Money \"{name}\" genannt"
     },
     "optionsHeading": "Importoptionen",

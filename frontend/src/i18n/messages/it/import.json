@@ -381,6 +381,7 @@
       "finalBalance": "Saldo finale",
       "closed": "Chiuso",
       "favourite": "Preferito",
+      "excludedFromNetWorth": "Escluso dal patrimonio netto",
       "renamedFrom": "chiamato \"{name}\" in Money"
     },
     "optionsHeading": "Opzioni di importazione",

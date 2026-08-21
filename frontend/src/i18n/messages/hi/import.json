@@ -381,6 +381,7 @@
       "finalBalance": "अंतिम शेष",
       "closed": "बंद",
       "favourite": "पसंदीदा",
+      "excludedFromNetWorth": "कुल संपत्ति से बाहर रखा गया",
       "renamedFrom": "Money में \"{name}\" नाम था"
     },
     "optionsHeading": "आयात विकल्प",

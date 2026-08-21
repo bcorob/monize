@@ -336,15 +336,28 @@ export const transactionsApi = {
     return response.data;
   },
 
-  // Detect recurring charges (cadence + typical amount) for the given payees
+  /**
+   * Detect recurring charges (cadence + typical amount), either on one account
+   * or for named payees. The server requires one of the two.
+   *
+   * Prefer `accountId` for a per-account view. `payeeIds` is serialized into
+   * the query string, so its request grows with the number of ids: a caller
+   * that would have to enumerate an account's payees to build that list is
+   * asking an account-shaped question and should send the account instead.
+   * Enumerating ~250 payees puts roughly 9 KB of UUIDs in the URL, past the
+   * request-line limit of a typical proxy. `payeeIds` stays for the payee
+   * surfaces, which pass exactly one id.
+   */
   getRecurringCharges: async (params: {
-    payeeIds: string[];
+    payeeIds?: string[];
+    accountId?: string;
     startDate: string;
     endDate: string;
   }): Promise<RecurringChargeInfo[]> => {
     const response = await apiClient.get<RecurringChargeInfo[]>('/transactions/recurring-charges', {
       params: {
-        payeeIds: params.payeeIds.join(','),
+        payeeIds: params.payeeIds?.length ? params.payeeIds.join(',') : undefined,
+        accountId: params.accountId,
         startDate: params.startDate,
         endDate: params.endDate,
       },

@@ -75,6 +75,11 @@ export interface MnyAccount {
   readonly closed: boolean;
   /** `fFavorite` */
   readonly favourite: boolean;
+  /**
+   * `fWatch`: Money's built-in "Investments to Watch" account. It tracks
+   * quotes, never money, so Monize imports it excluded from net worth.
+   */
+  readonly watch: boolean;
   /** `mComment` */
   readonly comment: string | null;
 }

@@ -76,6 +76,35 @@ drift apart quietly. Its known-violation register is the honest half: an entry
 there is a defect being tracked with the change that fixes it, and the test fails
 once the violation is gone, so a stale entry cannot outlive its fix.
 
+### A filter the server can apply is not a list the client enumerates
+
+`transactionsApi.getRecurringCharges` takes an `accountId`. It used to take only
+`payeeIds`, so the recurring-charges panel read a year of the account's
+transactions, distilled the distinct payee ids and sent those back -- a request
+whose size grew with the account's payee cardinality. Around 250 payees is ~9 KB
+of UUIDs in the query string, past the request-line limit of a typical proxy;
+past ~430 it exceeds Node's header budget, which the JWT cookie also draws on.
+Every one of these calls sits behind a `.catch()` that degrades to an empty
+list, so the failure arrives as "no recurring charges" rather than as an error
+-- the same user-visible failure as issue #1229, at the next size threshold.
+
+The tell is a client that fetches rows **only to extract ids from them**. That
+is an account-shaped (or category-shaped, or date-shaped) question being asked
+in the shape of an id list, and the id list is the part that does not scale.
+Send the narrow thing the server can filter on and let it apply the predicate;
+an array parameter is for a bounded set the caller genuinely holds, like the
+payee surfaces that pass exactly one id.
+
+Two obligations come with moving a filter server-side. The endpoint must
+**authorize** whatever it now accepts -- an `accountId` is a new door into
+another user's rows, so it goes through the same own/joint resolution the
+register uses (`resolveOwnContextJointScope`), and a joint account's detection
+runs as its owner. And the *meaning* usually sharpens rather than staying
+identical: detection scoped to an account measures cadence from that account's
+own rows, so a charge recurring on another card stops being reported on this
+one. Say which of the two you intended, and test it.
+
+
 ### A write that moves money calls `invalidateBalanceCaches()`
 
 `accountsApi.getAll`, `investmentsApi.getPortfolioSummary` and the budget

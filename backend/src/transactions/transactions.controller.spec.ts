@@ -1,4 +1,4 @@
-import { BadRequestException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException } from "@nestjs/common";
 import { Test, TestingModule } from "@nestjs/testing";
 import { TransactionsController } from "./transactions.controller";
 import { TransactionsService } from "./transactions.service";
@@ -1546,36 +1546,129 @@ describe("TransactionsController", () => {
         "user-1",
         "2024-01-01",
         "2024-12-31",
-        [uuid1, uuid2],
+        { payeeIds: [uuid1, uuid2], accountId: undefined },
       );
     });
 
-    it("rejects missing payeeIds or dates", () => {
-      expect(() =>
+    // The request that replaces one whose size grew with the account's payee
+    // count: one id, in constant space, whatever the account holds.
+    it("accepts an accountId instead of a payee list", async () => {
+      mockService.getRecurringCharges.mockResolvedValue([]);
+
+      await controller.getRecurringCharges(
+        mockReq,
+        undefined,
+        "2024-01-01",
+        "2024-12-31",
+        uuid1,
+      );
+
+      expect(mockService.getRecurringCharges).toHaveBeenCalledWith(
+        "user-1",
+        "2024-01-01",
+        "2024-12-31",
+        { payeeIds: undefined, accountId: uuid1 },
+      );
+    });
+
+    it("requires one of accountId or payeeIds", async () => {
+      // Neither filter would detect across the whole ledger, which is not the
+      // question any caller is asking.
+      await expect(
         controller.getRecurringCharges(
           mockReq,
           undefined,
           "2024-01-01",
           "2024-12-31",
         ),
-      ).toThrow(BadRequestException);
-      expect(() =>
-        controller.getRecurringCharges(mockReq, uuid1, undefined, "2024-12-31"),
-      ).toThrow(BadRequestException);
-      expect(() =>
-        controller.getRecurringCharges(mockReq, uuid1, "2024-01-01"),
-      ).toThrow(BadRequestException);
+      ).rejects.toThrow(BadRequestException);
+      expect(mockService.getRecurringCharges).not.toHaveBeenCalled();
     });
 
-    it("rejects an invalid payee UUID", () => {
-      expect(() =>
+    it("rejects missing dates", async () => {
+      await expect(
+        controller.getRecurringCharges(mockReq, uuid1, undefined, "2024-12-31"),
+      ).rejects.toThrow(BadRequestException);
+      await expect(
+        controller.getRecurringCharges(mockReq, uuid1, "2024-01-01"),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it("rejects an invalid payee UUID", async () => {
+      await expect(
         controller.getRecurringCharges(
           mockReq,
           "not-a-uuid",
           "2024-01-01",
           "2024-12-31",
         ),
-      ).toThrow(BadRequestException);
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it("rejects an invalid accountId", async () => {
+      await expect(
+        controller.getRecurringCharges(
+          mockReq,
+          undefined,
+          "2024-01-01",
+          "2024-12-31",
+          "not-a-uuid",
+        ),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockService.getRecurringCharges).not.toHaveBeenCalled();
+    });
+
+    it("runs a joint account's detection as the owner", async () => {
+      // A joint account reads natively in own context, but its rows belong to
+      // the owner -- querying as the caller would quietly return nothing,
+      // which is indistinguishable from an account with no subscriptions.
+      mockJointAccounts.jointAccountIdSetFor.mockResolvedValue(
+        new Set([uuid1]),
+      );
+      mockJointAccounts.jointAccessFor.mockResolvedValue({
+        ownerUserId: "owner-9",
+      });
+      mockService.getRecurringCharges.mockResolvedValue([]);
+
+      await controller.getRecurringCharges(
+        mockReq,
+        undefined,
+        "2024-01-01",
+        "2024-12-31",
+        uuid1,
+      );
+
+      expect(mockJointAccounts.jointAccessFor).toHaveBeenCalledWith(
+        "user-1",
+        uuid1,
+        "read",
+      );
+      expect(mockService.getRecurringCharges).toHaveBeenCalledWith(
+        "owner-9",
+        "2024-01-01",
+        "2024-12-31",
+        { payeeIds: undefined, accountId: uuid1 },
+      );
+    });
+
+    it("refuses an account the caller has no joint read grant on", async () => {
+      mockJointAccounts.jointAccountIdSetFor.mockResolvedValue(
+        new Set([uuid1]),
+      );
+      mockJointAccounts.jointAccessFor.mockRejectedValue(
+        new ForbiddenException(),
+      );
+
+      await expect(
+        controller.getRecurringCharges(
+          mockReq,
+          undefined,
+          "2024-01-01",
+          "2024-12-31",
+          uuid1,
+        ),
+      ).rejects.toThrow(ForbiddenException);
+      expect(mockService.getRecurringCharges).not.toHaveBeenCalled();
     });
   });
 

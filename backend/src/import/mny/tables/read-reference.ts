@@ -58,6 +58,7 @@ const ACCOUNT_SPEC: RowSpec<MnyAccount> = {
   closedOn: { from: "dtClose", as: toDate },
   closed: { from: "fClosed", as: toBoolean },
   favourite: { from: "fFavorite", as: toBoolean },
+  watch: { from: "fWatch", as: toBoolean },
   comment: { from: "mComment", as: toOptionalText },
 };
 

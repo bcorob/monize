@@ -34,6 +34,7 @@ function account(overrides: Partial<MappedAccount> = {}): MappedAccount {
     closed: false,
     closedDate: null,
     favourite: false,
+    excludeFromNetWorth: false,
     description: null,
     linkedKey: null,
     ...overrides,

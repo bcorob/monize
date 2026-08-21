@@ -381,6 +381,7 @@
       "finalBalance": "Eindsaldo",
       "closed": "Gesloten",
       "favourite": "Favoriet",
+      "excludedFromNetWorth": "Uitgesloten van nettovermogen",
       "renamedFrom": "in Money \"{name}\" genoemd"
     },
     "optionsHeading": "Importopties",

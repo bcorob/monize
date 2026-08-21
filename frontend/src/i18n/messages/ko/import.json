@@ -381,6 +381,7 @@
       "finalBalance": "최종 잔액",
       "closed": "해지됨",
       "favourite": "즐겨찾기",
+      "excludedFromNetWorth": "순자산에서 제외됨",
       "renamedFrom": "Money에서는 \"{name}\"(이)라는 이름"
     },
     "optionsHeading": "가져오기 옵션",

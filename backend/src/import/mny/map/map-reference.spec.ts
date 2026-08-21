@@ -366,6 +366,59 @@ describe("mapAccounts", () => {
       });
     });
 
+    it("excludes a watch account from net worth, on both sides of its pair", () => {
+      // Money's "Investments to Watch" (`fWatch`) tracks quotes, never money,
+      // so importing it into net worth would count phantom value.
+      const result = mapAccounts(
+        withAccounts([
+          {
+            handle: 1,
+            type: MNY_ACCOUNT_TYPE.INVESTMENT,
+            name: "Investments to Watch",
+            watch: true,
+          },
+          { handle: 2, name: "Chequing" },
+        ]),
+        options,
+        "USD",
+      );
+
+      expect(
+        result.accounts.map((a) => [a.name, a.excludeFromNetWorth]),
+      ).toEqual([
+        ["Investments to Watch - Cash", true],
+        ["Investments to Watch - Brokerage", true],
+        ["Chequing", false],
+      ]);
+    });
+
+    it("excludes the pair when only the cash companion carries the watch flag", () => {
+      const result = mapAccounts(
+        withAccounts([
+          {
+            handle: 2,
+            type: MNY_ACCOUNT_TYPE.INVESTMENT,
+            name: "Watchlist",
+            relatedAccount: 3,
+          },
+          {
+            handle: 3,
+            type: MNY_ACCOUNT_TYPE.BANK,
+            name: "Watchlist (Cash)",
+            relatedAccount: 2,
+            watch: true,
+          },
+        ]),
+        options,
+        "USD",
+      );
+
+      expect(result.accounts.map((a) => a.excludeFromNetWorth)).toEqual([
+        true,
+        true,
+      ]);
+    });
+
     it("does not treat a name prefix as a closure signal", () => {
       // PR #192 read a 'z ' prefix as "closed"; that was one user's filing
       // convention, not a Money semantic.

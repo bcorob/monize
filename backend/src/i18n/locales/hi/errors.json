@@ -471,6 +471,7 @@
     "invalidGroupBy": "groupBy 'category' या 'payee' होना चाहिए",
     "limitMustBePositive": "limit एक धनात्मक संख्या होनी चाहिए",
     "recurringPayeeRequired": "payeeIds आवश्यक है",
+    "recurringFilterRequired": "accountId या payeeIds आवश्यक है",
     "recurringDatesRequired": "startDate और endDate आवश्यक हैं",
     "statementDateFormat": "statementDate YYYY-MM-DD प्रारूप में होनी चाहिए",
     "statementBalanceMustBeNumber": "statementBalance एक संख्या होनी चाहिए",

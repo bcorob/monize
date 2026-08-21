@@ -57,6 +57,12 @@ export interface MnyPreviewAccount {
   finalBalance: number;
   closed: boolean;
   favourite: boolean;
+  /**
+   * True for Money's watch accounts, which import excluded from net worth.
+   * Optional so a response from a backend predating the field reads as
+   * "no information" rather than crashing; absent draws no badge.
+   */
+  excludeFromNetWorth?: boolean;
 }
 
 export type MnyFrequency =

@@ -263,6 +263,11 @@ export function MnyReviewStep({
                           {t('mnyReview.table.favourite')}
                         </span>
                       )}
+                      {account.excludeFromNetWorth && (
+                        <span className="ml-2 inline-block px-1.5 py-0.5 text-xs bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 rounded">
+                          {t('mnyReview.table.excludedFromNetWorth')}
+                        </span>
+                      )}
                       {account.name !== account.moneyName && (
                         <span className="block text-xs text-muted-foreground">
                           {t('mnyReview.table.renamedFrom', {

@@ -39,6 +39,8 @@ export interface MnyPreviewAccount {
   readonly finalBalance: number;
   readonly closed: boolean;
   readonly favourite: boolean;
+  /** True for Money's watch accounts, which import excluded from net worth. */
+  readonly excludeFromNetWorth: boolean;
 }
 
 /**
@@ -161,6 +163,7 @@ export function buildPreview(input: BuildPreviewInput): MnyPreview {
       finalBalance: parsed.expectedBalances.get(account.key) ?? 0,
       closed: account.closed,
       favourite: account.favourite,
+      excludeFromNetWorth: account.excludeFromNetWorth,
     }),
   );
 

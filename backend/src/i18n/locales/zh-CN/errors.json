@@ -471,6 +471,7 @@
     "invalidGroupBy": "groupBy 必须为 'category' 或 'payee'",
     "limitMustBePositive": "limit 必须为正数",
     "recurringPayeeRequired": "payeeIds 为必填项",
+    "recurringFilterRequired": "accountId 或 payeeIds 为必填项",
     "recurringDatesRequired": "startDate 和 endDate 为必填项",
     "statementDateFormat": "statementDate 必须为 YYYY-MM-DD 格式",
     "statementBalanceMustBeNumber": "statementBalance 必须是数字",

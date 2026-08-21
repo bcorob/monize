@@ -471,6 +471,7 @@
     "invalidGroupBy": "groupBy는 'category' 또는 'payee'여야 합니다",
     "limitMustBePositive": "limit은 양수여야 합니다",
     "recurringPayeeRequired": "payeeIds는 필수입니다",
+    "recurringFilterRequired": "accountId 또는 payeeIds는 필수입니다",
     "recurringDatesRequired": "startDate와 endDate는 필수입니다",
     "statementDateFormat": "statementDate는 YYYY-MM-DD 형식이어야 합니다",
     "statementBalanceMustBeNumber": "statementBalance는 숫자여야 합니다",

@@ -381,6 +381,7 @@
       "finalBalance": "Số dư cuối",
       "closed": "Đã đóng",
       "favourite": "Yêu thích",
+      "excludedFromNetWorth": "Loại khỏi tài sản ròng",
       "renamedFrom": "có tên \"{name}\" trong Money"
     },
     "optionsHeading": "Tuỳ chọn nhập",

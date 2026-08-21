@@ -381,6 +381,7 @@
       "finalBalance": "Son bakiye",
       "closed": "Kapalı",
       "favourite": "Favori",
+      "excludedFromNetWorth": "Net değerden hariç",
       "renamedFrom": "Money'de \"{name}\" olarak adlandırılmış"
     },
     "optionsHeading": "İçe aktarma seçenekleri",

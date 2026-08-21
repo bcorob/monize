@@ -220,6 +220,16 @@ describe("MnyParserService", () => {
       ]);
     });
 
+    it("excludes the watch account from net worth, from the file's own fWatch", () => {
+      const parsed = parse();
+
+      expect(
+        parsed.accounts.accounts.every(
+          (account) => account.excludeFromNetWorth,
+        ),
+      ).toBe(true);
+    });
+
     it("defers all three of its investment transactions", () => {
       const parsed = parse();
 
@@ -389,6 +399,19 @@ describe("buildPreview", () => {
 
   it("reports the file's own base currency and era", () => {
     expect(preview()).toMatchObject({ baseCurrency: "GBP", era: "money2002" });
+  });
+
+  it("carries each account's net-worth exclusion so the wizard can badge it", () => {
+    // money2002 holds the watch account ("Investments to Watch", fWatch true)
+    // and a real investment pair; only the watch pair is excluded.
+    const byName = new Map(
+      preview().accounts.map((row) => [row.name, row.excludeFromNetWorth]),
+    );
+
+    expect(byName.get("Investments to Watch - Cash")).toBe(true);
+    expect(byName.get("Investments to Watch - Brokerage")).toBe(true);
+    expect(byName.get("None Investment - Cash")).toBe(false);
+    expect(byName.get("None Investment - Brokerage")).toBe(false);
   });
 
   it("gives every account a review row with both balances", () => {

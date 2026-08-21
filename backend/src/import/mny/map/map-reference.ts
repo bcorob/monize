@@ -214,6 +214,9 @@ function mapInvestmentPair(
     closed,
     closedDate,
     favourite: account.favourite || (companion?.favourite ?? false),
+    // A watch account holds no money on either side, so the pair is one
+    // net-worth decision: both halves are excluded together.
+    excludeFromNetWorth: account.watch || (companion?.watch ?? false),
     description: account.comment,
   };
 
@@ -347,6 +350,7 @@ export function mapAccounts(
       closed: account.closed,
       closedDate: account.closedOn,
       favourite: account.favourite,
+      excludeFromNetWorth: account.watch,
       description: account.comment,
       linkedKey: null,
     });

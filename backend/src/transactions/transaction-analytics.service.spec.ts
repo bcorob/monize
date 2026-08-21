@@ -2718,6 +2718,58 @@ describe("TransactionAnalyticsService", () => {
         { payeeIds: ["payee-1"] },
       );
     });
+
+    it("filters by accountId only when provided", async () => {
+      await service.getRecurringCharges(userId, start, end);
+      expect(mockQueryBuilder.andWhere).not.toHaveBeenCalledWith(
+        "t.accountId = :accountId",
+        expect.anything(),
+      );
+
+      await service.getRecurringCharges(userId, start, end, {
+        accountId: "acc-1",
+      });
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
+        "t.accountId = :accountId",
+        { accountId: "acc-1" },
+      );
+    });
+
+    it("narrows the rows the cadence is measured from, not the result", async () => {
+      // The behaviour change this option introduces: with an accountId the
+      // >= 3 threshold and the amounts are the account's own, so a charge
+      // recurring on another card is not reported as recurring on this one.
+      // Asserting the predicate reaches the grouped query -- rather than a
+      // filter applied to the rows it returns -- is what pins that down.
+      await service.getRecurringCharges(userId, start, end, {
+        accountId: "acc-1",
+      });
+
+      const andWhereClauses = (
+        mockQueryBuilder.andWhere.mock.calls as any[][]
+      ).map((c) => c[0] as string);
+      expect(andWhereClauses).toContain("t.accountId = :accountId");
+      expect(mockQueryBuilder.having).toHaveBeenCalledWith("COUNT(*) >= 3");
+    });
+
+    it("accepts an account and payees together", async () => {
+      // Neither option supersedes the other; the payee surfaces send one id,
+      // the account panel sends an account, and nothing stops a caller
+      // narrowing by both.
+      await service.getRecurringCharges(userId, start, end, {
+        accountId: "acc-1",
+        payeeIds: ["payee-1"],
+      });
+
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
+        "t.accountId = :accountId",
+        { accountId: "acc-1" },
+      );
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
+        "t.payeeId IN (:...payeeIds)",
+        { payeeIds: ["payee-1"] },
+      );
+    });
   });
 
   describe("getGroupedTotals", () => {

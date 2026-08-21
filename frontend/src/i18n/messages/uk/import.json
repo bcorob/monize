@@ -381,6 +381,7 @@
       "finalBalance": "Кінцевий баланс",
       "closed": "Закритий",
       "favourite": "Улюблений",
+      "excludedFromNetWorth": "Виключено з чистих активів",
       "renamedFrom": "у Money називався «{name}»"
     },
     "optionsHeading": "Параметри імпорту",

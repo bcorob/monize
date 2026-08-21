@@ -381,6 +381,7 @@
       "finalBalance": "最終残高",
       "closed": "解約済み",
       "favourite": "お気に入り",
+      "excludedFromNetWorth": "純資産から除外",
       "renamedFrom": "Money では「{name}」という名前"
     },
     "optionsHeading": "インポートオプション",

@@ -25,11 +25,16 @@ vi.mock('@/components/scheduled-transactions/ScheduledTransactionForm', () => ({
   },
 }));
 
+// `getAll`/`getAllPages` are mocked purely so the panel can be caught reaching
+// for them: detection is a server-side question now, and enumerating the
+// account's transactions to answer it is the defect this suite guards.
 const mockGetAll = vi.fn();
+const mockGetAllPages = vi.fn();
 const mockGetRecurringCharges = vi.fn();
 vi.mock('@/lib/transactions', () => ({
   transactionsApi: {
-    getAllPages: (...a: unknown[]) => mockGetAll(...a),
+    getAll: (...a: unknown[]) => mockGetAll(...a),
+    getAllPages: (...a: unknown[]) => mockGetAllPages(...a),
     getRecurringCharges: (...a: unknown[]) => mockGetRecurringCharges(...a),
   },
 }));
@@ -74,10 +79,6 @@ function schedule(overrides: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockGetAll.mockResolvedValue([
-    { id: 't1', payeeId: 'pay-netflix', payeeName: 'Netflix' },
-    { id: 't2', payeeId: null, payeeName: null },
-  ]);
   mockGetRecurringCharges.mockResolvedValue([charge()]);
   mockGetScheduled.mockResolvedValue([schedule()]);
 });
@@ -128,11 +129,8 @@ describe('RecurringChargesPanel', () => {
     await waitFor(() => expect(screen.getByText('Netflix')).toBeInTheDocument());
     expect(screen.getByText('Possible recurring charges')).toBeInTheDocument();
     expect(screen.getByText('$15.00')).toBeInTheDocument();
-    expect(mockGetAll).toHaveBeenCalledWith(
-      expect.objectContaining({ accountId: 'acc-1' }),
-    );
     expect(mockGetRecurringCharges).toHaveBeenCalledWith(
-      expect.objectContaining({ payeeIds: ['pay-netflix'] }),
+      expect.objectContaining({ accountId: 'acc-1' }),
     );
   });
 
@@ -165,8 +163,8 @@ describe('RecurringChargesPanel', () => {
     );
   });
 
-  it('skips the recurring lookup when there are no payees', async () => {
-    mockGetAll.mockResolvedValue([]);
+  it('shows the empty state when detection finds nothing', async () => {
+    mockGetRecurringCharges.mockResolvedValue([]);
     mockGetScheduled.mockResolvedValue([]);
     await renderPanel();
     await waitFor(() =>
@@ -174,7 +172,43 @@ describe('RecurringChargesPanel', () => {
         screen.getByText('No recurring charges detected on this account'),
       ).toBeInTheDocument(),
     );
-    expect(mockGetRecurringCharges).not.toHaveBeenCalled();
+  });
+
+  // The panel used to read a year of the account's transactions, distil the
+  // distinct payee ids and send those back as a query parameter. That request
+  // grew with the account's payee cardinality: around 250 payees puts ~9 KB of
+  // UUIDs in the URL, past the request-line limit of a typical proxy, and the
+  // catch below turned the failure into "no recurring charges" -- the same
+  // user-visible failure as issue #1229, at the next size threshold.
+  it('asks by account, in a request whose size cannot grow with the account', async () => {
+    await renderPanel();
+    await waitFor(() => expect(mockGetRecurringCharges).toHaveBeenCalled());
+    const small = mockGetRecurringCharges.mock.calls[0][0];
+
+    // A far denser account: hundreds of distinct payees behind the same panel.
+    vi.clearAllMocks();
+    mockGetScheduled.mockResolvedValue([]);
+    mockGetRecurringCharges.mockResolvedValue(
+      Array.from({ length: 400 }, (_, i) =>
+        charge({ payeeId: `pay-${i}`, payeeName: `Payee ${i}` }),
+      ),
+    );
+    await renderPanel();
+    await waitFor(() => expect(mockGetRecurringCharges).toHaveBeenCalled());
+    const large = mockGetRecurringCharges.mock.calls[0][0];
+
+    // Byte-identical: the request carries an account, never a list of ids.
+    expect(JSON.stringify(large)).toEqual(JSON.stringify(small));
+    expect(small).not.toHaveProperty('payeeIds');
+  });
+
+  it('never enumerates the account\'s transactions to build the request', async () => {
+    await renderPanel();
+    await waitFor(() => expect(mockGetRecurringCharges).toHaveBeenCalled());
+
+    // Both doors to the register: neither is the way to ask this question.
+    expect(mockGetAll).not.toHaveBeenCalled();
+    expect(mockGetAllPages).not.toHaveBeenCalled();
   });
 
   it('opens the pre-filled bill form for a detected charge and reloads on success', async () => {

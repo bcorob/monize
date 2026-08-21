@@ -25,6 +25,7 @@ function accountsFixture(): MappedAccounts {
       closed: false,
       closedDate: null,
       favourite: false,
+      excludeFromNetWorth: false,
       description: null,
       linkedKey: "acct-11",
     },
