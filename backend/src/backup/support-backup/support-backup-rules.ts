@@ -274,6 +274,8 @@ export const RULES: Record<string, TableRules> = {
     investment_commission: scale,
     investment_total_amount: scale,
     investment_exchange_rate: keep,
+    investment_exchange_rate_from_currency: keep, // currency code, structure
+    investment_exchange_rate_to_currency: keep,
     tag_ids: keep, // UUID array, covered by id remap
     created_at: keep,
     updated_at: keep,
@@ -292,6 +294,8 @@ export const RULES: Record<string, TableRules> = {
     investment_price: keep,
     investment_commission: scale,
     investment_exchange_rate: keep,
+    investment_exchange_rate_from_currency: keep, // currency code, structure
+    investment_exchange_rate_to_currency: keep,
     created_at: keep,
   },
   scheduled_transaction_overrides: {

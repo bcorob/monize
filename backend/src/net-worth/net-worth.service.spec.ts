@@ -279,7 +279,12 @@ describe("NetWorthService", () => {
       const [sql, params] = reportQuery.mock.calls[0];
       expect(sql).toContain("FROM accounts");
       expect(sql).toContain("MAX(updated_at)");
-      expect(sql).toContain("a.updated_at >");
+      // The change is newer than the snapshot AND older than the grace measured
+      // from NOW() -- not a distance from the old snapshot, which would never
+      // recover a change made within the grace of its snapshot (MZ-1242-R5).
+      expect(sql).toContain("a.updated_at > s.computed_at");
+      expect(sql).toContain("a.updated_at <= NOW() -");
+      expect(sql).not.toMatch(/s\.computed_at\s*\+/);
       // Bounded, so a broken deployment cannot exhaust the pool in one pass.
       expect(sql).toContain("LIMIT $2");
       expect(params[1]).toBeGreaterThan(0);
@@ -775,38 +780,54 @@ describe("NetWorthService", () => {
         expect(insertCalls[0][1][4]).toBe(1500);
       });
 
-      it("uses transaction prices for skipPriceUpdates securities", async () => {
+      // Issue #1242. The old test here asserted the opposite -- that a
+      // skipPriceUpdates security was valued from its transaction price and the
+      // accepted security_prices rows were ignored -- which encoded the bug as
+      // expected behaviour. skipPriceUpdates governs external price FETCHING,
+      // not which stored prices may value a position. The persisted monthly
+      // market_value must use the latest accepted close in security_prices.
+      it("values a skipPriceUpdates security from its accepted stored price, not its transaction price (#1242)", async () => {
         accountRepository.findOne.mockResolvedValue({
           ...mockBrokerageAccount,
         });
-        reportQuery
-          .mockResolvedValueOnce([{ earliest: null }])
-          .mockResolvedValueOnce([{ inv_earliest: "2024-01-01" }])
-          .mockResolvedValueOnce([{ month: "2024-01-01", balance: 0 }])
-          // loadTransactionPrices query (no market prices query since all skip)
-          .mockResolvedValueOnce([
-            {
-              security_id: "sec-private",
-              transaction_date: "2024-01-10",
-              price: 50,
-            },
-          ]);
+        reportQuery.mockImplementation(async (sql: string) => {
+          if (/as earliest/.test(sql)) return [{ earliest: null }];
+          if (/inv_earliest/.test(sql)) return [{ inv_earliest: "2026-08-01" }];
+          if (/monthly_tx_sums/.test(sql))
+            return [{ month: "2026-08-01", balance: -6660 }];
+          if (/FROM security_prices/.test(sql))
+            return [
+              // A transaction-derived observation (source 'buy', $61) and a
+              // later manual correction ($120), both accepted rows in
+              // security_prices. The manual is the latest close on or before
+              // month end, so it wins -- and the raw-transaction fallback is
+              // never consulted because the store can answer.
+              { security_id: "sec-1", price_date: "2026-08-01", close_price: "61" },
+              {
+                security_id: "sec-1",
+                price_date: "2026-08-20",
+                close_price: "120",
+              },
+            ];
+          return [];
+        });
 
-        const privateSecurity: Partial<Security> = {
-          id: "sec-private",
-          symbol: "PRIV",
+        const skipSecurity: Partial<Security> = {
+          id: "sec-1",
+          symbol: "BMT-DEMO",
           skipPriceUpdates: true,
+          currencyCode: "USD",
         };
 
         invTxRepository.find.mockResolvedValue([
           {
-            securityId: "sec-private",
+            securityId: "sec-1",
             action: InvestmentAction.BUY,
-            quantity: 20,
-            transactionDate: "2024-01-05",
+            quantity: 120,
+            transactionDate: "2026-08-01",
           },
         ]);
-        securityRepository.findByIds.mockResolvedValue([privateSecurity]);
+        securityRepository.findByIds.mockResolvedValue([skipSecurity]);
 
         await service.recalculateAccount("user-1", "brokerage-1");
 
@@ -814,8 +835,63 @@ describe("NetWorthService", () => {
           (call: any[]) =>
             typeof call[0] === "string" && call[0].includes("INSERT"),
         );
-        // 20 shares * 50 = 1000
-        expect(insertCalls[0][1][4]).toBe(1000);
+        // 120 shares * $120 accepted close = $14,400. The pre-fix code valued
+        // the skip security from its $61 transaction price -> $7,320.
+        expect(insertCalls[insertCalls.length - 1][1][4]).toBe(14400);
+      });
+
+      // Issue #1242 legacy compatibility: a security with no security_prices
+      // rows at all (e.g. a backup taken before transaction-derived prices were
+      // written to security_prices, restored without a backfill) still values
+      // from its raw investment_transactions prices. The flag under test is not
+      // skipPriceUpdates -- this holds for any security absent from the store.
+      it("falls back to raw transaction prices only when security_prices has no row (#1242 legacy)", async () => {
+        accountRepository.findOne.mockResolvedValue({
+          ...mockBrokerageAccount,
+        });
+        reportQuery.mockImplementation(async (sql: string) => {
+          if (/as earliest/.test(sql)) return [{ earliest: null }];
+          if (/inv_earliest/.test(sql)) return [{ inv_earliest: "2024-01-01" }];
+          if (/monthly_tx_sums/.test(sql))
+            return [{ month: "2024-01-01", balance: -1000 }];
+          // No accepted stored prices for this security.
+          if (/FROM security_prices/.test(sql)) return [];
+          // Legacy transaction-derived fallback (loadTxPriceSeries).
+          if (/investment_transactions/.test(sql) && /action = ANY/.test(sql))
+            return [
+              {
+                security_id: "sec-legacy",
+                transaction_date: "2024-01-10",
+                price: "50",
+              },
+            ];
+          return [];
+        });
+
+        const legacySecurity: Partial<Security> = {
+          id: "sec-legacy",
+          symbol: "PRIV",
+          skipPriceUpdates: true,
+          currencyCode: "USD",
+        };
+        invTxRepository.find.mockResolvedValue([
+          {
+            securityId: "sec-legacy",
+            action: InvestmentAction.BUY,
+            quantity: 20,
+            transactionDate: "2024-01-05",
+          },
+        ]);
+        securityRepository.findByIds.mockResolvedValue([legacySecurity]);
+
+        await service.recalculateAccount("user-1", "brokerage-1");
+
+        const insertCalls = snapshotQuery.mock.calls.filter(
+          (call: any[]) =>
+            typeof call[0] === "string" && call[0].includes("INSERT"),
+        );
+        // 20 shares * $50 transaction fallback = $1,000.
+        expect(insertCalls[insertCalls.length - 1][1][4]).toBe(1000);
       });
 
       it("handles no investment transactions gracefully", async () => {
@@ -903,7 +979,7 @@ describe("NetWorthService", () => {
           .mockResolvedValueOnce([{ earliest: null }])
           .mockResolvedValueOnce([{ inv_earliest: "2025-02-01" }])
           .mockResolvedValueOnce([{ month: "2025-02-01", balance: 0 }])
-          // loadSecurityPrices query
+          // loadStoredPriceSeries query
           .mockResolvedValueOnce([
             {
               security_id: "sec-usd",
@@ -911,6 +987,8 @@ describe("NetWorthService", () => {
               close_price: 25.675,
             },
           ])
+          // loadTxPriceSeries fallback (no legacy transaction prices needed)
+          .mockResolvedValueOnce([])
           // buildRateIndex query (USD -> CAD)
           .mockResolvedValueOnce([
             {
@@ -2840,6 +2918,9 @@ describe("NetWorthService", () => {
         },
       ]);
 
+      // loadTxPriceSeries fallback (no legacy transaction prices)
+      reportQuery.mockResolvedValueOnce([]);
+
       // exchange rates (buildRateIndex)
       reportQuery.mockResolvedValueOnce([
         {
@@ -2909,6 +2990,9 @@ describe("NetWorthService", () => {
         },
       ]);
 
+      // loadTxPriceSeries fallback (no legacy transaction prices)
+      reportQuery.mockResolvedValueOnce([]);
+
       // cash balances CTE
       reportQuery.mockResolvedValueOnce([
         { date: "2025-03-01", balance: "5000", account_id: "cash-cad" },
@@ -2977,6 +3061,9 @@ describe("NetWorthService", () => {
           close_price: "50.00",
         },
       ]);
+
+      // loadTxPriceSeries fallback (no legacy transaction prices)
+      reportQuery.mockResolvedValueOnce([]);
 
       // cash balances CTE (standalone accounts also appear in cashIds)
       reportQuery.mockResolvedValueOnce([
@@ -3066,6 +3153,9 @@ describe("NetWorthService", () => {
           close_price: "100.00",
         },
       ]);
+
+      // loadTxPriceSeries fallback (no legacy transaction prices)
+      reportQuery.mockResolvedValueOnce([]);
 
       // exchange rates (buildRateIndex): USD->CAD rate
       reportQuery.mockResolvedValueOnce([
@@ -3168,7 +3258,11 @@ describe("NetWorthService", () => {
       expect(result[0].value).toBe(1000);
     });
 
-    it("uses transaction prices for skipPriceUpdates securities in daily mode", async () => {
+    // Issue #1242, daily aggregate -- the exact reproduction. The old test
+    // asserted a skipPriceUpdates security was valued from its $61-era
+    // transaction price and its later accepted manual close ignored, encoding
+    // the bug. It must use the accepted security_prices close instead.
+    it("values a skipPriceUpdates security from its accepted stored price in daily mode (#1242)", async () => {
       prefRepository.findOne.mockResolvedValue({
         defaultCurrency: "USD",
       });
@@ -3184,41 +3278,225 @@ describe("NetWorthService", () => {
         },
       ]);
 
-      // investment transactions
+      // investment transactions (120 shares held)
       reportQuery.mockResolvedValueOnce([
         {
           account_id: "brok-1",
           security_id: "sec-skip",
           action: "BUY",
-          quantity: "10",
-          transaction_date: "2025-01-15",
+          quantity: "120",
+          transaction_date: "2024-01-15",
         },
       ]);
 
-      // securities with skipPriceUpdates
+      // The security has skipPriceUpdates set -- which no longer excludes it
+      // from accepted stored-price lookup.
       securityRepository.findByIds.mockResolvedValue([
-        { id: "sec-skip", skipPriceUpdates: true },
+        { id: "sec-skip", skipPriceUpdates: true, currencyCode: "USD" },
       ]);
 
-      // transaction-based prices for skipPriceUpdates securities
-      // (market prices query is skipped since marketSecIds is empty)
+      // Accepted stored prices (security_prices): the $61 transaction-derived
+      // observation from 2024 and the later manual $120 correction. Since the
+      // store answers, the raw-transaction fallback is not queried.
       reportQuery.mockResolvedValueOnce([
         {
           security_id: "sec-skip",
-          transaction_date: "2025-01-15",
-          price: "25.00",
+          price_date: "2024-01-15",
+          close_price: "61",
+        },
+        {
+          security_id: "sec-skip",
+          price_date: "2026-08-20",
+          close_price: "120",
         },
       ]);
 
       const result = await service.getDailyInvestments(
         "user-1",
-        "2025-03-01",
+        "2026-08-21",
+        "2026-08-21",
+      );
+
+      // 120 shares * $120 accepted close = $14,400 -- not 120 * $61 = $7,320.
+      expect(result).toHaveLength(1);
+      expect(result[0].value).toBe(14400);
+    });
+
+    // Issue #1242, daily as-of boundary: each day is valued at the latest
+    // accepted close on or before it, and a future observation never leaks
+    // back to an earlier day.
+    it("values each day at the latest accepted close on or before it, never a future one (#1242)", async () => {
+      prefRepository.findOne.mockResolvedValue({ defaultCurrency: "USD" });
+
+      reportQuery.mockResolvedValueOnce([
+        {
+          id: "brok-1",
+          account_type: "INVESTMENT",
+          account_sub_type: "INVESTMENT_BROKERAGE",
+          currency_code: "USD",
+          opening_balance: 0,
+        },
+      ]);
+      reportQuery.mockResolvedValueOnce([
+        {
+          account_id: "brok-1",
+          security_id: "sec-skip",
+          action: "BUY",
+          quantity: "1",
+          transaction_date: "2026-07-01",
+        },
+      ]);
+      securityRepository.findByIds.mockResolvedValue([
+        { id: "sec-skip", skipPriceUpdates: true, currencyCode: "USD" },
+      ]);
+      reportQuery.mockResolvedValueOnce([
+        {
+          security_id: "sec-skip",
+          price_date: "2026-07-31",
+          close_price: "100",
+        },
+        {
+          security_id: "sec-skip",
+          price_date: "2026-08-20",
+          close_price: "120",
+        },
+      ]);
+
+      const result = await service.getDailyInvestments(
+        "user-1",
+        "2026-08-01",
+        "2026-08-21",
+      );
+
+      const valueOn = (date: string) =>
+        result.find((p) => p.date === date)?.value;
+      // 2026-08-01 predates the 2026-08-20 row, so it uses the 2026-07-31 $100.
+      expect(valueOn("2026-08-01")).toBe(100);
+      expect(valueOn("2026-08-20")).toBe(120);
+      expect(valueOn("2026-08-21")).toBe(120);
+    });
+
+    // Issue #1242 MZ-1242-R1: a legacy restore leaves the holding with only a
+    // FUTURE accepted stored price ($80 on 2025-03-01) while its earlier
+    // history lives only in investment_transactions ($50 on 2024-01-15).
+    // Keying the fallback off "does a stored row exist" reported the earlier
+    // dates as $0; the chronological merge values them from the legacy history
+    // and switches to the stored price once it is the newer observation.
+    it("merges legacy transaction history under a later stored price (#1242)", async () => {
+      prefRepository.findOne.mockResolvedValue({ defaultCurrency: "USD" });
+
+      reportQuery.mockResolvedValueOnce([
+        {
+          id: "brok-1",
+          account_type: "INVESTMENT",
+          account_sub_type: "INVESTMENT_BROKERAGE",
+          currency_code: "USD",
+          opening_balance: 0,
+        },
+      ]);
+      reportQuery.mockResolvedValueOnce([
+        {
+          account_id: "brok-1",
+          security_id: "sec-legacy",
+          action: "BUY",
+          quantity: "100",
+          transaction_date: "2024-01-15",
+        },
+      ]);
+      securityRepository.findByIds.mockResolvedValue([
+        { id: "sec-legacy", skipPriceUpdates: true, currencyCode: "USD" },
+      ]);
+      // loadStoredPriceSeries: only a future manual price falls in the window.
+      reportQuery.mockResolvedValueOnce([
+        {
+          security_id: "sec-legacy",
+          price_date: "2025-03-01",
+          close_price: "80",
+        },
+      ]);
+      // loadTxPriceSeries: the pre-window boundary carries the legacy $50.
+      reportQuery.mockResolvedValueOnce([
+        {
+          security_id: "sec-legacy",
+          transaction_date: "2024-01-15",
+          price: "50",
+        },
+      ]);
+
+      const result = await service.getDailyInvestments(
+        "user-1",
+        "2024-12-31",
         "2025-03-01",
       );
 
-      // 10 shares * $25 (from transaction price) = $250
-      expect(result).toHaveLength(1);
-      expect(result[0].value).toBe(250);
+      const valueOn = (date: string) =>
+        result.find((p) => p.date === date)?.value;
+      // Before the stored price exists: 100 * $50 legacy = $5,000 (not $0).
+      expect(valueOn("2024-12-31")).toBe(5000);
+      // Once the stored price is the newer observation: 100 * $80 = $8,000.
+      expect(valueOn("2025-03-01")).toBe(8000);
+    });
+
+    // MZ-1242-R7/R8/R10: the legacy transaction fallback query is bounded to
+    // the window plus one boundary date (not a lifetime aggregate CTE), rounds
+    // the same-day average to 6dp to match upsertTransactionPrice, and filters
+    // on `price IS NOT NULL` -- not `price > 0`, which would drop a zero-price
+    // disposal the canonical writer keeps.
+    it("bounds, 6dp-rounds and null-filters the legacy transaction fallback query (#1242 R7/R8/R10)", async () => {
+      prefRepository.findOne.mockResolvedValue({ defaultCurrency: "USD" });
+
+      const seenSql: string[] = [];
+      reportQuery.mockImplementation(async (sql: string) => {
+        seenSql.push(sql);
+        if (/FROM accounts a/.test(sql)) {
+          return [
+            {
+              id: "brok-1",
+              account_type: "INVESTMENT",
+              account_sub_type: "INVESTMENT_BROKERAGE",
+              currency_code: "USD",
+              opening_balance: 0,
+            },
+          ];
+        }
+        // The holdings-replay read (no aggregate) needs one held security so the
+        // valuation series -- including the fallback -- is loaded.
+        if (
+          /FROM\s+investment_transactions/.test(sql) &&
+          !/boundary_dates/.test(sql)
+        ) {
+          return [
+            {
+              account_id: "brok-1",
+              security_id: "sec-1",
+              action: "BUY",
+              quantity: "10",
+              transaction_date: "2024-01-15",
+            },
+          ];
+        }
+        return [];
+      });
+      securityRepository.findByIds.mockResolvedValue([
+        { id: "sec-1", skipPriceUpdates: false, currencyCode: "USD" },
+      ]);
+
+      await service.getDailyInvestments("user-1", "2026-08-15", "2026-08-22");
+
+      const txSql = seenSql.find((s) => /boundary_dates/.test(s));
+      expect(txSql).toBeDefined();
+      // R8: same-day average rounded to the canonical 6 decimals.
+      expect(txSql).toContain("ROUND(AVG(price::numeric), 6)");
+      // R7: bounded -- a pre-window boundary date plus the in-window rows, no
+      // unbounded all-time aggregate.
+      expect(txSql).toContain("transaction_date < $3::DATE");
+      expect(txSql).toContain("transaction_date >= $3::DATE");
+      expect(txSql).toContain("transaction_date <= $4::DATE");
+      expect(txSql).not.toMatch(/WITH\s+agg\s+AS/);
+      // R10: matches the canonical writer's filter; a zero-price disposal is
+      // kept, not excluded by `price > 0`.
+      expect(txSql).toContain("price IS NOT NULL");
+      expect(txSql).not.toMatch(/price\s*>\s*0/);
     });
 
     it("returns empty when accountIds resolve to no accounts", async () => {
@@ -3282,6 +3560,9 @@ describe("NetWorthService", () => {
           close_price: "25.675",
         },
       ]);
+
+      // loadTxPriceSeries fallback (no legacy transaction prices)
+      reportQuery.mockResolvedValueOnce([]);
 
       // exchange rates (USD -> CAD)
       reportQuery.mockResolvedValueOnce([
@@ -3417,11 +3698,14 @@ describe("NetWorthService", () => {
         },
       ]);
 
-      // month-end security prices (loadSecurityPrices)
+      // month-end security prices (loadStoredPriceSeries)
       reportQuery.mockResolvedValueOnce([
         { security_id: "sec-1", price_date: "2024-05-31", close_price: "100" },
         { security_id: "sec-1", price_date: "2024-06-28", close_price: "110" },
       ]);
+
+      // loadTxPriceSeries fallback (no legacy transaction prices)
+      reportQuery.mockResolvedValueOnce([]);
 
       // monthly cash balances
       reportQuery.mockResolvedValueOnce([
@@ -3501,6 +3785,121 @@ describe("NetWorthService", () => {
         { date: "2025-03-01", total: 1000, values: { "sec-1": 1000 } },
         { date: "2025-03-02", total: 1000, values: { "sec-1": 1000 } },
       ]);
+    });
+
+    // Issue #1242, by-security daily: a skipPriceUpdates security's band uses
+    // its accepted stored close, and the point total equals the sum of the
+    // security components.
+    it("values a skipPriceUpdates security's daily band from its accepted stored price (#1242)", async () => {
+      prefRepository.findOne.mockResolvedValue({ defaultCurrency: "USD" });
+
+      reportQuery.mockResolvedValueOnce([
+        {
+          id: "brok-1",
+          account_type: "INVESTMENT",
+          account_sub_type: "INVESTMENT_BROKERAGE",
+          currency_code: "USD",
+          opening_balance: 0,
+        },
+      ]);
+      reportQuery.mockResolvedValueOnce([
+        {
+          account_id: "brok-1",
+          security_id: "sec-skip",
+          action: "BUY",
+          quantity: "120",
+          transaction_date: "2024-01-15",
+        },
+      ]);
+      securityRepository.findByIds.mockResolvedValue([
+        {
+          id: "sec-skip",
+          symbol: "BMT-DEMO",
+          name: "Broad Market Tracker",
+          currencyCode: "USD",
+          skipPriceUpdates: true,
+        },
+      ]);
+      reportQuery.mockResolvedValueOnce([
+        {
+          security_id: "sec-skip",
+          price_date: "2026-08-20",
+          close_price: "120",
+        },
+      ]);
+
+      const result = await service.getInvestmentBreakdown("user-1", {
+        granularity: "daily",
+        startDate: "2026-08-21",
+        endDate: "2026-08-21",
+      });
+
+      expect(result.points).toHaveLength(1);
+      // 120 * $120 = $14,400 -- the band and the point total agree.
+      expect(result.points[0].values["sec-skip"]).toBe(14400);
+      expect(result.points[0].total).toBe(14400);
+    });
+
+    // Issue #1242, by-security monthly: same invariant at the month-end
+    // sampling boundary.
+    it("values a skipPriceUpdates security's monthly band from its accepted stored price (#1242)", async () => {
+      prefRepository.findOne.mockResolvedValue({ defaultCurrency: "USD" });
+
+      reportQuery.mockResolvedValueOnce([
+        {
+          id: "brok-1",
+          account_type: "INVESTMENT",
+          account_sub_type: "INVESTMENT_BROKERAGE",
+          currency_code: "USD",
+          opening_balance: 0,
+        },
+      ]);
+      reportQuery.mockResolvedValueOnce([
+        {
+          account_id: "brok-1",
+          security_id: "sec-skip",
+          action: "BUY",
+          quantity: "120",
+          transaction_date: "2024-01-15",
+        },
+      ]);
+      securityRepository.findByIds.mockResolvedValue([
+        {
+          id: "sec-skip",
+          symbol: "BMT-DEMO",
+          name: "Broad Market Tracker",
+          currencyCode: "USD",
+          skipPriceUpdates: true,
+        },
+      ]);
+      // Full accepted series; the monthly sampler takes the latest close on or
+      // before each month end.
+      reportQuery.mockResolvedValueOnce([
+        {
+          security_id: "sec-skip",
+          price_date: "2026-07-31",
+          close_price: "100",
+        },
+        {
+          security_id: "sec-skip",
+          price_date: "2026-08-20",
+          close_price: "120",
+        },
+      ]);
+
+      const result = await service.getInvestmentBreakdown("user-1", {
+        granularity: "monthly",
+        startDate: "2026-07-01",
+        endDate: "2026-08-31",
+      });
+
+      const july = result.points.find((p) => p.date === "2026-07-01");
+      const august = result.points.find((p) => p.date === "2026-08-01");
+      // July month-end (2026-07-31) -> $100; August month-end -> $120.
+      expect(july?.values["sec-skip"]).toBe(12000);
+      expect(july?.total).toBe(12000);
+      expect(august?.values["sec-skip"]).toBe(14400);
+      expect(august?.total).toBe(14400);
     });
 
     it("rolls securities beyond the limit into a single 'other' band", async () => {

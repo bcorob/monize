@@ -1463,15 +1463,30 @@ describe("a brand logo keeps the display mode its badge centres with", () => {
   /**
    * `BrandLogo`'s fallback badge centres its letter with `inline-flex` +
    * `items-center justify-center`. The caller's `className` is appended last,
-   * so a display utility in it wins: `hidden sm:block` on the payee list left
-   * every letter jammed against the top-left of its circle, which reads as a
-   * rendering fault rather than a class conflict. Responsive hiding is spelled
-   * `hidden sm:inline-flex`.
+   * but class-attribute order means nothing to CSS -- only stylesheet order
+   * decides, and Tailwind emits the display utilities in a fixed sequence with
+   * `.hidden` FIRST. Two mistakes follow from forgetting that:
+   *
+   * - `hidden sm:block` on the payee list left every letter jammed against
+   *   the top-left of its circle (`block` beat `inline-flex`), which reads as
+   *   a rendering fault rather than a class conflict.
+   * - `hidden sm:inline-flex` on the register never hid the badge on phones
+   *   at all: the badge's own base `inline-flex` beats the earlier-emitted
+   *   `hidden`, so the letter circles stayed visible on mobile.
+   *
+   * Responsive hiding of a logo is therefore spelled `max-sm:hidden` -- a
+   * variant sorts after every base utility, so it wins below the breakpoint
+   * and applies nothing above it.
    */
   const LOGO_TAGS = /<(?:BrandLogo|PayeeLogo|InstitutionLogo)\b[\s\S]{0,400}?\/>/g;
   /** A display utility, at any breakpoint, inside that element's className. */
   const DISPLAY_UTILITY =
     /className="[^"]*\b(?:[a-z]+:)?(?:block|grid|inline-block|flow-root)\b[^"]*"/;
+  /**
+   * A bare `hidden` token (no variant prefix) in that element's className --
+   * it sorts before the badge's own `inline-flex` and so never hides it.
+   */
+  const BARE_HIDDEN = /className="(?:[^"]*\s)?hidden(?:\s[^"]*)?"/;
 
   it("has no call site whose className overrides the badge's display", () => {
     const offenders: string[] = [];
@@ -1485,22 +1500,44 @@ describe("a brand logo keeps the display mode its badge centres with", () => {
     expect([...new Set(offenders)]).toEqual([]);
   });
 
+  it("has no call site trying to hide a logo with a bare `hidden`", () => {
+    const offenders: string[] = [];
+    for (const [path, content] of productionSources()) {
+      for (const match of content.matchAll(LOGO_TAGS)) {
+        if (BARE_HIDDEN.test(match[0])) {
+          offenders.push(path);
+        }
+      }
+    }
+    expect(
+      [...new Set(offenders)],
+      "a bare `hidden` loses to the badge's own `inline-flex`; spell responsive hiding `max-sm:hidden`",
+    ).toEqual([]);
+  });
+
   it("still finds the badge's centring, so the rule cannot pass by accident", () => {
     const brandLogo = sources["/src/components/ui/BrandLogo.tsx"];
     expect(brandLogo, "BrandLogo.tsx not found -- update this test").toBeTruthy();
     expect(brandLogo).toContain("inline-flex items-center justify-center");
   });
 
-  it("recognises the shape it is looking for", () => {
-    // Were the tag regex to stop matching, the scan above would police an
+  it("recognises the shapes it is looking for", () => {
+    // Were the tag regex to stop matching, the scans above would police an
     // empty set.
     const sample = '<PayeeLogo payee={p} size={20} className="hidden sm:block" />';
     const [found] = [...sample.matchAll(LOGO_TAGS)];
     expect(found).toBeTruthy();
     expect(DISPLAY_UTILITY.test(found[0])).toBe(true);
+    expect(BARE_HIDDEN.test(found[0])).toBe(true);
     expect(
-      DISPLAY_UTILITY.test('<PayeeLogo className="hidden sm:inline-flex" />'),
-    ).toBe(false);
+      BARE_HIDDEN.test('<PayeeLogo className="hidden sm:inline-flex" />'),
+    ).toBe(true);
+    expect(BARE_HIDDEN.test('<PayeeLogo className="hidden" />')).toBe(true);
+    // The sanctioned spelling: the variant prefix keeps `hidden` from being a
+    // bare token, and neither scan flags it.
+    const sanctioned = '<PayeeLogo className="mt-0.5 max-sm:hidden" />';
+    expect(DISPLAY_UTILITY.test(sanctioned)).toBe(false);
+    expect(BARE_HIDDEN.test(sanctioned)).toBe(false);
   });
 });
 

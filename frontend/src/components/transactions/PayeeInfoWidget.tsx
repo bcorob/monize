@@ -188,7 +188,7 @@ export function PayeeInfoWidget({
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-4 sm:p-6 mb-6 lg:mb-0 lg:absolute lg:inset-x-0 lg:top-0 lg:bottom-6 lg:overflow-y-auto flex flex-col">
       <div className="flex items-start justify-between gap-2 mb-4">
         <div className="flex min-w-0 items-start gap-2.5">
-          <PayeeLogo payee={payee} size={28} className="mt-0.5" />
+          <PayeeLogo payee={payee} size={28} className="mt-0.5 max-sm:hidden" />
           <div className="min-w-0">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 truncate">
             {payee.name}

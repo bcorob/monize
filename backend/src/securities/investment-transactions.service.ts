@@ -75,6 +75,7 @@ import { deletionBalanceEffect } from "../common/deletion-balance.util";
 import { ActionHistoryService } from "../action-history/action-history.service";
 import {
   computeInvestmentCashImpact,
+  investmentSplitCashAmount,
   isInvestmentActionAllowedInSplit,
 } from "./cash-impact.util";
 import {
@@ -456,6 +457,44 @@ export class InvestmentTransactionsService {
   }
 
   /**
+   * The currency pair an investment cash posting converts across:
+   * `from` = the source currency (the security's currency, or -- for a
+   * security-less action -- the investment account's currency); `to` = the
+   * settlement/cash account's currency (the explicit funding account when one is
+   * named, otherwise the brokerage's linked cash account).
+   *
+   * This is the single definition of that pair. `resolveCashExchangeRate` below
+   * consumes it so the rate it fetches and the pair a stored rate is validated
+   * against (the scheduled-investment provenance check, issue #1167) can never
+   * drift apart. Same-currency pairs are reported as `{ X, X }`; the caller
+   * decides what that means (a rate of 1, or a trivially-matching provenance).
+   */
+  async resolveSettlementCurrencyPair(
+    userId: string,
+    accountId: string,
+    fundingAccountId: string | null | undefined,
+    securityId: string | null | undefined,
+  ): Promise<{ from: string; to: string }> {
+    const cashAccount = fundingAccountId
+      ? await this.accountsService.findOne(userId, fundingAccountId)
+      : await this.findCashAccount(userId, accountId);
+
+    let from: string;
+    if (securityId) {
+      const security = await this.securitiesService.findOne(userId, securityId);
+      from = security.currencyCode;
+    } else {
+      const investmentAccount = await this.accountsService.findOne(
+        userId,
+        accountId,
+      );
+      from = investmentAccount.currencyCode;
+    }
+
+    return { from, to: cashAccount.currencyCode };
+  }
+
+  /**
    * Resolve the exchange rate used to convert a transaction's total amount
    * (expressed in the security's currency) into the cash account's currency.
    *
@@ -479,14 +518,64 @@ export class InvestmentTransactionsService {
     dtoRate: number | undefined,
     transactionDate?: string | Date,
   ): Promise<number> {
+    const rate = await this.resolveCashExchangeRateOrNull(
+      userId,
+      accountId,
+      fundingAccountId,
+      securityId,
+      dtoRate,
+      transactionDate,
+    );
+    if (rate === null) {
+      // Posting cannot proceed without a rate for a genuine cross-currency pair:
+      // 1.0 corrupts the cash balance and cost basis by the size of the FX rate
+      // (issue #744). The forecast, which cannot supply one, calls the OrNull
+      // variant instead and renders the projection as unknown (issue #1167).
+      const { from, to } = await this.resolveSettlementCurrencyPair(
+        userId,
+        accountId,
+        fundingAccountId,
+        securityId,
+      );
+      throw new BadRequestException(
+        tr(
+          "errors.securities.exchangeRateUnavailable",
+          `Could not determine an exchange rate for ${from} -> ${to} on the transaction date. Supply an explicit exchangeRate so the cash posting is correct.`,
+          { from, to },
+        ),
+      );
+    }
+    return rate;
+  }
+
+  /**
+   * The settlement-pair FX resolution as a `number | null`: the same pair
+   * derivation and rate path as {@link resolveCashExchangeRate}, but a genuine
+   * cross-currency pair with no determinable rate returns `null` instead of
+   * throwing. Posting wraps this and turns `null` into a `BadRequestException`;
+   * the forecast read model (issue #1167) uses `null` directly to mark an
+   * occurrence's projected cash impact as unknown rather than posting -- or
+   * displaying -- a stale or 1.0 rate. Same-currency is `1` by definition, so it
+   * is never confused with a missing rate.
+   */
+  async resolveCashExchangeRateOrNull(
+    userId: string,
+    accountId: string,
+    fundingAccountId: string | null | undefined,
+    securityId: string | null | undefined,
+    dtoRate: number | undefined,
+    transactionDate?: string | Date,
+  ): Promise<number | null> {
+    let supplied: number | undefined;
     if (dtoRate !== undefined && dtoRate !== null) {
       // A supplied rate is trusted but still has to be a rate. Zero used to be
       // accepted here (the DTO allowed @Min(0)): the preview then multiplied the
       // cash impact by 0 and showed no cash movement, while the committed cash
       // transaction ran `Number(rate) || 1` and posted the full amount at 1.0. A
       // user could approve a zero-cash preview and receive a 1,000 debit
-      // (audit P5-005). Negative is equally not a rate.
-      const supplied = Number(dtoRate);
+      // (audit P5-005). Negative is equally not a rate. This is a caller error,
+      // not a missing rate, so it throws in both variants.
+      supplied = Number(dtoRate);
       if (!Number.isFinite(supplied) || supplied <= 0) {
         throw new BadRequestException(
           tr(
@@ -495,27 +584,30 @@ export class InvestmentTransactionsService {
           ),
         );
       }
-      return supplied;
     }
 
-    const cashAccount = fundingAccountId
-      ? await this.accountsService.findOne(userId, fundingAccountId)
-      : await this.findCashAccount(userId, accountId);
-
-    let sourceCurrency: string;
-    if (securityId) {
-      const security = await this.securitiesService.findOne(userId, securityId);
-      sourceCurrency = security.currencyCode;
-    } else {
-      const investmentAccount = await this.accountsService.findOne(
+    // One derivation of the pair, shared with the provenance check (issue #1167).
+    const { from: sourceCurrency, to: cashCurrency } =
+      await this.resolveSettlementCurrencyPair(
         userId,
         accountId,
+        fundingAccountId,
+        securityId,
       );
-      sourceCurrency = investmentAccount.currencyCode;
+
+    // Same-currency settlement is 1 by definition and DOMINATES an explicit rate
+    // (issue #1167): a non-1 scalar supplied for -- or stored against -- an X->X
+    // pair (e.g. a rate that was legitimate before a security's currency changed
+    // to the cash currency, then explicitly re-entered) must never convert an
+    // amount away from par. This is checked *before* honouring `supplied`, and
+    // after deriving the pair rather than the previous early return on `dtoRate`,
+    // so an explicit 1.50 CAD/CAD resolves to 1, not 1.50.
+    if (sourceCurrency === cashCurrency) {
+      return 1;
     }
 
-    if (sourceCurrency === cashAccount.currencyCode) {
-      return 1;
+    if (supplied !== undefined) {
+      return supplied;
     }
 
     // Prefer the rate as of the transaction date (fetching from Yahoo for that
@@ -524,25 +616,20 @@ export class InvestmentTransactionsService {
     if (transactionDate) {
       rate = await this.exchangeRateService.getRateForDate(
         sourceCurrency,
-        cashAccount.currencyCode,
+        cashCurrency,
         transactionDate,
       );
     }
     if (rate === null) {
       rate = await this.exchangeRateService.getLatestRate(
         sourceCurrency,
-        cashAccount.currencyCode,
+        cashCurrency,
       );
     }
 
     if (rate === null || !(Number(rate) > 0)) {
-      throw new BadRequestException(
-        tr(
-          "errors.securities.exchangeRateUnavailable",
-          `Could not determine an exchange rate for ${sourceCurrency} -> ${cashAccount.currencyCode} on the transaction date. Supply an explicit exchangeRate so the cash posting is correct.`,
-          { from: sourceCurrency, to: cashAccount.currencyCode },
-        ),
-      );
+      // Unknown, not applicable: a zero/negative or absent rate is "no rate".
+      return null;
     }
 
     return Number(rate);
@@ -2275,13 +2362,13 @@ export class InvestmentTransactionsService {
     // stops the split's cash side and its investment side describing different
     // amounts of money.
     if (splitAmount !== undefined) {
-      const signedCashImpact = computeInvestmentCashImpact(
+      const expected = investmentSplitCashAmount(
         dto.action,
         Number(dto.quantity ?? 0),
         Number(dto.price ?? 0),
         Number(dto.commission ?? 0),
+        exchangeRate,
       );
-      const expected = roundMoney(signedCashImpact * exchangeRate);
       if (expected !== roundMoney(Number(splitAmount))) {
         throw new BadRequestException(
           tr(
@@ -4231,10 +4318,7 @@ export class InvestmentTransactionsService {
           }),
         )
       : null;
-    if (
-      linkedLeg &&
-      isAccruedInterestCompanion(transaction, linkedLeg)
-    ) {
+    if (linkedLeg && isAccruedInterestCompanion(transaction, linkedLeg)) {
       throw new BadRequestException(
         tr(
           "errors.securities.accruedInterestCompanionLocked",

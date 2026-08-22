@@ -4,6 +4,7 @@ import {
   IsOptional,
   IsString,
   IsArray,
+  IsBoolean,
   IsEnum,
   ValidateNested,
   ValidateIf,
@@ -18,6 +19,34 @@ import { InvestmentSplitDto } from "../../transactions/dto/create-transaction-sp
 import { SplitKind } from "../../transactions/entities/split-kind.enum";
 
 export class CreateScheduledTransactionSplitDto {
+  // The id of the split row this one continues from (issue #1167 F4). On an
+  // update, the client echoes the existing split's id so the server can decide
+  // FX-rate provenance by stable identity -- not by matching rate values, which
+  // collides when two same-security splits swap rates. Absent means a new split.
+  @ApiPropertyOptional({
+    description:
+      "Id of the source split this row continues (for FX provenance)",
+  })
+  @IsOptional()
+  @IsUUID()
+  sourceSplitId?: string;
+
+  // The client asserts this investment line's FX rate is a deliberate value for
+  // the CURRENT settlement pair (issue #1167 R8-F2): a line the user just added
+  // (no `sourceSplitId`) whose rate was resolved/entered for the securities and
+  // accounts on screen now. The server stamps the current pair for it, so a
+  // genuinely new line's explicit rate is honoured at posting. Absent, a line
+  // without `sourceSplitId` is treated as unknown (an older client, or a legacy
+  // line) and its rate is re-resolved at posting rather than stamped -- so a
+  // stale scalar can never be re-blessed as belonging to the current pair.
+  @ApiPropertyOptional({
+    description:
+      "The FX rate on this new line is for the current settlement pair",
+  })
+  @IsOptional()
+  @IsBoolean()
+  rateExplicit?: boolean;
+
   @ApiPropertyOptional({ enum: SplitKind })
   @IsOptional()
   @IsEnum(SplitKind)

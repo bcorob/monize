@@ -239,6 +239,20 @@ export class BackupRestoreService {
               // foreign keys -- so a new table or a new FK cannot quietly land in the
               // wrong position.
               for (const { table, countKey, scopeToUser } of RESTORE_PLAN) {
+                // monthly_account_balances is a derived cache, not authoritative
+                // data. Trusting the backup's rows re-imports whatever
+                // calculation semantics produced them -- so a backup taken
+                // before the #1242 fix would restore its wrong investment
+                // market_value even on a fixed instance, and migration 164 (a
+                // one-time delete) cannot catch a backup restored after it ran
+                // (review MZ-1242-R3). Skip the insert and let
+                // NetWorthService.ensurePopulated rebuild every account from the
+                // restored source transactions and prices on the next net-worth
+                // read (count === 0 -> full recalculateAllAccounts).
+                if (table === "monthly_account_balances") {
+                  restored[countKey] = 0;
+                  continue;
+                }
                 restored[countKey] = await this.db.insertRows(
                   manager,
                   table,

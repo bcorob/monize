@@ -47,7 +47,7 @@ const REFERENCE_DATA: ReadonlyArray<[string, string]> = [
   ['tags:', 'tag records'],
   [
     'scheduled:',
-    'schedule definitions. Posting one changes its nextDueDate and invalidates this prefix itself; an ordinary transaction write does not touch it',
+    'schedule definitions plus their #1167 FX-derived forecast fields. A transaction write does not touch it, so it stays out of invalidateBalanceCaches; its own writers invalidate it, and an FX-input change (rate refresh, account/security currency edit) drops it via invalidateScheduledFxReadModel',
   ],
   [
     'reports:',
@@ -81,9 +81,16 @@ for (const [path, source] of Object.entries(sources)) {
 }
 
 const apiCacheSource = sources['/src/lib/apiCache.ts'];
-const invalidatorBody = apiCacheSource.slice(
-  apiCacheSource.indexOf('export function invalidateBalanceCaches'),
+// Bound the slice to `invalidateBalanceCaches`'s own body -- not to end of file.
+// Other invalidators live below it now (e.g. invalidateScheduledFxReadModel,
+// which drops the FX-derived `scheduled:` prefix by design); a slice running to
+// EOF would read their bodies and wrongly report `scheduled:` as dropped by the
+// balance helper.
+const invalidatorStart = apiCacheSource.indexOf(
+  'export function invalidateBalanceCaches',
 );
+const invalidatorEnd = apiCacheSource.indexOf('\n}', invalidatorStart);
+const invalidatorBody = apiCacheSource.slice(invalidatorStart, invalidatorEnd);
 
 describe('cache prefix classification', () => {
   it('finds the prefixes it is meant to police', () => {

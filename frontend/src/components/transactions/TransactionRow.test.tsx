@@ -1040,6 +1040,28 @@ describe('TransactionRow payee brand icon', () => {
     expect(container.querySelector('td span[aria-hidden="true"]')).toBeNull();
   });
 
+  it('hides the favicon on phones with a variant, never a bare hidden', () => {
+    // `.hidden` is emitted before every other display utility, so on the
+    // fallback badge (whose own classes include `inline-flex`) a bare
+    // `hidden` loses and the letter circle stays visible on mobile. The
+    // reliable spelling is `max-sm:hidden` -- a variant sorts after the base
+    // utilities and wins below the breakpoint.
+    const { container } = renderRow({}, { payee: withLogo });
+    const img = container.querySelector('td img') as HTMLImageElement;
+    expect(img.classList.contains('max-sm:hidden')).toBe(true);
+    expect(img.classList.contains('hidden')).toBe(false);
+  });
+
+  it('hides the letter badge on phones with a variant, never a bare hidden', () => {
+    const { container } = renderRow(
+      {},
+      { payee: { ...withLogo, hasLogo: false } as Transaction['payee'] },
+    );
+    const badge = container.querySelector('td span[aria-hidden="true"]')!;
+    expect(badge.classList.contains('max-sm:hidden')).toBe(true);
+    expect(badge.classList.contains('hidden')).toBe(false);
+  });
+
   it('keeps the payee button\'s text to the name alone', () => {
     // The badge is a sibling of the button, never inside it: a glyph in there
     // changes what every textContent assertion over the cell reads.

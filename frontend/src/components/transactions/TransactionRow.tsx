@@ -318,13 +318,14 @@ export const TransactionRow = memo(function TransactionRow({
           {/* Brand badge beside the name, never inside the button: the button's
               text is the payee name, and a decorative glyph in it changes what
               every textContent assertion reads. Hidden at dense, where the row
-              is one line of data and a 20px chip per row is noise. */}
+              is one line of data and a 20px chip per row is noise, and on
+              phones, where the payee column has no width to spare. */}
           {density !== 'dense' && payeeLabel && (
             <PayeeLogo
               payee={transaction.payee}
               name={payeeLabel}
               size={20}
-              className="hidden sm:inline-flex"
+              className="max-sm:hidden"
             />
           )}
           {transaction.payeeId && onPayeeClick ? (

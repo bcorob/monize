@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import apiClient from './api';
 import { accountsApi } from './accounts';
+import { scheduledTransactionsApi } from './scheduled-transactions';
+import { invalidateCache } from './apiCache';
 
 vi.mock('./api', () => ({
   default: {
@@ -14,6 +16,9 @@ vi.mock('./api', () => ({
 describe('accountsApi', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // The scheduled read model is cached across modules; clear it so one test's
+    // populated `scheduled:all` cannot serve the next.
+    invalidateCache('scheduled:');
   });
 
   it('create posts to /accounts', async () => {
@@ -56,6 +61,37 @@ describe('accountsApi', () => {
     vi.mocked(apiClient.patch).mockResolvedValue({ data: { id: 'acc-1', name: 'Savings' } });
     await accountsApi.update('acc-1', { name: 'Savings' } as any);
     expect(apiClient.patch).toHaveBeenCalledWith('/accounts/acc-1', { name: 'Savings' });
+  });
+
+  // Issue #1167 review: a settlement/funding/brokerage account's currency is one
+  // side of a scheduled investment's settlement pair, and the scheduled read
+  // model caches server-derived FX fields resolved against it. An account edit
+  // must invalidate `scheduled:all` so getAll() re-resolves them rather than
+  // serving the pre-edit rate from the 120s cache.
+  it('invalidates the scheduled forecast read model when an account is updated', async () => {
+    vi.mocked(apiClient.get).mockResolvedValueOnce({
+      data: [{ id: 'st-1', investmentForecastExchangeRate: 1.5 }],
+    });
+    await scheduledTransactionsApi.getAll();
+    expect(apiClient.get).toHaveBeenCalledTimes(1);
+
+    // Cached within TTL: no second backend call yet.
+    await scheduledTransactionsApi.getAll();
+    expect(apiClient.get).toHaveBeenCalledTimes(1);
+
+    vi.mocked(apiClient.patch).mockResolvedValue({
+      data: { id: 'cash-1', currencyCode: 'USD' },
+    });
+    await accountsApi.update('cash-1', { currencyCode: 'USD' } as any);
+
+    vi.mocked(apiClient.get).mockResolvedValueOnce({
+      data: [{ id: 'st-1', investmentForecastExchangeRate: 1.35 }],
+    });
+    const refreshed = await scheduledTransactionsApi.getAll();
+
+    expect(apiClient.get).toHaveBeenCalledTimes(2);
+    expect(apiClient.get).toHaveBeenLastCalledWith('/scheduled-transactions');
+    expect(refreshed[0].investmentForecastExchangeRate).toBe(1.35);
   });
 
   it('close posts to /accounts/:id/close', async () => {

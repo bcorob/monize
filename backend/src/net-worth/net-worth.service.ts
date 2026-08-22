@@ -25,6 +25,7 @@ import { convertWithRateLookup } from "../common/currency-conversion.util";
 import { FxAggregate } from "../common/fx-aggregate";
 import { applyActionToQuantity } from "../securities/investment-replay.util";
 import { formatDateYMDLocal } from "../common/date-utils";
+import { positionCloseAsOf, PricePoint } from "./position-price.util";
 
 const LIABILITY_TYPES: AccountType[] = [
   AccountType.CREDIT_CARD,
@@ -105,11 +106,24 @@ export class NetWorthService {
   private static readonly RECALC_DEBOUNCE_MS = 2000;
 
   /**
-   * How stale a snapshot may be, relative to its account's last change, before
-   * the sweep recomputes it.
+   * How long a snapshot may lag its account's last change before the sweep
+   * recomputes it -- measured from the change to *now*, not from the change to
+   * the previous snapshot.
    *
-   * Comfortably longer than the debounce plus a slow recalc, so the sweep does
-   * not race the timer that is about to do the same work.
+   * The distinction is load-bearing (review MZ-1242-R5). The sweep fires when
+   * `a.updated_at > s.computed_at AND a.updated_at <= NOW() - grace`: the
+   * account changed after its snapshot, and that change is now older than the
+   * grace, so the debounce timer had ample time and clearly did not run.
+   * Expressing the grace as a required distance *between the change and the old
+   * snapshot* instead (`a.updated_at > s.computed_at + grace`) is a permanent
+   * blind spot: a change one minute after the snapshot never satisfies it, so a
+   * lost debounce for a manual-price edit -- which moves no balance and touches
+   * only `updated_at` -- would never be recovered.
+   *
+   * The grace is comfortably longer than the debounce plus a slow recalc, so
+   * the sweep does not race the timer that is about to do the same work, and
+   * repeated edits keep pushing `updated_at` forward so it waits until the most
+   * recent change has settled.
    */
   private static readonly STALE_SNAPSHOT_GRACE_MS = 10 * 60 * 1000;
 
@@ -210,7 +224,9 @@ export class NetWorthService {
    * Either way `accounts.updated_at` advances, so it is a timestamp the account
    * itself keeps -- and the snapshots are a delete-and-reinsert, so their
    * `updated_at` is when they were last computed. An account whose row is newer
-   * than its own snapshots by more than the grace period was missed.
+   * than its own snapshots, and whose change is now older than the grace
+   * period, was missed (see `STALE_SNAPSHOT_GRACE_MS` for why the grace is an
+   * age of the change, not a distance from the old snapshot -- MZ-1242-R5).
    *
    * This is the idempotent-predicate mechanism from `docs/cron-jobs.md`: two
    * replicas racing the sweep recompute the same accounts from scratch, under the
@@ -231,7 +247,8 @@ export class NetWorthService {
                    FROM monthly_account_balances
                   GROUP BY account_id
                ) s ON s.account_id = a.id
-              WHERE a.updated_at > s.computed_at + ($1::text || ' milliseconds')::interval
+              WHERE a.updated_at > s.computed_at
+                AND a.updated_at <= NOW() - ($1::text || ' milliseconds')::interval
               ORDER BY a.updated_at
               LIMIT $2`,
             [
@@ -1151,7 +1168,8 @@ export class NetWorthService {
       ),
     ];
 
-    // Load securities to check skipPriceUpdates
+    // Load securities for currency (skipPriceUpdates is NOT consulted for
+    // valuation -- see loadValuationSeries / positionCloseAsOf, #1242).
     const securities =
       securityIds.length > 0
         ? await withScopedDb(this.dataSource, (m) =>
@@ -1160,68 +1178,12 @@ export class NetWorthService {
         : [];
     const securityMap = new Map(securities.map((s) => [s.id, s]));
 
-    const marketSecIds = securityIds.filter(
-      (id) => !securityMap.get(id)?.skipPriceUpdates,
-    );
-    const skipSecIds = securityIds.filter(
-      (id) => securityMap.get(id)?.skipPriceUpdates,
-    );
-
-    // Load market prices for the date range
-    const priceRows: any[] =
-      marketSecIds.length > 0
-        ? await this.scopedQuery(
-            `SELECT security_id, price_date, close_price
-           FROM security_prices
-           WHERE security_id = ANY($1::UUID[])
-             AND price_date >= ($2::DATE - INTERVAL '7 days')
-             AND price_date <= $3
-           ORDER BY security_id, price_date`,
-            [marketSecIds, start, end],
-          )
-        : [];
-
-    // Index prices by security -> sorted array of {date, price}
-    const pricesBySec = new Map<
-      string,
-      Array<{ date: string; price: number }>
-    >();
-    for (const p of priceRows) {
-      const secId = p.security_id;
-      if (!pricesBySec.has(secId)) pricesBySec.set(secId, []);
-      pricesBySec.get(secId)!.push({
-        date: this.toDateString(p.price_date),
-        price: Number(p.close_price),
-      });
-    }
-
-    // Load transaction-based prices for skipPriceUpdates securities
-    const txPriceRows: any[] =
-      skipSecIds.length > 0
-        ? await this.scopedQuery(
-            `SELECT security_id, transaction_date, price
-           FROM investment_transactions
-           WHERE security_id = ANY($1::UUID[])
-             AND action = ANY($2)
-             AND price IS NOT NULL AND price > 0
-             AND status != 'VOID'
-           ORDER BY security_id, transaction_date, created_at`,
-            [skipSecIds, MARKET_PRICED_TRADE_ACTIONS],
-          )
-        : [];
-
-    const txPricesBySec = new Map<
-      string,
-      Array<{ date: string; price: number }>
-    >();
-    for (const r of txPriceRows) {
-      const secId = r.security_id;
-      if (!txPricesBySec.has(secId)) txPricesBySec.set(secId, []);
-      txPricesBySec.get(secId)!.push({
-        date: this.toDateString(r.transaction_date),
-        price: Number(r.price),
-      });
-    }
+    // Accepted stored closes for every held security, merged chronologically
+    // with the legacy transaction series (positionCloseAsOf). Every day is
+    // valued at the latest accepted close on or before it, so a manual/imported
+    // price is honoured exactly as a provider quote is.
+    const { stored: pricesBySec, txFallback: txPricesBySec } =
+      await this.loadValuationSeries(securityIds, start, end);
 
     // Load daily cash balances for INVESTMENT_CASH and standalone accounts
     const cashBalances = new Map<string, Map<string, number>>();
@@ -1359,27 +1321,19 @@ export class NetWorthService {
           if (Math.abs(qty) < 0.00000001) continue;
 
           const security = securityMap.get(secId);
-          let price: number | undefined;
 
-          // Value each point at the latest close on or before that day
+          // Value each point at the latest accepted close on or before that day
           // (end-of-day convention). The chart point at date X therefore
           // represents the portfolio's value as of the close of day X, so the
           // series lines up with the month-end-valued monthly snapshots and the
           // final point reflects the most recent available close rather than
-          // lagging a trading day behind it.
-          if (security?.skipPriceUpdates) {
-            const txPrices = txPricesBySec.get(secId) || [];
-            for (const tp of txPrices) {
-              if (tp.date <= dateStr) price = tp.price;
-              else break;
-            }
-          } else {
-            const secPrices = pricesBySec.get(secId) || [];
-            for (const sp of secPrices) {
-              if (sp.date <= dateStr) price = sp.price;
-              else break;
-            }
-          }
+          // lagging a trading day behind it. The accepted store wins over the
+          // legacy transaction fallback regardless of skipPriceUpdates (#1242).
+          const price = positionCloseAsOf(
+            pricesBySec.get(secId),
+            txPricesBySec.get(secId),
+            dateStr,
+          );
 
           if (price != null) {
             const valueInSecCurrency = qty * price;
@@ -1529,13 +1483,6 @@ export class NetWorthService {
         : [];
     const securityMap = new Map(securities.map((s) => [s.id, s]));
 
-    const marketSecIds = securityIds.filter(
-      (id) => !securityMap.get(id)?.skipPriceUpdates,
-    );
-    const skipSecIds = securityIds.filter(
-      (id) => securityMap.get(id)?.skipPriceUpdates,
-    );
-
     // Build the ordered list of sample dates and, for each, a valuation date
     // (the date whose close values that point) plus a price lookup.
     const sampleDates =
@@ -1545,79 +1492,19 @@ export class NetWorthService {
     if (sampleDates.length === 0) return empty;
 
     // --- Price lookups -------------------------------------------------------
-    // Daily values each point at the latest close on or before the date
-    // (end-of-day convention, matching getDailyInvestments). Monthly values
-    // each point at the latest close on or before the month end (matching the
-    // stored monthly snapshots). Both are inclusive of their period end so the
-    // daily and monthly series line up at overlapping dates.
-    const pricesBySec = new Map<
-      string,
-      Array<{ date: string; price: number }>
-    >();
-    const txPricesBySec = new Map<
-      string,
-      Array<{ date: string; price: number }>
-    >();
-    const monthPrices = new Map<string, Map<string, number>>();
-    const monthTxPrices = new Map<string, Map<string, number>>();
-
-    if (granularity === "daily") {
-      if (marketSecIds.length > 0) {
-        const priceRows: any[] = await this.scopedQuery(
-          `SELECT security_id, price_date, close_price
-             FROM security_prices
-             WHERE security_id = ANY($1::UUID[])
-               AND price_date >= ($2::DATE - INTERVAL '7 days')
-               AND price_date <= $3
-             ORDER BY security_id, price_date`,
-          [marketSecIds, start, end],
-        );
-        for (const p of priceRows) {
-          const arr = pricesBySec.get(p.security_id) ?? [];
-          arr.push({
-            date: this.toDateString(p.price_date),
-            price: Number(p.close_price),
-          });
-          pricesBySec.set(p.security_id, arr);
-        }
-      }
-      if (skipSecIds.length > 0) {
-        const txPriceRows: any[] = await this.scopedQuery(
-          `SELECT security_id, transaction_date, price
-             FROM investment_transactions
-             WHERE security_id = ANY($1::UUID[])
-               AND action = ANY($2)
-               AND price IS NOT NULL AND price > 0
-               AND status != 'VOID'
-             ORDER BY security_id, transaction_date, created_at`,
-          [skipSecIds, MARKET_PRICED_TRADE_ACTIONS],
-        );
-        for (const r of txPriceRows) {
-          const arr = txPricesBySec.get(r.security_id) ?? [];
-          arr.push({
-            date: this.toDateString(r.transaction_date),
-            price: Number(r.price),
-          });
-          txPricesBySec.set(r.security_id, arr);
-        }
-      }
-    } else {
-      // Monthly: reuse the month-end price loaders (keyed by month-first date).
-      await Promise.all([
-        this.loadSecurityPrices(
-          securityIds,
-          securityMap,
-          sampleDates,
-          monthPrices,
-        ),
-        this.loadTransactionPrices(
-          securityIds,
-          securityMap,
-          sampleDates,
-          monthTxPrices,
-        ),
-      ]);
-    }
+    // Every point is valued at the latest accepted close on or before its
+    // valuation date (the day itself for daily, the month end for monthly),
+    // from security_prices merged chronologically with the legacy transaction
+    // series. One load for both granularities and no skipPriceUpdates branch --
+    // see positionCloseAsOf (#1242).
+    // Window the price load to the samples actually valued: monthly points are
+    // valued at their month end, which can run past the report `end`, so bound
+    // to the last sample's valuation date rather than to `end`.
+    const lastSample = sampleDates[sampleDates.length - 1];
+    const loadEnd =
+      granularity === "monthly" ? this.monthEndDate(lastSample) : lastSample;
+    const { stored: storedSeries, txFallback: txSeries } =
+      await this.loadValuationSeries(securityIds, sampleDates[0], loadEnd);
 
     // --- Cash balances -------------------------------------------------------
     const cashBalances = new Map<string, Map<string, number>>();
@@ -1673,7 +1560,6 @@ export class NetWorthService {
     for (const sampleDate of sampleDates) {
       const valuationDate =
         granularity === "monthly" ? this.monthEndDate(sampleDate) : sampleDate;
-      const monthKey = granularity === "monthly" ? sampleDate : null;
 
       // Apply every transaction up to this sample point. Daily includes
       // transactions dated on the day itself; monthly includes any transaction
@@ -1702,13 +1588,10 @@ export class NetWorthService {
       for (const [secId, qty] of holdings) {
         if (Math.abs(qty) < 0.00000001) continue;
         const security = securityMap.get(secId);
-        const price = this.priceForSample(
-          secId,
-          security,
-          granularity,
-          sampleDate,
-          monthKey,
-          { pricesBySec, txPricesBySec, monthPrices, monthTxPrices },
+        const price = positionCloseAsOf(
+          storedSeries.get(secId),
+          txSeries.get(secId),
+          valuationDate,
         );
         if (price == null) continue;
         const secCurrency = security?.currencyCode || defaultCurrency;
@@ -1878,38 +1761,6 @@ export class NetWorthService {
     if (!earliest) return end;
     const inception = this.toDateString(earliest);
     return inception > end ? end : inception;
-  }
-
-  /** Latest close valuing a security at one sample point (see granularity notes). */
-  private priceForSample(
-    secId: string,
-    security: Security | undefined,
-    granularity: InvestmentBreakdownGranularity,
-    sampleDate: string,
-    monthKey: string | null,
-    maps: {
-      pricesBySec: Map<string, Array<{ date: string; price: number }>>;
-      txPricesBySec: Map<string, Array<{ date: string; price: number }>>;
-      monthPrices: Map<string, Map<string, number>>;
-      monthTxPrices: Map<string, Map<string, number>>;
-    },
-  ): number | undefined {
-    if (granularity === "monthly") {
-      const map = security?.skipPriceUpdates
-        ? maps.monthTxPrices
-        : maps.monthPrices;
-      return map.get(secId)?.get(monthKey!);
-    }
-    const series = security?.skipPriceUpdates
-      ? maps.txPricesBySec.get(secId)
-      : maps.pricesBySec.get(secId);
-    if (!series) return undefined;
-    let price: number | undefined;
-    for (const p of series) {
-      if (p.date <= sampleDate) price = p.price;
-      else break;
-    }
-    return price;
   }
 
   /** All calendar days in [start, end] inclusive, as YYYY-MM-DD strings. */
@@ -2300,15 +2151,19 @@ export class NetWorthService {
         : [];
     const securityMap = new Map(securities.map((s) => [s.id, s]));
 
-    // Preload prices
-    const marketPrices = new Map<string, Map<string, number>>();
-    const txPrices = new Map<string, Map<string, number>>();
-    if (securityIds.length > 0) {
-      await Promise.all([
-        this.loadSecurityPrices(securityIds, securityMap, months, marketPrices),
-        this.loadTransactionPrices(securityIds, securityMap, months, txPrices),
-      ]);
-    }
+    // Preload accepted stored prices for every held security (plus the legacy
+    // transaction fallback). Not keyed on skipPriceUpdates -- see
+    // loadValuationSeries / positionCloseAsOf (#1242). The window spans the
+    // months being (re)built, from the first month through its month end, so
+    // every month-end valuation below is covered without loading lifetime
+    // history.
+    const windowStart = months[0] ?? startDate;
+    const windowEnd =
+      months.length > 0
+        ? this.monthEndDate(months[months.length - 1])
+        : today;
+    const { stored: storedPrices, txFallback: txPrices } =
+      await this.loadValuationSeries(securityIds, windowStart, windowEnd);
 
     // Build a rate index for security currencies -> account currency so that
     // per-holding market values (which are stored in the security's native
@@ -2368,13 +2223,13 @@ export class NetWorthService {
         if (Math.abs(qty) < 0.00000001) continue;
 
         const security = securityMap.get(secId);
-        let price: number | undefined;
-
-        if (security?.skipPriceUpdates) {
-          price = txPrices.get(secId)?.get(monthStr);
-        } else {
-          price = marketPrices.get(secId)?.get(monthStr);
-        }
+        // Latest accepted close on or before month end, from security_prices
+        // merged chronologically with the legacy transaction series. #1242.
+        const price = positionCloseAsOf(
+          storedPrices.get(secId),
+          txPrices.get(secId),
+          monthEndStr,
+        );
 
         if (price != null) {
           const valueInSecCurrency = qty * price;
@@ -2428,102 +2283,175 @@ export class NetWorthService {
     });
   }
 
-  private async loadSecurityPrices(
+  /**
+   * Accepted stored closes per security (`security_prices.close_price`), sorted
+   * oldest-first, for **every** requested security regardless of
+   * `skipPriceUpdates`. This is the authoritative valuation source: provider
+   * quotes, imports, manual corrections and transaction-derived observations
+   * all live here with source precedence already applied at write time. Keying
+   * the load on `skipPriceUpdates` -- and then valuing skip-flagged securities
+   * from raw transaction prices instead -- is what left a manually corrected
+   * 401(k) reporting its old transaction price on every historical chart
+   * (issue #1242). That flag is a fetch-eligibility rule, not a valuation one.
+   *
+   * Bounded to the report window (`[start, end]`) plus the single most recent
+   * observation *before* `start`, which is the carry-forward that values the
+   * window's first day. Loading the whole lifetime history of every held
+   * security to answer a one-week chart is millions of avoidable rows on a
+   * large portfolio (review MZ-1242-R4). The pre-window boundary keeps an
+   * arbitrarily old sparse/manual price usable without loading everything
+   * between it and the window.
+   */
+  private async loadStoredPriceSeries(
     securityIds: string[],
-    securityMap: Map<string, Security>,
-    months: string[],
-    result: Map<string, Map<string, number>>,
-  ): Promise<void> {
-    const marketSecIds = securityIds.filter(
-      (id) => !securityMap.get(id)?.skipPriceUpdates,
-    );
-    if (marketSecIds.length === 0) return;
-
-    const prices: any[] = await this.scopedQuery(
-      `SELECT security_id, price_date, close_price
-       FROM security_prices
-       WHERE security_id = ANY($1::UUID[])
-       ORDER BY security_id, price_date`,
-      [marketSecIds],
-    );
-
-    const bySecId = new Map<string, Array<{ date: string; price: number }>>();
-    for (const p of prices) {
-      const secId = p.security_id;
-      if (!bySecId.has(secId)) bySecId.set(secId, []);
-      bySecId.get(secId)!.push({
-        date: this.toDateString(p.price_date),
-        price: Number(p.close_price),
-      });
-    }
-
-    for (const secId of marketSecIds) {
-      const secPrices = bySecId.get(secId) || [];
-      const monthPrices = new Map<string, number>();
-
-      for (const monthStr of months) {
-        const monthEnd = this.monthEndDate(monthStr);
-        let bestPrice: number | undefined;
-        for (const sp of secPrices) {
-          if (sp.date <= monthEnd) bestPrice = sp.price;
-          else break;
-        }
-        if (bestPrice != null) monthPrices.set(monthStr, bestPrice);
-      }
-
-      result.set(secId, monthPrices);
-    }
-  }
-
-  private async loadTransactionPrices(
-    securityIds: string[],
-    securityMap: Map<string, Security>,
-    months: string[],
-    result: Map<string, Map<string, number>>,
-  ): Promise<void> {
-    const skipSecIds = securityIds.filter(
-      (id) => securityMap.get(id)?.skipPriceUpdates,
-    );
-    if (skipSecIds.length === 0) return;
+    start: string,
+    end: string,
+  ): Promise<Map<string, PricePoint[]>> {
+    const result = new Map<string, PricePoint[]>();
+    if (securityIds.length === 0) return result;
 
     const rows: any[] = await this.scopedQuery(
-      `SELECT security_id, transaction_date, price
-       FROM investment_transactions
-       WHERE security_id = ANY($1::UUID[])
-         AND action = ANY($2)
-         AND price IS NOT NULL
-         AND price > 0
-         AND status != 'VOID'
-       ORDER BY security_id, transaction_date, created_at`,
-      [skipSecIds, MARKET_PRICED_TRADE_ACTIONS],
+      `WITH boundary AS (
+         SELECT DISTINCT ON (security_id) security_id, price_date, close_price
+           FROM security_prices
+          WHERE security_id = ANY($1::UUID[])
+            AND price_date < $2::DATE
+          ORDER BY security_id, price_date DESC
+       ),
+       windowed AS (
+         SELECT security_id, price_date, close_price
+           FROM security_prices
+          WHERE security_id = ANY($1::UUID[])
+            AND price_date >= $2::DATE
+            AND price_date <= $3::DATE
+       )
+       SELECT security_id, price_date, close_price FROM boundary
+       UNION ALL
+       SELECT security_id, price_date, close_price FROM windowed
+       ORDER BY security_id, price_date`,
+      [securityIds, start, end],
     );
-
-    const bySecId = new Map<string, Array<{ date: string; price: number }>>();
     for (const r of rows) {
-      const secId = r.security_id;
-      if (!bySecId.has(secId)) bySecId.set(secId, []);
-      bySecId.get(secId)!.push({
-        date: this.toDateString(r.transaction_date),
-        price: Number(r.price),
+      const arr = result.get(r.security_id) ?? [];
+      arr.push({
+        date: this.toDateString(r.price_date),
+        close: Number(r.close_price),
       });
+      result.set(r.security_id, arr);
     }
+    return result;
+  }
 
-    for (const secId of skipSecIds) {
-      const txs = bySecId.get(secId) || [];
-      const monthPrices = new Map<string, number>();
+  /**
+   * Transaction-derived closes per security, read directly from
+   * `investment_transactions` -- the legacy fallback (see `positionCloseAsOf`).
+   * Every accepted transaction observation is normally mirrored into
+   * `security_prices`, so this only carries anything for legacy data absent
+   * from the store; it is loaded for every security and merged chronologically
+   * so a stored series that begins mid-window does not suppress the legacy
+   * history that values its earlier dates (review MZ-1242-R1).
+   *
+   * Same-day trades are averaged and rounded to six decimals
+   * (`ROUND(AVG(price), 6)`), reproducing exactly what
+   * `SecurityPriceService.upsertTransactionPrice` would have written to
+   * `security_prices` (which rounds to 1e-6) -- not the raw driver average,
+   * which differs in the last places (review MZ-1242-R8) -- rather than letting
+   * the last row of the day stand in for the session. The row filter is
+   * `price IS NOT NULL`, matching the canonical writer exactly: a zero-price
+   * disposal (a `SELL`/`REDEEM` at $0, which the service allows) is a real
+   * observation the writer stores, so excluding it with `price > 0` would let
+   * the fallback carry an older price forward where the writer would not
+   * (review MZ-1242-R10).
+   *
+   * Bounded to the window plus one pre-window observation, as the stored loader
+   * is. The aggregate is applied *after* the date predicates rather than over
+   * an all-time CTE referenced twice: a lifetime aggregate that PostgreSQL 16
+   * materializes before filtering scans every transaction of every held
+   * security for a one-week report (review MZ-1242-R7). The boundary date is
+   * resolved first with a bounded lookup, then only rows on that date and rows
+   * inside `[start, end]` are aggregated.
+   */
+  private async loadTxPriceSeries(
+    securityIds: string[],
+    start: string,
+    end: string,
+  ): Promise<Map<string, PricePoint[]>> {
+    const result = new Map<string, PricePoint[]>();
+    if (securityIds.length === 0) return result;
 
-      for (const monthStr of months) {
-        const monthEnd = this.monthEndDate(monthStr);
-        let bestPrice: number | undefined;
-        for (const t of txs) {
-          if (t.date <= monthEnd) bestPrice = t.price;
-          else break;
-        }
-        if (bestPrice != null) monthPrices.set(monthStr, bestPrice);
-      }
-
-      result.set(secId, monthPrices);
+    const rows: any[] = await this.scopedQuery(
+      `WITH boundary_dates AS (
+         SELECT DISTINCT ON (security_id) security_id, transaction_date
+           FROM investment_transactions
+          WHERE security_id = ANY($1::UUID[])
+            AND action = ANY($2)
+            AND price IS NOT NULL
+            AND status != 'VOID'
+            AND transaction_date < $3::DATE
+          ORDER BY security_id, transaction_date DESC
+       ),
+       boundary AS (
+         SELECT it.security_id, it.transaction_date,
+                ROUND(AVG(it.price::numeric), 6) AS price
+           FROM investment_transactions it
+           JOIN boundary_dates bd
+             ON bd.security_id = it.security_id
+            AND bd.transaction_date = it.transaction_date
+          WHERE it.action = ANY($2)
+            AND it.price IS NOT NULL
+            AND it.status != 'VOID'
+          GROUP BY it.security_id, it.transaction_date
+       ),
+       windowed AS (
+         SELECT security_id, transaction_date,
+                ROUND(AVG(price::numeric), 6) AS price
+           FROM investment_transactions
+          WHERE security_id = ANY($1::UUID[])
+            AND action = ANY($2)
+            AND price IS NOT NULL
+            AND status != 'VOID'
+            AND transaction_date >= $3::DATE
+            AND transaction_date <= $4::DATE
+          GROUP BY security_id, transaction_date
+       )
+       SELECT security_id, transaction_date, price FROM boundary
+       UNION ALL
+       SELECT security_id, transaction_date, price FROM windowed
+       ORDER BY security_id, transaction_date`,
+      [securityIds, MARKET_PRICED_TRADE_ACTIONS, start, end],
+    );
+    for (const r of rows) {
+      const arr = result.get(r.security_id) ?? [];
+      arr.push({
+        date: this.toDateString(r.transaction_date),
+        close: Number(r.price),
+      });
+      result.set(r.security_id, arr);
     }
+    return result;
+  }
+
+  /**
+   * The pair `positionCloseAsOf` reads: the accepted stored series and the
+   * legacy transaction-derived series, both for every requested security and
+   * both bounded to `[start, end]` plus one pre-window observation.
+   * `skipPriceUpdates` plays no part -- the store is authoritative and the two
+   * are merged chronologically, so an accepted price always wins on its date
+   * while legacy history still values dates the store does not reach.
+   */
+  private async loadValuationSeries(
+    securityIds: string[],
+    start: string,
+    end: string,
+  ): Promise<{
+    stored: Map<string, PricePoint[]>;
+    txFallback: Map<string, PricePoint[]>;
+  }> {
+    const [stored, txFallback] = await Promise.all([
+      this.loadStoredPriceSeries(securityIds, start, end),
+      this.loadTxPriceSeries(securityIds, start, end),
+    ]);
+    return { stored, txFallback };
   }
 
   private async buildRateIndex(

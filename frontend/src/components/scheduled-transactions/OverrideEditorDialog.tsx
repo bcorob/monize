@@ -450,23 +450,22 @@ export function OverrideEditorDialog({
       // selectedDate = the actual date the user wants this occurrence to be (may differ)
       const dateChanged = existingOverride && selectedDate !== existingOverride.overrideDate;
 
-      if (existingOverride && !dateChanged) {
-        // Update existing override (date unchanged)
+      if (existingOverride) {
+        // Update the existing override in place, including a date move (issue
+        // #1167 R10-F3). Moving the date used to delete-then-recreate, which lost
+        // the override's split identities so a validly pinned FX rate could no
+        // longer be correlated and was silently re-resolved. `originalDate` (the
+        // row's identity) is unchanged; only `overrideDate` moves.
         await scheduledTransactionsApi.updateOverride(
           scheduledTransaction.id,
           existingOverride.id,
-          baseData,
+          dateChanged ? { ...baseData, overrideDate: selectedDate } : baseData,
         );
-        toast.success(t('overrideEditor.toasts.updated'));
-      } else if (existingOverride && dateChanged) {
-        // Date changed - delete old override and create new one with same originalDate
-        await scheduledTransactionsApi.deleteOverride(scheduledTransaction.id, existingOverride.id);
-        await scheduledTransactionsApi.createOverride(scheduledTransaction.id, {
-          ...baseData,
-          originalDate: existingOverride.originalDate,
-          overrideDate: selectedDate,
-        });
-        toast.success(t('overrideEditor.toasts.moved'));
+        toast.success(
+          dateChanged
+            ? t('overrideEditor.toasts.moved')
+            : t('overrideEditor.toasts.updated'),
+        );
       } else {
         // Create new override
         await scheduledTransactionsApi.createOverride(scheduledTransaction.id, {

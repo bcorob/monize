@@ -1092,6 +1092,7 @@ describe("SecuritiesController", () => {
       expect(securityPriceService.createManualPrice).toHaveBeenCalledWith(
         "sec-1",
         dto,
+        "user-1",
       );
       expect(result).toEqual({ id: 1, close: 100 });
     });
@@ -1113,6 +1114,7 @@ describe("SecuritiesController", () => {
         "sec-1",
         9,
         dto,
+        "user-1",
       );
       expect(result).toEqual({ id: 9, close: 200 });
     });
@@ -1126,7 +1128,11 @@ describe("SecuritiesController", () => {
       await controller.deletePrice(req, "sec-1", 9);
 
       expect(securitiesService.findOne).toHaveBeenCalledWith("user-1", "sec-1");
-      expect(securityPriceService.deletePrice).toHaveBeenCalledWith("sec-1", 9);
+      expect(securityPriceService.deletePrice).toHaveBeenCalledWith(
+        "sec-1",
+        9,
+        "user-1",
+      );
     });
   });
 

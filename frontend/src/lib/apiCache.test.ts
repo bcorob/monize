@@ -148,4 +148,96 @@ describe('apiCache – dedupe', () => {
     await new Promise(res => setTimeout(res, 5));
     expect(getCached('key6')).toBeUndefined();
   });
+
+  // Issue #1167 close-out: invalidation racing an in-flight success. A read
+  // that started before a mutation must neither be re-served after it nor
+  // repopulate the cache with its pre-mutation result when it finally resolves.
+  it('invalidation makes an in-flight fetch obsolete and its late result cannot resurrect the cache', async () => {
+    let resolveOld!: (val: string) => void;
+    let oldStarted = 0;
+    const oldFetcher = () => {
+      oldStarted++;
+      return new Promise<string>(res => { resolveOld = res; });
+    };
+
+    // Old fetch starts and is left pending (response not yet on the wire).
+    const pOld = dedupe('sched:all', oldFetcher);
+    expect(oldStarted).toBe(1);
+
+    // A mutation invalidates the prefix while the old fetch is still in flight.
+    invalidateCache('sched:');
+
+    // The next caller must start a NEW request, not join the obsolete one.
+    let newStarted = 0;
+    const pNew = dedupe('sched:all', () => {
+      newStarted++;
+      return Promise.resolve('new');
+    });
+    expect(newStarted).toBe(1);
+    expect(pNew).not.toBe(pOld);
+
+    // New fetch resolves first and populates the cache with the fresh value.
+    expect(await pNew).toBe('new');
+    expect(getCached('sched:all')).toBe('new');
+
+    // Old fetch resolves late -- it must NOT overwrite the fresh cache entry.
+    resolveOld('old');
+    expect(await pOld).toBe('old'); // its awaiters still get their value
+    expect(getCached('sched:all')).toBe('new'); // but the cache is not resurrected
+
+    // A subsequent read is served from the fresh cache without another fetch.
+    let thirdStarted = 0;
+    const third = await dedupe('sched:all', () => {
+      thirdStarted++;
+      return Promise.resolve('third');
+    });
+    expect(third).toBe('new');
+    expect(thirdStarted).toBe(0);
+  });
+
+  // clearAllCache must give the same guarantee as a prefix invalidation: a
+  // fetch already in flight cannot resurrect the cache after the clear.
+  it('clearAllCache prevents an in-flight fetch from resurrecting the cache', async () => {
+    let resolveOld!: (val: string) => void;
+    const pOld = dedupe('k:all', () => new Promise<string>(res => { resolveOld = res; }));
+
+    clearAllCache();
+
+    resolveOld('old');
+    expect(await pOld).toBe('old');
+    expect(getCached('k:all')).toBeUndefined();
+  });
+
+  // The old promise's finally must not evict the replacement request's entry.
+  it('a superseded in-flight promise does not evict the replacement on settle', async () => {
+    let resolveOld!: (val: string) => void;
+    const pOld = dedupe('r:all', () => new Promise<string>(res => { resolveOld = res; }));
+
+    invalidateCache('r:');
+
+    let resolveNew!: (val: string) => void;
+    let newStarted = 0;
+    const pNew = dedupe('r:all', () => {
+      newStarted++;
+      return new Promise<string>(res => { resolveNew = res; });
+    });
+    expect(newStarted).toBe(1);
+
+    // Old settles first -- while the new one is still in flight.
+    resolveOld('old');
+    await pOld;
+
+    // The new request must still be tracked: a concurrent caller joins it
+    // rather than starting a third fetch.
+    const pJoin = dedupe('r:all', () => {
+      newStarted++;
+      return Promise.resolve('third');
+    });
+    expect(newStarted).toBe(1);
+    expect(pJoin).toBe(pNew);
+
+    resolveNew('new');
+    expect(await pNew).toBe('new');
+    expect(getCached('r:all')).toBe('new');
+  });
 });

@@ -1,5 +1,9 @@
 import apiClient from './api';
-import { dedupe, invalidateCache } from './apiCache';
+import {
+  dedupe,
+  invalidateCache,
+  invalidateScheduledFxReadModel,
+} from './apiCache';
 
 export interface ExchangeRate {
   id: number;
@@ -88,8 +92,15 @@ export const exchangeRatesApi = {
   },
 
   refreshRates: async () => {
-    invalidateCache('exchange-rates:');
     const response = await apiClient.post('/currencies/exchange-rates/refresh');
+    // Invalidate AFTER the refresh succeeds. The scheduled read model's #1167
+    // forecast fields are resolved from these snapshots, so a rate refresh makes
+    // a cached `scheduled:all` stale (issue #1167 close-out); dropping it after
+    // the POST also lets the generation-aware primitive obsolete any scheduled
+    // read already in flight, rather than letting it repopulate the pre-refresh
+    // value. Invalidating before the POST would leave that window open.
+    invalidateCache('exchange-rates:');
+    invalidateScheduledFxReadModel();
     return response.data;
   },
 

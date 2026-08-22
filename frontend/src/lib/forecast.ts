@@ -104,6 +104,42 @@ function formatDateKey(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
+/** One occurrence produced for the forecast. */
+interface Occurrence {
+  date: string;
+  amount: number;
+  /**
+   * The occurrence's FX-dependent cash amount could not be resolved (issue
+   * #1167): a base or override investment line whose current settlement rate is
+   * unknown. A cumulative forecast withholds the whole series when any occurrence
+   * is unknown, so the flag travels per-occurrence rather than per-schedule -- an
+   * override can be unknown while the base schedule is not, and vice versa.
+   */
+  unknown: boolean;
+}
+
+/**
+ * Does this override carry an embedded investment split? Such an override is
+ * FX-sensitive (issue #1167 F5-2) and projects its server-resolved
+ * `investmentForecastAmount`, not its stale stored `amount`.
+ */
+function overrideHasInvestmentSplits(
+  override: { splits?: { splitKind?: string; investment?: unknown }[] | null },
+): boolean {
+  return (
+    override.splits?.some(
+      s => s.investment != null || s.splitKind === 'investment',
+    ) ?? false
+  );
+}
+
+interface OverrideLookup {
+  overrideDate: string;
+  amount: number | null;
+  hasInvestmentSplits: boolean;
+  investmentForecastAmount?: number | null;
+}
+
 /**
  * Generate all occurrence dates for a scheduled transaction within a date range.
  * Uses override data (amount, date) from futureOverrides for each occurrence.
@@ -112,8 +148,8 @@ function generateOccurrences(
   transaction: ScheduledTransaction,
   startDate: Date,
   endDate: Date
-): Array<{ date: string; amount: number }> {
-  const occurrences: Array<{ date: string; amount: number }> = [];
+): Occurrence[] {
+  const occurrences: Occurrence[] = [];
 
   if (!transaction.isActive) return occurrences;
 
@@ -125,34 +161,72 @@ function generateOccurrences(
   let currentDate = parseLocalDate(transaction.nextDueDate);
   let remainingOccurrences = transaction.occurrencesRemaining;
   const baseAmount = Number(transaction.amount);
+  // Base-schedule FX unknown (parent-investment rate, or embedded-split effective
+  // total). Every base occurrence inherits it; so does an override that falls
+  // through to the base amount.
+  const baseUnknown = hasUnknownForecastRate(transaction);
 
   // Build override lookup map: originalDate -> override
-  const overrideMap = new Map<string, { overrideDate: string; amount: number | null }>();
+  const overrideMap = new Map<string, OverrideLookup>();
+  const toLookup = (o: {
+    overrideDate?: string;
+    amount: number | null;
+    splits?: { splitKind?: string; investment?: unknown }[] | null;
+    investmentForecastAmount?: number | null;
+  }): OverrideLookup => ({
+    // `overrideDate` may be absent on a fallback nextOverride fixture; downstream
+    // treats an absent date as "same date" (uses the occurrence's own date).
+    overrideDate: o.overrideDate ? o.overrideDate.split('T')[0] : '',
+    amount: o.amount,
+    hasInvestmentSplits: overrideHasInvestmentSplits(o),
+    investmentForecastAmount: o.investmentForecastAmount,
+  });
   if (transaction.futureOverrides) {
     for (const o of transaction.futureOverrides) {
       const origKey = o.originalDate.split('T')[0];
-      overrideMap.set(origKey, { overrideDate: o.overrideDate.split('T')[0], amount: o.amount });
+      overrideMap.set(origKey, toLookup(o));
     }
   }
   // Also include nextOverride as fallback (in case futureOverrides is not populated)
   if (transaction.nextOverride && !overrideMap.has(transaction.nextDueDate)) {
-    overrideMap.set(transaction.nextDueDate, {
-      overrideDate: transaction.nextOverride.overrideDate,
-      amount: transaction.nextOverride.amount,
-    });
+    overrideMap.set(transaction.nextDueDate, toLookup(transaction.nextOverride));
   }
+
+  // Resolve the effective amount and unknown flag for one occurrence, given the
+  // override that applies to it (if any). An investment override -- one carrying
+  // investment splits (#1167 F5-2), OR any override of a top-level investment
+  // schedule whose quantity/price/total posting honours (#1167 R6 F3) -- projects
+  // its server-resolved effective total; a non-investment override uses its stored
+  // scalar; a base occurrence uses the base amount.
+  const baseIsInvestment = transaction.isInvestment === true;
+  const resolveOccurrence = (
+    override: OverrideLookup | undefined,
+  ): { amount: number; unknown: boolean } => {
+    if (override && (baseIsInvestment || override.hasInvestmentSplits)) {
+      if (override.investmentForecastAmount == null) {
+        return { amount: 0, unknown: true };
+      }
+      return { amount: override.investmentForecastAmount, unknown: false };
+    }
+    if (override && override.amount != null) {
+      return { amount: Number(override.amount), unknown: false };
+    }
+    // No override, or an override that reuses the base amount.
+    return { amount: baseAmount, unknown: baseUnknown };
+  };
 
   // For ONCE frequency, just check if it's in range
   if (transaction.frequency === 'ONCE') {
     const override = overrideMap.get(formatDateKey(currentDate));
     const effectiveDate = override?.overrideDate ? parseLocalDate(override.overrideDate) : currentDate;
-    const effectiveAmount = override?.amount != null ? Number(override.amount) : baseAmount;
+    const { amount, unknown } = resolveOccurrence(override);
     const effectiveTime = effectiveDate.getTime();
     if (effectiveTime >= startTime && effectiveTime <= endTime) {
       if (!txEndTime || effectiveTime <= txEndTime) {
         occurrences.push({
           date: formatDateKey(effectiveDate),
-          amount: effectiveAmount,
+          amount,
+          unknown,
         });
       }
     }
@@ -185,13 +259,14 @@ function generateOccurrences(
     const effectiveDateKey = override?.overrideDate && override.overrideDate !== currentDateKey
       ? formatDateKey(effectiveDate)
       : currentDateKey;
-    const effectiveAmount = override?.amount != null ? Number(override.amount) : baseAmount;
+    const { amount, unknown } = resolveOccurrence(override);
 
     // Only include if effective date is within our forecast range
     if (effectiveTime >= startTime && effectiveTime <= endTime) {
       occurrences.push({
         date: effectiveDateKey,
-        amount: effectiveAmount,
+        amount,
+        unknown,
       });
 
       if (remainingOccurrences !== null) {
@@ -228,11 +303,99 @@ function isTransfer(transaction: ScheduledTransaction): boolean {
  * affected account, with the amount converted into that account's currency
  * via the recorded exchange rate.
  */
+/**
+ * A split-investment schedule: an ordinary split parent (`isSplit`) carrying at
+ * least one embedded investment split line. Its cash impact is FX-sensitive the
+ * same way a parent investment schedule is (issue #1167), but it has no single
+ * settlement rate -- each investment line settles its own security's currency --
+ * so the server sends one recomputed effective total (`investmentForecastAmount`)
+ * rather than a rate.
+ */
+function hasEmbeddedInvestmentSplits(transaction: ScheduledTransaction): boolean {
+  return (
+    transaction.isSplit === true &&
+    (transaction.splits?.some(
+      s => s.investmentAction != null || s.kind === 'investment',
+    ) ?? false)
+  );
+}
+
+/**
+ * The FX rate the forecast should convert a top-level investment schedule at,
+ * as `number | null` where `null` means "unknown -- withhold" (issue #1167).
+ *
+ * A PRESENT `investmentForecastExchangeRate` is authoritative: `1` for a proven
+ * same-currency pair, a number for a resolved cross-currency pair, `null` when
+ * the current backend could not resolve it.
+ *
+ * An ABSENT field means a backend that predates the field (a rolling deploy).
+ * It is NOT evidence of a 1:1 pair, and a persisted `investmentExchangeRate` is
+ * NOT evidence of the current pair -- it is a rate for whatever pair it was
+ * resolved against, which the referenced security's or settlement account's
+ * currency may since have changed out from under (issue #1167). So the client
+ * derives the current settlement pair from data it already holds and reuses the
+ * persisted scalar ONLY when its recorded provenance proves it belongs to that
+ * pair:
+ *   - either currency unknown -> `null` (cannot prove the pair; withhold);
+ *   - same-currency pair -> `1` (a same-currency pair is always 1, no scalar);
+ *   - cross-currency pair -> the persisted scalar only if it is positive AND its
+ *     `investmentExchangeRate{From,To}Currency` provenance matches the derived
+ *     pair; otherwise `null` (unprovenanced or stale-pair scalar is unknown,
+ *     never `1` and never trusted, so the projection is withheld not fabricated).
+ * The derived pair mirrors the backend's `resolveSettlementCurrencyPair`:
+ * `from` is the security's currency (falling back to the brokerage's), `to` is
+ * the funding-or-linked cash account's currency.
+ */
+function effectiveForecastRate(
+  transaction: ScheduledTransaction,
+  accountsById: Map<string, Account>,
+  cashAccountId: string,
+): number | null {
+  const forecastRate = transaction.investmentForecastExchangeRate;
+  if (forecastRate !== undefined) return forecastRate;
+
+  const brokerage = accountsById.get(transaction.accountId);
+  const fromCurrency =
+    transaction.investmentSecurity?.currencyCode ?? brokerage?.currencyCode;
+  const cash =
+    accountsById.get(cashAccountId) ??
+    (transaction.investmentFundingAccountId === cashAccountId
+      ? transaction.investmentFundingAccount ?? undefined
+      : undefined);
+  const toCurrency = cash?.currencyCode;
+  if (!fromCurrency || !toCurrency) return null;
+  if (fromCurrency === toCurrency) return 1;
+
+  const persisted = transaction.investmentExchangeRate;
+  const provenanceMatches =
+    transaction.investmentExchangeRateFromCurrency === fromCurrency &&
+    transaction.investmentExchangeRateToCurrency === toCurrency;
+  return persisted != null &&
+    Number.isFinite(Number(persisted)) &&
+    Number(persisted) > 0 &&
+    provenanceMatches
+    ? Number(persisted)
+    : null;
+}
+
 function normalizeInvestmentForForecast(
   transaction: ScheduledTransaction,
   accountsById: Map<string, Account>,
 ): ScheduledTransaction {
   if (!transaction.isInvestment) {
+    // Issue #1167: a split-investment schedule projects the server's effective
+    // total (its base splits re-summed at current FX), never the stale stored
+    // `amount`. When any investment line's current rate is unknown the server
+    // sends `null`, and an older backend sends the field absent; in either case
+    // the amount is left as-is because the builders detect the unknown case
+    // (`hasUnknownForecastRate`, which treats null AND absent as unknown) and
+    // withhold the whole series rather than projecting a stale figure.
+    if (
+      hasEmbeddedInvestmentSplits(transaction) &&
+      transaction.investmentForecastAmount != null
+    ) {
+      return { ...transaction, amount: transaction.investmentForecastAmount };
+    }
     return transaction;
   }
   let cashAccountId = transaction.investmentFundingAccountId;
@@ -245,14 +408,31 @@ function normalizeInvestmentForForecast(
   if (!cashAccountId) {
     return transaction;
   }
-  const rate = transaction.investmentExchangeRate != null
-    ? Number(transaction.investmentExchangeRate)
-    : 1;
+  // Issue #1167: the forecast converts the security-currency amount into the
+  // cash account's currency with the server-resolved *forecast* rate, never the
+  // persisted `investmentExchangeRate` (which may be stale for the current
+  // settlement pair). The backend sends `1` for a same-currency pair, a resolved
+  // rate for a cross-currency one, and `null` when the current rate is unknown;
+  // when the field is absent (an older backend, mid rolling deploy) the effective
+  // rate is derived and provenance-checked client-side. The effective rate is
+  // stamped back onto `investmentForecastExchangeRate` so the downstream builders
+  // (`hasUnknownForecastRate`) read one explicit value -- `null` means withhold,
+  // a number means project -- rather than having to re-derive it.
+  const rate = effectiveForecastRate(transaction, accountsById, cashAccountId);
+  const remapped =
+    transaction.accountId === cashAccountId
+      ? transaction
+      : { ...transaction, accountId: cashAccountId };
+  if (rate === null) {
+    // Unknown current FX: remap onto the cash account but do not convert, and
+    // stamp explicit null so the builders withhold the projection for this
+    // investment schedule rather than inventing or trusting a rate.
+    return { ...remapped, investmentForecastExchangeRate: null };
+  }
   if (!Number.isFinite(rate) || rate === 1) {
-    if (transaction.accountId === cashAccountId) {
-      return transaction;
-    }
-    return { ...transaction, accountId: cashAccountId };
+    // Same-currency (or a degenerate rate): no conversion, but the rate is
+    // KNOWN, so stamp it so the projection is not withheld.
+    return { ...remapped, investmentForecastExchangeRate: rate };
   }
   const convertOverride = <T extends { amount: number | null }>(o: T): T => ({
     ...o,
@@ -262,11 +442,43 @@ function normalizeInvestmentForForecast(
     ...transaction,
     accountId: cashAccountId,
     amount: Number(transaction.amount) * rate,
+    investmentForecastExchangeRate: rate,
     futureOverrides: transaction.futureOverrides?.map(convertOverride),
     nextOverride: transaction.nextOverride
       ? convertOverride(transaction.nextOverride)
       : transaction.nextOverride,
   };
+}
+
+/**
+ * An investment schedule whose current settlement FX rate could not be resolved
+ * server-side (issue #1167). Its projected cash impact is unknown, so -- like a
+ * missing display-currency rate -- it withholds the whole cumulative projection
+ * rather than contributing a stale or 1:1 figure. The security's currency (the
+ * `from` side of the unresolved pair) names it in `missingCurrencies`, falling
+ * back to the settlement account's currency.
+ */
+function hasUnknownForecastRate(transaction: ScheduledTransaction): boolean {
+  // This runs on the NORMALIZED transaction (every `generateOccurrences` caller
+  // normalizes first), so an investment schedule always carries an explicit
+  // `investmentForecastExchangeRate` that `normalizeInvestmentForForecast`
+  // stamped: `null` when the current settlement rate is unknown -- an explicit
+  // null from the backend, or an absent field whose derived pair could not be
+  // proven client-side -- and a number when it is known. Read `=== null`.
+  if (transaction.isInvestment) {
+    return transaction.investmentForecastExchangeRate === null;
+  }
+  // A split-investment schedule whose effective total could not be resolved (any
+  // investment line's current rate unknown) is withheld the same way (#1167).
+  // Read `== null`: an absent `investmentForecastAmount` is an older backend that
+  // did not compute it, and the client cannot re-derive a split's current-FX
+  // total from data it holds, so an absent value is unknown -- withhold rather
+  // than project the stale stored `amount`, which may be off by the FX drift
+  // since it was last written (issue #1167 review).
+  if (hasEmbeddedInvestmentSplits(transaction)) {
+    return transaction.investmentForecastAmount == null;
+  }
+  return false;
 }
 
 /**
@@ -415,9 +627,23 @@ export function buildForecast(
     const txAccountId = isInbound ? (tx.transferAccountId ?? tx.accountId) : tx.accountId;
     for (const occ of occurrences) {
       const existing = transactionsByDate.get(occ.date) || [];
+      // An investment occurrence with an unresolved current FX rate makes the
+      // running balance unknown from here on (issue #1167): record the missing
+      // currency and contribute nothing, which withholds the whole series below.
+      // The flag is per-occurrence (F5-2): a base occurrence and an override on
+      // the same schedule can differ.
+      if (occ.unknown) {
+        missingRateCurrencies.add(
+          tx.investmentSecurity?.currencyCode ??
+            accountCurrencyMap.get(txAccountId) ??
+            tx.currencyCode,
+        );
+      }
       existing.push({
         name: tx.name,
-        amount: conv(isInbound ? -occ.amount : occ.amount, txAccountId),
+        amount: occ.unknown
+          ? 0
+          : conv(isInbound ? -occ.amount : occ.amount, txAccountId),
         scheduledTransactionId: tx.id,
       });
       transactionsByDate.set(occ.date, existing);
@@ -560,9 +786,19 @@ export function buildMultiAccountForecast(
 
     for (const { transaction, isInbound } of scheduledFlowsForAccount(normalized, account.id)) {
       for (const occ of generateOccurrences(transaction, today, endDate)) {
+        // Unresolved current FX for an investment occurrence withholds the whole
+        // result (issue #1167), the same as a missing display-currency rate. The
+        // flag is per-occurrence (F5-2).
+        if (occ.unknown) {
+          missingRateCurrencies.add(
+            transaction.investmentSecurity?.currencyCode ?? account.currencyCode,
+          );
+        }
         add(occ.date, {
           name: transaction.name,
-          amount: conv(isInbound ? -occ.amount : occ.amount, account.currencyCode),
+          amount: occ.unknown
+            ? 0
+            : conv(isInbound ? -occ.amount : occ.amount, account.currencyCode),
           scheduledTransactionId: transaction.id,
           accountId: account.id,
         });
@@ -648,7 +884,7 @@ export function getProjectedBalanceAtDate(
   futureTransactions: FutureTransaction[] = [],
   excludeScheduledId?: string,
   allAccounts?: Account[],
-): number {
+): number | null {
   const accountsById = new Map<string, Account>();
   accountsById.set(account.id, account);
   if (allAccounts) {
@@ -692,6 +928,12 @@ export function getProjectedBalanceAtDate(
     const occurrences = generateOccurrences(tx, today, endDate);
     const isInbound = inboundTransferIds.has(tx.id);
     for (const occ of occurrences) {
+      // An investment occurrence whose current FX rate is unknown (issue #1167)
+      // makes the balance at/after its date unknowable, exactly as it withholds
+      // the whole series in `buildForecast`. Return null rather than folding a
+      // stale/raw security-currency amount (or 0) into a projected balance the
+      // user approves a posting against.
+      if (occ.unknown) return null;
       balance += isInbound ? -occ.amount : occ.amount;
     }
   }

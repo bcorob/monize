@@ -4,12 +4,27 @@ import {
   BadRequestException,
   Logger,
 } from "@nestjs/common";
+import { randomUUID } from "crypto";
 import { DataSource } from "typeorm";
-import { ScheduledTransactionOverride } from "./entities/scheduled-transaction-override.entity";
+import {
+  ScheduledTransactionOverride,
+  OverrideSplit,
+} from "./entities/scheduled-transaction-override.entity";
 import {
   CreateScheduledTransactionOverrideDto,
   UpdateScheduledTransactionOverrideDto,
+  OverrideSplitDto,
 } from "./dto/scheduled-transaction-override.dto";
+
+/**
+ * Currency-pair provenance for an override's investment splits (issue #1167),
+ * keyed by split index. Derived by the scheduled service, which owns the
+ * settlement account; the override service just merges it into the stored jsonb.
+ */
+export type OverrideInvestmentProvenance = Map<
+  number,
+  { from: string | null; to: string | null }
+>;
 import { validateSplitAmountSum } from "../common/split-amount.util";
 import { withScopedDb } from "../common/db/scoped-db";
 import { tr } from "../i18n/translate";
@@ -22,9 +37,50 @@ export class ScheduledTransactionOverrideService {
 
   constructor(private dataSource: DataSource) {}
 
+  /**
+   * Reshape override split DTOs into the stored jsonb, merging in the
+   * currency-pair provenance for any investment split that carries a rate
+   * (issue #1167). The pair travels inside the split's `investment` object so
+   * the posting path can tell a still-valid stored rate from a stale one.
+   */
+  private buildOverrideSplits(
+    splits: OverrideSplitDto[] | null | undefined,
+    investmentProvenance?: OverrideInvestmentProvenance,
+  ): OverrideSplit[] | null {
+    return (
+      splits?.map((s, index) => {
+        const pair = investmentProvenance?.get(index);
+        // When the service decided a pair for this split, apply it -- including a
+        // deliberate null (a legacy or unverifiable rate the server refuses to
+        // bless, #1167 R7-F2), which overwrites any stale pair the client echoed
+        // with "unprovenanced" (undefined) so posting re-resolves it.
+        const investment =
+          s.investment && pair
+            ? {
+                ...s.investment,
+                exchangeRateFromCurrency: pair.from ?? undefined,
+                exchangeRateToCurrency: pair.to ?? undefined,
+              }
+            : s.investment;
+        return {
+          // Preserve the stable id a continuing split echoes (sourceSplitId), or
+          // mint one for a new split, so identity survives across edits (#1167 F4).
+          id: s.sourceSplitId ?? randomUUID(),
+          splitKind: s.splitKind,
+          categoryId: s.categoryId ?? null,
+          transferAccountId: s.transferAccountId ?? null,
+          investment,
+          amount: s.amount,
+          memo: s.memo ?? null,
+        };
+      }) ?? null
+    );
+  }
+
   async createOverride(
     scheduledTransactionId: string,
     createDto: CreateScheduledTransactionOverrideDto,
+    investmentProvenance?: OverrideInvestmentProvenance,
   ): Promise<ScheduledTransactionOverride> {
     return withScopedDb(this.dataSource, async (m) => {
       const repo = m.getRepository(ScheduledTransactionOverride);
@@ -72,15 +128,10 @@ export class ScheduledTransactionOverrideService {
         categoryId: createDto.categoryId ?? null,
         description: createDto.description ?? null,
         isSplit: createDto.isSplit ?? null,
-        splits:
-          createDto.splits?.map((s) => ({
-            splitKind: s.splitKind,
-            categoryId: s.categoryId ?? null,
-            transferAccountId: s.transferAccountId ?? null,
-            investment: s.investment,
-            amount: s.amount,
-            memo: s.memo ?? null,
-          })) ?? null,
+        splits: this.buildOverrideSplits(
+          createDto.splits,
+          investmentProvenance,
+        ),
         investmentQuantity: createDto.investmentQuantity ?? null,
         investmentPrice: createDto.investmentPrice ?? null,
         investmentTotalAmount: createDto.investmentTotalAmount ?? null,
@@ -166,6 +217,7 @@ export class ScheduledTransactionOverrideService {
     scheduledTransactionId: string,
     overrideId: string,
     updateDto: UpdateScheduledTransactionOverrideDto,
+    investmentProvenance?: OverrideInvestmentProvenance,
   ): Promise<ScheduledTransactionOverride> {
     const override = await this.findOverride(
       scheduledTransactionId,
@@ -185,6 +237,10 @@ export class ScheduledTransactionOverrideService {
       this.validateOverrideSplits(updateDto.splits, amount);
     }
 
+    // Moving the occurrence's date is an in-place update, so the row (and its
+    // split identities / FX provenance) survives (issue #1167 R10-F3).
+    if (updateDto.overrideDate !== undefined)
+      override.overrideDate = updateDto.overrideDate;
     if (updateDto.amount !== undefined) override.amount = updateDto.amount;
     if (updateDto.categoryId !== undefined)
       override.categoryId = updateDto.categoryId ?? null;
@@ -192,15 +248,10 @@ export class ScheduledTransactionOverrideService {
       override.description = updateDto.description;
     if (updateDto.isSplit !== undefined) override.isSplit = updateDto.isSplit;
     if (updateDto.splits !== undefined) {
-      override.splits =
-        updateDto.splits?.map((s) => ({
-          splitKind: s.splitKind,
-          categoryId: s.categoryId ?? null,
-          transferAccountId: s.transferAccountId ?? null,
-          investment: s.investment,
-          amount: s.amount,
-          memo: s.memo ?? null,
-        })) ?? null;
+      override.splits = this.buildOverrideSplits(
+        updateDto.splits,
+        investmentProvenance,
+      );
     }
     if (updateDto.investmentQuantity !== undefined)
       override.investmentQuantity = updateDto.investmentQuantity;

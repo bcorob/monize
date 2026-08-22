@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import apiClient from './api';
 import { investmentsApi } from './investments';
+import { scheduledTransactionsApi } from './scheduled-transactions';
 import { invalidateCache } from './apiCache';
 import { API_MAX_PAGE_LIMIT } from './api-page-limits';
 
@@ -12,6 +13,9 @@ describe('investmentsApi', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     invalidateCache('investments:');
+    // The scheduled read model is cached across modules; clear it so one test's
+    // populated `scheduled:all` cannot serve the next.
+    invalidateCache('scheduled:');
   });
 
   it('getPortfolioSummary fetches /portfolio/summary', async () => {
@@ -213,6 +217,51 @@ describe('investmentsApi', () => {
     vi.mocked(apiClient.patch).mockResolvedValue({ data: { id: 's-1' } });
     await investmentsApi.updateSecurity('s-1', { name: 'Apple' } as any);
     expect(apiClient.patch).toHaveBeenCalledWith('/securities/s-1', { name: 'Apple' });
+  });
+
+  // Issue #1167 review: the scheduled read model caches server-derived
+  // current-settlement-pair FX fields. A security currency edit (same id) makes
+  // that cached payload stale, so getAll() must hit the backend again rather
+  // than serving the pre-edit forecast rate from the 120s cache. This asserts
+  // the actual stale-read behaviour (a second GET), not merely that
+  // invalidateCache() was called.
+  it('invalidates the scheduled forecast read model when a security is updated', async () => {
+    vi.mocked(apiClient.get).mockResolvedValueOnce({
+      data: [
+        {
+          id: 'st-1',
+          investmentForecastExchangeRate: 1.5,
+          investmentSecurity: { id: 's-1', currencyCode: 'EUR' },
+        },
+      ],
+    });
+    const first = await scheduledTransactionsApi.getAll();
+    expect(first[0].investmentForecastExchangeRate).toBe(1.5);
+    expect(apiClient.get).toHaveBeenCalledTimes(1);
+
+    // A cached read within the TTL does not hit the backend again.
+    await scheduledTransactionsApi.getAll();
+    expect(apiClient.get).toHaveBeenCalledTimes(1);
+
+    vi.mocked(apiClient.patch).mockResolvedValue({
+      data: { id: 's-1', currencyCode: 'USD' },
+    });
+    await investmentsApi.updateSecurity('s-1', { currencyCode: 'USD' } as any);
+
+    vi.mocked(apiClient.get).mockResolvedValueOnce({
+      data: [
+        {
+          id: 'st-1',
+          investmentForecastExchangeRate: 1.35,
+          investmentSecurity: { id: 's-1', currencyCode: 'USD' },
+        },
+      ],
+    });
+    const refreshed = await scheduledTransactionsApi.getAll();
+
+    expect(apiClient.get).toHaveBeenCalledTimes(2);
+    expect(apiClient.get).toHaveBeenLastCalledWith('/scheduled-transactions');
+    expect(refreshed[0].investmentForecastExchangeRate).toBe(1.35);
   });
 
   it('deactivateSecurity posts to /securities/:id/deactivate', async () => {

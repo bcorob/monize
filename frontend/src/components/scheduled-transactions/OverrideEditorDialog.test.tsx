@@ -375,7 +375,10 @@ describe('OverrideEditorDialog', () => {
     expect((dateInput as HTMLInputElement).value).toBe('2025-03-05');
   });
 
-  it('creates new override with changed date by deleting old and creating new', async () => {
+  // Issue #1167 R10-F3: moving an occurrence's date updates the existing override
+  // in place (preserving its split identities and FX provenance), rather than
+  // deleting it and creating a new one -- which lost a validly pinned rate.
+  it('moves the date by updating the existing override in place, not delete+create', async () => {
     const existingOverride = {
       id: 'o1', originalDate: '2025-03-01', overrideDate: '2025-03-01',
       amount: -1500, categoryId: 'c1', description: null,
@@ -392,16 +395,15 @@ describe('OverrideEditorDialog', () => {
     fireEvent.click(screen.getByText('Update Override'));
 
     await waitFor(() => {
-      // Should delete old and create new
-      expect(mockDeleteOverride).toHaveBeenCalledWith('s1', 'o1');
+      expect(mockUpdateOverride).toHaveBeenCalledWith(
+        's1',
+        'o1',
+        expect.objectContaining({ overrideDate: '2025-03-10' }),
+      );
     });
-
-    await waitFor(() => {
-      expect(mockCreateOverride).toHaveBeenCalledWith('s1', expect.objectContaining({
-        originalDate: '2025-03-01',
-        overrideDate: '2025-03-10',
-      }));
-    });
+    // The row is not recreated -- its identity (and any pinned FX provenance) survives.
+    expect(mockDeleteOverride).not.toHaveBeenCalled();
+    expect(mockCreateOverride).not.toHaveBeenCalled();
 
     await waitFor(() => {
       expect(toast.success).toHaveBeenCalledWith('Override moved to new date');
@@ -729,13 +731,17 @@ describe('OverrideEditorDialog', () => {
       fireEvent.blur(dateInput);
       fireEvent.click(screen.getByText('Update Override'));
 
+      // A date-only move updates the existing override in place (R10-F3), keeping
+      // the stored price rather than recreating the row.
       await waitFor(() => {
-        expect(mockCreateOverride).toHaveBeenCalled();
+        expect(mockUpdateOverride).toHaveBeenCalled();
       });
-      expect(mockCreateOverride).toHaveBeenCalledWith(
+      expect(mockUpdateOverride).toHaveBeenCalledWith(
         'inv1',
+        'ov1',
         expect.objectContaining({ investmentPrice: 100, overrideDate: '2025-02-18' }),
       );
+      expect(mockCreateOverride).not.toHaveBeenCalled();
     });
 
     // Total-first (issue #1148): "use latest close" now keeps the scheduled total

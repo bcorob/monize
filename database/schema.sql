@@ -638,6 +638,11 @@ CREATE TABLE scheduled_transactions (
     investment_commission NUMERIC(20, 4) DEFAULT 0,
     investment_total_amount NUMERIC(20, 4), -- for amount-only actions (DIVIDEND, INTEREST, CAPITAL_GAIN)
     investment_exchange_rate NUMERIC(20, 10),
+    -- Currency pair the stored FX rate was resolved for (issue #1167). NULL on
+    -- rows written before the provenance change; posting reuses the rate only
+    -- when this pair still matches the current (security, settlement) currencies.
+    investment_exchange_rate_from_currency VARCHAR(3),
+    investment_exchange_rate_to_currency VARCHAR(3),
     tag_ids JSONB DEFAULT '[]'::jsonb, -- array of tag UUIDs to apply when posting
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -668,6 +673,10 @@ CREATE TABLE scheduled_transaction_splits (
     investment_price NUMERIC(24, 10),
     investment_commission NUMERIC(20, 4),
     investment_exchange_rate NUMERIC(20, 10),
+    -- Currency pair the stored FX rate was resolved for (issue #1167); see the
+    -- matching columns on scheduled_transactions.
+    investment_exchange_rate_from_currency VARCHAR(3),
+    investment_exchange_rate_to_currency VARCHAR(3),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT chk_scheduled_split_kind_exclusive CHECK (
         (kind = 'category'   AND transfer_account_id IS NULL AND investment_action IS NULL) OR

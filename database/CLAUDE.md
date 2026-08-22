@@ -1,9 +1,9 @@
 # Database Directory
 
 ## Overview
-Contains the PostgreSQL schema definition and incremental migration scripts for the monize database.
+PostgreSQL schema definition and incremental migration scripts for the monize database.
 
-A constraint here is usually the strongest available form of a system rule, so several entries in [`docs/system-invariants.md`](../docs/system-invariants.md) are enforced -- or unenforced -- by what is in `schema.sql`. `database/migrations/135_import_jobs_single_active.sql` is the model: a partial unique index doing what a read-then-insert in the service could not, with the reasoning in the migration's own header. See [`docs/concurrency-and-idempotency.md`](../docs/concurrency-and-idempotency.md) for when a constraint is the right mechanism, and note that a uniqueness constraint prevents duplicate *rows* and does nothing about a lost update to one.
+A constraint here is usually the strongest available form of a system rule, so several entries in [`docs/system-invariants.md`](../docs/system-invariants.md) are enforced -- or unenforced -- by what is in `schema.sql`. `database/migrations/135_import_jobs_single_active.sql` is the model: a partial unique index doing what a read-then-insert in the service could not, with the reasoning in the migration's own header. See [`docs/concurrency-and-idempotency.md`](../docs/concurrency-and-idempotency.md) for when a constraint is the right mechanism -- and note that a uniqueness constraint prevents duplicate *rows* and does nothing about a lost update to one.
 
 ## Files
 - `schema.sql` - Full database schema (used for fresh installs). Must be kept in sync with all migrations.
@@ -11,17 +11,9 @@ A constraint here is usually the strongest available form of a system rule, so s
 
 ## Automatic Migrations
 
-Migrations run automatically when the backend starts (both dev and production). The `db-migrate` script:
+Migrations run automatically when the backend starts (dev and production). `db-migrate`: creates a `schema_migrations` tracking table if absent, reads all `.sql` files from `migrations/`, compares against applied migrations, runs pending ones in filename order (each in a transaction), and records each success.
 
-1. Creates a `schema_migrations` tracking table if it doesn't exist
-2. Reads all `.sql` files from the `migrations/` directory
-3. Compares against already-applied migrations in `schema_migrations`
-4. Runs pending migrations in filename order, each wrapped in a transaction
-5. Records each successful migration in `schema_migrations`
-
-**Fresh installs:** `db-init` runs `schema.sql` first (which includes `schema_migrations`), then `db-migrate` runs all migrations. Since migrations use `IF NOT EXISTS`, they're no-ops on a fresh schema.
-
-**Existing installs:** `db-init` skips (tables exist), then `db-migrate` applies only new migrations.
+**Fresh installs:** `db-init` runs `schema.sql` first (which includes `schema_migrations`), then `db-migrate` runs all migrations -- no-ops on a fresh schema because they use `IF NOT EXISTS`. **Existing installs:** `db-init` skips, `db-migrate` applies only new migrations.
 
 ## Development Database Connection
 Credentials are in the root `.env` file (`POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`).
@@ -29,116 +21,48 @@ Credentials are in the root `.env` file (`POSTGRES_DB`, `POSTGRES_USER`, `POSTGR
 ## Creating a New Migration
 
 1. **Create the migration file** in `database/migrations/` with the next sequential number prefix:
-   - **Read the current max from the directory** (`ls database/migrations | tail`) — do not trust a
-     number written in any document, including this one; they go stale (the RLS task list learned
-     this three times).
-   - **The numeric prefix must be unique** — `ls database/migrations | awk -F_ '{print $1}' | sort | uniq -d` should print nothing.
-     Migrations are applied in filename order; duplicate prefixes (we have a few historical pairs at `022`, `068`, `075`, `116`, `117`) leave the apply order ambiguous and rely on alphabetical tie-breaking, which is brittle.
+   - **Read the current max from the directory** (`ls database/migrations | tail`) -- do not trust a number written in any document, including this one; they go stale.
+   - **The numeric prefix must be unique** -- `ls database/migrations | awk -F_ '{print $1}' | sort | uniq -d` should print nothing. Duplicate prefixes (historical pairs exist at `022`, `068`, `075`, `116`, `117`) leave the apply order to alphabetical tie-breaking, which is brittle.
    - Use `IF NOT EXISTS` / `IF EXISTS` to make migrations idempotent
-
 2. **Update `schema.sql`** to reflect the same change (so fresh installs match migrated databases)
-
-3. **Update the backend TypeORM entity** if the migration modifies a table mapped to an entity. Column names in the database use `snake_case`, entity properties use `camelCase`, with the mapping specified via `@Column({ name: 'snake_case_name' })`.
-
-4. **Update the backend DTO** if the field should be user-editable (add validation decorators from `class-validator`)
-
+3. **Update the backend TypeORM entity** if the migration modifies a mapped table. DB columns are `snake_case`, entity properties `camelCase`, mapped via `@Column({ name: 'snake_case_name' })`.
+4. **Update the backend DTO** if the field should be user-editable (class-validator decorators)
 5. **Update frontend types** in `frontend/src/types/` to match
-
-6. **Classify any new column in the support backup** if its table is exported —
-   `backend/src/backup/support-backup/support-backup-rules.ts`. `RULES` is an
-   allowlist, so an unclassified column is dropped from the output rather than
-   leaked, but the golden test in
-   `backend/test/integration/support-backup.integration.spec.ts` still fails
-   until you classify it deliberately. That failure is the point: it forces a
-   decision about a new field instead of letting a migration quietly change what
-   a de-identified backup contains. Pick `keep` for structure, dates, enums,
-   flags and FKs; `mask` for names; `drop` for free text, secrets, and anything
-   that re-identifies a value masked elsewhere — a URL beside a masked name
-   names the thing the mask hides, which is why `payees.website`,
-   `securities.website` and `securities.msn_instrument_id` are all dropped. Use
-   `const` instead of `drop` when the column is NOT NULL.
-
-7. **Ship the table's RLS policy in the same migration** if the table is user-owned — see
-   "Row-Level Security conventions" below. This is a hard convention, not a suggestion.
-
-8. **Restart the backend** — migrations will be applied automatically on startup
+6. **Classify any new column in the support backup** if its table is exported -- `backend/src/backup/support-backup/support-backup-rules.ts`. `RULES` is an allowlist (an unclassified column is dropped, not leaked), but the golden test in `backend/test/integration/support-backup.integration.spec.ts` fails until you classify it deliberately -- forcing a decision instead of letting a migration quietly change what a de-identified backup contains. Pick `keep` for structure, dates, enums, flags and FKs; `mask` for names; `drop` for free text, secrets, and anything that re-identifies a value masked elsewhere (a URL beside a masked name names the thing the mask hides -- why `payees.website`, `securities.website` and `securities.msn_instrument_id` are all dropped). Use `const` instead of `drop` when the column is NOT NULL.
+7. **Ship the table's RLS policy in the same migration** if the table is user-owned -- see below. This is a hard convention.
+8. **Restart the backend** -- migrations apply automatically on startup
 
 ## Row-Level Security conventions (hard rules)
 
-Every user-owned table carries a row-level-security policy; the app emits per-transaction identity
-GUCs through `withScopedDb` and the policies compare each row's owner against them (see
-`docs/future-plans/row-level-security.md` and the runbook). Two rules bind every migration:
+Every user-owned table carries a row-level-security policy; the app emits per-transaction identity GUCs through `withScopedDb` and the policies compare each row's owner against them (see `docs/future-plans/row-level-security.md` and the runbook). Two rules bind every migration:
 
-1. **A migration that creates a user-owned table ships its `CREATE POLICY` in the same file** —
-   `117_mny_import_staging_and_jobs.sql` and `118_security_documents_rls.sql` are the worked
-   examples. And because `123_rls_enable.sql` derives its `ENABLE ROW LEVEL SECURITY` targets from
-   `pg_policies` *at the moment it runs*, any migration numbered **after** `123` must also ship its
-   own `ALTER TABLE <t> ENABLE ROW LEVEL SECURITY;` — on a deployed database `123` has already been
-   recorded in `schema_migrations` and will never run again, so a later policy without its own
-   enable leaves that table as the single unprotected one under enforcement. (Enabling is inert
-   while the app connects as the table owner, i.e. at `RLS_MODE=off`/`shadow`, so shipping it does
-   not change behavior before the operator flips modes.)
+1. **A migration that creates a user-owned table ships its `CREATE POLICY` in the same file** -- `117_mny_import_staging_and_jobs.sql` and `118_security_documents_rls.sql` are the worked examples. Because `123_rls_enable.sql` derives its `ENABLE ROW LEVEL SECURITY` targets from `pg_policies` *at the moment it runs* and never runs again on a deployed database, any migration numbered after `123` must also ship its own `ALTER TABLE <t> ENABLE ROW LEVEL SECURITY;` -- a later policy without it leaves that table as the single unprotected one under enforcement. (Enabling is inert at `RLS_MODE=off`/`shadow`, so shipping it does not change behavior before the operator flips modes.)
 
-   Every table must land in exactly one of **four buckets**, and the catalog-driven
-   `backend/test/integration/rls-enforcement.integration.spec.ts` fails the moment a table is in
-   none (or several):
-   - **Direct**: the table has a `user_id` column → the uniform policy
-     (`user_id = (SELECT app_current_user_id()) OR (SELECT app_bypass_rls())`), picked up with no
-     spec change. Tables keyed by the *authenticated* user additionally OR in
-     `user_id = (SELECT app_real_user_id())` — see `112_rls_policies_direct.sql` Group B.
-   - **Owner-column**: a bespoke owner column (`owner_user_id`, `delegate_user_id`, `users.id`) →
-     bespoke policy (`114_rls_policies_special.sql`), plus an entry in the spec's owner-column map.
-   - **Indirect**: no owner column → an `EXISTS` back to the owning parent
-     (`113_rls_policies_indirect.sql`), plus an entry in the spec's indirect map.
-   - **Exempt**: no owner column to policy on. The set is `RLS_EXEMPT_TABLES` in
-     `backend/src/common/db/rls-exempt-tables.ts`, mirrored as `rls-exempt:` marker lines in
-     `database/schema.sql` and checked against it in both directions (with no database) by
-     `backend/src/common/db/rls-exempt-tables.spec.ts`. Do not write the list out anywhere else --
-     it was previously kept in five places and had already drifted. Exempting a table takes a
-     rationale in `docs/row-level-security-contract.md`, which is canonical.
+   Every table lands in exactly one of **four buckets**, and the catalog-driven `backend/test/integration/rls-enforcement.integration.spec.ts` fails the moment a table is in none (or several):
+   - **Direct**: has a `user_id` column -> the uniform policy (`user_id = (SELECT app_current_user_id()) OR (SELECT app_bypass_rls())`), picked up with no spec change. Tables keyed by the *authenticated* user additionally OR in `user_id = (SELECT app_real_user_id())` -- see `112_rls_policies_direct.sql` Group B.
+   - **Owner-column**: a bespoke owner column (`owner_user_id`, `delegate_user_id`, `users.id`) -> bespoke policy (`114_rls_policies_special.sql`), plus an entry in the spec's owner-column map.
+   - **Indirect**: no owner column -> an `EXISTS` back to the owning parent (`113_rls_policies_indirect.sql`), plus an entry in the spec's indirect map.
+   - **Exempt**: no owner column to policy on. The set is `RLS_EXEMPT_TABLES` in `backend/src/common/db/rls-exempt-tables.ts`, mirrored as `rls-exempt:` marker lines in `database/schema.sql` and checked in both directions (with no database) by `backend/src/common/db/rls-exempt-tables.spec.ts`. Do not write the list out anywhere else -- it was previously kept in five places and had drifted. Exempting a table takes a rationale in `docs/row-level-security-contract.md`, which is canonical.
 
-   Keep the `(SELECT app_current_user_id())` initplan form — a bare function call relies on
-   SQL-function inlining and evaluates per row on sequential scans.
+   Keep the `(SELECT app_current_user_id())` initplan form -- a bare function call relies on SQL-function inlining and evaluates per row on sequential scans.
 
-2. **No migration may name a role.** `GRANT ... TO monize_app` (or any `CREATE/ALTER/DROP ROLE`)
-   in a migration crash-loops every deployment where the role does not exist. The role and its
-   grants are provisioned idempotently by db-init on every startup
-   (`backend/src/common/db/app-role.ts`); on CNPG the role comes from the `Cluster` manifest
-   (`managed.roles`) instead. New tables created by the owner get their grants automatically via
-   `ALTER DEFAULT PRIVILEGES`. The `role-or-grant-statement` rule in
-   `backend/scripts/migration-lint.mjs` enforces this over every migration, so it is a CI failure
-   rather than a convention.
+2. **No migration may name a role.** `GRANT ... TO monize_app` (or any `CREATE/ALTER/DROP ROLE`) in a migration crash-loops every deployment where the role does not exist. The role and its grants are provisioned idempotently by db-init on every startup (`backend/src/common/db/app-role.ts`); on CNPG the role comes from the `Cluster` manifest (`managed.roles`). New tables created by the owner get grants automatically via `ALTER DEFAULT PRIVILEGES`. The `role-or-grant-statement` rule in `backend/scripts/migration-lint.mjs` enforces this in CI.
 
-   **`PUBLIC` is the exception, for the same reason and not in spite of it:** it is a keyword that
-   always resolves, so it cannot fail for a missing role. It has to be permitted, because
-   `CREATE FUNCTION` grants `EXECUTE` to `PUBLIC` implicitly -- revoking that anywhere but the
-   transaction that created the function leaves a window in which any role can execute a fresh
-   `SECURITY DEFINER` function. `136_currency_global_liveness.sql` is the case. This paragraph used
-   to read as an absolute ban while that `REVOKE` was already in the tree, which is a rule nothing
-   checked disagreeing with the code it governs.
+   **`PUBLIC` is the exception, for the same reason and not in spite of it:** it is a keyword that always resolves, so it cannot fail for a missing role. It has to be permitted, because `CREATE FUNCTION` grants `EXECUTE` to `PUBLIC` implicitly -- revoking that anywhere but the transaction that created the function leaves a window in which any role can execute a fresh `SECURITY DEFINER` function. `136_currency_global_liveness.sql` is the case.
 
 ## Migration File Conventions
 - Numbered prefix for ordering: `NNN_description.sql` (e.g., `079_securities_is_favourite.sql`)
-- Use `ADD COLUMN IF NOT EXISTS` for column additions
-- Use `CREATE TABLE IF NOT EXISTS` for new tables
-- Use `CREATE INDEX IF NOT EXISTS` for new indexes
+- Use `ADD COLUMN IF NOT EXISTS`, `CREATE TABLE IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`
 - Include a comment at the top describing the change
 - Keep migrations small and focused on a single change
 - Migrations must be idempotent (safe to run multiple times)
 
 ## Idempotency is a CI gate
 
-Every statement must be a no-op when re-applied to an up-to-date database --
-a half-applied migration otherwise crash-loops the backend at startup. Two
-checks enforce it, and `docs/database-migrations.md` holds the guard recipes
-(`ADD CONSTRAINT` needs a preceding `DROP CONSTRAINT IF EXISTS`, `CREATE
-TRIGGER` a `DROP TRIGGER IF EXISTS` or a `pg_trigger` `DO` block, `INSERT` an
-`ON CONFLICT`, ...) plus the recovery runbook for a failed migration:
+Every statement must be a no-op when re-applied to an up-to-date database -- a half-applied migration otherwise crash-loops the backend at startup. Two checks enforce it, and `docs/database-migrations.md` holds the guard recipes (`ADD CONSTRAINT` needs a preceding `DROP CONSTRAINT IF EXISTS`, `CREATE TRIGGER` a `DROP TRIGGER IF EXISTS` or a `pg_trigger` `DO` block, `INSERT` an `ON CONFLICT`, ...) plus the recovery runbook for a failed migration:
 
-- `cd backend && npm run migration:lint` -- static guard check, run in the
-  "Backend Lint & Type Check" job (`backend/scripts/migration-lint.mjs`).
-- `scripts/verify-schema.sh` -- applies every migration on top of `schema.sql`
-  **twice** and diffs the result, run in the "Schema vs Migrations Drift" job.
+- `cd backend && npm run migration:lint` -- static guard check, run in the "Backend Lint & Type Check" job (`backend/scripts/migration-lint.mjs`).
+- `scripts/verify-schema.sh` -- applies every migration on top of `schema.sql` **twice** and diffs the result, run in the "Schema vs Migrations Drift" job.
 
 ## Tables
 

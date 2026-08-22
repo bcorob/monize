@@ -145,6 +145,21 @@ that date through to the user. The bound above is what tells such a caller the
 date has no price in the first place; the substitution is explicit, marked, and
 after the fact.
 
+A second deliberate exception is **point-in-time position valuation**, and it
+is a different question from a period boundary. A holding you still own is worth
+its latest accepted close carried forward until a newer one supersedes it, with
+no age bound: a private security, a manually priced holding or an untraded fund
+may not have a fresh close for months, and refusing to value it after two weeks
+would report a position the user plainly holds as unknown. So
+`backend/src/net-worth/position-price.util.ts` (`positionCloseAsOf`) uses the
+unbounded `pointAsOf`/`priceAsOf`, not `closeAt`, deliberately -- issue #1242,
+where valuing a manually corrected 401(k) at anything other than its latest
+accepted close is the bug. This does **not** license carrying a stale price into
+a *return* or period-boundary figure (§2, §2.3 still bind those); it is confined
+to "what is this position worth on this date", which reads raw `close_price` and
+never `adjusted_close`. Do not "simplify" `positionCloseAsOf` back onto `closeAt`
+-- that reintroduces #1242.
+
 ### 2.2 An exchange rate is a price
 
 Everything above applies to currency conversion unchanged. A total built from

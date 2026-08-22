@@ -19,6 +19,29 @@ import { InvestmentSplitDto } from "../../transactions/dto/create-transaction-sp
 import { SplitKind } from "../../transactions/entities/split-kind.enum";
 
 export class OverrideSplitDto {
+  // Stable id of the override split this row continues (issue #1167 F4). Echoed
+  // by the client on update so FX-rate provenance is decided by identity, not by
+  // matching rate values; persisted so future edits keep the same identity.
+  @ApiPropertyOptional({
+    description: "Id of the source override split this row continues",
+  })
+  @IsOptional()
+  @IsUUID()
+  sourceSplitId?: string;
+
+  // The client asserts this new override investment line's FX rate is for the
+  // CURRENT settlement pair (issue #1167 R8-F2). Set for a line the user just
+  // added (no `sourceSplitId`); the server stamps the current pair so the
+  // explicit rate is honoured at posting. Absent, a line with no `sourceSplitId`
+  // is unknown (older client or legacy JSON) and re-resolved -- never stamped.
+  @ApiPropertyOptional({
+    description:
+      "The FX rate on this new line is for the current settlement pair",
+  })
+  @IsOptional()
+  @IsBoolean()
+  rateExplicit?: boolean;
+
   @ApiPropertyOptional({ enum: SplitKind })
   @IsOptional()
   @IsEnum(SplitKind)
@@ -134,6 +157,19 @@ export class CreateScheduledTransactionOverrideDto {
 }
 
 export class UpdateScheduledTransactionOverrideDto {
+  // Moving an occurrence's date is an update of the existing override, not a
+  // delete-then-recreate (issue #1167 R10-F3): recreating loses the override's
+  // split identities, so a validly pinned FX rate could no longer be correlated
+  // and was silently re-resolved. `originalDate` (which scheduled occurrence this
+  // overrides) is the row's identity and does not change; only `overrideDate`
+  // (the actual date) moves.
+  @ApiPropertyOptional({
+    description: "New actual date for this occurrence (YYYY-MM-DD)",
+  })
+  @IsOptional()
+  @IsDateString()
+  overrideDate?: string;
+
   @ApiPropertyOptional({ description: "Overridden amount" })
   @IsOptional()
   @IsNumber({ maxDecimalPlaces: 4 })

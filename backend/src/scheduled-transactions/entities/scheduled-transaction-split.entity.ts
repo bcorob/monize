@@ -106,6 +106,24 @@ export class ScheduledTransactionSplit {
   })
   investmentExchangeRate: number | null;
 
+  // Currency pair the stored `investmentExchangeRate` was resolved for (issue
+  // #1167); see the matching fields on ScheduledTransaction.
+  @Column({
+    type: "varchar",
+    length: 3,
+    name: "investment_exchange_rate_from_currency",
+    nullable: true,
+  })
+  investmentExchangeRateFromCurrency: string | null;
+
+  @Column({
+    type: "varchar",
+    length: 3,
+    name: "investment_exchange_rate_to_currency",
+    nullable: true,
+  })
+  investmentExchangeRateToCurrency: string | null;
+
   @ManyToMany(() => Tag)
   @JoinTable({
     name: "scheduled_transaction_split_tags",

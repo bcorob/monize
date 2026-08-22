@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useTranslations } from 'next-intl';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
@@ -137,7 +137,18 @@ function BillsContent() {
   }>({ isOpen: false, transaction: null });
   const [autoOpenedPostId, setAutoOpenedPostId] = useState<string | null>(null);
 
+  // A reload triggered by an AI/undo write (useOnAiAction / useOnUndoRedo)
+  // supersedes any older load still in flight. apiCache stops an obsolete
+  // response from re-entering the cache, but its original awaiter still
+  // receives that response -- so without a latest-request guard here the older
+  // invocation can overwrite the fresh React state when it happens to finish
+  // last, restoring a pre-mutation FX forecast the cache already corrected
+  // (issue #1167 close-out). "Latest load started wins", not "last completion
+  // wins".
+  const loadGenerationRef = useRef(0);
+
   const loadData = useCallback(async () => {
+    const generation = ++loadGenerationRef.current;
     setIsLoading(true);
     try {
       const tomorrow = new Date();
@@ -150,6 +161,9 @@ function BillsContent() {
         accountsApi.getAll(),
         transactionsApi.getAll({ startDate: tomorrowStr, limit: 200 }),
       ]);
+      // A newer load started while this one was awaiting: discard this result
+      // so it cannot overwrite the fresher state.
+      if (generation !== loadGenerationRef.current) return;
       setScheduledTransactions(transactionsData);
       setCategories(categoriesData);
       setAccounts(accountsData);
@@ -165,10 +179,15 @@ function BillsContent() {
           }))
       );
     } catch (error) {
+      // A superseded request must not surface an obsolete failure over a newer
+      // load that has already succeeded.
+      if (generation !== loadGenerationRef.current) return;
       toast.error(getErrorMessage(error, t('toasts.loadFailed')));
       logger.error(error);
     } finally {
-      setIsLoading(false);
+      if (generation === loadGenerationRef.current) {
+        setIsLoading(false);
+      }
     }
   }, [t]);
 

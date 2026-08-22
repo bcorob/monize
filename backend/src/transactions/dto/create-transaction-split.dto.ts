@@ -53,6 +53,28 @@ export class InvestmentSplitDto {
   @Min(0)
   exchangeRate?: number;
 
+  // Currency pair the supplied `exchangeRate` was resolved for (issue #1167).
+  // A scheduled-post round-trip carries these so the server can tell a rate that
+  // still belongs to the current settlement pair from a stale one whose currency
+  // has since changed -- without them a resent scheduled scalar is re-resolved,
+  // never trusted (the same rule the stored-split and override paths follow).
+  @ApiPropertyOptional({
+    description: "Currency the exchangeRate converts FROM (security currency)",
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(3)
+  exchangeRateFromCurrency?: string;
+
+  @ApiPropertyOptional({
+    description:
+      "Currency the exchangeRate converts TO (cash account currency)",
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(3)
+  exchangeRateToCurrency?: string;
+
   @ApiPropertyOptional({ description: "Description of the action" })
   @IsOptional()
   @IsString()

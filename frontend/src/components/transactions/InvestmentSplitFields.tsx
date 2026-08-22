@@ -22,7 +22,15 @@ import { baseInvestmentAction } from '@/lib/investment-actions';
 
 interface InvestmentSplitFieldsProps {
   value: InvestmentSplitDetails | undefined;
-  onChange: (next: InvestmentSplitDetails, computedAmount: number) => void;
+  onChange: (
+    next: InvestmentSplitDetails,
+    computedAmount: number,
+    // Real intent for the FX rate on this emit (issue #1167 R9): `rateEdited` when
+    // the user changed the rate input, `securityChanged` when the selected
+    // security (and thus the settlement pair) changed. The parent turns these
+    // into the row's `exchangeRateEdited` latch.
+    meta: { rateEdited: boolean; securityChanged: boolean },
+  ) => void;
   disabled?: boolean;
   currencyCode?: string;
 }
@@ -118,6 +126,8 @@ export function InvestmentSplitFields({
     field: K,
     fieldValue: InvestmentSplitDetails[K],
   ) => {
+    const securityChanged =
+      field === 'securityId' && fieldValue !== value?.securityId;
     const next: InvestmentSplitDetails = {
       action,
       securityId: value?.securityId,
@@ -128,10 +138,37 @@ export function InvestmentSplitFields({
       // computed amount was derived from rather than leaving the server to
       // resolve a possibly different one.
       exchangeRate: effectiveRate,
+      // Preserve the server-recorded currency pair across every field edit
+      // (issue #1167 F2): dropping it made an edited rate arrive with no
+      // provenance, so the server treated it as unknown and re-resolved -- losing
+      // the user's figure. Kept here, an unchanged rate still reads as still-valid
+      // and only a genuinely edited one is re-derived (by id, server-side).
+      exchangeRateFromCurrency: value?.exchangeRateFromCurrency,
+      exchangeRateToCurrency: value?.exchangeRateToCurrency,
       description: value?.description,
       ...(field === 'action' ? { action: fieldValue as InvestmentAction } : {}),
       [field]: fieldValue,
     };
+
+    // A security change moves the settlement pair, so the rate in force (which may
+    // be the same-currency 1, or a rate resolved for the *old* pair) must not
+    // carry over onto the new pair (issue #1167 R9-F3): a stale 1 blessed as the
+    // new pair's rate books the trade unconverted. Recompute from the NEW
+    // security -- its current market rate for the new pair, or 1 when the new pair
+    // is same-currency -- and leave it unresolved (undefined) rather than 1 when a
+    // cross-currency rate is unavailable. Clear the recorded pair too, so no stale
+    // scalar is blessed for a pair it was not resolved for.
+    if (securityChanged) {
+      const nextSecurity = securities.find((s) => s.id === next.securityId);
+      const nextSecurityCurrency = nextSecurity?.currencyCode ?? currencyCode;
+      const nextCross = nextSecurityCurrency !== currencyCode;
+      const nextMarket = nextCross
+        ? getRate(nextSecurityCurrency, currencyCode)
+        : 1;
+      next.exchangeRate = nextCross ? (nextMarket ?? undefined) : 1;
+      next.exchangeRateFromCurrency = undefined;
+      next.exchangeRateToCurrency = undefined;
+    }
 
     const cashImpact = computeInvestmentCashImpact(
       next.action,
@@ -151,7 +188,10 @@ export function InvestmentSplitFields({
     // investment form, which already converts at 4dp.
     const rate = Number(next.exchangeRate);
     const amount = rate > 0 ? roundToDecimals(cashImpact * rate, 4) : 0;
-    onChange(next, amount);
+    onChange(next, amount, {
+      rateEdited: field === 'exchangeRate',
+      securityChanged,
+    });
   };
 
   // Base-normalized so the Money-vocabulary refinements behave as their base.
@@ -232,14 +272,18 @@ export function InvestmentSplitFields({
             value={effectiveRate}
             onChange={(v) => {
               const incoming = v !== undefined && v > 0 ? v : undefined;
-              // The field shows 6dp but the market rate is stored at 10dp, so a
-              // blur on the untouched field re-reports the 6dp rounding of it.
-              // Do not turn that into a user-stated override that truncates the
-              // rate: ignore a re-report matching the effective rate at display
-              // precision (only relevant while the rate is market-derived).
+              // The field shows 6dp but a rate -- market-derived OR stored -- can
+              // carry up to 10dp, so a blur on the untouched field re-reports the
+              // 6dp rounding of it. `NumericInput` suppresses a no-op only when the
+              // re-parsed text equals its value, which a display-truncated >6dp
+              // rate never does, so the re-report arrives here. Do not turn it into
+              // a user edit: that would latch `rateEdited` and stamp the current
+              // settlement pair onto a truncated, possibly stale-pair scalar --
+              // reopening the #1167 bug class through a no-typing focus+blur. Ignore
+              // any incoming value equal to the effective rate at display precision,
+              // whether the rate came from the market or from a stored override.
               if (
                 incoming !== undefined &&
-                statedRate === undefined &&
                 roundToDecimals(Number(effectiveRate) || 0, FX_RATE_DISPLAY_DECIMALS) ===
                   roundToDecimals(incoming, FX_RATE_DISPLAY_DECIMALS)
               ) {

@@ -4142,6 +4142,187 @@ describe("InvestmentTransactionsService", () => {
     });
   });
 
+  describe("resolveCashExchangeRateOrNull (issue #1167)", () => {
+    const crossCurrency = () => {
+      accountsService.findOne.mockImplementation((_u: string, id: string) =>
+        id === accountId
+          ? Promise.resolve({ ...mockInvestmentAccount })
+          : id === cashAccountId
+            ? Promise.resolve({ ...mockCashAccount, currencyCode: "CAD" })
+            : Promise.resolve(null),
+      );
+      securitiesService.findOne.mockResolvedValue({
+        ...mockSecurity,
+        currencyCode: "EUR",
+      });
+    };
+
+    it("returns null (not throw) when a cross-currency rate is unavailable", async () => {
+      crossCurrency();
+      exchangeRateService.getLatestRate.mockResolvedValue(null);
+      exchangeRateService.getRateForDate.mockResolvedValue(null);
+
+      const rate = await service.resolveCashExchangeRateOrNull(
+        userId,
+        accountId,
+        null,
+        securityId,
+        undefined,
+        undefined,
+      );
+      expect(rate).toBeNull();
+    });
+
+    it("returns the resolved rate for a cross-currency pair", async () => {
+      crossCurrency();
+      exchangeRateService.getLatestRate.mockResolvedValue(1.35);
+
+      const rate = await service.resolveCashExchangeRateOrNull(
+        userId,
+        accountId,
+        null,
+        securityId,
+        undefined,
+        undefined,
+      );
+      expect(rate).toBe(1.35);
+    });
+
+    it("uses the date-aware (provider-capable) path when a date is supplied", async () => {
+      // The forecast passes today's date so it resolves through the same path as
+      // posting: getRateForDate can obtain a rate the stored snapshot lacks
+      // (issue #1167 re-review). getLatestRate alone would miss it.
+      crossCurrency();
+      exchangeRateService.getLatestRate.mockResolvedValue(null);
+      exchangeRateService.getRateForDate.mockResolvedValue(1.35);
+
+      const rate = await service.resolveCashExchangeRateOrNull(
+        userId,
+        accountId,
+        null,
+        securityId,
+        undefined,
+        new Date("2026-08-18T00:00:00.000Z"),
+      );
+      expect(rate).toBe(1.35);
+      expect(exchangeRateService.getRateForDate).toHaveBeenCalledWith(
+        "EUR",
+        "CAD",
+        expect.any(Date),
+      );
+    });
+
+    it("returns 1 for a same-currency pair (never null)", async () => {
+      accountsService.findOne.mockResolvedValue({ ...mockInvestmentAccount });
+      securitiesService.findOne.mockResolvedValue({ ...mockSecurity }); // USD
+
+      const rate = await service.resolveCashExchangeRateOrNull(
+        userId,
+        accountId,
+        null,
+        securityId,
+        undefined,
+        undefined,
+      );
+      expect(rate).toBe(1);
+    });
+
+    it("still throws for a non-positive supplied rate (a caller error, not a missing rate)", async () => {
+      await expect(
+        service.resolveCashExchangeRateOrNull(
+          userId,
+          accountId,
+          null,
+          securityId,
+          0,
+          undefined,
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("normalizes an explicit non-1 rate to 1 for a same-currency pair -- same-currency dominates (R12-F1)", async () => {
+      // The security and cash account are both USD, so the settlement pair is
+      // USD->USD. A supplied 1.50 (e.g. a rate that was legitimate before the
+      // security's currency changed to the cash currency, then explicitly
+      // re-entered) must resolve to 1, never convert the amount away from par.
+      accountsService.findOne.mockResolvedValue({ ...mockInvestmentAccount });
+      securitiesService.findOne.mockResolvedValue({ ...mockSecurity }); // USD
+
+      const rate = await service.resolveCashExchangeRateOrNull(
+        userId,
+        accountId,
+        null,
+        securityId,
+        1.5,
+        undefined,
+      );
+      expect(rate).toBe(1);
+    });
+  });
+
+  describe("resolveSettlementCurrencyPair (issue #1167)", () => {
+    it("pairs the security currency with the linked cash account currency", async () => {
+      accountsService.findOne.mockImplementation((_u: string, id: string) =>
+        id === accountId
+          ? Promise.resolve({ ...mockInvestmentAccount })
+          : id === cashAccountId
+            ? Promise.resolve({ ...mockCashAccount, currencyCode: "CAD" })
+            : Promise.resolve(null),
+      );
+      securitiesService.findOne.mockResolvedValue({
+        ...mockSecurity,
+        currencyCode: "EUR",
+      });
+
+      const pair = await service.resolveSettlementCurrencyPair(
+        userId,
+        accountId,
+        null,
+        securityId,
+      );
+      expect(pair).toEqual({ from: "EUR", to: "CAD" });
+    });
+
+    it("uses the funding account currency as the settlement target", async () => {
+      accountsService.findOne.mockImplementation((_u: string, id: string) =>
+        id === fundingAccountId
+          ? Promise.resolve({ ...mockFundingAccount, currencyCode: "GBP" })
+          : Promise.resolve({ ...mockInvestmentAccount }),
+      );
+      securitiesService.findOne.mockResolvedValue({
+        ...mockSecurity,
+        currencyCode: "EUR",
+      });
+
+      const pair = await service.resolveSettlementCurrencyPair(
+        userId,
+        accountId,
+        fundingAccountId,
+        securityId,
+      );
+      expect(pair).toEqual({ from: "EUR", to: "GBP" });
+    });
+
+    it("falls back to the account currency when there is no security", async () => {
+      accountsService.findOne.mockImplementation((_u: string, id: string) =>
+        id === accountId
+          ? Promise.resolve({ ...mockInvestmentAccount, currencyCode: "JPY" })
+          : id === cashAccountId
+            ? Promise.resolve({ ...mockCashAccount, currencyCode: "JPY" })
+            : Promise.resolve(null),
+      );
+
+      const pair = await service.resolveSettlementCurrencyPair(
+        userId,
+        accountId,
+        null,
+        null,
+      );
+      expect(pair).toEqual({ from: "JPY", to: "JPY" });
+      expect(securitiesService.findOne).not.toHaveBeenCalled();
+    });
+  });
+
   describe("findCashAccount (via create)", () => {
     beforeEach(() => {
       const findOneQB = createMockQueryBuilder(mockBuyTransaction);

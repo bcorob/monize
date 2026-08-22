@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, fireEvent, act } from '@/test/render';
 import BillsPage from './page';
 import { useDensityStore } from '@/store/densityStore';
+import { notifyAiAction } from '@/lib/aiActionSignal';
 
 // Mock next/image
 vi.mock('next/image', () => ({
@@ -1485,6 +1486,61 @@ describe('BillsPage', () => {
       render(<BillsPage />);
       await waitFor(() => expect(screen.getByTestId('scheduled-transaction-list')).toBeInTheDocument());
       expect(screen.queryByTestId('override-editor')).not.toBeInTheDocument();
+    });
+  });
+
+  // Issue #1167 close-out: an AI write (e.g. update_security changing a
+  // currency) fires notifyAiAction() while the initial Bills load is still in
+  // flight. apiCache refuses to re-cache the obsolete response, but its
+  // original awaiter still resolves -- so loadData must discard the older
+  // invocation rather than let its pre-mutation forecast overwrite the fresh
+  // post-mutation state when it finishes last.
+  describe('superseded load ordering', () => {
+    it('does not let a pre-AI load overwrite a newer post-AI reload', async () => {
+      const oldRow = {
+        id: 'st-1',
+        name: 'Old EUR forecast',
+        amount: -1500,
+        frequency: 'MONTHLY',
+        nextDueDate: '2026-02-15',
+        isActive: true,
+        isTransfer: false,
+        startDate: '2026-01-01',
+        endDate: null,
+      };
+      const freshRow = { ...oldRow, name: 'Fresh USD forecast' };
+
+      let resolveOld!: (value: unknown) => void;
+      mockGetAll
+        .mockImplementationOnce(
+          () => new Promise((resolve) => { resolveOld = resolve; }),
+        )
+        .mockResolvedValueOnce([freshRow]);
+
+      render(<BillsPage />);
+
+      // The mount load has started (and is still pending on scheduled getAll).
+      await waitFor(() => expect(mockGetAll).toHaveBeenCalledTimes(1));
+
+      // A confirmed AI write signals the mounted page, starting a second load
+      // while the first is still in flight.
+      await act(async () => {
+        notifyAiAction();
+      });
+
+      await waitFor(() => {
+        expect(mockGetAll).toHaveBeenCalledTimes(2);
+        expect(screen.getByText('Fresh USD forecast')).toBeInTheDocument();
+      });
+
+      // The pre-mutation request finishes last -- it must not win.
+      await act(async () => {
+        resolveOld([oldRow]);
+        await Promise.resolve();
+      });
+
+      expect(screen.getByText('Fresh USD forecast')).toBeInTheDocument();
+      expect(screen.queryByText('Old EUR forecast')).not.toBeInTheDocument();
     });
   });
 });

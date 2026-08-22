@@ -1,6 +1,7 @@
 import { InvestmentAction } from "./entities/investment-transaction.entity";
 import { baseInvestmentAction } from "./investment-replay.util";
 import { disposalCashAmount } from "./accrued-interest.util";
+import { roundMoney } from "../common/round.util";
 
 export const EMBEDDED_INVESTMENT_SPLIT_ACTIONS: ReadonlySet<InvestmentAction> =
   new Set([
@@ -60,4 +61,25 @@ export function computeInvestmentCashImpact(
     default:
       return 0;
   }
+}
+
+/**
+ * The signed cash amount an embedded investment split moves, in the settlement
+ * account's currency: the signed cash impact (security currency) converted at
+ * `rate` and rounded to money precision. This is the single definition of that
+ * figure -- `createEmbeddedForSplit`'s consistency check and the scheduled
+ * posting/forecast paths (issue #1167) all derive the split's cash amount from
+ * it, so a re-resolved FX rate produces one recomputed amount everywhere rather
+ * than a stored figure that disagrees with a fresh rate.
+ */
+export function investmentSplitCashAmount(
+  action: InvestmentAction,
+  quantity: number,
+  price: number,
+  commission: number,
+  rate: number,
+): number {
+  return roundMoney(
+    computeInvestmentCashImpact(action, quantity, price, commission) * rate,
+  );
 }

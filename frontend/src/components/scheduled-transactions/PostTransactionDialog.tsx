@@ -796,7 +796,7 @@ export function PostTransactionDialog({
       </div>
 
       {/* Account balance info */}
-      {projectedBalances && sourceAccount && (
+      {projectedBalances && sourceAccount && projectedBalances.sourceBefore != null && (
         <div className="bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg p-3 mb-4 space-y-2">
           <div className="flex items-center justify-between text-sm">
             <span className="text-gray-600 dark:text-gray-400">{sourceAccount.name}</span>

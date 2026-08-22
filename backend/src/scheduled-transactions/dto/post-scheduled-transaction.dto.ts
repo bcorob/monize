@@ -19,6 +19,30 @@ import { InvestmentSplitDto } from "../../transactions/dto/create-transaction-sp
 import { SplitKind } from "../../transactions/entities/split-kind.enum";
 
 class InlineSplitDto {
+  // Id of the scheduled/override split this inline row came from (issue #1167
+  // F2/F4). The manual Post dialog echoes it so the server can tell a user-edited
+  // rate (honour it) from an unchanged echoed one (reuse-if-current, else
+  // re-resolve) by stable identity rather than by matching rate values.
+  @ApiPropertyOptional({
+    description: "Id of the source split this inline row came from",
+  })
+  @IsOptional()
+  @IsUUID()
+  sourceSplitId?: string;
+
+  // The client asserts this inline investment line's FX rate is for the CURRENT
+  // settlement pair (issue #1167 R8-F2) -- a line the user just added in the Post
+  // dialog. Carried for parity with the create/override DTOs; the inline post path
+  // already re-validates every rate against the current pair via
+  // resolveEffectiveSplitCash, so an absent flag stays safe (re-resolve).
+  @ApiPropertyOptional({
+    description:
+      "The FX rate on this new line is for the current settlement pair",
+  })
+  @IsOptional()
+  @IsBoolean()
+  rateExplicit?: boolean;
+
   @ApiPropertyOptional({ enum: SplitKind })
   @IsOptional()
   @IsEnum(SplitKind)

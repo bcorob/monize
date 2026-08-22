@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import apiClient from './api';
 import { exchangeRatesApi } from './exchange-rates';
+import { scheduledTransactionsApi } from './scheduled-transactions';
 import { invalidateCache } from './apiCache';
 
 vi.mock('./api', () => ({
@@ -11,6 +12,9 @@ describe('exchangeRatesApi', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     invalidateCache('exchange-rates:');
+    // The scheduled read model is cached across modules; clear it so one test's
+    // populated `scheduled:all` cannot serve the next.
+    invalidateCache('scheduled:');
   });
 
   // --- Exchange rates ---
@@ -100,6 +104,37 @@ describe('exchangeRatesApi', () => {
       const result = await exchangeRatesApi.refreshRates();
       expect(result.updated).toBe(0);
       expect(result.message).toBe('No rates to update');
+    });
+
+    // Issue #1167 close-out: the scheduled read model carries FX-derived forecast
+    // fields resolved from these rate snapshots, so a successful refresh must
+    // invalidate `scheduled:all` -- otherwise Bills keeps projecting the pre-refresh
+    // rate for up to the 120s TTL while posting already resolves the new one. This
+    // asserts the actual stale-read behaviour (a second GET), not merely that
+    // invalidateCache was called.
+    it('invalidates the scheduled forecast read model after a successful refresh', async () => {
+      vi.mocked(apiClient.get).mockResolvedValueOnce({
+        data: [{ id: 'st-1', investmentForecastExchangeRate: 1.5 }],
+      });
+      const first = await scheduledTransactionsApi.getAll();
+      expect(first[0].investmentForecastExchangeRate).toBe(1.5);
+      expect(apiClient.get).toHaveBeenCalledTimes(1);
+
+      // Cached within TTL: no second backend call yet.
+      await scheduledTransactionsApi.getAll();
+      expect(apiClient.get).toHaveBeenCalledTimes(1);
+
+      vi.mocked(apiClient.post).mockResolvedValue({ data: { updated: 3 } });
+      await exchangeRatesApi.refreshRates();
+
+      vi.mocked(apiClient.get).mockResolvedValueOnce({
+        data: [{ id: 'st-1', investmentForecastExchangeRate: 1.35 }],
+      });
+      const refreshed = await scheduledTransactionsApi.getAll();
+
+      expect(apiClient.get).toHaveBeenCalledTimes(2);
+      expect(apiClient.get).toHaveBeenLastCalledWith('/scheduled-transactions');
+      expect(refreshed[0].investmentForecastExchangeRate).toBe(1.35);
     });
   });
 

@@ -51,6 +51,9 @@ export interface ScheduledTransactionSplit {
   investmentPrice?: number | null;
   investmentCommission?: number | null;
   investmentExchangeRate?: number | null;
+  // Currency pair the stored rate was resolved for (issue #1167), server-derived.
+  investmentExchangeRateFromCurrency?: string | null;
+  investmentExchangeRateToCurrency?: string | null;
   createdAt: string;
 }
 
@@ -100,6 +103,24 @@ export interface ScheduledTransaction {
   investmentCommission: number | null;
   investmentTotalAmount: number | null;
   investmentExchangeRate: number | null;
+  // Currency pair the stored rate was resolved for (issue #1167), server-derived.
+  investmentExchangeRateFromCurrency?: string | null;
+  investmentExchangeRateToCurrency?: string | null;
+  // Read-only, server-resolved FX rate the cash-flow forecast must use for this
+  // investment schedule (issue #1167) -- resolved through the same settlement
+  // pair + FX path as posting, never the stale persisted `investmentExchangeRate`.
+  // `1` for same-currency, a number for a resolvable cross-currency pair, `null`
+  // when the current rate is unknown (forecast then shows the projection as
+  // unavailable rather than inventing a rate). Absent/`null` for non-investment.
+  investmentForecastExchangeRate?: number | null;
+  // Read-only, server-resolved effective *total* the cash-flow forecast must use
+  // for a split-investment schedule (issue #1167) -- the base splits re-summed
+  // with each investment split's current FX rate, so the forecast matches what
+  // posting would book rather than the stale stored `amount`. A number when every
+  // investment split's current rate is known, `null` when any is unknown (forecast
+  // then shows the projection as unavailable). Absent/`null` for schedules that
+  // carry no investment splits.
+  investmentForecastAmount?: number | null;
   tagIds?: string[];
   splits?: ScheduledTransactionSplit[];
   overrideCount?: number;
@@ -159,17 +180,38 @@ export interface CreateScheduledTransactionData {
   tagIds?: string[];
 }
 
-export interface UpdateScheduledTransactionData extends Partial<CreateScheduledTransactionData> {}
+export interface UpdateScheduledTransactionData
+  extends Partial<CreateScheduledTransactionData> {
+  // Update-only marker (issue #1167 R11-F1): set true when the user actually
+  // re-enters the parent investment FX rate, so the server stamps the current
+  // settlement pair even when the value equals the stored one. The form resends
+  // the whole object, so numeric equality alone cannot distinguish an explicit
+  // re-entry from a passive round-trip. No shipping form emits the parent
+  // `investmentExchangeRate` yet, so nothing sends this today; it exists so a
+  // future caller can express the intent rather than silently re-blessing a
+  // stale rate.
+  investmentExchangeRateExplicit?: boolean;
+}
 
 // ==================== Override Types ====================
 
 export interface OverrideSplit {
+  // Stable id of this override split, server-generated (issue #1167 F4). Returned
+  // in the read model and echoed back as `sourceSplitId` on edit/post so the
+  // server correlates FX-rate provenance by identity, not by matching values.
+  id?: string;
   splitKind?: SplitKind;
   categoryId: string | null;
   transferAccountId?: string | null;
   investment?: InvestmentSplitDetails;
   amount: number;
   memo?: string | null;
+  // Set by the client on write to name the source split this row continues.
+  sourceSplitId?: string;
+  // Set for a newly added investment line (no `sourceSplitId`) so the server
+  // stamps the current settlement pair for its rate instead of re-resolving it
+  // as an unidentified legacy row (issue #1167 R8-F2).
+  rateExplicit?: boolean;
 }
 
 export interface ScheduledTransactionOverride {
@@ -186,6 +228,13 @@ export interface ScheduledTransactionOverride {
   investmentQuantity: number | null;
   investmentPrice: number | null;
   investmentTotalAmount: number | null;
+  // Read-only, server-resolved effective total this override would post today
+  // when it carries investment splits (issue #1167 F5-2) -- its base splits
+  // re-summed at current FX, so the forecast projects what posting would book
+  // rather than the stale stored `amount`. `null` when the override has no
+  // investment split (forecast uses `amount`) or when any line's current rate is
+  // unknown (forecast withholds this occurrence).
+  investmentForecastAmount?: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -204,6 +253,9 @@ export interface CreateScheduledTransactionOverrideData {
 }
 
 export interface UpdateScheduledTransactionOverrideData {
+  // Moving the occurrence's date updates the existing override in place, so its
+  // split identities and FX provenance survive (issue #1167 R10-F3).
+  overrideDate?: string;
   amount?: number | null;
   categoryId?: string | null;
   description?: string | null;

@@ -264,6 +264,8 @@ describe("ScheduledTransactionOverrideService", () => {
         expect.objectContaining({
           splits: [
             {
+              // Server-generated stable id (issue #1167 F4).
+              id: expect.any(String),
               splitKind: undefined,
               categoryId: null,
               transferAccountId: null,
@@ -272,6 +274,7 @@ describe("ScheduledTransactionOverrideService", () => {
               memo: null,
             },
             {
+              id: expect.any(String),
               splitKind: undefined,
               categoryId: null,
               transferAccountId: null,

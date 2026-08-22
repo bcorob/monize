@@ -1,16 +1,17 @@
 # Scheduled-investment FX rate: currency-pair invalidation (follow-up to issue #1154)
 
-Status: deferred. Tracked here because it is a real gap that was out of scope for
-the #1154 posting-path fix. It is ultimately a **financial-correctness** defect,
-not merely a consistency one: once a future occurrence posts with the stale
-scalar, the cash lands at the wrong converted amount and the account balance is
-wrong. What makes deferral reasonable is that nothing corrupts at the moment the
-security/account currency is edited -- the defect materializes only on a later
-scheduled posting, and no data is lost in the meantime. This document is the
-durable record until a GitHub issue is filed for it.
+Status: **implemented** as issue #1167. The durable "persist the currency pair"
+option below was chosen; the shipped design, invariants and test matrix live in
+`docs/specs/scheduled-investment-fx-currency-pair.md`. This file is retained as
+the record of why it was deferred and which options were weighed.
 
-If a GitHub issue is filed, the upstream review target is `kenlasko/monize`
-(where issue #1154 lives), not the mirror this branch is pushed to.
+It was a real gap that was out of scope for the #1154 posting-path fix -- a
+**financial-correctness** defect, not merely a consistency one: once a future
+occurrence posts with the stale scalar, the cash lands at the wrong converted
+amount and the account balance is wrong. What made deferral reasonable is that
+nothing corrupts at the moment the security/account currency is edited -- the
+defect materializes only on a later scheduled posting, and no data is lost in the
+meantime.
 
 ## The gap
 

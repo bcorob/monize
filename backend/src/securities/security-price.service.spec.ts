@@ -266,6 +266,7 @@ describe("SecurityPriceService", () => {
     netWorthService = {
       recalculateAllInvestmentSnapshots: jest.fn().mockResolvedValue(undefined),
       recalculateAllAccounts: jest.fn().mockResolvedValue(undefined),
+      triggerDebouncedRecalc: jest.fn(),
     };
 
     // Mock MSN to always return null by default so most tests stay
@@ -3097,10 +3098,14 @@ describe("SecurityPriceService", () => {
 
   describe("createManualPrice", () => {
     it("should create a new manual price entry", async () => {
-      await service.createManualPrice("sec-1", {
-        priceDate: "2025-06-01",
-        closePrice: 150.5,
-      });
+      await service.createManualPrice(
+        "sec-1",
+        {
+          priceDate: "2025-06-01",
+          closePrice: 150.5,
+        },
+        "user-1",
+      );
 
       expect(upsertedPrices).toHaveLength(1);
       expect(upsertedPrices[0]).toMatchObject({
@@ -3120,10 +3125,14 @@ describe("SecurityPriceService", () => {
       // `ON CONFLICT DO UPDATE` merges onto it rather than inserting.
       seedStoredPrice(existing);
 
-      await service.createManualPrice("sec-1", {
-        priceDate: "2025-06-01",
-        closePrice: 200.0,
-      });
+      await service.createManualPrice(
+        "sec-1",
+        {
+          priceDate: "2025-06-01",
+          closePrice: 200.0,
+        },
+        "user-1",
+      );
 
       // One statement: the manual entry merges onto the provider's row for the
       // same day instead of racing it to a unique violation.
@@ -3133,6 +3142,112 @@ describe("SecurityPriceService", () => {
         source: "manual",
       });
     });
+
+    // Issue #1242 invalidation: a manual price changes an accepted close, so
+    // every account holding the security has a stale monthly snapshot. The
+    // create recomputes them through the shared debounced net-worth path.
+    it("recalculates the snapshots of accounts holding the security", async () => {
+      dataSourceMock.query.mockImplementation(async (sql: string) => {
+        if (/SELECT DISTINCT account_id/.test(sql)) {
+          return [{ account_id: "acc-1" }, { account_id: "acc-2" }];
+        }
+        return [];
+      });
+
+      await service.createManualPrice(
+        "sec-1",
+        { priceDate: "2026-08-20", closePrice: 120 },
+        "user-1",
+      );
+
+      expect(netWorthService.triggerDebouncedRecalc).toHaveBeenCalledWith(
+        "acc-1",
+        "user-1",
+      );
+      expect(netWorthService.triggerDebouncedRecalc).toHaveBeenCalledWith(
+        "acc-2",
+        "user-1",
+      );
+    });
+
+    // MZ-1242-R2: the recompute must survive a crash before the debounce
+    // timer fires, so the write path advances accounts.updated_at in the same
+    // transaction as the price -- a marker sweepStaleSnapshots reads.
+    // The debounce is only a latency optimization on top of it.
+    it("advances holding accounts' updated_at as a stale-recovery marker", async () => {
+      const calls: Array<{ sql: string; params?: unknown[] }> = [];
+      dataSourceMock.query.mockImplementation(
+        async (sql: string, params?: unknown[]) => {
+          calls.push({ sql, params });
+          if (/SELECT DISTINCT account_id/.test(sql)) {
+            return [{ account_id: "acc-1" }, { account_id: "acc-2" }];
+          }
+          return [];
+        },
+      );
+
+      await service.createManualPrice(
+        "sec-1",
+        { priceDate: "2026-08-20", closePrice: 120 },
+        "user-1",
+      );
+
+      const touch = calls.find(
+        (c) =>
+          /UPDATE accounts/.test(c.sql) &&
+          /updated_at\s*=\s*now\(\)/.test(c.sql),
+      );
+      expect(touch).toBeDefined();
+      // Scoped to the holding accounts and the owner.
+      expect(touch?.params?.[0]).toEqual(["acc-1", "acc-2"]);
+      expect(touch?.params?.[1]).toBe("user-1");
+    });
+
+    // MZ-1242 lock ordering: the marker's UPDATE locks the same holding
+    // accounts a background recompute locks, and the debounced recompute runs
+    // concurrently -- so the marker must take the row locks in the shared
+    // ascending-id order (lockAccountsForBalanceWrite) *before* the UPDATE, or
+    // two overlapping manual-price saves deadlock (40P01). Assert both the
+    // ordering relative to the UPDATE and that the lock is sorted and
+    // owner-scoped.
+    it("locks holding accounts in ascending-id order before advancing the marker", async () => {
+      const calls: Array<{ sql: string; params?: unknown[] }> = [];
+      dataSourceMock.query.mockImplementation(
+        async (sql: string, params?: unknown[]) => {
+          calls.push({ sql, params });
+          if (/SELECT DISTINCT account_id/.test(sql)) {
+            // Returned out of order on purpose: the lock helper must sort.
+            return [{ account_id: "acc-2" }, { account_id: "acc-1" }];
+          }
+          return [];
+        },
+      );
+
+      await service.createManualPrice(
+        "sec-1",
+        { priceDate: "2026-08-20", closePrice: 120 },
+        "user-1",
+      );
+
+      const lockIdx = calls.findIndex(
+        (c) =>
+          /FROM accounts/.test(c.sql) &&
+          /FOR UPDATE/.test(c.sql) &&
+          /ORDER BY id/.test(c.sql),
+      );
+      const updateIdx = calls.findIndex(
+        (c) =>
+          /UPDATE accounts/.test(c.sql) &&
+          /updated_at\s*=\s*now\(\)/.test(c.sql),
+      );
+      expect(lockIdx).toBeGreaterThanOrEqual(0);
+      expect(updateIdx).toBeGreaterThanOrEqual(0);
+      // The lock is taken before the write it protects.
+      expect(lockIdx).toBeLessThan(updateIdx);
+      // Ascending-id order, owner-scoped -- the deadlock guard.
+      expect(calls[lockIdx].params?.[0]).toEqual(["acc-1", "acc-2"]);
+      expect(calls[lockIdx].params?.[1]).toBe("user-1");
+    });
   });
 
   describe("updatePrice", () => {
@@ -3141,7 +3256,7 @@ describe("SecurityPriceService", () => {
         ...mockPriceEntry,
       });
 
-      await service.updatePrice("sec-1", 1, { closePrice: 200.0 });
+      await service.updatePrice("sec-1", 1, { closePrice: 200.0 }, "user-1");
 
       expect(securityPriceRepository.save).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -3151,11 +3266,25 @@ describe("SecurityPriceService", () => {
       );
     });
 
+    it("recalculates the snapshots of accounts holding the security", async () => {
+      securityPriceRepository.findOne.mockResolvedValue({ ...mockPriceEntry });
+      dataSourceMock.query.mockImplementation(async (sql: string) =>
+        /SELECT DISTINCT account_id/.test(sql) ? [{ account_id: "acc-1" }] : [],
+      );
+
+      await service.updatePrice("sec-1", 1, { closePrice: 200.0 }, "user-1");
+
+      expect(netWorthService.triggerDebouncedRecalc).toHaveBeenCalledWith(
+        "acc-1",
+        "user-1",
+      );
+    });
+
     it("should throw NotFoundException when price not found", async () => {
       securityPriceRepository.findOne.mockResolvedValue(null);
 
       await expect(
-        service.updatePrice("sec-1", 999, { closePrice: 200.0 }),
+        service.updatePrice("sec-1", 999, { closePrice: 200.0 }, "user-1"),
       ).rejects.toThrow("Security price not found");
     });
   });
@@ -3172,17 +3301,39 @@ describe("SecurityPriceService", () => {
         { avg_price: null, latest_action: null },
       ]);
 
-      await service.deletePrice("sec-1", 1);
+      await service.deletePrice("sec-1", 1, "user-1");
 
       expect(securityPriceRepository.remove).toHaveBeenCalledWith(
         priceToDelete,
       );
     });
 
+    it("recalculates the snapshots of accounts holding the security after deletion", async () => {
+      securityPriceRepository.findOne.mockResolvedValue({
+        ...mockPriceEntry,
+        priceDate: "2025-06-01",
+      });
+      securityPriceRepository.remove = jest.fn().mockResolvedValue(undefined);
+      dataSourceMock.query.mockImplementation(async (sql: string) => {
+        if (/SELECT DISTINCT account_id/.test(sql)) {
+          return [{ account_id: "acc-1" }];
+        }
+        // upsertTransactionPrice's read finds no transaction to restore.
+        return [{ avg_price: null, latest_action: null }];
+      });
+
+      await service.deletePrice("sec-1", 1, "user-1");
+
+      expect(netWorthService.triggerDebouncedRecalc).toHaveBeenCalledWith(
+        "acc-1",
+        "user-1",
+      );
+    });
+
     it("should throw NotFoundException when price not found", async () => {
       securityPriceRepository.findOne.mockResolvedValue(null);
 
-      await expect(service.deletePrice("sec-1", 999)).rejects.toThrow(
+      await expect(service.deletePrice("sec-1", 999, "user-1")).rejects.toThrow(
         "Security price not found",
       );
     });

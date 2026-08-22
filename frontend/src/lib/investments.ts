@@ -35,7 +35,13 @@ import {
   InvestmentRegisterFilterOptions,
 } from '@/types/investment';
 import { IntradayBreakdown } from '@/types/net-worth';
-import { getCached, setCache, invalidateBalanceCaches, invalidateCache } from './apiCache';
+import {
+  getCached,
+  setCache,
+  invalidateBalanceCaches,
+  invalidateCache,
+  invalidateScheduledFxReadModel,
+} from './apiCache';
 import { API_MAX_PAGE_LIMIT } from './api-page-limits';
 
 export const investmentsApi = {
@@ -510,6 +516,18 @@ export const investmentsApi = {
   // Update security
   updateSecurity: async (id: string, data: Partial<CreateSecurityData>): Promise<Security> => {
     const response = await apiClient.patch<Security>(`/securities/${id}`, data);
+    // Issue #1167: the scheduled-transaction read model (`scheduled:all`) carries
+    // server-derived, current-settlement-pair FX fields
+    // (investmentForecastExchangeRate / investmentForecastAmount) whose
+    // correctness depends on the referenced security's CURRENT currency. A
+    // currency edit keeping the same security id makes that cached payload
+    // semantically stale, so drop it -- otherwise the forecast keeps projecting
+    // the old pair's rate for up to the 120s TTL while posting already resolves
+    // the new pair. Invalidate on every update rather than diffing currencyCode:
+    // an occasional extra scheduled refetch is far cheaper than silently gaining
+    // an un-invalidated branch here later. One semantic helper shared with the
+    // account-update and rate-refresh paths.
+    invalidateScheduledFxReadModel();
     return response.data;
   },
 

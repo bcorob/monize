@@ -786,7 +786,7 @@ export class SecuritiesController {
     @Body() dto: CreateSecurityPriceDto,
   ) {
     await this.securitiesService.findOne(req.user.id, id);
-    return this.securityPriceService.createManualPrice(id, dto);
+    return this.securityPriceService.createManualPrice(id, dto, req.user.id);
   }
 
   @Patch(":id/prices/:priceId")
@@ -799,7 +799,7 @@ export class SecuritiesController {
     @Body() dto: UpdateSecurityPriceDto,
   ) {
     await this.securitiesService.findOne(req.user.id, id);
-    return this.securityPriceService.updatePrice(id, priceId, dto);
+    return this.securityPriceService.updatePrice(id, priceId, dto, req.user.id);
   }
 
   @Delete(":id/prices/:priceId")
@@ -811,6 +811,6 @@ export class SecuritiesController {
     @Param("priceId", ParseIntPipe) priceId: number,
   ) {
     await this.securitiesService.findOne(req.user.id, id);
-    await this.securityPriceService.deletePrice(id, priceId);
+    await this.securityPriceService.deletePrice(id, priceId, req.user.id);
   }
 }

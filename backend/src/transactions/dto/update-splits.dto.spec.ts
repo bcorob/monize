@@ -1,6 +1,7 @@
 import "reflect-metadata";
 import { validate } from "class-validator";
 import { plainToInstance } from "class-transformer";
+import { ValidationPipe, BadRequestException } from "@nestjs/common";
 import { UpdateSplitsDto } from "./update-splits.dto";
 
 function buildDto(data: any): UpdateSplitsDto {
@@ -55,5 +56,42 @@ describe("UpdateSplitsDto", () => {
     const dto = buildDto({ splits });
     const errors = await validate(dto);
     expect(errors).toHaveLength(0);
+  });
+
+  // R7-F1: `sourceSplitId` is scheduled-transaction split correlation metadata
+  // (issue #1167). It must NOT leak into the shared ordinary-transaction split
+  // serializer, because the ordinary CreateTransactionSplitDto does not declare
+  // it and the global pipe rejects unknown properties -- so a serializer that
+  // emitted it would 400 every ordinary split edit and duplicate. These run the
+  // payload through the ACTUAL production ValidationPipe (whitelist +
+  // forbidNonWhitelisted + transform), which the raw `validate()` cases above do
+  // not exercise.
+  describe("R7-F1: sourceSplitId must not reach the ordinary split DTO", () => {
+    // Same options main.ts installs globally.
+    const pipe = new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+    });
+    const metadata = {
+      type: "body" as const,
+      metatype: UpdateSplitsDto,
+      data: "",
+    };
+
+    it("accepts an ordinary split with no sourceSplitId (the serializer's output)", async () => {
+      await expect(
+        pipe.transform({ splits: [{ ...validSplit }] }, metadata),
+      ).resolves.toBeDefined();
+    });
+
+    it("rejects an ordinary split that carries sourceSplitId", async () => {
+      await expect(
+        pipe.transform(
+          { splits: [{ ...validSplit, sourceSplitId: "not-a-real-field" }] },
+          metadata,
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
   });
 });

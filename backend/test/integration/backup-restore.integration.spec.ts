@@ -13,6 +13,7 @@ import { BackupExportService } from "@/backup/backup-export.service";
 import { BackupRestoreService } from "@/backup/backup-restore.service";
 import { BackupAttachmentTransferService } from "@/backup/backup-attachment-transfer.service";
 import { BackupRestoreDatabaseService } from "@/backup/backup-restore-database.service";
+import { NetWorthService } from "@/net-worth/net-worth.service";
 import { User } from "@/users/entities/user.entity";
 import { OidcReauthService } from "@/auth/oidc/oidc-reauth.service";
 import { AiEncryptionService } from "@/ai/ai-encryption.service";
@@ -42,6 +43,7 @@ import { withUserContext } from "@/common/db/with-context";
 describe("Backup export/restore round-trip (integration)", () => {
   let module: TestingModule;
   let service: BackupService;
+  let netWorth: NetWorthService;
   let dataSource: DataSource;
 
   // The shared login password createTestUserDirect bakes into every user; the
@@ -93,6 +95,10 @@ describe("Backup export/restore round-trip (integration)", () => {
         BackupRestoreService,
         BackupAttachmentTransferService,
         BackupRestoreDatabaseService,
+        // Real, depends only on DataSource: the R6 case proves restore does not
+        // reinstate a pre-#1242 derived snapshot and that the lazy rebuild
+        // (ensurePopulated) recomputes it under the corrected algorithm.
+        NetWorthService,
         // The REAL re-authentication service, not a double: it is the thing that
         // refuses a restore without a valid artifact, and a mock here would let a
         // future change remove that check with this suite still green. Local-auth
@@ -119,6 +125,7 @@ describe("Backup export/restore round-trip (integration)", () => {
     }).compile();
 
     service = module.get(BackupService);
+    netWorth = module.get(NetWorthService);
     dataSource = module.get(DataSource);
 
     // synchronize:true builds the schema from entity metadata, which includes
@@ -969,5 +976,102 @@ describe("Backup export/restore round-trip (integration)", () => {
       const expected = new Set([...RESTORABLE_TABLES, "currencies"]);
       expect([...covered].sort()).toEqual([...expected].sort());
     });
+  });
+
+  // MZ-1242-R6: monthly_account_balances is a derived cache. A backup taken
+  // before the #1242 fix carries a wrong investment market_value; trusting it
+  // on restore would reintroduce the bug on a fixed instance, and migration 164
+  // (one-time) cannot catch a backup restored after it ran. Restore therefore
+  // skips the table and the next net-worth read rebuilds it under the corrected
+  // algorithm. A mocked repository cannot prove the round trip, so this is a
+  // real export -> restore -> lazy-rebuild test.
+  it("does not restore pre-#1242 monthly investment snapshots as authoritative", async () => {
+    const userA = await createTestUserDirect(dataSource, {
+      email: "r6-source@example.com",
+    });
+    const userB = await createTestUserDirect(dataSource, {
+      email: "r6-dest@example.com",
+    });
+
+    await dataSource.query(
+      `INSERT INTO currencies (code, name, symbol, created_by_user_id)
+       VALUES ('USD', 'US Dollar', '$', $1)`,
+      [userA.id],
+    );
+    await dataSource.query(
+      `INSERT INTO user_preferences (user_id, default_currency, language)
+       VALUES ($1, 'USD', 'en')`,
+      [userA.id],
+    );
+
+    const [{ id: accountId }] = await dataSource.query(
+      `INSERT INTO accounts (user_id, account_type, account_sub_type, name,
+                             currency_code, current_balance, opening_balance)
+       VALUES ($1, 'INVESTMENT', 'INVESTMENT_BROKERAGE', 'Sample Retirement Plan',
+               'USD', 0, 0)
+       RETURNING id`,
+      [userA.id],
+    );
+    const [{ id: securityId }] = await dataSource.query(
+      `INSERT INTO securities (user_id, symbol, name, currency_code,
+                              skip_price_updates)
+       VALUES ($1, 'BMT-DEMO', 'Broad Market Tracker', 'USD', true)
+       RETURNING id`,
+      [userA.id],
+    );
+    await dataSource.query(
+      `INSERT INTO investment_transactions
+         (user_id, account_id, security_id, action, transaction_date, quantity,
+          price, total_amount, status)
+       VALUES ($1, $2, $3, 'BUY', DATE '2024-01-15', 120, 61, 7320, 'UNRECONCILED')`,
+      [userA.id, accountId, securityId],
+    );
+    await dataSource.query(
+      `INSERT INTO security_prices (security_id, price_date, close_price, source)
+       VALUES ($1, CURRENT_DATE, 120, 'manual')`,
+      [securityId],
+    );
+    // The deliberately stale derived snapshot the backup carries.
+    await dataSource.query(
+      `INSERT INTO monthly_account_balances
+         (user_id, account_id, month, balance, market_value)
+       VALUES ($1, $2, DATE_TRUNC('month', CURRENT_DATE)::date, 0, 7320)`,
+      [userA.id, accountId],
+    );
+
+    const { buffer } = await withUserContext(userA.id, () =>
+      service.exportToBuffer(userA.id),
+    );
+    // The export still carries the derived row -- the skip is on the restore
+    // side, not the export side.
+    const parsed = JSON.parse(gunzipSync(buffer).toString("utf-8"));
+    expect(parsed.monthly_account_balances).toHaveLength(1);
+
+    const result = await withUserContext(userB.id, () =>
+      service.restoreData(userB.id, {
+        compressedData: buffer,
+        password: PASSWORD,
+      }),
+    );
+    // Source data restored; the derived cache deliberately not.
+    expect(result.restored.investmentTransactions).toBe(1);
+    expect(result.restored.securityPrices).toBe(1);
+    expect(result.restored.monthlyAccountBalances).toBe(0);
+
+    const beforeRead = await dataSource.query(
+      `SELECT COUNT(*)::int AS n FROM monthly_account_balances WHERE user_id = $1`,
+      [userB.id],
+    );
+    expect(beforeRead[0].n).toBe(0);
+
+    // The supported lazy rebuild: ensurePopulated sees zero rows and rebuilds
+    // every account from the restored source data under the corrected valuation.
+    const today = new Date().toISOString().slice(0, 10);
+    const history = await withUserContext(userB.id, () =>
+      netWorth.getMonthlyNetWorth(userB.id, "2024-01-01", today),
+    );
+    // 120 shares * $120 accepted close = $14,400, not the stale $7,320.
+    const latest = history[history.length - 1];
+    expect(latest?.assets).toBe(14400);
   });
 });

@@ -1082,7 +1082,7 @@ export function ScheduledTransactionForm({
           transferAccountId: undefined,
           isInvestment: false,
           categoryId: undefined,
-          splits: toCreateSplitData(splits),
+          splits: toCreateSplitData(splits, { includeSourceIdentity: true }),
         };
       } else if (mode === 'investment') {
         // Estimate display amount from quantity*price (or totalAmount).

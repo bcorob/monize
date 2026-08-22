@@ -260,6 +260,36 @@ describe('InvestmentSplitFields', () => {
       expect(onChange).not.toHaveBeenCalled();
     });
 
+    it('does not truncate a STORED >6dp rate when the field is only blurred', async () => {
+      // The same display-truncation trap for a rate the split already carries
+      // (issue #1167 review): a stored 10dp rate shows as 6dp, and a no-typing
+      // focus+blur re-reports that truncation. Adopting it would latch
+      // `rateEdited`, so the server stamps the current settlement pair onto a
+      // truncated -- possibly stale-pair -- scalar, reopening the #1167 bug class
+      // through a cosmetic edit. No market rate is offered here, so only the
+      // stored value can fill the field; the guard must still drop the re-report.
+      mockGetLatestRates.mockResolvedValue([]);
+      const onChange = vi.fn();
+      await renderFieldsAsync({
+        value: buyValue({
+          exchangeRate: 1.2345678,
+          exchangeRateFromCurrency: 'USD',
+          exchangeRateToCurrency: 'CAD',
+        }),
+        onChange,
+      });
+      const rateField = await screen.findByLabelText(
+        'Exchange rate (CAD per 1 USD)',
+      );
+      await waitFor(() => expect(rateField).toHaveValue('1.234568'));
+      onChange.mockClear();
+      await act(async () => {
+        fireEvent.focus(rateField);
+        fireEvent.blur(rateField);
+      });
+      expect(onChange).not.toHaveBeenCalled();
+    });
+
     it('says the rate is unknown rather than settling at par', async () => {
       mockGetLatestRates.mockResolvedValue([]);
       await renderFieldsAsync({ value: noStatedRate() });
@@ -299,6 +329,110 @@ describe('InvestmentSplitFields', () => {
       });
       const [next] = onChange.mock.calls.at(-1)!;
       expect(next.exchangeRate).toBe(1.4);
+    });
+
+    // Issue #1167 R9-F3: selecting a foreign security must resolve the rate for
+    // the NEW pair, not carry the same-currency 1 the row started with. The old
+    // code copied the effective rate (1) into the payload before applying the new
+    // security, so a USD BUY on a CAD account booked at 1:1 (a 26% error), and R8
+    // then blessed that 1 as an explicit USD/CAD rate.
+    it('resolves the new security pair rate on select, never carrying the stale 1 (R9-F3)', async () => {
+      mockGetLatestRates.mockResolvedValue([
+        { fromCurrency: 'USD', toCurrency: 'CAD', rate: 1.35 },
+      ]);
+      const onChange = vi.fn();
+      // Start with no security (CAD account -> same-currency, effective rate 1).
+      await renderFieldsAsync({
+        value: {
+          action: 'BUY',
+          securityId: undefined,
+          quantity: 10,
+          price: 100,
+          commission: 0,
+          exchangeRate: undefined,
+        } as InvestmentSplitDetails,
+        onChange,
+        currencyCode: 'CAD',
+      });
+
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText('Security'), {
+          target: { value: 'sec-1' },
+        });
+      });
+
+      const [next, amount, meta] = onChange.mock.calls.at(-1)!;
+      expect(next.securityId).toBe('sec-1');
+      expect(next.exchangeRate).toBe(1.35); // resolved for USD->CAD, not 1
+      expect(amount).toBe(-1350); // 10 x 100 x 1.35, never -1000
+      expect(meta.securityChanged).toBe(true);
+      // The recorded pair is cleared so a stale scalar cannot be blessed for it.
+      expect(next.exchangeRateFromCurrency).toBeUndefined();
+      expect(next.exchangeRateToCurrency).toBeUndefined();
+    });
+
+    it('leaves the rate unresolved (never 1) when the new pair has no rate (R9-F3)', async () => {
+      mockGetLatestRates.mockResolvedValue([]); // no USD/CAD rate available
+      const onChange = vi.fn();
+      await renderFieldsAsync({
+        value: {
+          action: 'BUY',
+          securityId: undefined,
+          quantity: 10,
+          price: 100,
+          commission: 0,
+          exchangeRate: undefined,
+        } as InvestmentSplitDetails,
+        onChange,
+        currencyCode: 'CAD',
+      });
+
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText('Security'), {
+          target: { value: 'sec-1' },
+        });
+      });
+
+      const [next, amount] = onChange.mock.calls.at(-1)!;
+      expect(next.exchangeRate).toBeUndefined(); // unresolved, not 1
+      expect(amount).toBe(0); // never the unconverted -1000
+    });
+
+    // Issue #1167 R9-F2: `meta.rateEdited` is real intent -- true only when the
+    // user changes the rate input, so a re-entered rate on a continuing line is
+    // honoured even when its value equals the stale stored one.
+    it('reports meta.rateEdited only for a rate edit, not for other field edits (R9-F2)', async () => {
+      mockGetLatestRates.mockResolvedValue([
+        { fromCurrency: 'USD', toCurrency: 'CAD', rate: 1.35 },
+      ]);
+      const onChange = vi.fn();
+      await renderFieldsAsync({ value: noStatedRate(), onChange });
+      await waitFor(() =>
+        expect(
+          screen.getByLabelText('Exchange rate (CAD per 1 USD)'),
+        ).toHaveValue('1.350000'),
+      );
+
+      await act(async () => {
+        fireEvent.change(screen.getByPlaceholderText('Quantity'), {
+          target: { value: '20' },
+        });
+      });
+      expect(onChange.mock.calls.at(-1)![2]).toEqual({
+        rateEdited: false,
+        securityChanged: false,
+      });
+
+      await act(async () => {
+        fireEvent.change(
+          screen.getByLabelText('Exchange rate (CAD per 1 USD)'),
+          { target: { value: '1.4' } },
+        );
+      });
+      expect(onChange.mock.calls.at(-1)![2]).toEqual({
+        rateEdited: true,
+        securityChanged: false,
+      });
     });
 
     it('shows no rate field when the security matches the account currency', async () => {

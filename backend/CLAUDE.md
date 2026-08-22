@@ -29,27 +29,16 @@ npm run migration:lint:test # Self-test for the migration lint
 
 ### `test/*.e2e-spec.ts` is not a gate, and three of the four suites are broken
 
-CI runs `test:unit` and `test:integration` (the latter filtered to
-`test/integration/*.spec.ts`). Nothing runs `test:e2e`, and `tsconfig.json`
-excludes `test/`, so for over a week four suites did not even compile -- a
-namespace `import * as cookieParser` left behind when `main.ts` moved to a
-default import. ESLint's glob covers the directory, but that is a type error, not
-a lint error. `npm run typecheck` now closes the compile half in CI.
-
-What the compile error was hiding, once removed:
+CI runs `test:unit` and `test:integration` (filtered to `test/integration/*.spec.ts`). Nothing runs `test:e2e`, and separate rot accumulated behind a since-fixed compile error (`npm run typecheck` now closes the compile half in CI):
 
 | Suite | State | Why |
 |---|---|---|
-| `test/payee-detail.e2e-spec.ts` | passes (9 tests) | nothing wrong with it; its coverage was simply absent. This is the spec cited below as what caught the raw-select transformer class of bug |
-| `test/payees.e2e-spec.ts` | fails | calls services directly, so there is no request scope; never converted for RLS (`withScopedDb` throws without ambient context) |
+| `test/payee-detail.e2e-spec.ts` | passes (9 tests) | fine; this is the spec that caught the raw-select transformer class of bug |
+| `test/payees.e2e-spec.ts` | fails | calls services directly, so no request scope; never converted for RLS (`withScopedDb` throws without ambient context) |
 | `test/auth.e2e-spec.ts` | fails | `AuthController` gained a `TokenService` dependency its test module does not provide |
 | `test/transactions.e2e-spec.ts` | fails | `DelegateTransferMaskInterceptor` gained a `CrossOwnerAccessService` dependency its test module does not provide |
 
-Each is separate rot that accumulated *behind* the compile error: the RLS
-conversion, the token-service split and the cross-owner-transfers work each moved
-on without these files and nothing complained. Repair them or delete them --
-what they must not stay is present, cited, and dead. Do not add `test:e2e` to CI
-until the three are fixed; it will be red.
+Repair them or delete them -- what they must not stay is present, cited, and dead. Do not add `test:e2e` to CI until the three are fixed; it will be red.
 
 ## Module Structure
 
@@ -125,671 +114,171 @@ transactionDate: string;
 
 **Decimal columns** use a `numericTransformer` to convert PostgreSQL's string representation to `number`. **Timestamps** are `@CreateDateColumn({ name: 'created_at' })` and `@UpdateDateColumn({ name: 'updated_at' })`.
 
-**Raw selects bypass both transformers.** `getRawOne`/`getRawMany` return driver values, not entity-hydrated ones, so a DATE column comes back as a JS `Date` and a numeric as a string -- regardless of the transformer on the entity. Select a DATE as text in SQL (`TO_CHAR(col, 'YYYY-MM-DD')`) and pass a numeric through `Number()` before it reaches a DTO that declares `string`/`number`. `main.ts` installs a global DATE string parser, which hides the DATE half of this in the running server but not in tests, jobs, or any other process -- so do not rely on it. `payee-detail.service.ts` is the worked example; its `test/payee-detail.e2e-spec.ts` is what caught it, because a unit spec with mocked query builders cannot.
+**Raw selects bypass both transformers.** `getRawOne`/`getRawMany` return driver values: a DATE comes back as a JS `Date` and a numeric as a string, regardless of the entity transformer. Select a DATE as text in SQL (`TO_CHAR(col, 'YYYY-MM-DD')`) and pass a numeric through `Number()` before it reaches a DTO that declares `string`/`number`. `main.ts` installs a global DATE string parser, which hides the DATE half in the running server but not in tests, jobs, or any other process -- so do not rely on it. `payee-detail.service.ts` is the worked example; `test/payee-detail.e2e-spec.ts` caught it, because a unit spec with mocked query builders cannot.
 
-**A hand-written column name is checked by nobody -- so a scan checks it.** A
-mocked `manager.query` records the string and resolves, which makes every raw
-statement's column names untested by construction. `AutoBackupService`'s claim
-ended `RETURNING id`, `auto_backup_settings` has no `id` (its primary key is
-`user_id`), and the spec beside it asserted
-`expect(sql).toContain("RETURNING id")` -- so the mistake was not merely
-uncaught, it was pinned. In production every hourly sweep raised
-`column "id" does not exist` (42703) and no user's automatic backup ran.
-`src/common/db/raw-sql-columns.spec.ts` now checks every `RETURNING` list,
-`INSERT` column list and `UPDATE ... SET` target in `src/` against
-`database/schema.sql`, with the grammar in `raw-sql-columns.ts` unit-tested
-separately. Assert the *column*, not the substring: a mock cannot tell a real
-column from a plausible one.
+**A hand-written column name is checked by nobody -- so a scan checks it.** A mocked `manager.query` records the string and resolves, making every raw statement's column names untested by construction (`AutoBackupService` wrote `RETURNING id` against a table whose primary key is `user_id`, the spec pinned the wrong string with `toContain`, and no user's automatic backup ran). `src/common/db/raw-sql-columns.spec.ts` checks every `RETURNING` list, `INSERT` column list and `UPDATE ... SET` target in `src/` against `database/schema.sql`. Assert the *column*, not the substring.
 
-**A per-user loop in a cron isolates each user, including the steps before the
-work starts.** The auto-backup sweep's `try` began *below* the claim, so an
-error while deciding whether to run -- the maintenance pre-check, the claim's
-own `UPDATE` -- left the whole handler and every remaining user was skipped,
-with nothing recorded as failed. Wrap the entire per-user body, record the
-failure on the row so the surface that shows a last-run status tells the truth,
-and record it through a path that cannot itself throw (the outcome write is a
-database call, and whatever broke the work can break the recording of it).
-`enrollManagedUsers` in the same file already had the rule; the loop below it
-did not.
+**A per-user loop in a cron isolates each user, including the steps before the work starts.** Wrap the entire per-user body in the `try` -- an error while deciding whether to run (a pre-check, the claim's own `UPDATE`) must not leave the handler and skip every remaining user. Record the failure on the row so the last-run status tells the truth, and record it through a path that cannot itself throw.
 
 ## DTO Conventions
 
 ### An optional field with a format validator needs `@ValidateIf`, not just `@IsOptional`
 
-`@IsOptional()` waives validation for `undefined` and `null` only. A text input the user left alone arrives as `""` -- react-hook-form gives the empty string and the form sends it -- so an `@IsUrl` / `@IsEmail` sitting beside `@IsOptional()` still runs on it and rejects it. Because validation fails per *request*, one blank optional field breaks every save from that form, not just the field. Add `@ValidateIf((_o, value) => value !== null && value !== "")` for a column that is nullable, so a blank clears it. `src/common/optional-url-dto.spec.ts` sweeps every URL-validated DTO property and fails on a new one; a field whose column is NOT NULL belongs on that file's exemption list with the reason, not silently rejecting a blank.
-
-This class of bug is invisible to unit tests, which construct payloads by hand and never send what the form sends. It surfaces in E2E or in production.
+`@IsOptional()` waives validation for `undefined` and `null` only. A text input the user left alone arrives as `""` (react-hook-form sends it), so an `@IsUrl` / `@IsEmail` beside `@IsOptional()` still rejects it -- and because validation fails per *request*, one blank optional field breaks every save from that form. Add `@ValidateIf((_o, value) => value !== null && value !== "")` for a nullable column so a blank clears it. `src/common/optional-url-dto.spec.ts` sweeps every URL-validated DTO property; a NOT NULL field belongs on its exemption list with a reason. This class of bug is invisible to unit tests (hand-built payloads); it surfaces in E2E or production.
 
 ### A request-supplied array declares an upper bound
 
-Every `@IsArray()` DTO property carries `@ArrayMaxSize(n)` beside it -- an unbounded array turns any per-element work downstream (one UPDATE per id inside a transaction) into a denial-of-service lever, and CodeQL flags the loop as `js/loop-bound-injection` (CWE-834). `src/common/array-bound-dto.spec.ts` sweeps validator metadata and fails on a new unbounded property; properties older than the guard are grandfathered there, and that list may only shrink. Relatedly, never use a request value's `.length` as a loop bound inside a `withScopedDb` callback: CodeQL cannot track an outer `Array.isArray` guard through the closure, so iterate `for (const [i, v] of xs.entries())` instead of `for (let i = 0; i < xs.length; i++)`.
+Every `@IsArray()` DTO property carries `@ArrayMaxSize(n)` -- an unbounded array turns per-element work downstream into a denial-of-service lever (CodeQL `js/loop-bound-injection`, CWE-834). `src/common/array-bound-dto.spec.ts` sweeps validator metadata; its grandfather list may only shrink. Relatedly, never use a request value's `.length` as a loop bound inside a `withScopedDb` callback (CodeQL cannot track the outer guard through the closure): iterate `for (const [i, v] of xs.entries())`.
 
 ## `complete()` is not `completeWithTools()` with the tools left off
 
-The two take the same `AiCompletionRequest`, which makes them look
-interchangeable, and they are not: `complete()` maps messages through
-`toSimpleMessages`, which **filters `role: "tool"` out entirely**. Reach for it
-to summarise a tool-use conversation and you send a transcript stripped of
-every tool result and get back a confident summary of nothing -- no error, no
-empty response, just an answer about no data.
+Both take `AiCompletionRequest`, but `complete()` maps messages through `toSimpleMessages`, which **filters `role: "tool"` out entirely** -- summarising a tool-use conversation through it sends a transcript stripped of every tool result and returns a confident summary of nothing.
 
-A tool-free turn over a tool-use transcript therefore goes through
-`completeWithTools`/`streamWithTools` with an empty tool list, and every
-provider builds the field with `toolsField` (`src/ai/providers/tools-field.util.ts`)
-so it is **omitted** rather than sent as `[]` -- OpenAI rejects `tools: []`
-outright. `tools-field.util.spec.ts` scans every `*.provider.ts` and fails on a
-bare `tools:` key, so a sixth provider cannot reintroduce it; the per-provider
-specs assert the request body in both directions.
-
-The one caller is `AiQueryService.streamFinalSynthesis`, the pass that turns an
-unfinished investigation -- budget-truncated, or stalled per the rule below --
-into an answer instead of an apology.
+A tool-free turn over a tool-use transcript goes through `completeWithTools`/`streamWithTools` with an empty tool list, and every provider builds the field with `toolsField` (`src/ai/providers/tools-field.util.ts`) so it is **omitted** rather than sent as `[]` (OpenAI rejects `tools: []`). `tools-field.util.spec.ts` scans every `*.provider.ts` for a bare `tools:` key; per-provider specs assert the request body both ways. The one caller is `AiQueryService.streamFinalSynthesis`, the pass that turns an unfinished investigation into an answer.
 
 ## A turn that ends on a promise is not an answer
 
-Nothing runs between turns. So a tool-free turn saying "I am gathering the split
-details for those 17 transactions. One moment." ends the query: the loop's exit
-condition is `stopReason !== "tool_use"`, control goes back to the user, and the
-second message they are now waiting for cannot ever arrive. It reads as a hang,
-and the smaller the model the more often it happens -- assistant training data is
-full of transcripts where a human speaks next.
+Nothing runs between turns, so a tool-free turn saying "One moment, I'm gathering..." ends the query (the loop exits on `stopReason !== "tool_use"`) and reads as a hang. The loop therefore does not treat every tool-free turn as an answer: `isDeferredContinuation` (`src/ai/query/continuation.ts`) recognises the promise, and the loop replies with `CONTINUATION_NUDGE` in the user's place for at most `MAX_CONTINUATION_NUDGES` passes, then breaks to the tool-free synthesis pass with `cutoff = "stalled"`. The stalled text stays in the thinking buffer and never becomes the answer bubble.
 
-The loop therefore does not treat every tool-free turn as an answer.
-`isDeferredContinuation` (`src/ai/query/continuation.ts`) recognises the promise,
-and the loop replies with `CONTINUATION_NUDGE` in the user's place -- "your turn
-does not resume; call the tool now or answer now" -- for at most
-`MAX_CONTINUATION_NUDGES` passes, after which it breaks to the tool-free
-synthesis pass with `cutoff = "stalled"`, because a model with no tools left
-cannot answer with another promise. The stalled text stays in the thinking
-buffer and never becomes the answer bubble.
+Detector shape (both asymmetries are in its spec): a wait request ("one moment") is decisive; a bare work announcement is not, and an offer ("let me know", a trailing `?`) wins over it; only the tail of the message is examined. A false positive costs one extra pass; a false negative is the hang. The strongest signal needs no prose judgement: `promisesPendingAction` pairs a promise of confirmation cards against `proposingToolResults === 0` -- prefer pairing a text claim against state the loop already tracks over adding another regex phrase. `QUERY_SYSTEM_PROMPT` asks for the same thing, but a prompt rule is not a guarantee.
 
-Two asymmetries decide the detector's shape, and both are in its spec. A wait
-request ("one moment", "hold on") is decisive; a bare work announcement ("I'll
-pull the rest") is not, because the same words end a finished answer that offers
-more -- so an offer (`let me know`, `if you want`, a trailing `?`) wins over it.
-And only the tail of the message is examined: mid-answer narration is followed
-by the answer itself. A false positive costs one extra pass; a false negative is
-the hang this exists to stop.
+**A stall is often a dead end the model found and could not name.** Both reported stalls were a request the tools could not express (recategorizing one line in 17 split transactions, with one proposing call allowed per query). Batch rows now carry `splits` (`BatchUpdateTransactionRow.splits`, applied in `executeBatchRow` inside the same `UpdateTransactionDto` as the scalar fields, per invariant I1); the individual-card path passes `result.splits` through. Two rules the tests hold: a row that resends no splits must carry none (an empty set would rewrite the lines it was asked to leave), and a row's preview shows its lines instead of a category name. The general point: when you add a limit, put it in the tool description in the same commit.
 
-One of these signals needs no judgement about prose, and it is the strongest:
-`promisesPendingAction` recognises a promise of confirmation cards, and a card
-exists **only** if a write tool call in that same turn produced a pending
-action. Promised cards plus `proposingToolResults === 0` is a broken promise the
-loop can prove. Prefer that shape -- pair a claim in the text against state the
-loop already tracks -- over adding another phrase to a regex list.
+**A filtered read is not a complete read, and only one of its two readers can tell.** `applyCategoryFilters` hydrates only the split lines matching the filter -- right for the register, wrong for anything that sends the lines back, because `manage_transactions` replaces a split set with exactly what it is given. The LLM path reloads the full set per split parent (`loadCompleteSplits`). Before reusing a list query in a tool, ask what its `where` does to the collections it hydrates: a filter on a joined child table silently truncates the parent's children.
 
-The prompt asks for the same thing in `QUERY_SYSTEM_PROMPT` ("FINISH THE TURN YOU
-ARE IN") and the safety reminder, since the cheapest stall is the one that never
-happens -- but a prompt rule is not a guarantee, which is why the loop enforces
-it too.
-
-**A stall is often a dead end the model found and could not name.** Both reported
-stalls were the same request: recategorize one line inside 17 split
-transactions. It could not be done. A split update had to be a single-item call
-(batch rows dropped the splits), and `AiQueryService` allows one proposing tool
-call per *query* -- so one split transaction per user request, seventeen
-requests, and nothing said so. The model narrated progress towards something
-unreachable instead.
-
-Batch rows now carry `splits` (`BatchUpdateTransactionRow.splits`, applied in
-`executeBatchRow` inside the same `UpdateTransactionDto` as the scalar fields,
-per invariant I1), so one call recategorizes up to 25 split transactions and the
-individual-card path passes `result.splits` through rather than silently
-dropping them. Two rules the tests hold: a row that resends no splits must carry
-none (an empty set would rewrite the lines it was asked to leave), and a row's
-preview shows its lines instead of a category name, because a card reading
-"Groceries" while writing three other lines is a card approved for something
-else.
-
-The general point outlives this feature: when you add a limit, put it in the
-tool description in the same commit. An assistant that says "I can do six of
-these at a time" is working; one that discovers the wall mid-answer stalls.
-
-**A filtered read is not a complete read, and only one of its two readers can
-tell.** `applyCategoryFilters` hydrates *only* the split lines matching the
-filter, which is right for the register (it wants a partial total and refetches
-the whole transaction to edit it) and wrong for anything that will send the
-lines back. `getLlmTransactionRows` reuses that query, so a model asking for
-"transactions in Business: Cell Phone" received one line of a three-line split
--- and `manage_transactions` replaces a split set with exactly what it is given.
-The observed outcome was a one-line replacement set, refused only by the
-unrelated "a split needs at least 2 lines" rule, with the model then offering to
-convert the transactions to non-split ones. Two lines matching out of three
-would have passed that rule and silently destroyed the third.
-
-So the LLM path reloads the full set per split parent (`loadCompleteSplits`) and
-its rows are always complete. Before reusing a list query in a tool, ask what
-its `where` does to the collections it hydrates: a filter on a joined child
-table silently truncates the parent's children, and the caller cannot tell a
-truncated set from a short one.
-
-**A refusal the caller cannot act on is a refusal that ends the task.** Every
-bulk tool path computes a per-row reason and then used to throw it away,
-answering "None of the transaction edits could be prepared. Check each
-transactionId and the fields to change." The next attempt at the 17 splits
-failed exactly there: all 17 rows were refused because a split's categories
-live on its lines and the edit resent none -- the reason said so, in words the
-model could have acted on -- and it was told to check the ids, which were
-correct. It concluded the task was impossible and stopped.
-
-`describeSkippedRows` (`common/bulk-create.types.ts`) is now the only way those
-messages are built: identical reasons collapse to one line with a count,
-distinct ones are listed up to three with a tail count. `bulk-skip-reporting.spec.ts`
-scans all four tool sources and fails on a "None of ... could be prepared"
-message that does not carry its reasons -- and a generic message is worse than
-none when it *guesses*, because a confident wrong diagnosis sends the reader
-away from the fix. Individual-card paths that counted skips (`skipped++`) now
-collect reasons too, for the same reason.
+**A refusal the caller cannot act on is a refusal that ends the task.** Every bulk tool path computes a per-row reason; `describeSkippedRows` (`common/bulk-create.types.ts`) is the only way those messages are built (identical reasons collapse with a count; distinct ones list up to three). `bulk-skip-reporting.spec.ts` scans all four tool sources and fails on a "None of ... could be prepared" message that does not carry its reasons -- a generic message that *guesses* sends the reader away from the fix. Individual-card paths that count skips collect reasons too.
 
 ## A numeric env knob is declared as data, next to its documentation
 
-Coerce every numeric environment variable through `resolvePositiveInt`
-(`src/common/env-number.util.ts`) rather than a bare `Number(...)`: env values
-arrive as strings, and `Number` is willing enough to turn `true` into 1 and
-`[5]` into 5. It separates *absent* from *invalid* so the caller can log the
-second -- a typo that silently runs on the default is an afternoon lost to
-wondering why the setting did nothing.
-
-Where a feature has more than one knob, declare the set as one table of
-`{ envVar, default, description }` and resolve from it in a loop --
-`src/ai/query/query-budgets.ts` is the pattern -- so a new knob cannot be added
-without a name, and a copied spec object that reads a neighbour's variable
-fails a test rather than moving two budgets together. A knob nobody can find is
-not configurable, so `query-budgets.spec.ts` checks `.env.example` in both
-directions: every declared budget is documented with its current default, and
-no `AI_QUERY_*` line documents a variable the code does not read.
+Coerce every numeric environment variable through `resolvePositiveInt` (`src/common/env-number.util.ts`), never a bare `Number(...)` -- it separates *absent* from *invalid* so a typo is logged rather than silently running on the default. Where a feature has more than one knob, declare the set as one table of `{ envVar, default, description }` and resolve in a loop (`src/ai/query/query-budgets.ts` is the pattern). `query-budgets.spec.ts` checks `.env.example` in both directions: every declared budget documented with its current default, and no `AI_QUERY_*` line documenting a variable the code does not read.
 
 ## An environment variable configures the deployment's own resource, not somebody else's
 
-The AI provider is the worked example, and it has two owners. `AI_DEFAULT_*`
-builds the **centrally managed** provider -- the operator's, used for anyone who
-has configured none of their own, editable nowhere in the UI. Everything else in
-`ai_provider_configs` is a row a *user* created, pointed at their own key or
-their own Ollama box, and can see and edit.
+The AI provider has two owners. `AI_DEFAULT_*` builds the **centrally managed** provider (the operator's, used when a user has configured none, editable nowhere in the UI); everything else in `ai_provider_configs` is a row a *user* created and can edit. So `AI_QUERY_*` sizes the central provider only; a user's provider carries the same five budgets as nullable columns, set in Settings -> AI, defaulting to the built-in numbers -- never to the environment. `resolveQueryBudgetsForConfig` is the single place that decision is made; `AiService.resolveToolUseProvider` hands the caller the configuration alongside the provider, and the transient system-default config is marked `isSystemDefault`.
 
-A setting about how hard the assistant may work belongs to whichever of those
-two owns the provider. So `AI_QUERY_*` sizes the central provider only, and a
-user's provider carries the same five budgets as nullable columns on its row,
-set per provider in Settings -> AI and defaulting to the built-in numbers --
-never to the environment. `resolveQueryBudgetsForConfig` is the single place
-that decision is made; `AiService.resolveToolUseProvider` hands the caller the
-configuration alongside the provider so it can be made at all, and the transient
-system-default config is marked `isSystemDefault` because that is the only thing
-distinguishing it from a row.
-
-Before adding an env var for anything a user can also configure, ask which
-resource it describes. An operator's ceiling for the model they host says
-nothing about the model somebody else is paying for, and a global limit quietly
-reshaping a configuration the user is looking at reads as a broken form rather
-than as a policy. The reverse mistake is worse: a per-user knob for something
-the operator is paying for hands out their budget.
-
-`query-budgets.spec.ts` holds the split from both sides -- the environment must
-not reach a user's provider, and a stored value outside the declared range falls
-back to the documented default rather than being clamped to a number nobody
-chose. The bounds live in the same spec table as the defaults, so the DTO
-(`QueryBudgetFieldsDto`), the migration and the frontend form all derive from
-one place; the form's copy of the numbers is checked against it by
-`frontend/src/lib/ai-query-budgets.contract.test.ts`.
+Before adding an env var for anything a user can also configure, ask which resource it describes -- an operator's ceiling says nothing about a model somebody else is paying for, and the reverse mistake (a per-user knob for the operator's resource) hands out their budget. `query-budgets.spec.ts` holds the split from both sides; a stored value outside the declared range falls back to the documented default rather than being clamped. The bounds live in the same spec table as the defaults, so the DTO (`QueryBudgetFieldsDto`), the migration and the frontend form derive from one place; the form's copy is checked by `frontend/src/lib/ai-query-budgets.contract.test.ts`.
 
 ## A label the exporter writes itself must need no escaping
 
-The CSV formula-injection guard in `account-export.service.ts` exists for
-user-controlled text -- a payee named `=cmd|...`, a description opening with
-`+`. When one of the *exporter's own* strings trips it, the guard is neutralizing
-a threat the exporter invented: `-- Split --` was prefixed with an apostrophe on
-the parent row of every split in every account export, and no test saw it,
-because `toContain("-- Split --")` is satisfied by `'-- Split --`.
+The CSV formula-injection guard in `account-export.service.ts` exists for user-controlled text; when one of the exporter's *own* strings trips it (`-- Split --` got an apostrophe prefix on every split parent row), rename the label so it opens with a character no spreadsheet evaluates (`CSV_SPLIT_CATEGORY_LABEL` is `(Split)`) -- do not exempt the literal. Assert the *field*, not the line (`toContain` is satisfied by the neutralized cell), and keep the document-level check: export an all-ordinary-text fixture and assert no cell carries the guard's prefix.
 
-Do not fix that by exempting the literal -- Excel evaluates a leading dash, so an
-unguarded `-- Split --` reads as `#NAME?`, which is worse. Rename the label so it
-opens with a character no spreadsheet evaluates (`CSV_SPLIT_CATEGORY_LABEL` is
-now `(Split)`), and assert the *field* rather than the line, so a neutralized
-cell cannot satisfy the assertion again. The document-level check is the durable
-half: export a fixture whose every user-supplied field is ordinary text, and
-assert no cell carries the guard's prefix. Any future literal that needs
-escaping fails it, wherever it is added.
-
-A transfer's label is `csvTransferLabel` in the same file, and it names the
-direction as well as the counterpart (`Transfer To Savings`): money leaving this
-account went *to* the other one, money arriving came *from* it, and a split line
-is asked with its own amount rather than the parent's. `Transfer: Savings` named
-the counterpart without saying which way the money moved -- the half a reader
-cannot recover from the sign of a column they are looking at in a spreadsheet.
-Its twin is `transferCsvLabel` in `frontend/src/lib/transfer-label.ts`; the QIF
-export keeps Quicken's `L[Account]` form and is deliberately untouched.
+A transfer's label is `csvTransferLabel` in the same file, and it names the direction as well as the counterpart (`Transfer To Savings`); a split line is asked with its own amount, not the parent's. Its twin is `transferCsvLabel` in `frontend/src/lib/transfer-label.ts`; the QIF export keeps Quicken's `L[Account]` form deliberately.
 
 ## A blank transfer payee is stored blank and resolved at read time
 
-A transfer created without a payee persists `payee_name` as NULL (issue #1214);
-the display label ("Transfer to Savings") is resolved per read from the linked
-leg's account -- its CURRENT name, in the reader's language -- so renames and
-language switches reach every historical row. The English form for
-machine-facing surfaces (CSV/QIF export, AI/MCP rows, custom reports) lives
-only in `src/transactions/transfer-payee-label.util.ts`, and
-`transfer-payee-stamp.guard.spec.ts` fails on a `Transfer to/from ${...}`
-template anywhere else in `src/`. Migration 161 blanked the rows the old
-writers stamped (exact match against the counterpart's current name only);
-`updateTransfer` heals a surviving legacy stamp to NULL when it recognises
-one, and never regenerates it. A read surface that joins
-`linkedTransaction.account` for this must mask or restrict cross-owner
-counterparts the reader cannot read -- the account export masks, the custom
-report query restricts the join to same-owner legs.
+A transfer created without a payee persists `payee_name` as NULL (issue #1214); the display label is resolved per read from the linked leg's account -- its CURRENT name, in the reader's language. The English form for machine-facing surfaces (CSV/QIF export, AI/MCP rows, custom reports) lives only in `src/transactions/transfer-payee-label.util.ts`, and `transfer-payee-stamp.guard.spec.ts` fails on a `Transfer to/from ${...}` template anywhere else in `src/`. Migration 161 blanked the legacy-stamped rows; `updateTransfer` heals a surviving stamp to NULL and never regenerates it. A read surface joining `linkedTransaction.account` for this must mask or restrict cross-owner counterparts the reader cannot read (the account export masks; the custom report query restricts the join to same-owner legs).
 
-The guard also asks what a value *is* rather than what it starts with, matching
-its twin in `frontend/src/lib/csv-export.ts`: a value a spreadsheet reads as a
-number is data, and prefixing one stops the column adding up (issue #1134).
-Amounts here bypass `escapeCsv`, so the rule covers the text columns that can
-still hold a number, such as a cheque number written `-123`.
+The guard also asks what a value *is* rather than what it starts with, matching its twin in `frontend/src/lib/csv-export.ts`: a value a spreadsheet reads as a number is data, and prefixing one stops the column adding up (issue #1134) -- amounts bypass `escapeCsv`, so the rule covers text columns that can still hold a number (a cheque number written `-123`).
 
 ## A partial escape is indistinguishable from a correct one
 
-Interpolating a literal into a pattern goes through `escapeRegExp`
-(`src/common/escape-regexp.util.ts`) -- never a hand-written
-`replace(/[.*+?^${}()|[\]\\]/g, "\\$&")`, and never a subset of that class.
-`repo-paths.util.ts` escaped only dots, which reads as complete because a
-repository path contains dots and nothing else interesting; it left `\` alone,
-so a prefix carrying `\d` would have interpolated as the digit class and matched
-input nobody wrote (CodeQL `js/incomplete-sanitization`, CWE-020). The class was
-already spelled out in four other files, and the fifth copy was the wrong one --
-which is the argument for one function rather than a remembered character class.
-`escape-regexp.guard.spec.ts` scans `src/` and fails on either shape.
-
-Where the pattern is built from a list, export the builder and test it against a
-prefix carrying a metacharacter. `ROOTED`'s entries contain at most a dot, so
-over its real inputs the broken escape and the correct one agree exactly; only a
-synthetic prefix can tell them apart (`buildPlainRootedPathPattern`). Do not
-escape `-`: outside a character class it is literal, and `\-` is a SyntaxError
-under the `u` flag -- so never interpolate the result *inside* a class.
+Interpolating a literal into a pattern goes through `escapeRegExp` (`src/common/escape-regexp.util.ts`) -- never a hand-written character class, and never a subset of one (`repo-paths.util.ts` escaped only dots and left `\` alone; CodeQL `js/incomplete-sanitization`, CWE-020). `escape-regexp.guard.spec.ts` scans `src/` for either shape. Where the pattern is built from a list, export the builder and test it against a prefix carrying a metacharacter (`buildPlainRootedPathPattern`) -- over real inputs the broken and correct escapes can agree exactly. Do not escape `-`: outside a class it is literal, and `\-` is a SyntaxError under the `u` flag -- so never interpolate the result *inside* a class.
 
 ## A cached brand favicon is four columns, one fetcher, and one export rule
 
-Institutions and payees both resolve a website's favicon server-side and cache
-the bytes so the browser never contacts a third party. Everything shared lives
-in `src/common/favicon/`: `FaviconService` (the gstatic fetch, with its
-timeout, size cap and image-only content-type check) and `brandLogoColumns`,
-which turns a fetch result into the four columns
-(`logo_data`, `logo_content_type`, `has_logo`, `logo_fetched_at`). A third
-entity imports `FaviconModule`; it does not copy the fetcher.
+Institutions and payees resolve a website's favicon server-side and cache the bytes so the browser never contacts a third party. Shared code lives in `src/common/favicon/`: `FaviconService` (the gstatic fetch, with timeout, size cap and image-only content-type check) and `brandLogoColumns` (the four columns `logo_data`, `logo_content_type`, `has_logo`, `logo_fetched_at`). A third entity imports `FaviconModule`, not a copy. Four shared rules, each with a test:
 
-Four rules the two implementations share, each of which has a test:
-
-- **The fetch stays outside the transaction.** It is best-effort -- a favicon
-  that could not be resolved never fails the create or update around it -- and
-  a slow remote host must not hold a database connection open.
-- **Re-resolve only when the address actually changed.** The form resends the
-  current website on every save, and a re-fetch that failed would clear a
-  perfectly good icon. Clearing the address clears the icon with it.
-- **The flag and the bytes move together.** `has_logo` is what every list read
-  answers "is there an icon?" with, because the bytes are `select: false` and
-  never serialized; they leave only through that entity's `GET /:id/logo`,
-  which 404s so the client can draw its own badge. `logo_fetched_at` stamps the
-  *attempt*, so null means never looked for.
-- **A bytea column breaks `SELECT *`.** The driver returns a Buffer, which JSON
-  cannot carry and the restore's `decode(..., 'base64')` cannot read, so the
-  table's export query must list its columns and wrap the bytes in
-  `encode(logo_data, 'base64')` -- `export-driver-values.spec.ts` is what
-  catches the omission. The support backup drops the bytes and forces
-  `has_logo` to false, because a brand icon re-identifies a payee whose name
-  was masked.
+- **The fetch stays outside the transaction** -- best-effort, never fails the create/update, never holds a connection on a slow host.
+- **Re-resolve only when the address actually changed.** The form resends the current website on every save, and a failed re-fetch would clear a good icon. Clearing the address clears the icon.
+- **The flag and the bytes move together.** `has_logo` answers every list read (the bytes are `select: false`, leaving only through `GET /:id/logo`, which 404s so the client draws its own badge); `logo_fetched_at` stamps the *attempt*.
+- **A bytea column breaks `SELECT *`.** The export query must list columns and wrap the bytes in `encode(logo_data, 'base64')` (`export-driver-values.spec.ts` catches the omission). The support backup drops the bytes and forces `has_logo` false, because a brand icon re-identifies a masked payee.
 
 ## Rejection happens before the write
 
-A check capable of refusing a command belongs inside the transaction that performs it, and under the same lock when concurrency is in play. A service that mutates, commits, and returns a success-shaped value for a caller to reject afterwards has already done the thing the `409` says it did not do.
+A check capable of refusing a command belongs inside the transaction that performs it, and under the same lock where concurrency is in play. A service that mutates, commits, and returns a success-shaped value for a caller to reject afterwards has already done the thing the `409` says it did not do.
 
 Give the operation the caller's precondition as a parameter -- the expected owner, scenario or revision -- and let it refuse before writing. Return the refusal distinguishably: "no such row", "not yours" and "done" are three answers, and folding two into `null` makes the caller guess. Tests assert the rejected response **and** the stored state; see `docs/financial-calculation-contract.md` section 7.
 
 ## A category's leaf name is not its identity
 
-"Cell Phone" under **Bills** and "Cell Phone" under **Business** is an ordinary
-chart of accounts, not an edge case -- so a bare leaf name identifies nothing,
-and every surface that emitted one was guessing on the reader's behalf. The
-analytics breakdown grouped on `splitCat.name`, which merged the two categories
-into a single row carrying `MIN(id)`; the LLM transaction rows sent the model
-`s.category.name`, so a split filed under Business came back as "Cell Phone" and
-was reported under whichever parent the model had seen elsewhere.
+"Cell Phone" under **Bills** and under **Business** is an ordinary chart of accounts, so a bare leaf name identifies nothing. Both halves go through `categories/category-name.util.ts`:
 
-Both halves now go through `categories/category-name.util.ts`:
+- **Emitting**: `qualifiedCategoryName` / `loadQualifiedCategoryNames` produce `"Business: Cell Phone"`. Analytics groups on `SPLIT_CATEGORY_ID` and resolves the label from the map -- there is deliberately no category-*name* SQL fragment left, and `transaction-split-query.util.spec.ts` fails if one reappears.
+- **Accepting**: `resolveCategoryNamePaths` matches a name the model sends back, separator- and spacing-insensitive, and **refuses an ambiguous one** with the qualified candidates rather than picking a winner.
 
-- **Emitting**: `qualifiedCategoryName` / `loadQualifiedCategoryNames` produce
-  `"Business: Cell Phone"`. Analytics groups on `SPLIT_CATEGORY_ID` and resolves
-  the label from the map -- there is deliberately no category-*name* SQL
-  fragment left to reach for, and `transaction-split-query.util.spec.ts` fails if
-  one reappears.
-- **Accepting**: `resolveCategoryNamePaths` matches a name the model sends back,
-  separator- and spacing-insensitive, and **refuses an ambiguous one** with the
-  qualified candidates rather than picking a winner.
+The test that matters is the round trip: every name we emit must resolve back to the category we emitted it for (`category-name.util.spec.ts`) -- four hand-rolled resolvers had drifted apart, and one rejected the exact spelling every tool description tells the model to type, falling through to a last-segment fallback that silently read the *other* "Cell Phone".
 
-The two are one contract, and the test that matters is the round trip: every
-name we emit must resolve back to the category we emitted it for
-(`category-name.util.spec.ts`). Four hand-rolled resolvers had drifted apart
-before this, and the one the tools used accepted `"Business:Cell Phone"` and
-`"Business : Cell Phone"` but **not** `"Business: Cell Phone"` -- the single
-spelling every tool description and error message tells the model to type. That
-miss fell through to a last-segment fallback that returned the *other* "Cell
-Phone", and because results were labelled with the leaf name, nothing in the
-answer could reveal that the wrong category had been read.
-
-Also: `Uncategorized` (the user filed it nowhere) and `Unknown category` (we
-could not resolve the name of the category they did file it under) are different
-facts and have different constants. Do not fold the second into the first.
+Also: `Uncategorized` (the user filed it nowhere) and `Unknown category` (we could not resolve the name of the category they did file it under) are different facts with different constants. Do not fold the second into the first.
 
 ## A predicate that decides which row counts is written once
 
-When "is this row the one we mean" takes more than one clause -- current
-algorithm version *and* matching configuration fingerprint, say -- name it and
-call it. Written out at each site it drifts, and the drift is invisible: the
-GEM signal service spelled the condition out four times, and the fourth asked
-only whether the *date* had an answer. A date can hold two rows once a unique
-key carries a version, so a superseded row could win the lookup and be stored
-as the next period's predecessor -- a wrong decision, persisted, from rules no
-longer in force.
-
-The same goes for the `where` clause that reads such a row back. A key that
-grew a column selects more than one row now; a query still written against the
-old key returns whichever the database offers first. Grep for reads of a
-unique key in the migration that widens it.
+When "is this row the one we mean" takes more than one clause (current algorithm version *and* matching configuration fingerprint), name it and call it. Spelled out per site it drifts invisibly: the GEM signal service wrote it four times and the fourth checked only the date, so a superseded row could be stored as the next period's predecessor. Same for the `where` that reads such a row back: a unique key that grew a column selects more than one row under the old `where` -- grep for reads of a unique key in the migration that widens it.
 
 ## One classifier decides whether a database role is safe
 
-`common/db/runtime-role-check.ts` owns the question "may this role serve
-enforced traffic": one facts query template, one violation list, one verdict.
-Every surface that asks goes through its exports -- `main.ts` about its own
-connection (`assertRuntimeRoleSafe`), `db-init` about the configured role by
-name (`assertRuntimeRoleSafeByName`). Do not write a second role-safety query:
-a hand-written copy in `app-role.ts` once warned on CREATEDB/CREATEROLE/
-REPLICATION where the original refuses them, so the pre-flight blessed a role
-the runtime check then rejected (PR #1076). `runtime-role-check.spec.ts` pins
-the two exported queries to one template ("only the subject swapped") and the
-two asserts to one verdict per input.
+`common/db/runtime-role-check.ts` owns "may this role serve enforced traffic": one facts query template, one violation list, one verdict. Every surface asks through its exports -- `main.ts` about its own connection (`assertRuntimeRoleSafe`), `db-init` about the configured role by name (`assertRuntimeRoleSafeByName`). Do not write a second role-safety query (a hand-written copy in `app-role.ts` once blessed a role the runtime check then rejected, PR #1076). `runtime-role-check.spec.ts` pins the two exported queries to one template and the two asserts to one verdict per input.
 
 ## A read about somebody else needs somebody else's identity
 
-`users_self` exposes exactly two rows to a session: `app_current_user_id()` and
-`app_real_user_id()`. So **any query keyed on another person -- by their id, or
-worse, by their email -- returns zero rows from the caller's own scope**, and
-under `RLS_MODE=enforce` that empty result is what the caller gets back. It does
-not raise, it does not log, and "no rows" is the same shape as "no such user".
-`AuthService` finds a login by email only because it runs pre-identity, under a
-bypass; `DelegationService.delegateEmailExists` ran the identical `where` under
-`scoped()` and told owners that an account which demonstrably logs in did not
-exist. `listDelegates` had the same defect as a `relations: ["delegate"]` join,
-`revokeDelegate` decided whether to delete a login from three counts the
-database had refused to answer, and the delegate 2FA gate concluded that no
-owner requires 2FA.
+`users_self` exposes exactly two rows to a session: `app_current_user_id()` and `app_real_user_id()`. **Any query keyed on another person -- by id, or worse, by email -- returns zero rows from the caller's own scope** under `RLS_MODE=enforce`, without raising or logging, and "no rows" looks like "no such user". (`AuthService` finds a login by email only because it runs pre-identity, under a bypass; `DelegationService.delegateEmailExists` ran the identical `where` under `scoped()` and told owners an account that demonstrably logs in did not exist.)
 
 Before writing a query, ask whose row it is. There are three answers, not two:
 
 | Whose row | Use | Why |
 |---|---|---|
 | The caller's | `scoped()` / `withScopedDb` | The policy is the point. |
-| An owner's, read by their delegate | `withDelegateContext(owner, delegate)` | `current = owner, real = delegate` is the identity `users_self` and `user_preferences_isolation` were written for. **No bypass** -- the delegation is an identity the policies already understand, and `app.real_user_id` stays true about who is authenticated. |
+| An owner's, read by their delegate | `withDelegateContext(owner, delegate)` | `current = owner, real = delegate` is the identity the policies were written for. **No bypass** -- `app.real_user_id` stays true about who is authenticated. |
 | A delegate's, read by their owner (or any genuine cross-user sweep) | `withSystemContext` | There is no policy arm for it. Decide authorization *first*, under `scoped()`, and let only the minimum out. |
 
-Reaching for `withSystemContext` when the middle row applies is the easy wrong
-answer: it works, so nothing complains, and the bypass fence widens by one.
+Reaching for `withSystemContext` when the middle row applies is the easy wrong answer: it works, so nothing complains, and the bypass fence widens by one.
 
-`src/delegation/rls-context-smoke.spec.ts` is the guard, and the shape is worth
-copying. Per-service specs mock `withScopedDb` away, which makes them
-structurally incapable of seeing this class of bug -- so that suite runs the
-**real** `withScopedDb` at `RLS_MODE=enforce`, records the ambient context at
-each repository call, and asserts the ordered sequence of identities plus the
-`set_config` statements actually emitted. Asserting the order is what proves the
-fence: the authorization read must appear under the caller's own identity
-*before* any bypass opens.
+`src/delegation/rls-context-smoke.spec.ts` is the guard, and its shape is worth copying: per-service specs mock `withScopedDb` away and are structurally incapable of seeing this class of bug, so that suite runs the **real** `withScopedDb` at `RLS_MODE=enforce`, records the ambient context at each repository call, and asserts the ordered sequence of identities plus the emitted `set_config` statements. Asserting the order is what proves the fence: the authorization read must appear under the caller's own identity *before* any bypass opens.
 
 ## A joint account is only shared where somebody remembered to share it
 
-`transaction.userId = :userId` is the wrong ownership predicate for any
-own-context read a delegate can reach: a jointly shared account's rows belong
-to the **owner**, so the grantee matches none of them and the endpoint returns
-a confident empty answer rather than an error. That is how the register got the
-joint scope on day one while the summary, grouped totals and monthly totals
-beside it did not -- a joint account's detail page drew a full balance chart
-with an empty cash flow, no top categories and no top payees under it.
+`transaction.userId = :userId` is the wrong ownership predicate for any own-context read a delegate can reach: a jointly shared account's rows belong to the **owner**, so the grantee matches none of them and the endpoint returns a confident empty answer (the register had joint scope on day one; the summary, grouped totals and monthly totals beside it did not).
 
-Own-context reads resolve their scope through
-`TransactionsController.resolveOwnContextJointScope` (the accounts controller's
-equivalents are `jointAccountIdSetFor` for list reads and a `NotFoundException`
-fallback through `jointAccessFor` for `:id` reads, as on `getBalance` and
-`getBalanceForecast`). Filtered to exactly one joint account, the query runs as
-the owner so every derived value -- category descendant expansion, the search
-term parsed in the user's number/date format, the money math -- is byte-identical
-to the owner's own view; anything else keeps the caller's scope and widens it by
-the already-authorized joint ids, never by raw request input. The widened
-predicate itself is written once per service (`registerScope`,
-`analyticsScope`).
-
-An endpoint that deliberately stays owner-only says so where it is skipped:
-`tag-key-breakdown` does, because tags are personal and a joint row never
-carries the grantee's.
+Own-context reads resolve their scope through `TransactionsController.resolveOwnContextJointScope` (the accounts controller's equivalents are `jointAccountIdSetFor` for list reads and a `NotFoundException` fallback through `jointAccessFor` for `:id` reads, as on `getBalance` and `getBalanceForecast`). Filtered to exactly one joint account, the query runs as the owner so every derived value is byte-identical to the owner's own view; anything else keeps the caller's scope and widens it by the already-authorized joint ids, never by raw request input. The widened predicate is written once per service (`registerScope`, `analyticsScope`). An endpoint that deliberately stays owner-only says so where it is skipped (`tag-key-breakdown` does: tags are personal).
 
 ## A stored price says which session it belongs to, not which minute it was fetched
 
-`security_prices` holds one row per trading day, and the thing that row is
-supposed to hold is the **session**: the official close, the full-day volume,
-the high and low over the whole day, and the adjusted close. A live quote is
-none of those. `regularMarketPrice` is the last print at the moment it was
-asked for, which is a true statement about 14:42 and a false one about the day.
+`security_prices` holds one row per trading day, and that row is the **session**: official close, full-day volume, high/low, adjusted close. A live quote (`regularMarketPrice`) is a true statement about 14:42 and a false one about the day -- and the frontend auto-refreshes quotes through the session (`usePriceRefresh`), so a row for today exists long before the day is over. Three rules, each with a test:
 
-The frontend auto-refreshes quotes through the trading session
-(`usePriceRefresh`), so a row for today exists long before the day is over --
-and the closing job used to treat that as "already done" and skip the security,
-leaving whichever mid-session quote arrived last stored as the close. On real
-data that was sixteen of seventeen consecutive rows disagreeing with the
-provider, by a cent or two, with volumes at a third of the real figure. The two
-correct ones were the days nobody opened the app.
+- **"Has a price for today" is not "the day is settled".** Ask whether the *session* has ended -- `isSessionSettled` (`providers/settled-bar.util.ts`), on the market's own clock in the market's own zone, from the stored `market_timezone` / `market_close_time`. Never from the presence of a row or the server's clock.
+- **The closing job settles the day from the daily bar, after the quote refresh.** `settleDailyBars` re-reads a bounded recent window and upserts the bars whose sessions have ended, so a missed run or provider outage repairs itself. The quote is what a still-open market can offer; the bar is what the finished session did, and the bar wins.
+- **A calculated column needs a writer on the recurring path.** `adjusted_close` was populated only by the on-demand backfill, and because `loadPriceSeries` picks one basis per series and keeps only adjusted rows, that silently truncated every return series at the last backfill date. The quote path fills `adjusted_close` with the close it is writing -- definitional for the newest session (adjustment factor 1), but only where the series already carries an adjusted close; both conditions live in the `CASE ... EXISTS` inside the statement (an MSN-priced series given exactly one adjusted close flips `bool_or(...)` and collapses to that row).
 
-Three rules, each with a test rather than a paragraph:
+A daily bar is not a quote, so settling clears `quoted_at`; and a `source = 'manual'` row is a user correction no provider write may overwrite -- the quote path and `bulkUpsertPrices` both carry `WHERE security_prices.source IS DISTINCT FROM 'manual'`, and the quote path treats the refusal as a successful no-op that reads back the winning row. The honest cost: a manual row on a provider-priced security has no adjusted close, so that day stays out of the adjusted series.
 
-- **"Has a price for today" is not "the day is settled".** Ask whether the
-  *session* has ended -- `isSessionSettled` (`providers/settled-bar.util.ts`),
-  on the market's own clock in the market's own zone, from the
-  `market_timezone` / `market_close_time` the quote refresh stores. Never from
-  the presence of a row, and never from the server's clock.
-- **The closing job settles the day from the daily bar, after the quote
-  refresh.** `settleDailyBars` re-reads a bounded recent window and upserts the
-  bars whose sessions have ended, so a missed run, a provider outage or a week
-  of intraday-only rows repairs itself. Order matters: the quote is what a
-  still-open market can offer, the bar is what the finished session did, and
-  the bar has to win.
-- **A calculated column needs a writer on the recurring path.**
-  `adjusted_close` was populated by the on-demand backfill and by nothing else,
-  so it was null on every row the daily job wrote. Because `loadPriceSeries`
-  picks one basis per series and then keeps only the adjusted rows, that did
-  not degrade to raw prices -- it silently truncated every return series at the
-  last backfill date.
-
-The quote path fills `adjusted_close` with the close it is writing, so today is
-in the series from the first intraday refresh rather than only after
-settlement. That is definitional, not a guess -- the newest session's
-adjustment factor is 1 -- but it holds *only* for the newest session, and only
-where the series already carries an adjusted close. Both conditions live in the
-`CASE ... EXISTS` inside the statement, because the second one is not obvious:
-an MSN-priced series has no adjusted closes anywhere, and giving it exactly one
-flips `bool_or(...)` and collapses the series to that single row.
-
-A daily bar is also not a quote, so settling clears `quoted_at`; and a
-`source = 'manual'` row is a correction the user typed, which no provider write
-may overwrite -- the quote path and `bulkUpsertPrices` both carry
-`WHERE security_prices.source IS DISTINCT FROM 'manual'`, and the quote path
-treats the refusal as a successful no-op that reads back the row that won,
-not as a failure. The guard is what makes a nightly settlement pass safe to
-add at all; without it every manual correction would be destroyed each night.
-Its cost, which is the honest half: a manual row on a provider-priced security
-has no adjusted close and no way to derive one, so that day stays out of the
-adjusted series rather than being overwritten into it.
-
-A related one, in the same family as the DATE-transformer rule above: **a bar's
-timestamp is the instant its session opened, so the day it belongs to is the
-exchange's calendar day.** `barDate` reads it in `meta.exchangeTimezoneName`,
-falling back to UTC. Reading it with `setHours(0,0,0,0)` made `price_date` a
-function of the container's timezone and put an ASX bar on the wrong day.
+Related: **a bar's timestamp is the instant its session opened, so the day it belongs to is the exchange's calendar day.** `barDate` reads it in `meta.exchangeTimezoneName`, falling back to UTC; `setHours(0,0,0,0)` made `price_date` a function of the container's timezone.
 
 ## A payload coarser than daily is a different series, not a sparse one
 
-Ask a provider for a long range and it may answer with weekly or monthly bars.
-Written into a daily table those rows are indistinguishable from daily ones --
-and they overwrite the real daily rows that sat on those dates, so the damage
-is not limited to what was added. `market_index_prices` refused this from the
-day it was written; `security_prices` did not, and one production catalogue
-carried **six years of a single adjusted row per month** spliced through a daily
-history. Under the one-basis-per-series rule that did not merely add noise: the
-monthly rows carried adjusted closes and the daily ones did not, so
-`loadPriceSeries` kept the monthly rows and *dropped every daily row around
-them*, reducing six years of return series to twelve points a year.
-
-`assertDailySeries` (`providers/daily-spacing.util.ts`) is the one test, and it
-runs inside `bulkUpsertPrices` -- not in its callers, of which there are four,
-because a guard one caller forgets is not a guard. Every caller already wraps
-that write in a try/catch that reports a failed security, so the throw surfaces
-as "this one did not update" rather than as a crash. The threshold, the median
-(never the mean -- one long exchange closure must not make a daily series look
-weekly) and the minimum sample size live there too, and
-`daily-spacing.util.spec.ts` fails if a second copy of any of them appears
-anywhere under `securities/`.
+A provider asked for a long range may answer weekly or monthly bars; written into a daily table they overwrite the real daily rows on those dates, and under the one-basis-per-series rule monthly rows carrying adjusted closes made `loadPriceSeries` *drop every daily row around them*. `assertDailySeries` (`providers/daily-spacing.util.ts`) is the one test, and it runs inside `bulkUpsertPrices` -- not in its four callers, because a guard one caller forgets is not a guard (each caller already reports a failed security, so the throw surfaces as "this one did not update"). The threshold, the median (never the mean -- one long exchange closure must not make a daily series look weekly) and the minimum sample size live there too; `daily-spacing.util.spec.ts` fails on a second copy of any of them under `securities/`.
 
 ## History depth is a request, not a property of the holding
 
-`backfillSecurityHoldingPeriod` clips its write to the first transaction date,
-which is right for a position valuation and wrong for everything else: a
-backtest, the GEM report and the performance comparison all need prices from
-before the user bought. A security first transacted in May 2025 therefore held
-fifteen months of history out of ten available, with no way to ask for more --
-`backfillSecurityRange` can fetch any range but has no HTTP route of its own,
-reachable only as a side effect of running one of those reports.
-
-Both backfill endpoints now take `range` (`BackfillPricesQueryDto`), and
-supplying it means two things at once, deliberately: fetch that range, **and**
-store all of it. Omitting it keeps the clipped default. When you add a caller,
-decide which of the two questions it is asking -- "what is this position worth
-over the time I held it" or "what did this instrument do" -- rather than
-reaching for `max` because more data seems safer; the clip exists so an
-untouched catalogue does not accumulate decades of prices nobody reads.
+`backfillSecurityHoldingPeriod` clips its write to the first transaction date -- right for position valuation, wrong for backtests, the GEM report and performance comparison, which need prices from before the user bought. Both backfill endpoints take `range` (`BackfillPricesQueryDto`); supplying it means fetch that range **and** store all of it, omitting it keeps the clipped default. When adding a caller, decide which question it asks -- "what is this position worth over the time I held it" or "what did this instrument do" -- rather than reaching for `max`; the clip exists so an untouched catalogue does not accumulate decades of prices nobody reads.
 
 ## A money value carries the currency it was calculated into
 
-Not the currency of the account it is filed under. `InvestmentTransaction.exchangeRate`
-converts a trade out of the security's currency and into the *settlement*
-account's -- the funding account when the row names one, otherwise the
-brokerage's linked cash account -- so a replayed cost basis is denominated
-there, and a PLN brokerage funded from EUR holds a EUR basis. A consumer that
-assumed the holding account's currency set that against a PLN market value and
-reported the exchange rate as profit, then taxed it.
-
-So the amount and its currency travel together (`ReplayedLot.currencyCode`),
-and a consumer compares that field against what it is reporting in. A mismatch
-is **unknown**, not a conversion: today's rate answers today's question, and
-the acquisition happened at its own. Two acquisitions that settled in
-different currencies cannot be summed at all.
+Not the currency of the account it is filed under. `InvestmentTransaction.exchangeRate` converts a trade into the *settlement* account's currency (the funding account when named, else the brokerage's linked cash account), so a PLN brokerage funded from EUR holds a EUR cost basis. The amount and its currency travel together (`ReplayedLot.currencyCode`), and a consumer compares that field against what it is reporting in. A mismatch is **unknown**, not a conversion -- today's rate answers today's question, not the acquisition's -- and two acquisitions settled in different currencies cannot be summed at all.
 
 ## A fallback answers only the question it was asked
 
-A lookup that fails is a fact about *that* lookup. A stale scenario id that no
-longer resolves says nothing about the user's other scenarios, so an empty
-report hardcoding `strategies: []` made a second claim -- that there are none
--- without looking, and took away the switcher that was the only route back.
-Fall back to the default rather than to nothing, and fill the surrounding
-fields from a real read.
-
-And a retry has to change something. `getReport` recursed with the same
-strategy id after establishing that the id was gone, so every attempt took the
-identical path: a retry whose inputs are unchanged is a comment claiming a
-recovery that cannot happen.
+A lookup that fails is a fact about *that* lookup. A stale scenario id says nothing about the user's other scenarios, so an empty report hardcoding `strategies: []` made a second claim without looking -- and took away the switcher that was the only route back. Fall back to the default rather than to nothing, and fill the surrounding fields from a real read. And a retry has to change something: recursing with the same id after establishing the id is gone is a comment claiming a recovery that cannot happen.
 
 ## Backup and restore
 
-`docs/backup-restore-contract.md` is the contract: what a backup promises, what
-it deliberately does not, and the known gaps. Read it before changing anything
-under `src/backup/`.
+`docs/backup-restore-contract.md` is the contract: what a backup promises, what it deliberately does not, and the known gaps. Read it before changing anything under `src/backup/`. Three things a test enforces:
 
-Three things it will not let you get wrong by accident, because a test enforces
-them:
+- **A new foreign key between two backed-up tables** must keep `src/backup/restore-plan.spec.ts` green (it parses every FK out of `database/schema.sql` and fails on ordering/self-reference problems).
+- **A new column referencing `currencies(code)`** must keep `src/currencies/currency-references.spec.ts` green -- both SQL functions and the TypeScript constant.
+- **A new table** must be exported or listed in `INTENTIONALLY_EXCLUDED_TABLES` with a reason, and classified in the support backup rules.
 
-- **A new foreign key between two backed-up tables** has to keep
-  `src/backup/restore-plan.spec.ts` green. It parses every FK out of
-  `database/schema.sql` and fails when a restored table references a table
-  inserted later, or itself, without being stripped on insert and repaired
-  afterwards.
-- **A new column referencing `currencies(code)`** has to keep
-  `src/currencies/currency-references.spec.ts` green -- both SQL functions and
-  the TypeScript constant the support backup uses.
-- **A new table** has to be exported or listed in
-  `INTENTIONALLY_EXCLUDED_TABLES` with a reason, and classified in the support
-  backup rules.
+**A file's name is its identity, so anything that decides whether it may be deleted has to be in the name.** An automatic backup that could not include every attachment is published as `monize-backup-partial-<date>` in its own retention tier, and the name is chosen *after* the export from what the export found -- `writeFileAtomic` replaces a final name by design, so a partial artifact written under the `daily-` name had already destroyed that day's complete copy before any status column could say so. State beside the file cannot govern a decision the write has already made; the durable copy of the fact goes *inside* the document (`completeness` in the envelope).
 
-**A file's name is its identity, so anything that decides whether it may be
-deleted has to be in the name.** An automatic backup that could not include every
-attachment is published as `monize-backup-partial-<date>` in its own retention
-tier, and the name is chosen *after* the export from what the export found --
-`writeFileAtomic` replaces a final name by design, so a partial artifact written
-under the ordinary `daily-` name had already destroyed that day's complete copy
-by the time `applyBackupOutcome` recorded `partial` in the settings row, and
-every later retention pass then counted it as a complete daily. State beside the
-file (a status column, a variable, a later check) cannot govern a decision the
-write has already made. The durable copy of the same fact goes *inside* the
-document (`completeness` in the envelope), because a filename does not survive a
-rename and a settings row does not survive the machine.
+**Nothing in the export path may hold a whole table, a whole artifact, or a whole attachment set.** Rows come through the cursor in `src/backup/export-cursor.ts`, the document is serialised a row at a time under the chunk budget in `export-json-stream.ts`, and an object store is opened one object at a time. A `manager.query` for an export table, a `JSON.stringify` over an array of rows, or an array of base64 built before serialising are each the same defect (issue #1070). The guards in `src/backup/export-streaming.spec.ts` assert the ordering (batched fetches, loads interleaved with writes, reads that stop when the client does) rather than the memory.
 
-**Nothing in the export path may hold a whole table, a whole artifact, or a whole
-attachment set.** Rows come through the cursor in `src/backup/export-cursor.ts`,
-the document is serialised a row at a time under the chunk budget in
-`export-json-stream.ts`, and an object store is opened one object at a time and
-the bytes dropped once written. A `manager.query` for an export table, a
-`JSON.stringify` over an array of rows, or an array of base64 built before
-serialising are each the same defect (issue #1070), and each looks reasonable in
-isolation -- which is how it survived five audits. The guards are in
-`src/backup/export-streaming.spec.ts`: they assert the ordering (batched fetches,
-loads interleaved with writes, reads that stop when the client does) rather than
-the memory, because peak RSS needs a cgroup harness this repository does not have.
+**`verifyAuthentication` is the one refusal deliberately not first.** An OIDC restore is authorized by a single-use `OidcReauthService` artifact, and the round trip that mints one loses the user's file selection -- so the restore validates everything free (decrypt, decompress, envelope) *before* spending it. It still precedes every write. Do not reorder it forward, and do not reorder it backward past a `DELETE FROM`; section 5 of the contract has the reasoning, and `backup.service.spec.ts` pins both edges.
 
-And one thing about `verifyAuthentication` that is easy to undo by accident. An
-OIDC restore is authorized by a single-use `OidcReauthService` artifact, and the
-round trip that mints one loses the user's file selection -- so the restore
-validates everything free (decrypt, decompress, envelope) *before* spending it,
-and a wrong backup password costs no identity-provider round trip. That makes it
-the one refusal in the path that is deliberately not first; it still precedes
-every write. Do not reorder it forward to match section 3's list, and do not
-reorder it backward past a `DELETE FROM`. Section 5 of the contract has the
-reasoning, and `backup.service.spec.ts` pins both edges.
-
-**A value encrypted with server configuration cannot travel in a document.**
-`ai_provider_configs.api_key_enc` is ciphertext under `AI_ENCRYPTION_KEY`, and
-that variable is not in the backup and must not be -- shipping the master key
-beside the ciphertext would make encrypting the column pointless. Exported
-verbatim it restored onto any other instance *populated and unreadable*, which is
-the worst shape a failure can have: the column is non-null, so every "is a key
-configured?" check said yes, the row drew a masked key, and the only symptom was
-that AI calls failed. So the key is decrypted on the way out and re-encrypted on
-the way in (`ai-provider-key-transport.ts`), and both directions live in one file
-because the field name and the fallbacks are one contract -- an export writing a
-field the restore does not read loses the secret silently. The cost is that the
-artifact holds the credential in plaintext, which is stated in
-`docs/backup-restore-contract.md` §1, logged by the export, and the reason the
-support backup drops the table outright. Anything else stored under server-side
-configuration and put in a user-facing document has the same problem; solve it
-the same way, or exclude it.
+**A value encrypted with server configuration cannot travel in a document.** `ai_provider_configs.api_key_enc` is ciphertext under `AI_ENCRYPTION_KEY`, which is not in the backup and must not be. Exported verbatim it restored onto any other instance *populated and unreadable* -- every "is a key configured?" check said yes and only the AI calls failed. The key is decrypted on the way out and re-encrypted on the way in (`ai-provider-key-transport.ts`), both directions in one file because the field name and fallbacks are one contract. The cost -- the artifact holds the credential in plaintext -- is stated in `docs/backup-restore-contract.md` §1, logged by the export, and why the support backup drops the table. Anything else stored under server-side configuration gets the same treatment, or is excluded.
 
 ### `BackupService` is a facade; put new code in the component that owns it
 
-Issue #1092 split the 2,600-line original into `BackupExportService`,
-`BackupRestoreService`, `BackupAttachmentTransferService` and
-`BackupRestoreDatabaseService`, with the file format in `backup-format.ts` and
-the table list in `export-table-queries.ts`. Section 0 of the contract says which
-owns what. `BackupService` itself is one delegation per method and holds no
-`DataSource` and no storage provider -- a query there is how the original grew,
-and `src/backup/module-shape.spec.ts` fails on the dependency as well as on the
-line count. That spec's grandfather list may only shrink.
+Issue #1092 split the 2,600-line original into `BackupExportService`, `BackupRestoreService`, `BackupAttachmentTransferService` and `BackupRestoreDatabaseService`, with the file format in `backup-format.ts` and the table list in `export-table-queries.ts`. Section 0 of the contract says which owns what. `BackupService` is one delegation per method and holds no `DataSource` and no storage provider; `src/backup/module-shape.spec.ts` fails on the dependency as well as the line count, and its grandfather list may only shrink.
 
-**A source-scanning guard names a file, so a split disarms it silently.** Four of
-them pointed at `backup.service.ts` -- the two attachment readers, the trigger-DDL
-ban, the export's bytea encoding and `currency-references.spec.ts`'s "one
-predicate" check -- and every one would have gone on passing while scanning code
-that had moved out from under it. A scan whose subject is "wherever this appears"
-walks the directory (`backupModuleSources()` in `backup.service.spec.ts` is the
-pattern); one that must name a file throws when its marker is missing rather than
-returning an empty match set. Grep `readFileSync(` under the module you are
-splitting before you split it.
+**A source-scanning guard names a file, so a split disarms it silently.** Four guards pointed at `backup.service.ts` and would have gone on passing while scanning code that had moved out from under them. A scan whose subject is "wherever this appears" walks the directory (`backupModuleSources()` in `backup.service.spec.ts` is the pattern); one that must name a file throws when its marker is missing rather than returning an empty match set. Grep `readFileSync(` under the module you are splitting before you split it.
 
 ## Testing Conventions
 
@@ -797,162 +286,65 @@ Mock repositories use `Record<string, jest.Mock>`; tests use `Test.createTesting
 
 ### A mock must return what the real collaborator returns
 
-`Record<string, jest.Mock>` is fine for a repository, whose surface the driver defines. For **one of our own services**, type the double -- `jest.Mocked<TheService>`, or a `Partial<jest.Mocked<T>>` cast once -- so `tsc` rejects a return shape the real method cannot produce.
+`Record<string, jest.Mock>` is fine for a repository, whose surface the driver defines. For **one of our own services**, type the double -- `jest.Mocked<TheService>`, or a `Partial<jest.Mocked<T>>` cast once -- so `tsc` rejects a return shape the real method cannot produce. Untyped, a mock quietly becomes fiction, and the branch that reads that fiction is green and unreachable:
 
-Untyped, a mock quietly becomes fiction, and the branch that reads that fiction is green and unreachable. Two ways it happens:
-
-- **A shape the driver never returns.** A TypeORM insert result mocked as `{ generatedMaps: [] }` made an entire lost-the-race path testable, tested and dead: the real driver signals a conflict elsewhere, so the branch never ran in production and its tests never ran anything else.
-- **A signature that moved.** A service method growing from `Promise<boolean>` to `Promise<string | null>` leaves `mockResolvedValue(true)` behind it -- still truthy, still passing, still describing a contract nothing has any more. When you change a method's return type, grep its mocks in the same commit.
+- **A shape the driver never returns.** A TypeORM insert result mocked as `{ generatedMaps: [] }` made an entire lost-the-race path testable, tested and dead.
+- **A signature that moved.** A method growing from `Promise<boolean>` to `Promise<string | null>` leaves `mockResolvedValue(true)` behind it -- still truthy, still passing. When you change a return type, grep its mocks in the same commit.
 
 ### Fixtures are claims about production data
 
-`docs/testing-contract.md` is the shared list of adversarial inputs to choose from. A fixture is evidence only if the code that writes the real data could have written it. Before adding one, look at the producer: the query's sampling, whether the column is nullable, whether the format guarantees what the fixture assumes. A price series three points a quarter apart proves nothing about code reading daily closes, and weightings that always sum to 1 never exercise the remainder the storage format allows. `docs/financial-calculation-contract.md` section 8.3 has the full rule.
+`docs/testing-contract.md` is the shared list of adversarial inputs to choose from. A fixture is evidence only if the code that writes the real data could have written it -- check the producer's sampling, nullability, and format guarantees before adding one. `docs/financial-calculation-contract.md` section 8.3 has the full rule.
 
 ### Do not trust a suite that stayed green
 
-Changing what a service computes and seeing every test pass means the change is a no-op or the suite has a hole -- see `docs/financial-calculation-contract.md` sections 8.1 and 8.2. Establish which before moving on, and break each new invariant on purpose once to confirm its test actually fails.
+Changing what a service computes and seeing every test pass means the change is a no-op or the suite has a hole -- `docs/financial-calculation-contract.md` sections 8.1 and 8.2. Establish which before moving on, and break each new invariant on purpose once to confirm its test actually fails.
 
 ## Internationalization (i18n)
 
-Server-rendered strings (exception messages, email copy) are localized via `nestjs-i18n`. Wrap exception messages in `tr(key, fallback, args)` (`src/i18n/translate.ts`), which resolves against the request locale and returns the English `fallback` outside an HTTP context (jobs, schedulers, tests). Render emails with an `EmailT` translator (`emailTranslator(i18n, recipientLang)` from `src/i18n/email-translator.ts`) so copy matches the recipient's stored locale rather than the request's. Catalogs live in `src/i18n/locales/{locale}/*.json`, one folder per supported locale; the authoritative locale list is `SUPPORTED_LOCALE_CODES` in `src/i18n/config.ts` (root `CLAUDE.md` enumerates them) -- keep it in sync with the frontend's. The `en-*` entries are lean regional variants (declared in `LOCALE_BASES`): they hold only the keys that differ from `en` and fall back to it per key. Adding or changing a string means updating every locale -- the parity test `src/i18n/locales.parity.spec.ts` fails otherwise -- then regenerating the pseudo-locale with `npm run i18n:pseudo`. Full contributor flow: `src/i18n/README.md`.
+Server-rendered strings (exception messages, email copy) are localized via `nestjs-i18n`. Wrap exception messages in `tr(key, fallback, args)` (`src/i18n/translate.ts`), which resolves against the request locale and returns the English `fallback` outside an HTTP context. Render emails with `emailTranslator(i18n, recipientLang)` (`src/i18n/email-translator.ts`) so copy matches the recipient's stored locale. Catalogs live in `src/i18n/locales/{locale}/*.json`; the authoritative locale list is `SUPPORTED_LOCALE_CODES` in `src/i18n/config.ts` (root `CLAUDE.md` enumerates them) -- keep in sync with the frontend's. The `en-*` entries are lean regional variants (`LOCALE_BASES`), falling back to `en` per key. Adding or changing a string means updating every locale (`src/i18n/locales.parity.spec.ts` fails otherwise), then `npm run i18n:pseudo`. Full flow: `src/i18n/README.md`.
 
 ## Every line in the log has the same shape
 
-`[Nest] pid - date LEVEL [Context] message`, produced by the NestJS `Logger`.
-That includes the lines written before the app exists: `Logger` works outside an
-application context, so `db-init`, `db-migrate`, `db-demo-check` and the seeders
-each construct `new Logger("<Context>")` rather than calling `console`. Backend
-`src/` bans `console` outright (`no-console`, `eslint.config.mjs`); the only
-exception is `oauth/oidc-provider-log-bridge.ts`, which has to hold the real
-console methods in order to forward everything that is not a provider notice.
-
-`docker-entrypoint.sh` prints nothing itself. A shell `echo` is the one line in
-the container log with no timestamp, level or context, and an inline `node -e`
-blob cannot reach the `Logger` without restating its format -- so each step logs
-for itself and the entrypoint just runs the steps.
-`src/startup-logging.spec.ts` scans for both mistakes and for a `console` call in
-any pre-boot script.
+`[Nest] pid - date LEVEL [Context] message`, produced by the NestJS `Logger` -- including the lines written before the app exists: `db-init`, `db-migrate`, `db-demo-check` and the seeders each construct `new Logger("<Context>")`. Backend `src/` bans `console` outright (`no-console` in `eslint.config.mjs`); the only exception is `oauth/oidc-provider-log-bridge.ts`, which must hold the real console methods to forward non-provider output. `docker-entrypoint.sh` prints nothing itself -- each step logs for itself. `src/startup-logging.spec.ts` scans for both mistakes and for `console` in any pre-boot script.
 
 ## OAuth / OIDC provider
 
-**A page whose form submission must redirect off-origin needs its own CSP.**
-Helmet's app-wide policy merges in the default `form-action 'self'`, and Chrome
-enforces `form-action` against every redirect hop that follows a form submit --
-so the OAuth consent page's Allow/Deny POST (303 to `/oauth/auth` resume, 303 to
-the client's `redirect_uri` with the code) is silently cancelled on the final,
-cross-origin hop. The server logs `authorization.success`, the browser stays
-parked on the consent form, and the MCP client never receives its code. The
-interaction controller therefore sets a per-page policy with
-`form-action 'self' https:` (`setInteractionPageHeaders`); the redirect_uri is
-per-client and dynamic, so it cannot be enumerated. Do not "fix" this by
-loosening the global Helmet `form-action` -- only this page needs it.
+**A page whose form submission must redirect off-origin needs its own CSP.** Helmet's app-wide `form-action 'self'` is enforced by Chrome against every redirect hop after a form submit, so the OAuth consent POST's final cross-origin hop to the client's `redirect_uri` was silently cancelled -- server logs `authorization.success`, browser parked on the consent form. The interaction controller sets a per-page `form-action 'self' https:` (`setInteractionPageHeaders`); the redirect_uri is per-client and dynamic, so it cannot be enumerated. Do not loosen the global Helmet `form-action` -- only this page needs it.
 
-`node-oidc-provider` prints its own `oidc-provider NOTICE:`/`WARNING:` lines with bare `console.info`/`console.warn`, outside the Nest `Logger`. The library exposes no logger hook, so `oauth/oidc-provider-log-bridge.ts` -- installed at the top of `main.ts`, before anything can instantiate the provider -- re-routes exactly those lines to a `[OidcProvider]` logger and passes any other console output through untouched. That fixes the formatting only: every such notice still means a config option was left at its default, so fix the config rather than treating the bridge as the answer. In particular, `ttl` needs an explicit number for every artifact the provider can issue (`AccessToken`, `AuthorizationCode`, `IdToken`, `RefreshToken`, `Grant`, `Interaction`, `Session`); the guard test in `src/oauth/oauth-provider.service.spec.ts` fails when one is missing.
+`node-oidc-provider` prints `oidc-provider NOTICE:`/`WARNING:` lines with bare `console.info`/`console.warn` and exposes no logger hook, so `oauth/oidc-provider-log-bridge.ts` -- installed at the top of `main.ts` -- re-routes exactly those lines to a `[OidcProvider]` logger. That fixes only the formatting: every such notice means a config option was left at its default, so fix the config. In particular, `ttl` needs an explicit number for every artifact the provider can issue (`AccessToken`, `AuthorizationCode`, `IdToken`, `RefreshToken`, `Grant`, `Interaction`, `Session`); the guard in `src/oauth/oauth-provider.service.spec.ts` fails when one is missing.
 
 ## Money investment mapping is finalized after both mappers run
 
-`mapInvestments` cannot know whether `mapTransactions` will preserve or
-collapse a cash split. Reconcile generated investment companions only after
-cash-source mapping: when a redemption remains embedded, its preserved sibling
-is the interest record, so the generated companion and mutual link must not be
-written as a second representation of that income.
+`mapInvestments` cannot know whether `mapTransactions` will preserve or collapse a cash split. Reconcile generated investment companions only after cash-source mapping: when a redemption remains embedded, its preserved sibling is the interest record, so the generated companion and mutual link must not be written as a second representation of that income.
 
 ## Automatic backups are an operator setting, not a user preference
 
-The auto-backup endpoints live on `AutoBackupController`, whose class-level
-`@Roles("admin")` is the whole access rule -- put a new endpoint there and it is
-admin-only without anyone remembering to say so. Manual export/restore, which
-touches only the caller's own data, stays on `BackupController` for everyone.
+Auto-backup endpoints live on `AutoBackupController`, whose class-level `@Roles("admin")` is the whole access rule -- a new endpoint there is admin-only automatically. Manual export/restore (caller's own data) stays on `BackupController` for everyone.
 
-Every other user is enrolled on the deployment defaults by
-`AutoBackupService.enrollManagedUsers`, which runs at the top of the hourly
-cron: nobody but an admin can switch the feature on, so without it a non-admin
-would silently have no backups. It reconciles rather than seeds -- a row that
-has drifted is written back to the defaults, an unchanged one is not written at
-all, and `lastBackup*`/`nextBackupAt` are left alone so enrollment never
-re-triggers a backup.
+`AutoBackupService.enrollManagedUsers` runs at the top of the hourly cron and enrolls every other user on the deployment defaults -- without it a non-admin would silently have no backups. It reconciles rather than seeds: drifted rows are written back to the defaults, unchanged ones are not written, and `lastBackup*`/`nextBackupAt` are left alone so enrollment never re-triggers a backup.
 
-Backups are encrypted with the user's own password. For a local-auth account
-the server only ever holds that in plaintext at the moment they type it, so
-`rememberLoginPassword` captures it from registration, login and
-change-password and nothing asks them to configure anything. An OIDC account
-has no password of ours, so those users set a dedicated one in Settings
-(`setBackupPasswordForOidcUser`) or go unencrypted; `getStatus().manageable` is
-what the UI gates that section on, and both management methods refuse a
-local-auth caller rather than accepting a change the next login would undo.
-
-A stored copy is checked against the account's current password hash before it
-is used (`resolveBackupPassword`) -- encrypting with a password the user has
-since changed produces a file that looks like a backup and cannot be opened.
-That resolution has three outcomes, not two: nothing stored (write plaintext), a
-usable password (encrypt), and stored-but-undecryptable (refuse, because the
-previous backups are encrypted and silently downgrading is worse than failing).
+Backups are encrypted with the user's own password. Local-auth accounts have it captured at the moment they type it (`rememberLoginPassword` from registration, login and change-password). OIDC accounts set a dedicated one in Settings (`setBackupPasswordForOidcUser`) or go unencrypted; `getStatus().manageable` gates that UI section, and both management methods refuse a local-auth caller. A stored copy is checked against the account's current password hash before use (`resolveBackupPassword`) -- three outcomes, not two: nothing stored (write plaintext), usable password (encrypt), stored-but-undecryptable (refuse -- silently downgrading previous encrypted backups is worse than failing).
 
 ## Cron Jobs
 
-Cron jobs use `@Cron()` from `@nestjs/schedule` and run **in the API process** -- `ScheduleModule.forRoot()` is registered in `app.module.ts`; there is no separate scheduler process (on k8s with more than one backend replica, every replica fires every cron). For the full schedule, see `docs/cron-jobs.md` or grep `@Cron(`.
+Cron jobs use `@Cron()` from `@nestjs/schedule` and run **in the API process** (`ScheduleModule.forRoot()` in `app.module.ts`; on k8s with multiple replicas, every replica fires every cron). Full schedule: `docs/cron-jobs.md`, or grep `@Cron(`.
 
-Every `@Cron` handler is an out-of-request entry point, so its body must seed its own RLS context (tasks C2-C4): the cross-user fan-out under `withSystemContext`, each per-user body under `withUserContext(userId)`. A handler that reaches the DB with no ambient context throws `DB access outside request/user/system context` in every `RLS_MODE`, including `off` -- the per-module `rls-context-smoke.spec.ts` specs are the pattern for proving a cron runs clean.
+Every `@Cron` handler is an out-of-request entry point, so its body must seed its own RLS context (tasks C2-C4): the cross-user fan-out under `withSystemContext`, each per-user body under `withUserContext(userId)`. A handler that reaches the DB with no ambient context throws in every `RLS_MODE`, including `off` -- the per-module `rls-context-smoke.spec.ts` specs are the pattern for proving a cron runs clean.
 
 ### Cleanup somebody is blocked on belongs on the request path
 
-Before choosing an interval, ask what the stale row *does* while it sits there.
-If it is only untidy, a schedule is the whole answer. If it **refuses the user's
-next request** -- a slot, a lock, a uniqueness guard -- then the interval is a
-lockout the user cannot end, and picking a smaller number only makes the outage
-shorter. Run the cleanup inside the transaction of the request that is about to
-be refused by it, scoped to that caller, and leave the cron as a cross-user
-backstop for whoever never comes back. `MnyImportJobService` is the worked
-example: `reapStaleJobsForUser` runs in `create` and in the poll's `findOne`, so
-a dead import clears itself within one 1.5s poll instead of within ten minutes,
-and `reapStaleJobs` dropped from every five minutes to hourly.
+Before choosing an interval, ask what the stale row *does* while it sits there. Only untidy: a schedule is the whole answer. But if it **refuses the user's next request** (a slot, a lock, a uniqueness guard), the interval is a lockout the user cannot end. Run the cleanup inside the transaction of the request about to be refused, scoped to that caller, and leave the cron as a cross-user backstop. `MnyImportJobService` is the worked example: `reapStaleJobsForUser` runs in `create` and the poll's `findOne`, so a dead import clears within one 1.5s poll, and `reapStaleJobs` dropped to hourly.
 
-Two things that path has to get right, both of which have a test rather than a
-paragraph. The staleness predicate is **one exported constant** used by the reap
-and negated by the advisory pre-check -- an advisory check that still counts what
-the reap would clear throws the refusal before the request ever reaches the
-transaction that would have cleared it, which reinstates the lockout through the
-back door and looks correct at every individual site. And a per-user cleanup
-whose predicate is a disjunction needs its own parentheses inside the
-`user_id = $n AND (...)`, or the trailing arm escapes the tenant restriction
-entirely; assert the composed clause, not an `"AND ("` prefix, since a condition
-that opens with its own paren satisfies that prefix while ungrouped.
+Two things that path must get right, both tested: the staleness predicate is **one exported constant** used by the reap and negated by the advisory pre-check (an advisory check that still counts what the reap would clear reinstates the lockout through the back door); and a per-user cleanup whose predicate is a disjunction needs its own parentheses inside `user_id = $n AND (...)` -- assert the composed clause, not an `"AND ("` prefix.
 
 ### Deciding a worker is dead does not stop it -- revoke, do not merely record
 
-A reaper reads a heartbeat and concludes a worker is gone. That conclusion can be
-wrong in the one direction that costs money: the heartbeat runs on its own
-connection while the work runs on another, so a worker that is merely *blocked*
-gets written off, wakes up, and finishes. Marking its row `failed` changed
-nothing about what it was about to write -- and because the reap also advertised
-a retry, the file lands twice.
+A reaper's conclusion can be wrong in the direction that costs money: a merely *blocked* worker gets written off, wakes up, and finishes -- and if the reap also advertised a retry, the file lands twice. So an attempt gets an identity, not just a status: `import_jobs.attempt_token` is minted by `claim()`, required by every write that worker makes, and set to NULL by both reaps. The worker's commit checkpoint (`markDataCommitted`) is a fenced compare-and-set on that token and the **last statement of the transaction that wrote the rows**, so a zero-row result throws and rolls all of them back -- one statement later would be a check after the commit (see "Rejection happens before the write").
 
-So an attempt gets an identity, not just a status. `import_jobs.attempt_token` is
-minted by `claim()`, required by every write that worker makes, and set to NULL by
-both reaps. The worker's own commit checkpoint (`markDataCommitted`) is a fenced
-compare-and-set on that token and is the **last statement of the transaction that
-wrote the rows**, so a zero-row result throws and rolls all of them back. Position
-is load-bearing: the same check one statement later is a check after the commit,
-which is the rule in "Rejection happens before the write".
+Three parts, each a separate way to get it wrong:
 
-Three parts, and each is a separate way to get it wrong:
+- **A status check is not a fence.** `WHERE status = 'running'` passes for a job reaped and re-claimed by a different attempt. Compare the token.
+- **A fence the other binary does not know about is not a fence.** During a rolling deployment the previous release's checkpoint names no token, so the rule lives in the database: migration 145's `BEFORE UPDATE` trigger refuses a false -> true `data_committed` on a non-`running` job, from either binary. Deliberately not "and has a token": an old worker's normal state is `running` with a NULL token.
+- **Terminal states are monotonic.** `complete()` and `fail()` are compare-and-set on `(status, attempt_token)` and return whether they took; the caller must read that boolean (logging "completed" after a refusal contradicts the reaper's line, with the false one more visible).
 
-- **A status check is not a fence.** `WHERE status = 'running'` still passes for a
-  job that was reaped and re-claimed by a *different* attempt. Compare the token.
-- **A fence the other binary does not know about is not a fence.** During a
-  rolling deployment the previous release is still running, and its checkpoint
-  names no token because its code predates the column. That rule has to live in
-  the database -- migration 145's `BEFORE UPDATE` trigger refuses a false -> true
-  `data_committed` on a non-`running` job, which is exactly the reaped case, from
-  either binary. Deliberately not "and has a token": an old worker's normal state
-  is `running` with a NULL token, and refusing that would break every import in
-  flight during the rollout.
-- **Terminal states are monotonic.** `complete()` and `fail()` are compare-and-set
-  on `(status, attempt_token)` and return whether they took, so a woken worker
-  cannot overwrite the terminal state the reaper already wrote. The caller must
-  read that boolean: logging "completed" after a refusal puts the operator's only
-  two lines about the job in contradiction, with the false one the more visible.
-
-The integration suite installs the trigger via `findTriggerMigrations()` in
-`test/helpers/rls-setup.ts` -- `synchronize` creates no triggers, so without that
-step a mixed-version test reports the fence as working while nothing enforces it.
+The integration suite installs the trigger via `findTriggerMigrations()` in `test/helpers/rls-setup.ts` -- `synchronize` creates no triggers, so without that step a mixed-version test reports the fence as working while nothing enforces it.
