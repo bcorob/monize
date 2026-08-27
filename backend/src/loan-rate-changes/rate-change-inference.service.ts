@@ -3,18 +3,18 @@ import { DataSource } from "typeorm";
 import { tr } from "../i18n/translate";
 import { withScopedDb } from "../common/db/scoped-db";
 import { LoanRateChange } from "./entities/loan-rate-change.entity";
-import { Account, AccountType } from "../accounts/entities/account.entity";
+import { Account } from "../accounts/entities/account.entity";
 import { Transaction } from "../transactions/entities/transaction.entity";
 import {
   LoanPaymentDetectorService,
   PaymentRecord,
 } from "../accounts/loan-payment-detector.service";
 import { LoanRateChangesService } from "./loan-rate-changes.service";
-import { getMortgagePeriodsPerYear } from "../accounts/mortgage-amortization.util";
-import { getPeriodsPerYear } from "../accounts/loan-amortization.util";
-import type { PaymentFrequency } from "../accounts/loan-amortization.util";
-import type { MortgagePaymentFrequency } from "../accounts/mortgage-amortization.util";
 import { roundMoney } from "../common/round.util";
+import {
+  DEFAULT_PERIODS_PER_YEAR,
+  periodsPerYearForStoredFrequency,
+} from "../accounts/payment-frequency.util";
 
 /** Balances below this produce interest amounts too noisy to infer a rate from */
 export const MIN_BALANCE_FOR_INFERENCE = 500;
@@ -258,12 +258,10 @@ export class RateChangeInferenceService {
     const observedPeriods = this.periodsPerYearFromIntervals(payments);
 
     if (account.paymentFrequency) {
+      // One lookup for both spellings; the account type never decided the count.
       const configured =
-        account.accountType === AccountType.MORTGAGE
-          ? getMortgagePeriodsPerYear(
-              account.paymentFrequency as MortgagePaymentFrequency,
-            )
-          : getPeriodsPerYear(account.paymentFrequency as PaymentFrequency);
+        periodsPerYearForStoredFrequency(account.paymentFrequency) ??
+        DEFAULT_PERIODS_PER_YEAR;
       if (
         observedPeriods !== null &&
         Math.abs(observedPeriods - configured) / configured > 0.5

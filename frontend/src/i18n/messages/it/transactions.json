@@ -123,6 +123,10 @@
       "status": "Stato",
       "actions": "Azioni"
     },
+    "dateDisplay": {
+      "toggleLabel": "Nascondi l’anno",
+      "toggleTitle": "Togli l’anno dalle date per lasciare più spazio al beneficiario"
+    },
     "attachmentsCount": "{count, plural, one {# allegato} other {# allegati}}",
     "today": "Oggi",
     "export": {

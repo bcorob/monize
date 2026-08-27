@@ -1,3 +1,33 @@
+Direction           Bill or deposit, outflow or income, is decided from
+                    EffectiveScheduledOccurrence.directionAmount, which is
+                    `number | null`: the occurrence's own amount when known, the
+                    snapshot's sign only where that sign is PROVABLE without the
+                    missing rate (a top-level investment is one scalar times one
+                    positive rate; a split whose lines all point the same way
+                    stays on that side of zero, because an investment line's cash
+                    impact is signed by its action), and `null` for a mixed-sign
+                    aggregate, whose direction the missing rate decides. "An
+                    exchange rate is positive, so it cannot flip a sign" holds for
+                    the first two and fails for the third: a +10 parent made of a
+                    fixed +100 beside an unpriceable BUY posts -20 or +20.
+                    `null` travels rather than collapsing: AI/MCP report
+                    `kind: "unknown"` and withhold BOTH bucket totals (the item
+                    could belong to either), the reminder email draws a neutral
+                    badge, the forecast prompt says DIRECTION UNKNOWN, the client's
+                    occurrenceKind answers `'unknown'` with neutral styling and no
+                    sign, and an outflow-only read KEEPS the occurrence -- its
+                    amount is unknown too, so the consumer's total is withheld,
+                    where dropping it would hide a possible payment behind a total
+                    that still looked complete.
+                    The candidate read may narrow on the stored sign only for
+                    shapes nothing can move: it keeps every FX-sensitive schedule
+                    AND every schedule carrying an override with an amount or its
+                    own splits (an override replaces the amount and the SHAPE, so
+                    a +100 schedule overridden to -250, or to a split holding an
+                    embedded investment with no amount of its own, is a genuine
+                    outflow the snapshot cannot see). The direction is applied
+                    after pricing, and the per-schedule cap after that -- capping
+                    first let an overridden credit hide the real outflow behind it.
 # System Invariants
 
 The conditions that must hold regardless of which controller, service, cron,
@@ -66,8 +96,15 @@ implied.
 | INV-REDEEM-001 | A redemption's accrued interest moves cash once and is income once | enforced |
 | INV-RECONCILE-001 | While the strict lock is on, a reconciled transaction is not altered | enforced |
 | INV-FX-001 | An unavailable rate never becomes 1:1 | enforced |
+| INV-REPORT-001 | A report's account scope is investment linkage, not account type | enforced |
+| INV-LOAN-001 | A recurring overpayment's cadence is a calendar, not a payment interval | enforced |
+| INV-LOAN-002 | A schedule truncated by the projection horizon yields no lifetime total | enforced |
+| INV-LOAN-003 | One named compounding convention, from preview to projection to displayed EAR | enforced |
+| INV-LOAN-004 | The final payment is the residual payoff, not another installment | enforced |
+| INV-LOAN-005 | The first payment date is payment number 1 | enforced |
 | INV-OCCURRENCE-001 | One scheduled occurrence has at most one financial effect | enforced |
 | INV-OCCURRENCE-002 | A stored override price survives reopening | enforced |
+| INV-OCCURRENCE-003 | Every surface reports the effective occurrence: its current amount and currency, its direction, on the date it falls | enforced |
 | INV-CLAIM-001 | An emergency-access claim token is consumed exactly once | enforced |
 | INV-AUTH-001 | A refresh token rotates once, or the family is revoked | enforced |
 | INV-AUTH-002 | A failed-login counter records every failure | enforced |
@@ -430,6 +467,483 @@ At a real rate of 1.3500, a false 100.00 CAD would understate a 135.00 CAD
 position by 35.00 and report it as measured -- which is what the null return and
 the scan now prevent.
 
+### INV-REPORT-001 -- a report's account scope is investment linkage, not account type
+
+```text
+Statement           A report over the transaction ledger includes an ordinary
+                    categorized cash row whatever account it sits in, and
+                    excludes a row that is an investment movement. Membership is
+                    decided by what the row IS -- the cash leg of an investment
+                    transaction, or a row in a securities sleeve -- never by the
+                    account's type. An INVESTMENT account is a pair, and its
+                    INVESTMENT_CASH sleeve is ordinary money: salary, interest,
+                    fees, transfers in and out; a standalone INVESTMENT account
+                    (account_type INVESTMENT with a NULL sub-type, which the
+                    ordinary account-create path produces and which net_worth and
+                    the monthly comparison already branch on) IS its own cash
+                    side.
+                    The claim is symmetric, and the account type fails in both
+                    directions: an investment action with an explicit
+                    fundingAccountId posts its generated cash into an ORDINARY
+                    account, where an account-type predicate cannot see it at
+                    all.
+Source of truth     investment_transactions.transaction_id /
+                    .transaction_split_id for the linkage; accounts.
+                    account_sub_type for the sleeve. Not accounts.account_type,
+                    which is the same value for both halves of the pair.
+Enforcement         One predicate, in backend/src/common/investment-filter.util.ts:
+                    investmentExclusionSql for raw-SQL report queries,
+                    applyInvestmentTransactionFilters for QueryBuilder callers,
+                    both built from the same fragments so the two dialects
+                    cannot drift. An embedded investment split is excluded by
+                    both of its representations -- the split's declared kind and
+                    an investment_transactions row pointing at that split -- and
+                    at SPLIT-ROW granularity, so an ordinary sibling line on the
+                    same split parent survives (excluding the parent would lose
+                    it; keying only on transaction_id would miss the embedded
+                    line entirely, since its transaction_id is null).
+                    A report that reads only the parent row cannot classify a
+                    line at all -- t.amount there is the sum of every child --
+                    so it derives its figure through
+                    reportableTransactionAmountSql: the sum of the children that
+                    are neither transfer nor investment, NULL when the row
+                    represents no ordinary cash. Spending by Payee, Recurring
+                    Expenses, Bill Payment History and the Uncategorized list
+                    and summary read that instead of t.amount. Duplicate
+                    Transactions is the one declared exception, marked in its SQL
+                    as a PARENT-IDENTITY REPORT: its subject is the stored row,
+                    so a split parent entered twice is a duplicate at its stored
+                    amount and the remedy is deleting one whole transaction.
+                    Applied by all fifteen ledger queries under
+                    backend/src/built-in-reports/ and by the "Uncategorized"
+                    filters on the register (transactions.service.ts), the
+                    register summary (transaction-analytics.service.ts) and the
+                    bulk-update filter (transaction-bulk-update.service.ts) --
+                    the last one a write path, where the old predicate let a
+                    "select all uncategorized" sweep reach the cash legs a trade
+                    owns. Two scans in
+                    backend/src/common/investment-filter.guard.spec.ts: no
+                    account-type exclusion anywhere in src/, and every
+                    built-in-report query that is not transfer-only carries the
+                    exclusion IN THE REPRESENTATION ITS SHAPE NEEDS -- a query
+                    joining transaction_splits must use the split-aware
+                    conjunction, and a parent-only query must derive its amount,
+                    since accepting the bare substring passed exactly the defect
+                    the branch audit found (F-RPT-001). Both exemptions are
+                    derived from the query rather than kept as a list of file
+                    names: transfer-only (an investment cash leg is never a
+                    transfer) and the declared PARENT-IDENTITY marker. The
+                    classifier carries its own negative controls, so the scan is
+                    known to fire rather than merely known to pass.
+Concurrency scope   -- (read path)
+Retry semantics     -- (read path)
+Crash semantics     -- (read path)
+Failure response    -- a report answers; it does not refuse.
+Required tests      Present: the two source scans above, and
+                    backend/test/integration/report-investment-cash.integration
+                    .spec.ts, which reproduces issue #1257 against a real
+                    database using the real writer
+                    (InvestmentTransactionsService.create posts the cash leg)
+                    and asserts both directions -- $1,000 of sleeve income
+                    reaching Cash Flow and Income by Source, the generated leg
+                    staying out of spending, payees, Uncategorized and
+                    duplicates, the parent-only consumers reporting a mixed
+                    split at its ordinary 60 rather than the parent's 560 or
+                    nothing at all (by payee, as recurring spending, and in the
+                    Uncategorized list and summary), a pure embedded-investment
+                    passthrough being absent from Uncategorized and never
+                    learned as a recurring expense, the custom report engine
+                    answering the same 60 through five groupings and agreeing
+                    with the built-in report over one fixture, a brokerage-sleeve
+                    row
+                    staying out, generated
+                    cash staying out of an ORDINARY funding account's report
+                    (BUY debit and DIVIDEND credit), a SELL credit staying out
+                    of income, ordinary cash on a standalone INVESTMENT account
+                    counting, the VOID and transfer-split exclusions still
+                    holding, an embedded investment split not becoming an
+                    Uncategorized bucket while its ordinary sibling still
+                    counts, the three Cash Flow queries reconciling with each
+                    other, and the catalogue-wide claim that adding a trade
+                    changes no report's answer. Unit specs mock manager.query and can only
+                    assert the text of the SQL, which is why the behavioural
+                    proof is the integration suite.
+Also covered        backend/src/reports/ -- the USER-DEFINED custom report
+                    engine. It reads the same ledger through hydrated TypeORM
+                    entities and aggregates in TypeScript, so no SQL fragment
+                    reaches it; it gets the same rule in the other dialect
+                    (isEmbeddedInvestmentSplit / ordinarySplitLines /
+                    reportableTransactionAmount, beside the SQL in
+                    investment-filter.util.ts). Its selector always excludes the
+                    generated cash leg (investmentLinkedTransactionExclusion) and
+                    excludes the securities sleeve
+                    (brokerageExclusionForEntity) only from a report that did not
+                    NAME an account -- built-in reports have no account picker,
+                    this one does, and answering an explicitly scoped report with
+                    nothing is worse than showing the rows that were asked for.
+                    It hydrates splits.investmentTransaction; its six aggregators
+                    iterate
+                    ordinary lines and ask for the reportable amount rather than
+                    reading a parent's own. Until this was done a generated BUY
+                    leg was reported as `Uncategorized` spending and the
+                    canonical -560 parent reported 560 rather than 60 (re-audit
+                    F-CUSTOM-001) -- existing debt rather than a regression: that
+                    engine is byte-identical at the merge base. The two dialects
+                    differ by exactly one clause, deliberately: the SQL form
+                    drops transfer children because no built-in report using it
+                    includes transfers, while this one says nothing about
+                    transfers at all. Direction (Income/Expenses only) is
+                    applied to the split LINES in that engine, never to the
+                    parent's own amount: a -60 expense beside a +500 embedded
+                    SELL is a +440 parent, and rejecting that row on its sum
+                    discarded the expense before provenance could run (audit
+                    F-CUSTOM-DIR-001). The securities-sleeve exception is per
+                    ROW, keyed on the accounts the report explicitly names,
+                    because conditions inside a filter group are OR'd and a
+                    whole-report boolean cannot tell `account = Brokerage OR
+                    category = Salary` from `account = Chequing OR payee = Acme`
+                    (F-CUSTOM-OR-001).
+                    Transfer SPLIT LINES are the report's own decision, not this
+                    invariant's: `includeTransfers` is applied per LINE in that
+                    engine (`narrowSplitLines`), because a split parent carrying
+                    a transfer line is not itself a transfer -- so a -260 parent
+                    of -60 groceries and a -200 transfer reported 260 until it
+                    was. Investment provenance is a property of the data; which
+                    transfers to count is a property of the report.
+                    The AI forecast baseline
+                    (ai/forecast/forecast-aggregator.service.ts) reads one row
+                    per payment with no split join, so it derives the reportable
+                    amount too: it had been training on a -560 parent as 560 of
+                    household spending.
+                    The category-keyed aggregates (ai/insights,
+                    budgets/budget-generator, the payee totals) are structurally
+                    unable to admit either row and are deliberately not listed as
+                    mechanism: each INNER JOINs a category, and a generated cash
+                    leg has none while a split parent's own category_id is NULL.
+                    If one of those joins is ever loosened to a LEFT JOIN it
+                    needs this predicate in the same change.
+Status              enforced
+```
+
+The defect this records was not a subtle one: with `AND a.account_type !=
+'INVESTMENT'` in place, sixteen of the twenty-three integration cases above
+fail, and the rest pass only because every report was uniformly empty for that
+account. The focused audit of issue #1257 recorded the same root as
+`F-1257-001` (MEDIUM, derived reporting only -- no stored balance is wrong) and
+the naive-repair trap as `DR-1257-001`.
+
+The parent-only half was found by a second audit, of the fix itself
+(`F-RPT-001`), and is worth recording as its own lesson: removing a filter that
+was hiding too much exposes every row it was also hiding *correctly*. The
+account-type predicate had been doing two jobs, and only one of them was wrong.
+Five of the cases above fail on the first fix and pass on the second.
+
+### INV-LOAN-001 -- a recurring overpayment's cadence is a calendar
+
+```text
+Statement           A recurring overpayment declared MONTHLY contributes exactly
+                    12 occurrences per calendar year (QUARTERLY 4, ANNUALLY 1)
+                    whatever the loan's own payment frequency is, and WEEKLY /
+                    BIWEEKLY contribute one every 7 / 14 days. The borrower's
+                    nominal annual cash may not change because the loan happens
+                    to be paid biweekly.
+Source of truth     The overpayment's frequency plus its window, on the plan.
+Enforcement         recurringOccurrencesDue (frontend/src/lib/loan-schedule.ts)
+                    is the single place a cadence becomes schedule rows: dated
+                    occurrences, each applied at the first loan payment on or
+                    after its due date. The interval it replaced,
+                    round(periodsPerYear / overpaymentsPerYear), rounded 26/12 to
+                    2 and paid a monthly extra 13 times a year on a biweekly
+                    loan -- 8.3% more cash than the plan describes, with the
+                    interest saving overstated to match.
+Concurrency scope   --
+Retry semantics     --
+Crash semantics     -- (projection only; nothing is persisted)
+Failure response    --
+                    The cadence steps the recurrence engine, the same calendar
+                    the loan's payment rows step. Deriving each occurrence from
+                    the anchor by index instead kept a 31st anchor on month-end
+                    (31 Jan, 28 Feb, 31 Mar, 30 Apr) while the rows accumulated
+                    the engine's clamp (31 Jan, 28 Feb, 28 Mar, 28 Apr), so on a
+                    monthly loan first paid on the 31st the occurrence due 31
+                    March arrived after the 28 March row, waited for 28 April,
+                    and the year paid ELEVEN -- this invariant broken by two
+                    calendars disagreeing rather than by arithmetic. (Earlier
+                    still, `advanceDate` OVERFLOWED -- 31 January to 3 March --
+                    which lost February outright.) The price is that an
+                    accumulating clamp is lossy: an anchor on the 31st settles
+                    onto the 28th after its first February instead of returning
+                    to month-end. On a loan whose own payments have settled there
+                    that is not a cost, and for any anchor on the 28th or earlier
+                    the two are identical. Twelve to a calendar year from every
+                    anchor day is the invariant and holds either way; the
+                    alignment does not.
+                    A plan names its mode in three places
+                    (targetMonthlyPaymentMode, recurringExtra.mode, and each
+                    lump sum's), so consumers read effectiveOverpaymentMode(plan)
+                    rather than one carrier: reading recurringExtraMode alone
+                    left a saved BUDGET scenario with no mode and fell back to
+                    the installmentReduction heuristic, which is null exactly
+                    when a schedule truncated -- the case the explicit mode
+                    exists for. Precedence follows the engine: a budget ignores
+                    the other two, and otherwise any LOWER_INSTALLMENT carrier
+                    makes the plan one, because the engine re-levels when any
+                    does and adding the overpayment on top of a re-levelled
+                    installment counts the same money twice.
+                    ONE_OFF is excluded from RecurringExtra.frequency by TYPE
+                    (RecurringOverpaymentFrequency), not by convention: it is a
+                    single dated payment and belongs in lumpSums, and accepted as
+                    a cadence it collapsed into the legacy per-payment branch.
+Required tests      Present: the recurringOccurrencesDue block and the
+                    "recurring overpayment cadence in a schedule" block in
+                    frontend/src/lib/loan-schedule.test.ts assert the per-year
+                    counts across weekly, biweekly and monthly loans and across
+                    every anchor day a month can start on, the cumulative "every
+                    occurrence paid exactly once" invariant, the month-end clamp,
+                    the backwards-rowDate refusal, and the window rules. The
+                    goal-seek replay cases in loan-overpayment-solver.test.ts
+                    assert a solved amount still reaches its target when replayed
+                    through the same cadence.
+Status              enforced
+```
+
+`perPaymentExtraAmount` survives as a display average for the "resulting monthly
+payment" card. It is not what the engine applies, and a balance must never be
+computed from it.
+
+### INV-LOAN-002 -- a truncated schedule yields no lifetime total
+
+```text
+Statement           A projection that stopped at its horizon rather than paying
+                    off has accumulated the horizon's interest, not the loan's.
+                    No lifetime figure, and no saving derived from one, may be
+                    presented from it.
+Source of truth     LoanScheduleResult.paidOff.
+Enforcement         The horizon itself is derived from the frequency
+                    (maxPaymentsForHorizon: DEFAULT_MAX_PROJECTION_YEARS of this
+                    frequency's payments), so an ordinary 25- or 30-year weekly
+                    or biweekly mortgage completes -- a flat 600-payment default
+                    cut those short, omitting 44% of a 30-year weekly
+                    mortgage's lifetime interest and reporting no payoff date. Where truncation is still possible,
+                    consumers gate on paidOff. compareSchedules returns null for
+                    ALL FOUR of interestSaved, paymentsSaved, monthsSaved and
+                    installmentReduction (a horizon's row count, a missing payoff
+                    date read as 0 months, and an installment taken from a
+                    mid-schedule row are the same defect as the interest);
+                    PastImpactResult.interestAlreadySaved and monthsAlreadySaved
+                    are null; deriveLoanFigures withholds the payoff date and
+                    remaining interest; ScenarioComparisonChart draws only
+                    outcomes passing hasKnownInterestSaved and the panel names
+                    what it left out; the goal-seek solver returns
+                    baseline-incomplete rather than a saving against a subtotal
+                    (meetsInterestTarget requires paidOff); and both loan reports
+                    (DebtPayoffTimelineReport, LoanAmortizationReport) withhold
+                    the projected payoff date and relabel the interest figure
+                    "Interest Over Projection" instead of "Est. Total Interest".
+Concurrency scope   --
+Retry semantics     --
+Crash semantics     -- (projection only)
+Failure response    null, plus an explicit unknown in the UI -- never 0.00.
+Required tests      Present: "projection horizon" and "a truncated schedule is
+                    not a lifetime total" in loan-schedule.test.ts (the four
+                    ordinary long terms, and every saving null when either side
+                    truncates); "a target cannot be met by a truncated schedule"
+                    in loan-overpayment-solver.test.ts; the two unknown-saving
+                    cases in loan-past-impact.test.ts; the Unknown-card and
+                    em-dash cases in ComparisonSummaryCards.test.tsx,
+                    PastImpactSection.test.tsx and loan-scenario-labels.test.ts;
+                    the two chart-exclusion messages in
+                    SavedScenariosPanel.test.tsx.
+Missing             A source scan asserting no NEW consumer presents a lifetime
+                    figure without the gate. The list above is prose, which the
+                    repository's own ranking puts last -- the reports were found
+                    ungated by review, not by a test.
+Status              enforced
+```
+
+### INV-LOAN-003 -- one compounding convention, named
+
+```text
+Statement           The mortgage creation preview, the persisted paymentAmount,
+                    the scheduled principal/interest split, the frontend
+                    projection and the displayed effective annual rate all use
+                    one explicitly chosen compounding convention.
+Source of truth     docs/financial-semantics.md section 9.
+Enforcement         The convention is the nominal annual rate divided by the
+                    payments per year (calculateStandardPeriodicRate), with
+                    Canadian fixed-rate semi-annual compounding as the one legal
+                    exception (calculateCanadianPeriodicRate); the frontend
+                    getPeriodicRate mirrors it. calculateEffectiveAnnualRate now
+                    takes periodsPerYear and compounds at the payment frequency,
+                    so the displayed EAR describes the rate the schedule charges
+                    rather than a monthly one nothing used.
+                    A cadence read back out of accounts.payment_frequency is a
+                    STRING -- the column is a bare VARCHAR(20) written in both
+                    spellings -- so it goes through
+                    periodsPerYearForStoredFrequency, which answers null rather
+                    than guessing, or through toMortgagePaymentFrequency where a
+                    mortgage-domain value is genuinely needed. Six call sites
+                    cast it to MortgagePaymentFrequency and asked
+                    getMortgagePeriodsPerYear instead, whose default of 12 turned
+                    SEMIMONTHLY into a monthly rate: the per-posting P/I split,
+                    the rate-change recalculation and its scheduled-transaction
+                    sync, the inference warning and the account service's own
+                    split all booked twice the correct interest on a semi-monthly
+                    mortgage, three times on a quarterly one.
+                    mortgage-frequency-cast.guard.spec.ts scans src/ for a
+                    revived cast, because fixing five of six is what happened
+                    the first time.
+                    The frequency a periodic rate is divided by must itself be
+                    real: SetupLoanPaymentsDto accepts SEMIMONTHLY and the
+                    service casts it into calculatePaymentSplit, where
+                    getPeriodsPerYear had no such case and fell through to its
+                    default of 12 -- a semi-monthly loan's interest split was
+                    computed at twice the correct rate. The case exists now, and
+                    loan-payment-frequency.guard.spec.ts reads the DTO's @IsIn
+                    list out of the source and fails on any accepted value
+                    without its own period count or that does not move
+                    calculateEndDate, because a cast cannot be type-checked. The
+                    frontend has the same hazard and the same scan: the setup
+                    dialog stores SEMIMONTHLY, ScheduleFrequency spelled only
+                    SEMI_MONTHLY, and every projection surface read 12 periods a
+                    year instead of 24. Both spellings are accepted on both
+                    layers now. The frequency tables are Records over their
+                    unions, so a future widening is a compile error rather than a
+                    silent monthly fallback, and toMortgagePaymentFrequency
+                    refuses a cadence the mortgage helpers cannot express
+                    (QUARTERLY, YEARLY) instead of casting it into their monthly
+                    default. PAYMENT_FREQUENCIES is one list per layer with the
+                    type derived from it, because AccountForm's optionalEnum maps
+                    an unlisted value to undefined -- a form list missing a stored
+                    frequency erases it on the first edit. The tables live in
+                    payment-frequency.util.ts rather than in the two amortization
+                    utils, which had to import each other to share them: under a
+                    mortgage-first load order the merged table initialised with
+                    only the loan keys, so an accelerated-biweekly mortgage's
+                    scheduled transaction was created monthly. The guard requires
+                    the modules in the hostile order in a fresh registry, because
+                    a completeness assertion cannot see a load-order defect.
+Concurrency scope   --
+Failure response    --
+Required tests      Present: the "periodic-rate convention" block in
+                    backend/src/accounts/mortgage-amortization.util.spec.ts and
+                    "is the nominal convention, not monthly compounding
+                    converted" in frontend/src/lib/loan-schedule.test.ts. Both
+                    spell out the REJECTED contract and assert the implementation
+                    differs from it -- backend/frontend parity mirrors one
+                    formula, so it can only detect drift, never validate the
+                    choice. Plus the two frequency scans --
+                    loan-payment-frequency.guard.spec.ts reads the DTO's @IsIn
+                    list and checks both getPeriodsPerYear and calculateEndDate,
+                    loan-frequency.guard.test.ts reads the setup dialog's options
+                    and checks the frontend engine -- and the effectiveAnnualRate
+                    block in loan-schedule.test.ts.
+Status              enforced
+```
+
+### INV-LOAN-004 -- the final payment is the residual payoff
+
+```text
+Statement           Lifetime interest reflects cash actually paid. The payment
+                    that clears the balance is the remaining balance plus that
+                    period's interest, not another full installment.
+Source of truth     The period-by-period amortization of the same schedule.
+Enforcement         calculateResidualPayoff
+                    (backend/src/accounts/mortgage-amortization.util.ts) computes
+                    the balance after n-1 installments and closes it out, and
+                    calculateMortgageAmortization derives totalInterest and
+                    residualPayoffAmount from it (deliberately NOT named
+                    finalPaymentAmount, which LoanScheduleResult already uses for
+                    the ending regular installment). paymentAmount * totalPayments -
+                    principal overstated a 25-year accelerated-biweekly
+                    mortgage's lifetime interest by 569, because Math.ceil had
+                    rounded a fractional payoff count up. The frontend schedule
+                    already capped its final principal at the balance, so the two
+                    surfaces disagreed.
+                    `totalPayments` is a ceiling, not a promise: an installment
+                    that clears the balance sooner makes the caller's count too
+                    high, so calculateResidualPayoff derives the effective count
+                    (paymentsToClear) and returns it, and the result's
+                    totalPayments and endDate come from that one number. An
+                    installment that never covers the interest yields -1 for all
+                    three rather than a precise, enormous total.
+                    paymentsToClear itself lives once, in
+                    amortization-count.util.ts: the same formula had three copies
+                    and two of them ran on identical inputs in a single call.
+Concurrency scope   --
+Failure response    -1 for all three figures when the schedule is unknowable: a
+                    non-finite count, or an installment that never amortizes.
+Required tests      Present: "final payment and lifetime interest" in
+                    mortgage-amortization.util.spec.ts, whose expectations come
+                    from an independent period-by-period simulation in the spec
+                    rather than from the implementation, including both
+                    directions of the count (an installment clearing early, and
+                    a rounding remainder absorbed by the last payment) and the
+                    non-amortizing case at a finite count.
+Status              enforced
+```
+
+### INV-LOAN-005 -- the first payment date is payment number 1
+
+```text
+Statement           accounts.payment_start_date is the date of the first payment,
+                    so a schedule of N payments advances N-1 intervals to reach
+                    its last one.
+Source of truth     accounts.payment_start_date.
+Enforcement         calculateEndDate (loan-amortization.util.ts) and
+                    calculateMortgageEndDate (mortgage-amortization.util.ts)
+                    advance totalPayments - 1, with the zero-, negative- and
+                    infinite-payment sentinels kept explicit. Advancing N dated
+                    every displayed payoff -- and the linked scheduled
+                    transaction's endDate, derived from the same value -- one
+                    full payment period late.
+                    The stepping itself is calculateNextDueDate, the recurrence
+                    engine that posts those payments, through advancePaymentDates:
+                    this date bounds the scheduled transaction, so it must be a
+                    date the scheduler reaches. A hand-rolled semi-monthly step
+                    (1st, 15th) against the engine's (15th, last day of month)
+                    dated payment 24 of 24 before the final installment, and the
+                    schedule posted 23.
+                    A Date carrying a calendar date is UTC-midnight throughout
+                    these helpers -- the convention ensureYMD and formatDateYMD
+                    already share. Reading local components in between put every
+                    payoff date a day early outside UTC, and CI's TZ=UTC cannot
+                    see it (nor can a Jest worker: setting process.env.TZ does
+                    not move Date there).
+Concurrency scope   --
+Failure response    The start date itself for a zero- or one-payment schedule.
+Data already written
+                    Migration 166 steps the affected scheduled_transactions.endDate
+                    back one interval, scoped to the schedule a LOAN or MORTGAGE
+                    account NAMES as its payment schedule
+                    (accounts.scheduled_transaction_id, written by exactly the
+                    two paths that write this end_date), still active, its bound
+                    still in the future, and a whole number of the schedule's own
+                    intervals from its start date. Matching "a transfer split
+                    points at a debt account" instead would have caught a user's
+                    own extra-principal transfer: "monthly, for ten years" is a
+                    whole number of intervals too, and this body is not
+                    re-runnable. It is a one-shot (registered in
+                    NON_RERUNNABLE_DATA_MIGRATIONS), run once per database by
+                    schema_migrations.
+                    Two populations are deliberately NOT healed, because the old
+                    value is not invertible in SQL rather than because it is
+                    right: a month cadence anchored on the 29th to 31st (the old
+                    stepper overflowed -- 31 January to 3 March -- and carried
+                    the new day forward), and SEMIMONTHLY (the old mortgage
+                    stepper used the 1st and the 15th where the engine uses the
+                    15th and the last day of the month, so the stored bound sits
+                    on a different calendar). Re-running payment setup on those
+                    accounts rewrites the bound correctly.
+Required tests      Present: the calculateEndDate and calculateMortgageEndDate
+                    blocks in both specs assert exact calendar dates (12 monthly
+                    payments from 2026-01-01 end on 2026-12-01), including the
+                    one-payment and zero-payment cases;
+                    payment-frequency.timezone.spec.ts walks the offsets in child
+                    processes and scans the three helpers for a local accessor.
+Status              enforced
+```
+
 ## Scheduled occurrences
 
 ### INV-OCCURRENCE-001 -- one occurrence, one effect
@@ -480,6 +994,210 @@ Failure response    a stored ten-at-100.00 stays ten at 100.00 across a reopen.
 Required tests      Present: OverrideEditorDialog.test.tsx -- reopen with a stored
                     price and a differing quote asserts the stored price stands,
                     plus the typed-total-before-close case.
+Status              enforced
+```
+
+### INV-OCCURRENCE-003 -- one effective occurrence, everywhere
+
+```text
+Statement           Every surface that presents or aggregates a scheduled
+                    occurrence reports the amount THAT occurrence would post
+                    *today*, on the date it actually falls, and reports the
+                    amount as unavailable when it cannot be determined. The
+                    persisted amount is never substituted, and the recurrence
+                    slot is never reported as the due date when an override moved
+                    the occurrence off it.
+Source of truth     Two files, and only two:
+                    common/scheduled-occurrences.ts (expandOccurrenceSlots) owns
+                    occurrence IDENTITY -- walking a recurrence over a window and
+                    matching each slot to its override. The identity is
+                    original_date (the unique index says so); override_date moves
+                    the occurrence, and filtering is on the date it falls.
+                    ScheduledOccurrenceService (backend
+                    scheduled-transactions/scheduled-occurrence.service.ts) owns
+                    PRICING: it hydrates each candidate's overrides, asks
+                    ScheduledEffectiveAmountService.resolveMany once, and returns
+                    EffectiveScheduledOccurrence {amount, currencyCode, complete,
+                    dueDate, originalDate, overrideId, settlementAccountId}.
+                    ScheduledEffectiveAmountService remains the arithmetic layer:
+                    it owns the #1167 stored-if-current-else-resolve decision and
+                    the combination of rate and stored scalar.
+                    scheduled_transactions.amount is a snapshot at whatever rate
+                    was current when it was written.
+Enforcement         Server: every occurrence-aware surface consumes the occurrence
+                    service -- getLlmUpcomingBillsAndDeposits (AI + MCP),
+                    BudgetsService.getUpcomingBills / getVelocity /
+                    ensureBillAlerts, BillReminderService,
+                    ForecastAggregatorService, BalanceForecastService, and
+                    GET /scheduled-transactions/occurrences for clients. findAll
+                    still emits effectiveAmount / effectiveAmountComplete /
+                    effectiveCurrencyCode per schedule and per override, which is
+                    a SCHEDULE-level read model: it says what the base occurrence
+                    costs and carries the overrides beside it.
+                    occurrence-selection.guard.spec.ts is the scan, over the files
+                    that import the resolver or the occurrence service: a second
+                    recurrence loop, a second overrideEffectiveKey lookup, a read
+                    of the resolver's `base` outside the two places where the base
+                    is the question, a new resolveMany call site, or a direction
+                    read of a schedule's stored amount each fail with the file and
+                    line. Both matchers are shape-based rather than name-based --
+                    `const b = resolved.base` and
+                    `Number(b.amount) > 0` inside a `??` expression are the two
+                    aliases that slipped past their first versions -- and the
+                    base-read and resolver-call allowances are COUNTS per file,
+                    asserted to be exactly right so a dead allowance cannot hide a
+                    matcher that stopped matching.
+                    Client: lib/scheduled-effective-amount.ts is the only reader
+                    of those fields (nextOccurrenceEffectiveAmount for a
+                    schedule-level surface, nextOccurrenceDueDate for the date it
+                    falls on); lib/scheduled-kind.ts occurrenceKind is the only
+                    place an occurrence's kind is decided, and the guard scans for
+                    the composed `scheduledKind({ amount: x ?? y })` shape it
+                    replaced -- `Number(null)` is 0, which paints an unpriceable
+                    bill as a grey reminder.
+                    lib/scheduled-effective-amount.guard.test.ts scans src/ for
+                    the `override.amount ?? …amount` fingerprint, for a client
+                    -side recurrence expansion outside its four named exemptions,
+                    and for the Upcoming Bills report actually calling
+                    getOccurrences (import presence is not proof: the report
+                    imported the helper throughout the period it was applying one
+                    amount to every occurrence).
+Aggregation rule    A total is null when any component is unknown; the partial sum
+                    travels in a separately named field (knownUpcoming*Subtotal,
+                    knownSubtotal) and never under the total's caption.
+                    A total also spans one currency or it spans none: each
+                    occurrence is converted into the reporting currency before it
+                    joins a sum, and a pair with no rate withholds the total and
+                    is NAMED (getVelocity's upcomingBillsMissingRates,
+                    LlmUpcomingScheduledResult.missingRatePairs,
+                    ConvertedTotal.missingCurrencies) so the reader knows which
+                    rate to fix. Backend aggregation goes through FxAggregate,
+                    client aggregation through sumConverted /
+                    sumEffectiveOccurrences; a currency-blind adder is the defect
+                    (the report summed 1,350 CAD beside 500 USD and printed 1,850
+                    in the reader's default currency, and the AI/MCP rollup did
+                    the same after the report was fixed).
+                    A published total also NAMES its currency
+                    (LlmUpcomingScheduledResult.totalsCurrency, echoed in the
+                    executor's summary line), because the items beside it carry
+                    their own settlement currencies. The currency a reader falls
+                    back to with no preference row is one constant
+                    (FALLBACK_DEFAULT_CURRENCY, backend/src/common/
+                    default-currency.util.ts) -- thirteen copies had drifted to
+                    two different currencies.
+Direction           Bill or deposit, outflow or income, is decided from
+                    EffectiveScheduledOccurrence.directionAmount -- the
+                    occurrence's own amount when known, the snapshot's sign only
+                    when it is not. "An exchange rate is positive, so it cannot
+                    flip a sign" holds for one scalar times one rate and fails for
+                    a mixed-sign split parent, where only the investment line
+                    re-prices: a parent stored at -200 posts +150 once that line
+                    moves. Reading the snapshot reported a re-priced deposit as a
+                    bill (AI/MCP, the forecast) and a SQL prefilter on
+                    `st.amount < 0` dropped the reverse case from the budget
+                    entirely. The candidate read therefore narrows on the stored
+                    sign only for shapes no rate can move and keeps every
+                    FX-sensitive row; the direction is applied after pricing.
+                    The client's equivalent is occurrenceKind, which already read
+                    the occurrence first.
+Concurrency scope   per occurrence; the resolver's FX caches are per read
+Failure response    the occurrence renders as unavailable (UnknownAmount, or the
+                    localized budgets.alerts.billDue.amountUnavailable copy) and
+                    every total containing it is withheld -- never the stale
+                    figure, never a measured zero.
+Persisted alerts    A BILL_DUE row carries structured data (payeeName, amount,
+                    amountComplete, dueDate, originalDate, currencyCode) and the
+                    client composes both lines from it, counting the days from
+                    `dueDate` against its own clock: the row outlives the day it
+                    was written, so a stored "due in 3 days" would go on saying
+                    three days. `title`/`message` remain as the English fallback
+                    for a consumer with no catalog. `originalDate` is also what
+                    decides "already alerted" and what the weekly digest compares
+                    `nextDueDate` against -- an override can move an occurrence
+                    EARLIER than its slot, and comparing the announced date then
+                    reads an unposted bill as paid and drops it from the digest.
+Required tests      Occurrence identity and window: scheduled-occurrences.spec.ts
+                    (slot-versus-override-date matching, an occurrence moved out
+                    of the window, an occurrence moved INTO it from beyond the
+                    horizon, end date, remaining count, maxOccurrences ordering).
+                    Pricing and selection: scheduled-occurrence.service.spec.ts
+                    (override amount wins, a moved override still wins, an
+                    unpriceable override stays unknown instead of falling back to
+                    the base).
+                    Consumers, each with an override case that fails if the base
+                    is read: scheduled-transactions.service.spec.ts
+                    ("quotes the next occurrence's override amount",
+                    "announces the date an override moved the occurrence to",
+                    "withholds the bills total when the due occurrence's override
+                    cannot be priced"); budgets.service.spec.ts (getVelocity
+                    override + moved-date + moved-out-of-period, and the alert
+                    path's moved occurrence and its identity-based dedup);
+                    bill-reminder.service.spec.ts (override amount and override
+                    date in the email); forecast-aggregator.service.spec.ts;
+                    balance-forecast.service.spec.ts (settlement account, unknown
+                    rate withholding the series, per-occurrence overrides) and
+                    balance-forecast.util.spec.ts.
+                    Frontend: UpcomingBillsReport.test.tsx (per-occurrence
+                    override in the list, the calendar, the CSV and the PDF, and
+                    an unresolvable occurrence withholding the total),
+                    BudgetAlertList.test.tsx (localized bill-due copy, including
+                    the unavailable-amount case), UpcomingBills.test.tsx and
+                    BudgetUpcomingBills.test.tsx (moved next occurrence),
+                    plus scheduled-utils, BudgetVelocityWidget,
+                    RecurringChargesPanel (including the date an override moved
+                    the occurrence to, which the panel sorted by and printed the
+                    slot for) and ScheduledTransactionList.
+                    Direction and currency: scheduled-occurrence.service.spec.ts
+                    (a mixed-sign split parent whose effective sign flips, both
+                    ways, plus the unpriceable fallback),
+                    scheduled-transactions.service.spec.ts (the AI/MCP kind),
+                    forecast-aggregator.service.spec.ts (isIncome),
+                    budgets.service.spec.ts (a CAD occurrence converted into a USD
+                    budget, and a missing display rate withholding the total),
+                    scheduled-effective-amount.test.ts (conversion before summing)
+                    and UpcomingBillsReport.test.tsx (a mixed-currency total and
+                    the CSV currency column).
+                    Each mutant these exist for was confirmed to fail them: base
+                    instead of override, and keying the override on override_date.
+Settlement account  An occurrence is charged to the account that actually moves
+                    the cash. `EffectiveScheduledOccurrence.settlementAccountId`
+                    carries it, derived through
+                    `InvestmentTransactionsService.resolveSettlementAccountId` --
+                    the same decision the posting makes, and the one the currency
+                    pair is derived from, so the account and its currency cannot
+                    disagree. A scheduled investment's `accountId` is the
+                    brokerage, so `BalanceForecastService` keyed on that column
+                    charged the brokerage for cash it never moved and left the
+                    funding account's own chart missing the outflow it pays; the
+                    amount alone could not have fixed it.
+Cumulative series   A projected balance is cumulative, so an occurrence nobody can
+                    price makes every point after it wrong. `BalanceForecastResult`
+                    withholds the forward line (`complete: false`, only today's
+                    anchor) and names the schedules in `gaps`; the client draws
+                    `BalanceForecastUnavailable` instead of a stub line and reports
+                    the projected-balance card as unavailable rather than falling
+                    back to today's figure. Completeness is decided from the
+                    occurrences that actually landed in the window, so an
+                    unpriceable schedule with no occurrence inside it does not
+                    withhold anything.
+                    A `crossCurrencyTransfer` gap is a separate cause with its own
+                    copy: the schedule's amount is the SOURCE account's, the
+                    arriving amount is resolved at posting, and this endpoint
+                    applies no rate -- so the destination's projection reports it
+                    rather than adding a foreign number (INV-FX-001's rule applied
+                    to a projection).
+Known scope         Two client-side expansions remain, both named in the frontend
+                    guard's exemption list with their reasons: `lib/forecast.ts`
+                    (the cash-flow forecast, which resolves each occurrence
+                    against `futureOverrides` and the effective-amount contract --
+                    it is the surface the others were wrong against) and the bills
+                    calendar in `app/bills/page.tsx` (which draws names on dates
+                    and prints no amount per occurrence). A third,
+                    `OccurrenceDatePicker`, offers dates to attach an override to.
+                    The AI forecast summary describes every active schedule, so it
+                    asks for one occurrence per schedule over a deliberately wide
+                    horizon (FORECAST_OCCURRENCE_HORIZON_DAYS) rather than a
+                    product window.
 Status              enforced
 ```
 
@@ -892,8 +1610,9 @@ Required tests      A workflow self-test asserting the bump commit's parent is t
 Status              partial
 ```
 
-`docs/release-integrity.md` has the full rules and gap register, including the
-unconditional `--passWithNoTests` on the integration suite.
+`docs/release-integrity.md` has the full rules and gap register, including
+REL-001's blanket pass-with-no-tests rule and what still remains unenforced
+under REL-002.
 
 ## Candidates not yet admitted
 

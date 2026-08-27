@@ -18,6 +18,8 @@
     "colAmount": "Bedrag",
     "typeIncome": "Inkomsten",
     "typeExpense": "Uitgaven",
+    "typeUnknown": "Richting onbekend",
+    "amountUnavailable": "Bedrag niet beschikbaar",
     "button": "Facturen &amp; Stortingen bekijken"
   },
   "mortgageReminder": {

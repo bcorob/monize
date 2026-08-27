@@ -210,6 +210,7 @@
     "frequencyOptions": {
       "weekly": "Semanal",
       "biweekly": "Quinzenal",
+      "semiMonthly": "Duas vezes por mês",
       "monthly": "Mensal",
       "quarterly": "Trimestral",
       "yearly": "Anual"
@@ -308,12 +309,13 @@
     "previewFirstInterest": "Juros do Primeiro Pagamento:",
     "previewTotalPayments": "Total de Pagamentos:",
     "previewTotalInterest": "Total de Juros:",
+    "previewFinalPayment": "Pagamento final:",
     "previewPayoffDate": "Data Est. de Liquidação:",
     "previewNA": "N/A",
     "calculatingPreview": "A calcular pré-visualização...",
     "frequencyOptions": {
       "monthly": "Mensal",
-      "semiMonthly": "Duas vezes por mês (dia 1 e 15)",
+      "semiMonthly": "Duas vezes por mês (dia 15 e fim do mês)",
       "biweekly": "Quinzenal",
       "acceleratedBiweekly": "Quinzenal Acelerado",
       "weekly": "Semanal",
@@ -367,6 +369,7 @@
       "WEEKLY": "Semanal",
       "BIWEEKLY": "Quinzenal",
       "SEMI_MONTHLY": "Bimensal",
+      "SEMIMONTHLY": "Bimensal",
       "MONTHLY": "Mensal",
       "QUARTERLY": "Trimestral",
       "YEARLY": "Anual",
@@ -436,7 +439,8 @@
         "effect": "→ poupa {interest}, liquidação {date}",
         "alreadyMet": "Já alcançado sem qualquer amortização extra.",
         "unreachableInterest": "Fora de alcance — nem uma amortização extra muito grande consegue poupar tantos juros.",
-        "unreachableDate": "Fora de alcance — esse mês é anterior à liquidação mais cedo possível."
+        "unreachableDate": "Fora de alcance — esse mês é anterior à liquidação mais cedo possível.",
+        "baselineIncomplete": "Este empréstimo não é liquidado no período projetado, pelo que não existe um total de juros a partir do qual calcular."
       },
       "simulationTypeLabel": "Tipo de simulação",
       "overpaymentAmount": "Valor do pagamento extra",
@@ -463,6 +467,7 @@
       "interestSaved": "Juros poupados",
       "totalExtraContributed": "Total extra contribuído",
       "beyondProjection": "Além da projeção",
+      "unknown": "Desconhecido",
       "newInstallment": "Nova prestação",
       "installmentDrop": "{payment} (−{reduction})",
       "monthlyPayment": "Pagamento mensal",
@@ -505,7 +510,9 @@
       "colOverpayment": "Pagamento extra",
       "overpaymentWithFrequency": "{amount} ({frequency})",
       "loadAria": "Carregar cenário \"{name}\"",
-      "budgetSummary": "Orçamento {amount}/mês"
+      "budgetSummary": "Orçamento {amount}/mês",
+      "chartExcludedUnknown": "{count, plural, one {# cenário não é mostrado: a sua poupança de juros é desconhecida.} other {# cenários não são mostrados: a sua poupança de juros é desconhecida.}}",
+      "chartNeedsTwoKnown": "O gráfico de comparação necessita de pelo menos dois cenários com uma poupança de juros conhecida."
     },
     "scenarioChart": {
       "title": "Comparação de cenários",

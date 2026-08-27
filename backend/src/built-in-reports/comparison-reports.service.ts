@@ -11,6 +11,20 @@ import {
   DaySpending,
   CategoryWeekendWeekday,
 } from "./dto";
+import { investmentExclusionSql } from "../common/investment-filter.util";
+
+/**
+ * Investment scope is LINKAGE, never account type (INV-REPORT-001, issue #1257):
+ * the cash sleeve of an INVESTMENT account holds ordinary money, while the cash
+ * leg a trade generated is not spending or income. Both halves of the predicate,
+ * and why the account type cannot express either, live in
+ * `common/investment-filter.util.ts`.
+ */
+const INVESTMENT_EXCLUSION = investmentExclusionSql({
+  accountAlias: "a",
+  transactionAlias: "t",
+  splitAlias: "ts",
+});
 
 @Injectable()
 export class ComparisonReportsService {
@@ -46,7 +60,7 @@ export class ComparisonReportsService {
         AND t.is_transfer = false
         AND (t.status IS NULL OR t.status != 'VOID')
         AND t.parent_transaction_id IS NULL
-        AND a.account_type != 'INVESTMENT'
+        AND ${INVESTMENT_EXCLUSION}
         AND (ts.transfer_account_id IS NULL OR ts.id IS NULL)
       GROUP BY EXTRACT(YEAR FROM t.transaction_date), EXTRACT(MONTH FROM t.transaction_date), t.currency_code
       ORDER BY year, month
@@ -141,7 +155,7 @@ export class ComparisonReportsService {
         AND t.is_transfer = false
         AND (t.status IS NULL OR t.status != 'VOID')
         AND t.parent_transaction_id IS NULL
-        AND a.account_type != 'INVESTMENT'
+        AND ${INVESTMENT_EXCLUSION}
         AND (ts.transfer_account_id IS NULL OR ts.id IS NULL)
     `;
 

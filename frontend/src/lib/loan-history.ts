@@ -871,20 +871,33 @@ export async function fetchAllAccountTransactions(accountId: string): Promise<Tr
  * counts (an interest-only grace period or migrated history included). Pointing
  * two loans at one interest category would therefore merge them -- give each
  * loan its own interest category to keep them apart.
+ *
+ * **A failed lookup REJECTS; it is not an empty result.** `[]` means one of two
+ * things and only those two: the loan is not configured for separate-interest
+ * booking, or the query ran and this loan genuinely has no standalone interest
+ * expenses. A `catch { return [] }` here made a transient 500 or timeout
+ * indistinguishable from the second -- and every one of this function's callers
+ * already has the error state it should have reached. `useLoanProjection`
+ * reports the projection as unknown, the account detail page has an outer error
+ * boundary, and both the Debt Payoff Timeline and the Overpayment Simulator run
+ * on `useReportData`'s error-and-retry. The helper was swallowing the failure
+ * before any of them could see it, so the history was recomputed from a
+ * fabricated empty interest list: on a loan that books interest separately,
+ * `hasSeparateInterest` then reads false and every row takes the ANALYTIC
+ * estimate -- a plausible invented number standing in for a recorded one. The
+ * same shape as the rule in `frontend/CLAUDE.md`: a failed lookup is not an
+ * empty dataset, and rendering the failure as emptiness turns an outage into an
+ * answer.
  */
 export async function fetchLoanInterestTransactions(
   account: Account,
 ): Promise<Transaction[]> {
   if (!account.interestCategoryId || !account.sourceAccountId) return [];
-  try {
-    const results = await transactionsApi.getAllPages({
-      categoryIds: [account.interestCategoryId],
-      accountIds: [account.sourceAccountId],
-    });
-    return results.filter(
-      (tx) => tx.categoryId === account.interestCategoryId && !tx.isTransfer,
-    );
-  } catch {
-    return [];
-  }
+  const results = await transactionsApi.getAllPages({
+    categoryIds: [account.interestCategoryId],
+    accountIds: [account.sourceAccountId],
+  });
+  return results.filter(
+    (tx) => tx.categoryId === account.interestCategoryId && !tx.isTransfer,
+  );
 }

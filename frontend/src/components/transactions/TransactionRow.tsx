@@ -7,6 +7,7 @@ import { createPortal } from 'react-dom';
 import { getIconComponent } from '@/components/ui/IconPicker';
 import { HOVER_ROW_ON_PAGE } from '@/components/ui/Card';
 import { CategoryPill } from '@/components/transactions/CategoryPill';
+import { registerDateColumnPadding } from '@/components/transactions/register-date-columns';
 import { PayeeLogo } from '@/components/payees/PayeeLogo';
 import { Transaction, TransactionSplit, TransactionStatus } from '@/types/transaction';
 import { StatusCellButton } from '@/components/transactions/StatusCellButton';
@@ -152,6 +153,15 @@ export interface TransactionRowProps {
   displayAmount?: number;
   isDeleting: boolean;
   formatDate: (date: string) => string;
+  /**
+   * Drop the year from the date below the `sm` breakpoint, handing the freed
+   * width to the payee. Both formats are rendered and CSS picks one, so wider
+   * screens keep the full date whatever the flag says. The long-press action
+   * sheet still shows the full date, so the year stays reachable.
+   */
+  compactDates?: boolean;
+  /** Day and month in the user's own ordering (useDateFormat's formatDateWithoutYear). */
+  formatCompactDate?: (date: string) => string;
   formatAmount: (amount: number, currencyCode?: string) => JSX.Element;
   formatBalance: (balance: number, currencyCode?: string) => JSX.Element;
   onRowClick: (transaction: Transaction) => void;
@@ -203,6 +213,8 @@ export const TransactionRow = memo(function TransactionRow({
   displayAmount,
   isDeleting,
   formatDate,
+  compactDates,
+  formatCompactDate,
   formatAmount,
   formatBalance,
   onRowClick,
@@ -232,6 +244,7 @@ export const TransactionRow = memo(function TransactionRow({
   showFxColumns = false,
   staleReason,
 }: TransactionRowProps) {
+  const compactPadding = registerDateColumnPadding(compactDates);
   const t = useTranslations('transactions');
   const tc = useTranslations('common');
   // The reconciliation chips live in the reconcile catalog so the register and
@@ -291,9 +304,16 @@ export const TransactionRow = memo(function TransactionRow({
           />
         </td>
       )}
-      <td className={`${cellPadding} whitespace-nowrap text-sm text-gray-900 dark:text-gray-100 ${isVoid ? 'line-through' : ''}`}>
+      <td className={`${cellPadding} ${compactPadding.date} whitespace-nowrap text-sm text-gray-900 dark:text-gray-100 ${isVoid ? 'line-through' : ''}`}>
         <span className={`flex items-center gap-1.5 ${isVoid ? 'line-through' : ''}`}>
-          {formatDate(transaction.transactionDate)}
+          {compactDates && formatCompactDate ? (
+            <>
+              <span className="sm:hidden">{formatCompactDate(transaction.transactionDate)}</span>
+              <span className="hidden sm:inline">{formatDate(transaction.transactionDate)}</span>
+            </>
+          ) : (
+            formatDate(transaction.transactionDate)
+          )}
           {staleReason && (
             <span
               data-testid="stale-reconciliation-chip"
@@ -313,7 +333,11 @@ export const TransactionRow = memo(function TransactionRow({
       <td className={`${cellPadding} whitespace-nowrap text-sm text-gray-900 dark:text-gray-100 ${isVoid ? 'line-through' : ''} hidden lg:table-cell`}>
         {transaction.account?.name || '-'}
       </td>
-      <td className={`${cellPadding} max-w-[100px] sm:max-w-none overflow-hidden`}>
+      {/* Two things give the payee room when the year is hidden: this
+          phone-width cap widens, and the inset between this column and the
+          date closes (registerDateColumnPadding). It stays a cap, with
+          truncate below, so a long payee cannot push Amount off screen. */}
+      <td className={`${cellPadding} ${compactPadding.payee} ${compactDates ? 'max-w-[160px]' : 'max-w-[100px]'} sm:max-w-none overflow-hidden`}>
         <div className="flex items-center gap-2 min-w-0">
           {/* Brand badge beside the name, never inside the button: the button's
               text is the payee name, and a decorative glyph in it changes what

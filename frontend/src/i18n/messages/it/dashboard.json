@@ -27,7 +27,6 @@
     "manualTitle": "Richiede registrazione manuale",
     "negativeBalanceWarning": "Questa transazione porterà il saldo del conto sotto zero",
     "viewAll": "Visualizza tutte le fatture e i versamenti",
-    "totalDue": "Totale dovuto",
     "totalIncoming": "Totale in arrivo",
     "moreItems": "+{count} altri",
     "overdue": "Scaduta",
@@ -38,7 +37,8 @@
       "bill": "Fattura",
       "deposit": "Versamento",
       "transfer": "Trasferimento",
-      "reminder": "Promemoria"
+      "reminder": "Promemoria",
+      "unknown": "Sconosciuto"
     }
   },
   "gettingStarted": {

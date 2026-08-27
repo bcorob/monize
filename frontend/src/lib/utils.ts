@@ -2,6 +2,7 @@ import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import {
   datePatternFieldOrder,
+  dropYearFromPattern,
   formatByPattern,
   parseByPattern,
 } from './date-parse';
@@ -101,6 +102,30 @@ export function formatDate(date: Date | string, format: string = 'browser', loca
   if (!isPattern) return d.toLocaleDateString();
 
   return formatByPattern(d.getFullYear(), d.getMonth() + 1, d.getDate(), format);
+}
+
+/**
+ * A calendar date with its year dropped, keeping day and month in the order
+ * and separators the user's own pattern uses -- `08/22` under `MM/DD/YYYY`,
+ * `22/08` under `DD/MM/YYYY`, `22-Aug` under `DD-MMM-YYYY`.
+ *
+ * Takes a resolved pattern, never the `browser` sentinel: which of day and
+ * month comes first is exactly what a sentinel does not say, and
+ * `useDateFormat`'s `datePattern` has already asked the locale. A pattern that
+ * names no year, or that would be left without a day or a month, renders in
+ * full rather than as a fragment.
+ *
+ * @param date - Date object or date string (YYYY-MM-DD)
+ * @param pattern - Concrete pattern from `resolveDateFormatPattern`
+ */
+export function formatDateWithoutYear(date: Date | string, pattern: string): string {
+  const d = typeof date === 'string' ? parseLocalDate(date) : date;
+  return formatByPattern(
+    d.getFullYear(),
+    d.getMonth() + 1,
+    d.getDate(),
+    dropYearFromPattern(pattern),
+  );
 }
 
 /**

@@ -22,6 +22,7 @@ import { ScheduledTransactionsService } from "../scheduled-transactions/schedule
 import { NetWorthService } from "../net-worth/net-worth.service";
 import { PortfolioService } from "../securities/portfolio.service";
 import { LoanMortgageAccountService } from "./loan-mortgage-account.service";
+import { mortgageTermEndDate } from "./payment-frequency.util";
 import { PaymentFrequency, AmortizationResult } from "./loan-amortization.util";
 import {
   MortgagePaymentFrequency,
@@ -763,11 +764,10 @@ export class AccountsService {
           account.termMonths = updateAccountDto.termMonths || null;
           // Recalculate termEndDate when termMonths changes
           if (updateAccountDto.termMonths > 0 && account.paymentStartDate) {
-            const termEndDate = new Date(account.paymentStartDate);
-            termEndDate.setMonth(
-              termEndDate.getMonth() + updateAccountDto.termMonths,
+            account.termEndDate = mortgageTermEndDate(
+              new Date(account.paymentStartDate),
+              updateAccountDto.termMonths,
             );
-            account.termEndDate = termEndDate;
           } else {
             account.termEndDate = null;
           }

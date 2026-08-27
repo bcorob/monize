@@ -17,6 +17,10 @@ import { Transaction, TransactionStatus } from "./entities/transaction.entity";
 import { TransactionSplit } from "./entities/transaction-split.entity";
 import { TransactionSplitService } from "./transaction-split.service";
 import { Category } from "../categories/entities/category.entity";
+import {
+  brokerageExclusionForEntity,
+  investmentLinkedTransactionExclusion,
+} from "../common/investment-filter.util";
 import { Payee } from "../payees/entities/payee.entity";
 import { UserPreference } from "../users/entities/user-preference.entity";
 import { AccountsService } from "../accounts/accounts.service";
@@ -1540,7 +1544,9 @@ export class TransactionBulkUpdateService {
             const method = hasCondition ? "orWhere" : "where";
             hasCondition = true;
             qb[method](
-              "transaction.categoryId IS NULL AND transaction.isSplit = false AND transaction.isTransfer = false AND filterAccount.accountType != 'INVESTMENT'",
+              `transaction.categoryId IS NULL AND transaction.isSplit = false AND transaction.isTransfer = false AND ${brokerageExclusionForEntity(
+                "filterAccount",
+              )} AND ${investmentLinkedTransactionExclusion("transaction")}`,
             );
           }
           if (hasTransfer) {

@@ -1721,6 +1721,43 @@ describe('TransactionsPage', () => {
     });
   });
 
+  // Regression: CI run #2873, where this file's first Bulk Update test failed
+  // with "Unable to find [data-testid=bulk-update-btn]" while the register
+  // showed all three rows -- the selection had been cleared, not never made.
+  // The page's bulk-update scope falls back to every visible account, so it
+  // changes the moment the accounts request lands; on a loaded runner that
+  // landed after the click and wiped the selection with it. A background load
+  // finishing is not the user changing a filter.
+  describe('Selection survives a background load', () => {
+    it('keeps the row selected when the accounts request lands after the click', async () => {
+      mockGetAll.mockResolvedValue({
+        data: mockTransactions,
+        pagination: { page: 1, totalPages: 1, total: 3 },
+      });
+      mockGetSummary.mockResolvedValue({ totalIncome: 0, totalExpenses: 0, netCashFlow: 0, transactionCount: 0 });
+      // The accounts request is the slow one, as it was on the CI runner.
+      let landAccounts: () => void = () => {};
+      mockGetAllAccounts.mockImplementation(
+        () => new Promise((resolve) => { landAccounts = () => resolve(mockAccounts); }),
+      );
+
+      render(<TransactionsPage />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('select-tx-1')).toBeInTheDocument();
+      });
+      fireEvent.click(screen.getByTestId('select-tx-1'));
+      expect(screen.getByTestId('bulk-update-btn')).toBeInTheDocument();
+
+      await act(async () => {
+        landAccounts();
+        await Promise.resolve();
+      });
+
+      expect(screen.getByTestId('bulk-update-btn')).toBeInTheDocument();
+    });
+  });
+
   describe('Bulk Update', () => {
     beforeEach(() => {
       mockGetAll.mockResolvedValue({

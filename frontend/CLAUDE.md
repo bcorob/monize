@@ -154,6 +154,7 @@ The header's link arrays and the per-route Heroicon map are declared side by sid
 - **On desktop it is a text box regardless of format preference** -- the pointer decides the mode, not the format (touch keeps the native picker). The native control's segment-jumping entry is issue #1201.
 - **`browser` is not a pattern, and nothing below `useDateFormat` should see it.** `datePattern` off that hook is the concrete arrangement, resolved by `resolveDateFormatPattern` (`lib/date-parse.ts`). `parseFlexibleDate` takes the pattern (7/8 is ambiguous without it); `parseDateFromFormat` stays strict for canonical values.
 - **A partial entry is completed, and an unreadable one changes nothing.** Day+month take the year from the field's current date (today when empty); a lone number is a day in the month on screen; unparseable text restores what was there -- clearing the box is the only way to mean "no date". None of this happens on the keystroke: the lenient reading waits for blur or Enter.
+- **`setValue()` moves the form, not the box.** Registered with `register('date')`, `DateInput` is uncontrolled: it renders its own `displayValue`/`isoValue` state and only reads the DOM once on mount, so a react-hook-form `setValue` on that field changes what gets *submitted* while the date on screen stays put -- the two silently disagree. To move a date the user can see, pass `value` (the sync effect runs only when `externalValue !== undefined`) or drive it through `onDateChange`. A test asserting the visible input's value cannot see the difference; assert the submitted payload.
 - **A screen hosting a date field does not answer a load with a second tree.** `if (isLoading) return <Skeleton/>` unmounts the field being typed into; render load/error states *inside* the one tree. Duplicating the controls block into the second `return` is not a fix (different child indexes still reconcile wrong -- `CashFlowReport` did this). `ui-conventions.test.ts` fails both shapes for any component pairing a date control with a `useReportData` loading flag; a one-shot prerequisite load (the report *forms*' `isLoadingData`) is deliberately not policed.
 
 ### Currency entry -- `CurrencyInput`, never a raw number input
@@ -196,11 +197,25 @@ Whether a picker *offers* to create is a property of the surface, not the field:
 
 `balanceColor` (`lib/format.ts`) is the one rule: negative is red, everything else neutral. Do not add `|| isLiability` (or any `accountType` test) -- a credit card at a credit balance is not in the red, and the sign already carries the meaning. `gainLossColor` is the sibling for a *change* in value (green when up), not for a balance.
 
+### A scheduled occurrence's amount is `nextOccurrenceEffectiveAmount`, never `nextOverride?.amount ?? amount`
+
+`ScheduledTransaction.amount` was computed at whatever FX rate was current when it was written, so for a top-level investment schedule (whose `amount` is the *security-currency* cash impact) or a split parent carrying an investment line it is a stale snapshot -- and it is labelled with the brokerage account's `currencyCode`, not the settlement currency the cash lands in. Read `effectiveAmount` / `effectiveAmountComplete` / `effectiveCurrencyCode` through `lib/scheduled-effective-amount.ts` (`scheduleEffectiveAmount`, `overrideEffectiveAmount`, `nextOccurrenceEffectiveAmount`, `sumEffectiveOccurrences`).
+
+`null` means the server could not work the amount out. Render `UnknownAmount` (`components/ui/UnknownAmount.tsx`) -- never the stored figure and never a zero -- and withhold any total containing it, keeping the partial sum under its own name. An **absent** field is an older backend mid rolling deploy, which the helper already reads as unknown for an FX-sensitive schedule and as the stored amount for everything else.
+
+**The date is the other half, and `nextDueDate` is not it.** That column is the recurrence *slot*; an override addressed to the slot can move the occurrence, so filter, sort and print `nextOccurrenceDueDate(st)`. A surface that reads the slot announces a payment on a day the user has already changed -- the same defect as reading the stored amount, applied to the date.
+
+**A total over occurrences is converted, never added.** `sumEffectiveOccurrences` (`lib/scheduled-effective-amount.ts`) takes the converter and cannot be called without one; its predecessor accepted an `EffectiveScheduledAmount` accessor and read only the `amount`, so the Upcoming Bills report and the budget panel summed a CAD occurrence beside a USD one and formatted the result in the reader's default currency. Check `isComplete` before displaying the value, and format a *row* with its own `currencyCode` -- `formatCurrency(amount)` with no code labels a CAD figure with whatever the reader's default is. `UnknownAmount`'s `reason` tells the two causes apart: `displayFx` is a missing display rate (fix it on Currencies), `scheduledFx` is the occurrence's own settlement rate.
+
+**A list of occurrences comes from the server, not from a loop here.** `scheduledTransactionsApi.getOccurrences({ through })` returns one row per occurrence with the amount THAT occurrence would post; expanding the recurrence in the browser can produce dates but never per-occurrence amounts, which is how the Upcoming Bills report came to print, total and export one schedule-level figure against every occurrence it drew. `lib/forecast.ts`, the bills calendar and `OccurrenceDatePicker` are the named exemptions, each for a reason the guard records.
+
+`lib/scheduled-effective-amount.guard.test.ts` scans `src/` for the `override.amount ?? …amount` fingerprint, for a client-side recurrence expansion outside those exemptions, and for the report actually calling `getOccurrences` -- import presence is not proof, since the report imported this helper throughout the period it was applying one amount to every occurrence. `PostTransactionDialog` is the one fallback exemption: it seeds the POST form's editable field, which is the write path. Issue #1247, INV-OCCURRENCE-003.
+
 ### A scheduled transaction has four kinds, not two -- `scheduledKind`
 
 `amount < 0` / `> 0` answers half the question: a **transfer** between own accounts is neither bill nor deposit, and exactly **zero** is a deliberate placeholder for an amount unknown until it arrives. A sign ternary paints the zero green, and a `!st.isTransfer` filter deleted a scheduled transfer from both calendars (issue #1124).
 
-Classify with `scheduledKind` (`lib/scheduled-kind.ts`) -- `bill | deposit | transfer | reminder` -- and colour from `SCHEDULED_KIND_CHIP_CLASSES` / `SCHEDULED_KIND_AMOUNT_CLASSES`. Pass the *effective* amount (`nextOverride?.amount ?? amount`) where the surface is about one occurrence.
+Classify with `scheduledKind` (`lib/scheduled-kind.ts`) -- `bill | deposit | transfer | reminder` -- and colour from `SCHEDULED_KIND_CHIP_CLASSES` / `SCHEDULED_KIND_AMOUNT_CLASSES`. Where the surface is about one occurrence, classify it with `occurrenceKind(occurrence, schedule)` from the same file rather than composing an amount at the call site: kind is a question about direction, an exchange rate is positive, so the schedule's *sign* still classifies correctly when the occurrence's own magnitude is unknown -- and `Number(null)` would paint an unpriceable bill as a grey reminder. `scheduled-effective-amount.guard.test.ts` scans for the composed `scheduledKind({ amount: x ?? y })` shape.
 
 A surface listing *occurrences* includes every active schedule whatever its kind. Filtering by kind is for a surface genuinely about bills or deposits, and there a `reminder` belongs in neither bucket -- except where the surface is about *what the user still has to pay*, where a zero-amount reminder counts as an upcoming bill contributing nothing (`BudgetUpcomingBills`). A **money total** is a separate decision from the count: a transfer is counted as upcoming but its amount never joins a bills-and-deposits sum (`UpcomingBillsReport`'s `summary.totalOf`), and a reminder's zero is never given a sign or a red/green treatment.
 
@@ -286,6 +301,10 @@ A full-page list uses `components/ui/Pagination.tsx`. A list inside a card caps 
 
 Bound the height rather than letting the card grow or hiding rows behind a "Show N more" expander -- a card in a grid must be the same height whatever its contents (`SecurityWeightingBars` and the detail page's "Held in accounts" are the worked examples). `scrollbar-hide` is for a horizontal chip strip where overflow is obvious; never use it on a vertical list.
 
+### A table a phone renders must fit the phone -- `overflow-x-auto` is not containment there
+
+Mobile Chrome sizes the viewport that `position: fixed` elements attach to from the page's *widest* content, and a table inside `overflow-x-auto` still counts even though it scrolls -- the reconcile table at ~690px put every modal on its page (the transaction edit form) hundreds of pixels off a 390px screen while the page itself looked fine. Desktop windows and plain narrow viewports never show this; only real mobile emulation (`isMobile`) or a phone does. So a register-like table makes the register's trades rather than relying on horizontal scroll: hide the secondary columns below `sm` (`hidden sm:table-cell`), collapse the actions column with them and back it on every width with the shared `RowActionSheet` opened by `useLongPress` (press-and-hold, or right-click), offer the register's year-hiding toggle (`useCompactMobileDates` + `registerDateColumnPadding`, one store for every register surface), cap the payee (`max-w-* sm:max-w-none overflow-hidden`), and give a grouping row per-column filler cells that collapse with their columns instead of one desktop-sized `colSpan`. The mobile reconcile spec in `e2e/tests/mobile.spec.ts` holds the property end to end: `window.innerWidth` stays at device width with the table on screen, and the modal's box fits the viewport.
+
 ### A password field declares what may be autofilled into it
 
 Every `<Input type="password">` carries an `autoComplete`: `current-password` when it really is this account's password, `new-password` when one is being set here, `off` when it is not a credential of this site at all. Omitting it is not neutral -- a password manager fills a bare box with the saved credential, and the form submits it as typed: the AI provider's API key field silently replaced the stored key ("Saved" on screen, provider dead, row shows `****` either way), and the backup export password is the same shape and worse. `ui-conventions.test.ts` fails on a password input with no `autoComplete`, and on a value outside those three.
@@ -331,7 +350,15 @@ The request key is every selector that changes the *meaning* of the response, no
 
 **A failed lookup is not an empty dataset.** A failed accounts request is not `accounts = []`, and a failed report is not a report of zeros -- rendering the failure as emptiness turns an outage into a plausible answer and leaves the save button live over prerequisites that never loaded. Five states stay distinguishable: loaded-and-empty, loading, failed, stale-previous, and current. Where a prerequisite failed, use the shared retryable error presentation, keep the stored ids, and disable the actions that depend on it.
 
+**The `catch` belongs where the decision is, and a fetch helper is not that place.** `fetchLoanInterestTransactions` returned `[]` from a `catch`, which made a transient 500 indistinguishable from "this loan books no separate interest" -- and every one of its five callers already had the error state it should have reached (`useLoanProjection` reports the projection unknown, the account page has an outer boundary, two reports run on `useReportData`). The helper was starving all of them. The consequence was not a visible blank: with the interest list empty, `deriveLoanPaymentHistory` reads `hasSeparateInterest` as false and every row falls to the ANALYTIC estimate, so a loan that books interest separately renders a full history of invented interest that looks exactly like a real one. A swallowed failure is worst where the fallback is *plausible*. `LoanAmortizationReport` was the one caller that also caught it itself and cleared both arrays; it goes through `useReportData` now like every other loader on that surface.
+
+**A surface that swallows a failure also hides the tests that depend on it.** Five fixtures in `LoanAmortizationReport.test.tsx` omitted `pagination.hasMore`, so `fetchAllAccountTransactions` threw on the first page and the report rendered its error screen -- and every one of those tests was green, because each asserted something that did not need the history. Making the failure visible turned four of them red at once, and a fifth test (`handles loadTransactions error gracefully`) turned out to be *asserting* the silence: it expected the report chrome to render on a failed history load. So the removed `catch` is itself the guard a source scan could not be; a repo-wide "fixture carries its pagination" scan reports 261 candidate blocks, nearly all legitimate.
+
 **A dirty keyed form is data.** Changing the request key while a form has unsaved edits calls for a confirmation, a preserved draft, or an explicit save/discard flow; silently unmounting it is data loss. A form rendered for scenario A must also stop being editable once scenario B is the current selection -- two obligations, and meeting the second by discarding the first is not meeting both.
+
+**A background load finishing is not the user acting.** State a page throws away when the user changes a filter -- a selection, a draft, a scroll position -- keys off the criteria the *user* chose, never off a derived object the page recomputes as data lands. The transactions page's `bulkUpdateFilters` falls back to every visible account when no account filter is set, so it changes the moment the accounts request answers; `useTransactionSelection` compared that object and silently cleared a selection the user had already made (CI run #2873 saw it as a bulk-update banner that never appeared). Pass the user's own criteria as the reset key and keep the resolved scope for the server payload -- derived from the one object, so the two lists cannot drift. The row set carries the same distinction: the first page of rows arriving is a load finishing, not a page change.
+
+**A `useMemo` that sorts copies first.** `Array.prototype.sort` reorders in place, so a display memo sorting a shared memoized array reorders what every other consumer reads, and the value then depends on which memo happened to run first -- `accountFilterOptions` sorting `filteredAccounts` decided the bulk-update account scope's order as a side effect of rendering a dropdown. Write `[...xs].sort(...)`, always.
 
 Regression tests for this class need deferred promises, and must assert on what the user *can do*, not only on what is rendered (`docs/testing-contract.md` carries the wider adversarial list):
 
@@ -345,6 +372,83 @@ Regression tests for this class need deferred promises, and must assert on what 
 | Save on the default selection, nothing else happens | the response is adopted |
 
 **Both sides of that comparison must come from the same place.** The origin key a mutation captures and the key the loader is holding have to be produced by one expression -- take the origin from what the loader actually stamped (`dataKey` on `useReportData`), never rebuild it from the rendered payload's fields. The GEM report built its page key from a `strategyId` *state* unset until the user picks from a switcher, and the save's origin from `data.strategy.id`, always a real id: they could never match on the ordinary path, so every save was discarded with no refetch behind it. A key comparison that silently drops the common case looks exactly like one that works.
+
+### An act() warning is a failure, not a log line
+
+A test asserting on a tree React has not finished updating reads whatever
+happened to be committed when the assertion ran -- it passes or fails on
+timing, not on behaviour. React says so, on stderr, and nobody is watching
+stderr in a 14,000-test run: CI run #2873 carried fifteen act warnings under a
+green tick, in the same job whose one real failure was a race. So `src/test/setup.ts`
+routes them into `src/test/act-guard.ts`, which **fails** the test that earned
+them. `act-guard.test.ts` checks the behaviour and scans `setup.ts` for the
+wiring, because a guard nothing calls is not a guard.
+
+Fix the update, never the message. In order of preference: await the thing that
+lands late (`await screen.findBy...`, `await waitFor(...)`); or wrap the trigger
+in `await act(async () => { ... })`. Adding the text to a console filter is the
+one response that is always wrong.
+
+**Exactly one message is that failure**: `An update to <Component> inside a test
+was not wrapped in act(...)`. React's other act-related line -- `The current
+testing environment is not configured to support act(...)` -- is a different
+condition and is deliberately *not* failed on. It fires when an update is
+checked while `IS_REACT_ACT_ENVIRONMENT` is unset, which happens during teardown
+after RTL has restored the flag; it names no component, so it points at nothing,
+and it depends on timing the suite does not control. Matching it turned `main`
+red on CI run #2875, on a test nothing had changed and that neither the PR run
+nor three full local runs of the same commit had flagged. **A guard against
+flakiness that is itself timing-dependent is worse than none.**
+
+And a guard classifies in one place: `recordIfActWarning` both recognises and
+records, because the two were separate functions that disagreed -- the
+classifier rejected a message the recorder stored anyway, so a warning nothing
+recognised could still fail a test.
+
+Three sources produce nearly all of them here:
+
+- **A synchronous test with a request still in flight.** The response commits
+  after the test returns, into whichever tree is mounted by then. Settle it
+  before returning, even when the assertion is about the state *before* it
+  arrives (`useStaleReconciliation.test.ts`).
+- **`vi.waitFor` and `element.dispatchEvent`, which are not act-aware.** Prefer
+  RTL's `waitFor` and `fireEvent`; `fireEvent(element, event)` takes an event
+  object when a test needs to spy on that exact one. Where Vitest's fake timers
+  rule out RTL's `waitFor` -- it cannot drive them -- drain the clock inside
+  act: `await act(async () => { await vi.advanceTimersByTimeAsync(n); })`.
+- **A store write with the tree mounted.** Zustand notifies subscribers
+  synchronously, so `useDensityStore.setState(...)` re-renders outside act
+  unless wrapped. Writing *before* the render does not need it.
+
+### Awaiting static chrome synchronises nothing
+
+`await screen.findByText('Portfolio Value Over Time')` resolves on the page's
+title -- markup that renders before any request does. Every assertion keyed off
+it is asserting on an async call it never waited for. Wait for the thing being
+asserted (`await waitFor(() => expect(api.x).toHaveBeenCalledTimes(1))`), which
+cannot mask a real failure: a call that never happens still times out.
+
+The trap is worst where a call is **second-stage** -- issued only after an
+earlier response commits. The Portfolio Value chart's prior-close baseline is
+gated on `chartPoints[0]`, so it cannot fire until the intraday response lands;
+tests asserting it right after the title passed on a fast machine and failed on
+CI run #2877. Before asserting that a request was made, ask what has to resolve
+first.
+
+Two exceptions, both real: an assertion already inside a `waitFor` callback, and
+one inside a pinned clock -- RTL's `waitFor` cannot drive Vitest's fake timers
+and will hang until the test times out, so there the act-wrapped drain is the
+barrier. A blanket sweep over a file with mixed timer regimes walks into that.
+
+### Test isolation is every storage, not just `localStorage`
+
+`src/test/setup.ts` clears `localStorage` between tests, and for a long time
+cleared nothing else. The Portfolio Value chart caches its intraday response in
+`sessionStorage`, and a leaked entry hydrates the next test's chart
+*synchronously on mount* -- which moves a second-stage request to immediate and
+silently changes what that test is exercising. Anything a component persists is
+shared state between tests: clear it, or the suite's behaviour depends on
+ordering.
 
 ### A busy flag shared by nesting operations is a counter, not a boolean
 
@@ -408,6 +512,10 @@ Whoever adds the `null` on the server owns how it looks; a component test assert
 
 Same currency is 1:1 *by definition* and stays a known conversion -- keep it distinguishable from the missing case, and keep a real zero rendering as a number.
 
+**And a rate table that has not loaded is not a table missing that rate.** `useExchangeRates` starts with no rates and keeps none if the fetch fails, so every cross-currency `convert` returns `null` in both states: a surface that names the missing pair then instructs the reader to add a rate that already exists. Check `ratesUnavailable` (loading or failed) before naming any pair; `ratesFailed` tells an outage from a table still arriving. The reporting currency itself comes from `preferredCurrency` (`lib/default-currency.ts`) -- never a hand-written `|| 'CAD'`, which is how ten call sites came to disagree with each other and with the server.
+
+**Where more than one thing can withhold a figure, the reader is told about all of them.** The bills page's Monthly Net can be incomplete because a schedule could not be priced *and* because a currency has no rate; naming one makes the reader fix it and watch nothing change. Compose the causes, do not pick between them.
+
 ## `accountsApi.getAll()` is not "the user's accounts"
 
 In own context the endpoint returns a **union**: accounts the caller owns, plus accounts another owner shared with them jointly, told apart by `account.isJoint` (true means the row belongs to someone else; `ownerLabel` names the owner). Any screen treating the list as "mine" is wrong for whichever half it forgot.
@@ -425,6 +533,14 @@ Creation gets a blunter answer: **do not offer it.** `categoriesApi.create` writ
 `useFormModal<T>` (`hooks/useFormModal.ts`) manages create/edit modal state with browser-history integration (back button closes), unsaved-changes detection via `UnsavedChangesDialog`, and form submit exposed via ref. Returns `showForm`, `editingItem`, `openCreate()`, `openEdit(item)`, `close()`, `modalProps`, `unsavedChangesDialog`.
 
 Supporting hooks: `useFormSubmitRef` (expose submit via ref), `useFormDirtyNotify` (track dirty state). Forms use react-hook-form + Zod.
+
+**A quick-fill copies what a row says, never the context the user is entering in.** The transaction form's Recent (history) button lists recents deduped *across accounts*, so the chosen row usually belongs to somewhere other than the account the modal was opened on. `handleQuickFill` fills payee, category, amount, description, tags and split lines, and leaves three fields exactly as the form holds them:
+
+- `accountId` -- moving the entry to the source's account silently changes which ledger the user is writing to.
+- `currencyCode` -- it is derived from the selected account by the account effect in `TransactionForm.tsx`, and a copied code would denominate the amount in a currency the account does not hold (the same "currency comes from the account, not the request" rule the backend enforces with `assertTransactionCurrencyMatchesAccount`).
+- `transactionDate` -- the date on screen is the user's, typed or carried over from the remembered last entry. Resetting it to today re-dates a back-dated batch one row at a time, and the source row's own date is when *that* transaction happened, not this one.
+
+The date case is also the worked example of the `DateInput` `setValue` trap above: the old reset never moved the visible box, only the submitted value. `TransactionForm.test.tsx`'s quick-fill block pins all three, and asserts the *submitted payload* for the date and the currency.
 
 ## Internationalization (i18n)
 
@@ -470,6 +586,10 @@ Never use synchronous `act(() => {...})` for calls that trigger async side-effec
 - A **synchronous `render(...)` of a component that fetches on mount** -- even in a test that only asserts static copy, and even with a stubbed `mockResolvedValue([])`. Give the file one `await act(async () => { render(...) })` helper and use it everywhere.
 - An **awaited handler behind a click**: `fireEvent.click` is act-wrapped, but the `finally { setBusy(false) }` after an `await` lands in a later microtask. Wrap the click in `await act(async () => ...)`.
 - A **bare `await new Promise(r => setTimeout(r, n))`** used to let a `requestAnimationFrame` run -- put the wait inside `await act(async () => { ... })`.
+
+**A fixture that means "the reader's own currency" says so through the constant, not by spelling a code.** Four test files pinned behaviour against a reader on CAD -- one by hardcoding the conversion target inside its own `useExchangeRates` mock, one by giving the security `currencyCode: 'USD'` to mean *foreign*, one by setting `defaultCurrency` in a `usePreferencesStore` mock that ignored its selector (so the value never reached the component and every case silently ran on the fallback). All four passed for as long as the fallback happened to be CAD, and when it moved to USD they failed with the components correct: the fixtures had been asserting the opposite of their own names. Derive from `FALLBACK_DEFAULT_CURRENCY` (`lib/default-currency.ts`) where a case is about the reader's own currency, and pick a code that can never be the fallback where it is about a foreign one.
+
+**A mocked selector hook applies the selector.** `usePreferencesStore: () => ({ preferences: {...} })` returns the whole state whatever it is asked for, so `usePreferencesStore((s) => s.preferences)` gets one level too deep and every read off it is `undefined` -- the component takes its no-preferences branch while the fixture claims to have set one. `src/test/test-hygiene.test.ts` scans for a zero-argument mock of any selector store.
 
 **A mocked hook must return a stable object if the real one does.** `useRouter()` returns the same router every render; a mock written as `useRouter: () => ({ push: vi.fn(), ... })` returns a new one per call, so every `useCallback([router])` changes identity each render and an effect that also sets state loops forever (the Transactions page made 83 `getAll` calls in 300ms under its own local mock). The mock in `src/test/setup.ts` builds one router for the run; a file overriding it to observe `push` must do the same (build it lazily inside the factory -- `vi.mock` is hoisted above the `const mockPush` it closes over). Applies to any mocked hook returning an object or array.
 

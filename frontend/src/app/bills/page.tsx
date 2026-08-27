@@ -45,10 +45,13 @@ import {
   deriveAccountsFromScheduledTransactions,
 } from '@/lib/bills-filters';
 import { parseLocalDate } from '@/lib/utils';
-import { SCHEDULED_KIND_CHIP_CLASSES, scheduledKind } from '@/lib/scheduled-kind';
+import { SCHEDULED_KIND_CHIP_CLASSES, occurrenceKind } from '@/lib/scheduled-kind';
+import { scheduleEffectiveAmount } from '@/lib/scheduled-effective-amount';
 import { advanceByFrequency, isOneTime, monthlyEquivalent } from '@/lib/frequency';
 import type { FutureTransaction } from '@/lib/forecast';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
+import { useExchangeRates } from '@/hooks/useExchangeRates';
+import { combineTotals, isComplete, sumConverted } from '@/lib/currency-total';
 import { Modal } from '@/components/ui/Modal';
 import { UnsavedChangesDialog } from '@/components/ui/UnsavedChangesDialog';
 import { useFormModal } from '@/hooks/useFormModal';
@@ -69,6 +72,20 @@ interface OverrideEditorState {
   existingOverride: ScheduledTransactionOverride | null;
   // When set (post-reconciliation flow), seeds the Amount field with this value.
   prefillAmount: number | null;
+}
+
+/**
+ * What a schedule's next occurrence IS, for every surface on this page: the
+ * filter, the tab counts, the calendar chip and the monthly summary.
+ *
+ * One function, because these all sit beside a magnitude that comes from the
+ * occurrence: classifying from the stored sign put a re-priced inflow in the
+ * bills bucket and painted its chip red beside a green number. `occurrenceKind`
+ * falls back to the schedule's sign when the occurrence cannot be priced, so an
+ * unpriceable bill stays a bill rather than becoming a zero-amount reminder.
+ */
+function billKind(st: ScheduledTransaction) {
+  return occurrenceKind(scheduleEffectiveAmount(st), st);
 }
 
 export default function BillsPage() {
@@ -98,6 +115,10 @@ function BillsContent() {
   // scroll to the row without opening the post flow that ?postBillId triggers.
   const highlightId = useHighlightParam();
   const { formatCurrency } = useNumberFormat();
+  // The reader's reporting currency and the converter into it. The monthly net
+  // spans one currency or none (issue #1247).
+  const { convertToDefault, defaultCurrency, ratesUnavailable } =
+    useExchangeRates();
   const [scheduledTransactions, setScheduledTransactions] = useState<ScheduledTransaction[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -482,8 +503,8 @@ function BillsContent() {
   // effective date (considering overrides)
   const filteredTransactions = useMemo(() => {
     const byType = scheduledTransactions.filter((t) => {
-      if (filterType === 'bills') return scheduledKind(t) === 'bill';
-      if (filterType === 'deposits') return scheduledKind(t) === 'deposit';
+      if (filterType === 'bills') return billKind(t) === 'bill';
+      if (filterType === 'deposits') return billKind(t) === 'deposit';
       return true;
     });
 
@@ -503,22 +524,57 @@ function BillsContent() {
 
     let totalBills = 0;
     let totalDeposits = 0;
-    let monthlyBills = 0;
-    let monthlyDeposits = 0;
     let dueCount = 0;
+    // One schedule whose current amount cannot be worked out makes the monthly
+    // net unknowable rather than smaller (issue #1247). The count of schedules is
+    // unaffected: how many bills there are is still known.
+    let amountsResolved = true;
+    // Each schedule's monthly equivalent kept WITH the currency it is in, and
+    // converted only once the whole set is collected. A running `+=` sums a CAD
+    // investment schedule beside a USD bill and labels the result with whichever
+    // currency the reader happens to prefer -- the same defect the report and the
+    // budget were fixed for (issue #1247 re-audit).
+    const billComponents: { monthly: number; currencyCode: string }[] = [];
+    const depositComponents: { monthly: number; currencyCode: string }[] = [];
 
     for (const t of scheduledTransactions) {
-      const amount = Number(t.amount);
-      // Transfers move money between the user's own accounts and a zero-amount
-      // reminder states no amount, so neither is a bill or a deposit here.
-      const kind = t.isActive ? scheduledKind(t) : null;
+      // The amount this schedule would post today, not the persisted snapshot:
+      // for an FX-sensitive schedule that scalar was calculated at an older rate.
+      const effectiveAmount = scheduleEffectiveAmount(t);
+      const effective = effectiveAmount.amount;
+      const amount = effective ?? Number(t.amount);
+      // The kind comes from the SAME occurrence the magnitude does. Reading the
+      // stored sign here put a re-priced inflow of 20 into `monthlyBills` and
+      // left the header's net 40 out: "an exchange rate cannot turn a bill into a
+      // deposit" is true of one scalar times one rate and false of a mixed-sign
+      // split parent, where only the investment line re-prices. `occurrenceKind`
+      // falls back to the schedule's sign when the occurrence cannot be priced,
+      // so an unpriceable bill is still a bill. Transfers move money between the
+      // user's own accounts and a zero-amount reminder states no amount, so
+      // neither is a bill or a deposit here.
+      const kind = t.isActive ? billKind(t) : null;
 
-      if (kind === 'bill') {
+      if (kind === 'unknown') {
+        // Neither bucket can claim it, and the net cannot be complete without
+        // it: the server could not derive which side of zero this occurrence
+        // falls on (issue #1247 re-audit).
+        amountsResolved = false;
+      } else if (kind === 'bill') {
         totalBills++;
-        monthlyBills += monthlyEquivalent(Math.abs(amount), t.frequency);
+        if (effective === null) amountsResolved = false;
+        else
+          billComponents.push({
+            monthly: monthlyEquivalent(Math.abs(amount), t.frequency),
+            currencyCode: effectiveAmount.currencyCode,
+          });
       } else if (kind === 'deposit') {
         totalDeposits++;
-        monthlyDeposits += monthlyEquivalent(amount, t.frequency);
+        if (effective === null) amountsResolved = false;
+        else
+          depositComponents.push({
+            monthly: monthlyEquivalent(amount, t.frequency),
+            currencyCode: effectiveAmount.currencyCode,
+          });
       }
 
       if (t.isActive && t.nextDueDate) {
@@ -531,8 +587,72 @@ function BillsContent() {
       }
     }
 
-    return { totalBills, totalDeposits, monthlyBills, monthlyDeposits, dueCount };
-  }, [scheduledTransactions]);
+    // Converted into ONE currency -- the reader's default, which is also what
+    // the card's `formatCurrency` labels a bare amount with -- and a pair with
+    // no rate withholds the net rather than shrinking it.
+    const bills = sumConverted(
+      billComponents,
+      (c) => c.monthly,
+      (c) => c.currencyCode,
+      convertToDefault,
+    );
+    const deposits = sumConverted(
+      depositComponents,
+      (c) => c.monthly,
+      (c) => c.currencyCode,
+      convertToDefault,
+    );
+    // Incompleteness is the union: a complete deposits total beside a partial
+    // bills total makes the net partial.
+    const monthlyNet = combineTotals(
+      [deposits, bills],
+      ([depositTotal, billTotal]) => depositTotal - billTotal,
+    );
+
+    return {
+      totalBills,
+      totalDeposits,
+      monthlyNet,
+      // Two causes, and the card names BOTH when both apply: an occurrence the
+      // server could not price sends the reader to the schedule, a missing
+      // display rate to the Currencies page. A bare "unavailable" is a dead
+      // end, and naming only one of two makes the reader fix it and watch
+      // nothing change.
+      monthlyAmountsComplete: amountsResolved && isComplete(monthlyNet),
+      monthlyMissingRates: monthlyNet.missingCurrencies,
+      monthlyHasUnpriceable: !amountsResolved,
+      dueCount,
+    };
+  }, [scheduledTransactions, convertToDefault]);
+
+  /**
+   * Why the Monthly Net is withheld, or `undefined` when it is not.
+   *
+   * `ratesUnavailable` comes first because it makes the other diagnoses
+   * untrustworthy: with the rate table still loading or its fetch failed, every
+   * cross-currency conversion returns `null`, so "no exchange rate for CAD"
+   * would be a statement about this request rather than about the user's rates --
+   * an instruction to add a rate that is very likely already there.
+   */
+  const monthlyNetUnavailableHint = useMemo(() => {
+    if (summary.monthlyAmountsComplete) return undefined;
+    if (ratesUnavailable) return t('page.summaryNetRatesUnavailable');
+    const missingRates = summary.monthlyMissingRates.length > 0;
+    // Three cases, three catalog strings -- never two joined here. A sentence
+    // built by concatenating fragments is one a translator cannot reorder or
+    // punctuate, and the both-causes case is a real sentence in its own right.
+    if (missingRates && summary.monthlyHasUnpriceable) {
+      return t('page.summaryNetMissingRatesAndUnpriceable', {
+        currencies: summary.monthlyMissingRates.join(', '),
+      });
+    }
+    if (missingRates) {
+      return t('page.summaryNetMissingRates', {
+        currencies: summary.monthlyMissingRates.join(', '),
+      });
+    }
+    return t('page.summaryNetUnpriceable');
+  }, [summary, ratesUnavailable, t]);
 
   // Generate upcoming occurrences for calendar view
   const getNextOccurrences = (st: ScheduledTransaction, _monthsAhead: number = 3): Date[] => {
@@ -622,9 +742,22 @@ function BillsContent() {
           <SummaryCard label={t('page.summaryActiveDeposits')} value={summary.totalDeposits} icon={SummaryIcons.plus} />
           <SummaryCard
             label={t('page.summaryMonthlyNet')}
-            value={formatCurrency(summary.monthlyDeposits - summary.monthlyBills)}
+            value={
+              summary.monthlyAmountsComplete
+                ? formatCurrency(summary.monthlyNet.value, defaultCurrency)
+                : t('page.summaryAmountUnavailable')
+            }
+            // A withheld figure names its cause, so the reader knows whether to
+            // look at a schedule or add a rate (issue #1247 re-audit).
+            hint={monthlyNetUnavailableHint}
             icon={SummaryIcons.money}
-            valueColor={summary.monthlyDeposits - summary.monthlyBills >= 0 ? 'green' : 'red'}
+            valueColor={
+              !summary.monthlyAmountsComplete
+                ? 'default'
+                : summary.monthlyNet.value >= 0
+                  ? 'green'
+                  : 'red'
+            }
           />
           <SummaryCard
             label={t('page.summaryDueNow')}
@@ -728,8 +861,8 @@ function BillsContent() {
                       }`}
                     >
                       {type === 'all' ? t('viewTabs.filterAll', { count: scheduledTransactions.length }) :
-                       type === 'bills' ? t('viewTabs.filterBills', { count: scheduledTransactions.filter((st) => scheduledKind(st) === 'bill').length }) :
-                       t('viewTabs.filterDeposits', { count: scheduledTransactions.filter((st) => scheduledKind(st) === 'deposit').length })}
+                       type === 'bills' ? t('viewTabs.filterBills', { count: scheduledTransactions.filter((st) => billKind(st) === 'bill').length }) :
+                       t('viewTabs.filterDeposits', { count: scheduledTransactions.filter((st) => billKind(st) === 'deposit').length })}
                     </button>
                   ))}
                 </div>
@@ -832,7 +965,7 @@ function BillsContent() {
                         key={billIndex}
                         onClick={() => handleEdit(bill)}
                         className={`px-1 py-0.5 text-xs rounded truncate cursor-pointer ${
-                          SCHEDULED_KIND_CHIP_CLASSES[scheduledKind(bill)]
+                          SCHEDULED_KIND_CHIP_CLASSES[billKind(bill)]
                         } hover:opacity-80`}
                       >
                         {bill.name}

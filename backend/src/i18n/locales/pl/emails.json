@@ -18,6 +18,8 @@
     "colAmount": "Kwota",
     "typeIncome": "Przychód",
     "typeExpense": "Wydatek",
+    "typeUnknown": "Kierunek nieznany",
+    "amountUnavailable": "Kwota niedostępna",
     "button": "Zobacz rachunki &amp; wpłaty"
   },
   "mortgageReminder": {

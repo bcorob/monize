@@ -4,15 +4,14 @@ import { ScheduledTransaction } from "./entities/scheduled-transaction.entity";
 import { ScheduledTransactionSplit } from "./entities/scheduled-transaction-split.entity";
 import { Account, AccountType } from "../accounts/entities/account.entity";
 import { PaymentFrequency } from "../accounts/loan-amortization.util";
-import {
-  getPeriodicRate,
-  getMortgagePeriodsPerYear,
-  MortgagePaymentFrequency,
-} from "../accounts/mortgage-amortization.util";
-import { getPeriodsPerYear } from "../accounts/loan-amortization.util";
+import { getPeriodicRate } from "../accounts/mortgage-amortization.util";
 import { roundMoney } from "../common/round.util";
 import { allocateLoanPayment } from "../accounts/loan-payment-waterfall.util";
 import { withScopedDb } from "../common/db/scoped-db";
+import {
+  DEFAULT_PERIODS_PER_YEAR,
+  periodsPerYearForStoredFrequency,
+} from "../accounts/payment-frequency.util";
 
 // The account types that carry a scheduled loan-payment structure and therefore
 // need their next principal/interest split advanced after each posting. This set
@@ -157,10 +156,15 @@ export class ScheduledTransactionLoanService {
         //
         // The total principal (regular + extra) reduces the balance, which
         // causes the interest to drop by that amount times the periodic rate.
+        // One lookup for both spellings. The column is a bare VARCHAR written by
+        // two paths, so a MORTGAGE row can hold the recurrence spelling
+        // SEMIMONTHLY -- cast into getMortgagePeriodsPerYear it fell through to
+        // that function's monthly default, and every posted split booked twice
+        // the interest for the life of the loan. Account type still decides the
+        // COMPOUNDING below (Canadian semi-annual); it never decided the count.
         const periodsPerYear =
-          loanAccount.accountType === "MORTGAGE"
-            ? getMortgagePeriodsPerYear(frequency as MortgagePaymentFrequency)
-            : getPeriodsPerYear(frequency);
+          periodsPerYearForStoredFrequency(frequency) ??
+          DEFAULT_PERIODS_PER_YEAR;
 
         const periodicRate =
           loanAccount.accountType === "MORTGAGE"
@@ -185,10 +189,15 @@ export class ScheduledTransactionLoanService {
         }
       } else {
         // No previous split data or no rate -- fall back to balance-based calc
+        // One lookup for both spellings. The column is a bare VARCHAR written by
+        // two paths, so a MORTGAGE row can hold the recurrence spelling
+        // SEMIMONTHLY -- cast into getMortgagePeriodsPerYear it fell through to
+        // that function's monthly default, and every posted split booked twice
+        // the interest for the life of the loan. Account type still decides the
+        // COMPOUNDING below (Canadian semi-annual); it never decided the count.
         const periodsPerYear =
-          loanAccount.accountType === "MORTGAGE"
-            ? getMortgagePeriodsPerYear(frequency as MortgagePaymentFrequency)
-            : getPeriodsPerYear(frequency);
+          periodsPerYearForStoredFrequency(frequency) ??
+          DEFAULT_PERIODS_PER_YEAR;
 
         const periodicRate =
           loanAccount.accountType === "MORTGAGE"

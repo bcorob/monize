@@ -27,6 +27,8 @@
     "loanRequiresInstitution": "Las cuentas de préstamo requieren un nombre de institución",
     "mortgageRequiredFields": "Las cuentas de hipoteca requieren mortgagePaymentFrequency, paymentStartDate, sourceAccountId y amortizationMonths",
     "mortgageRequiresInterestRate": "Las cuentas de hipoteca requieren una tasa de interés",
+    "mortgageFrequencyUnsupported": "Las hipotecas canadienses no se pueden programar con una frecuencia de pago {frequency}",
+    "paymentFrequencyUnsupported": "No se puede programar una frecuencia de pago {frequency}",
     "mortgageRequiresInstitution": "Las cuentas de hipoteca requieren un nombre de institución",
     "onlyMortgageAccounts": "Esta operación solo es válida para cuentas de hipoteca",
     "updateRateClosed": "No se puede actualizar la tasa en una cuenta cerrada",
@@ -193,13 +195,16 @@
     "reauthUnavailable": "Termina de configurar la contraseña de tu cuenta antes de restaurar una copia de seguridad.",
     "supportPasswordRequired": "Una copia de soporte debe estar cifrada: indique una contraseña.",
     "passwordHeaderNotBase64": "El encabezado {header} debe estar codificado en base64.",
-    "decompressTooLarge": "La copia es demasiado grande para restaurarse: al descomprimirse supera el límite configurado de {limit} bytes. Aumente BACKUP_RESTORE_EXPANDED_LIMIT si es una copia legítima.",
+    "decompressTooLarge": "La copia de seguridad es demasiado grande para restaurarla: al descomprimirse supera el límite de {limit} bytes de esta instalación. Ese límite se deriva de la memoria del contenedor y de un coste medido por byte, así que subirlo por sí solo describe una restauración que el proceso no puede terminar: aumenta el límite de memoria del contenedor (Kubernetes: backend.resources.limits.memory).",
     "exportTooLarge": "Esta copia es demasiado grande para generarse de una vez (supera {limit} bytes en la tabla \"{table}\"). Las copias automáticas y de soporte deben mantenerse en memoria; descargue una copia manual, que se transmite, o aumente BACKUP_EXPORT_BUFFER_LIMIT.",
     "supportExportTooLarge": "Esta copia de soporte tendría {{ size }} MiB de JSON, por encima del límite de {{ limit }} MiB. Redúzcala con una selección de cuentas o un intervalo de fechas, o aumente BACKUP_EXPORT_BUFFER_LIMIT.",
     "folderUnusable": "La carpeta \"{{ path }}\" no puede usarse como directorio ({{ reason }}).",
     "folderOutsideAllowedRoots": "La carpeta de copias \"{path}\" está fuera de las raíces permitidas ({roots}). Defina BACKUP_ALLOWED_ROOTS para permitirla.",
     "noBackupStorage": "Esta instalación no tiene almacenamiento de copias escribible: {{ safePath }} no existe y no se puede crear ({{ reason }}). Monte un volumen allí (Docker: bind mount o volumen con nombre; Kubernetes: defina backend.persistence.backups en el chart de Helm) e inténtelo de nuevo.",
-    "restoreNoMemoryHeadroom": "Esta instalación no tiene margen de memoria para una restauración: el pico estimado de una restauración no cabe en el contenedor. Aumente el límite de memoria del contenedor o reduzca BACKUP_RESTORE_EXPANDED_LIMIT."
+    "restoreNoMemoryHeadroom": "Esta instalación no tiene margen de memoria para una restauración: el pico estimado de una restauración no cabe en el contenedor. Aumente el límite de memoria del contenedor o reduzca BACKUP_RESTORE_EXPANDED_LIMIT.",
+    "restoreQueueFull": "Demasiadas restauraciones están esperando la capacidad de restauración de esta instalación. Vuelve a intentarlo en un momento.",
+    "restoreQueueWaitTimeout": "Se agotó el tiempo de espera de la capacidad de restauración: otra restauración sigue en curso. Vuelve a intentarlo en un momento.",
+    "restoreTicketUnavailable": "Esta instalación no puede autorizar cargas de restauración."
   },
   "budgets": {
     "notFound": "Presupuesto con ID {{ id }} no encontrado",

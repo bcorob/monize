@@ -27,7 +27,6 @@
     "manualTitle": "需要手動過帳",
     "negativeBalanceWarning": "此交易將導致科目結餘低於零",
     "viewAll": "查看所有帳單與存款",
-    "totalDue": "應付總額",
     "totalIncoming": "應收總額",
     "moreItems": "+{count} 更多",
     "overdue": "已逾期",
@@ -38,7 +37,8 @@
       "bill": "帳單",
       "deposit": "存款",
       "transfer": "轉帳",
-      "reminder": "提醒"
+      "reminder": "提醒",
+      "unknown": "未知"
     }
   },
   "gettingStarted": {

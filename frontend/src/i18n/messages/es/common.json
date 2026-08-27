@@ -237,6 +237,12 @@
     "explanation": "Total parcial: {count, plural, one {# importe} other {# importes}} no se pudieron incluir, por lo que la cifra mostrada los excluye. No hay tipo de cambio a {displayCurrency} para {currencies}.",
     "explanationExcluded": "Total parcial: {count, plural, one {# importe} other {# importes}} no se pudieron calcular, por lo que la cifra mostrada los excluye."
   },
+  "unknownAmount": {
+    "marker": "—",
+    "srLabel": "Importe no disponible",
+    "scheduledFx": "No se puede calcular el importe actual: no hay tipo de cambio disponible para el par de divisas de liquidación de este elemento programado. El importe guardado se calculó con un tipo anterior, por lo que no se muestra.",
+    "displayFx": "Esta cifra no se puede mostrar aquí: el importe se conoce, pero no hay ningún tipo de cambio disponible para convertirlo a la moneda de este total. Actualice los tipos en la página Monedas."
+  },
   "density": {
     "title": "Cambiar densidad de filas",
     "normal": "Normal",

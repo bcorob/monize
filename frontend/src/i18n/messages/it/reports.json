@@ -128,7 +128,8 @@
     "backToReports": "Torna ai report",
     "switchReport": "Passa a un altro report",
     "switchPlaceholder": "Filtra report...",
-    "switchNoMatches": "Nessun report corrisponde"
+    "switchNoMatches": "Nessun report corrisponde",
+    "favourites": "Preferiti"
   },
   "reportPage": {
     "notFound": "Report non trovato",
@@ -437,6 +438,7 @@
     "currentBalance": "Saldo attuale",
     "principalPaid": "Capitale rimborsato",
     "estTotalInterest": "Interessi totali stimati",
+    "interestOverProjection": "Interessi sulla proiezione",
     "interestPaid": "Interessi pagati",
     "progress": "Avanzamento",
     "estPayoff": "Estinzione stimata",
@@ -807,6 +809,7 @@
     "originalAmount": "Importo originale",
     "interestRate": "Tasso d'interesse",
     "estTotalInterest": "Interessi totali stimati",
+    "interestOverProjection": "Interessi sulla proiezione",
     "totalInterestPaid": "Totale interessi pagati",
     "paymentsMade": "Pagamenti effettuati",
     "estPayoff": "Estinzione stimata",
@@ -839,7 +842,8 @@
     "typeLineOfCredit": "Linea di credito",
     "typeLoan": "Prestito",
     "typeMortgage": "Mutuo",
-    "pdfSubtitlePaymentsSummary": "{count} pagamenti effettuati, {interest} interessi totali"
+    "pdfSubtitlePaymentsSummary": "{count} pagamenti effettuati, {interest} interessi totali",
+    "pdfSubtitlePaymentsProjection": "{count} pagamenti effettuati, {interest} di interessi sulla proiezione"
   },
   "monteCarlo": {
     "toasts": {
@@ -1548,12 +1552,16 @@
     "csvColBillName": "Nome fattura",
     "csvColDueDate": "Data scadenza",
     "csvColAmount": "Importo",
+    "csvColCurrency": "Valuta",
     "csvColFrequency": "Frequenza",
     "csvColAccount": "Conto",
     "csvColStatus": "Stato",
     "csvStatusOverdue": "In scadenza",
     "csvStatusAuto": "Auto",
     "csvStatusManual": "Manuale",
+    "amountUnavailable": "Non disponibile",
+    "occurrencesUnavailable": "Non è stato possibile caricare le occorrenze previste, quindi il calendario e gli importi seguenti non sono disponibili. Le tue scadenze non sono state modificate.",
+    "csvAmountUnavailable": "Non disponibile (nessun tasso di cambio attuale)",
     "pdfTitle": "Report fatture in scadenza",
     "pdfSubtitle": "{month} | {count} fatture attive",
     "pdfActiveBills": "Fatture attive",

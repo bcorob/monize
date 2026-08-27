@@ -210,6 +210,7 @@
     "frequencyOptions": {
       "weekly": "Weekly",
       "biweekly": "Every 2 Weeks",
+      "semiMonthly": "Semi-Monthly",
       "monthly": "Monthly",
       "quarterly": "Quarterly",
       "yearly": "Yearly"
@@ -318,12 +319,13 @@
     "previewFirstInterest": "First Payment Interest:",
     "previewTotalPayments": "Total Payments:",
     "previewTotalInterest": "Total Interest:",
+    "previewFinalPayment": "Final Payment:",
     "previewPayoffDate": "Est. Payoff Date:",
     "previewNA": "N/A",
     "calculatingPreview": "Calculating preview...",
     "frequencyOptions": {
       "monthly": "Monthly",
-      "semiMonthly": "Semi-Monthly (1st & 15th)",
+      "semiMonthly": "Semi-Monthly (15th & month end)",
       "biweekly": "Bi-Weekly",
       "acceleratedBiweekly": "Accelerated Bi-Weekly",
       "weekly": "Weekly",
@@ -367,6 +369,7 @@
       "WEEKLY": "Weekly",
       "BIWEEKLY": "Bi-Weekly",
       "SEMI_MONTHLY": "Semi-Monthly",
+      "SEMIMONTHLY": "Semi-Monthly",
       "MONTHLY": "Monthly",
       "QUARTERLY": "Quarterly",
       "YEARLY": "Yearly",
@@ -520,7 +523,8 @@
         "effect": "→ saves {interest}, payoff {date}",
         "alreadyMet": "Already met without any overpayment.",
         "unreachableInterest": "Out of reach — even a very large overpayment cannot save that much interest.",
-        "unreachableDate": "Out of reach — that month is earlier than the soonest possible payoff."
+        "unreachableDate": "Out of reach — that month is earlier than the soonest possible payoff.",
+        "baselineIncomplete": "This loan does not pay off within the projected period, so there is no total interest to work back from."
       }
     },
     "scenarioChart": {
@@ -546,6 +550,7 @@
       "installmentDrop": "{payment} (−{reduction})",
       "totalExtraContributed": "Total Extra Contributed",
       "beyondProjection": "Beyond projection",
+      "unknown": "Unknown",
       "overpaymentAtFrequency": "{frequency}: +{amount}"
     },
     "chart": {
@@ -585,7 +590,9 @@
       "colOverpayment": "Overpayment",
       "overpaymentWithFrequency": "{amount} ({frequency})",
       "loadAria": "Load scenario \"{name}\"",
-      "budgetSummary": "Budget {amount}/month"
+      "budgetSummary": "Budget {amount}/month",
+      "chartExcludedUnknown": "{count, plural, one {# scenario is not shown: its interest saving is unknown.} other {# scenarios are not shown: their interest saving is unknown.}}",
+      "chartNeedsTwoKnown": "The comparison chart needs at least two scenarios with a known interest saving."
     },
     "pastImpact": {
       "title": "Impact of Overpayments Made",

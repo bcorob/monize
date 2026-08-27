@@ -24,9 +24,63 @@ vi.mock('@/lib/utils', () => ({
 
 const mockGetAll = vi.fn();
 
+/**
+ * One occurrence per schedule, at its next due date, priced at its own amount.
+ *
+ * The report no longer expands a recurrence in the browser: the server sends
+ * occurrences, each already carrying the amount THAT occurrence would post
+ * (issue #1247). This default keeps the fixtures in the tests that are about
+ * something else -- badges, navigation, payees -- to a single schedule list, and
+ * a test that is about occurrences programs `mockGetOccurrences` itself.
+ */
+const occurrencesFrom = (schedules: any[]): any[] =>
+  schedules
+    .filter((s) => s.isActive !== false)
+    .map((s) => ({
+      scheduledTransactionId: s.id,
+      originalDate: s.nextDueDate,
+      dueDate: s.nextDueDate,
+      amount:
+        s.effectiveAmount !== undefined ? s.effectiveAmount : Number(s.amount),
+      amountComplete:
+        s.effectiveAmount !== undefined
+          ? s.effectiveAmount !== null
+          : true,
+      currencyCode: s.currencyCode ?? 'CAD',
+      overrideId: null,
+      moved: false,
+      accountId: s.accountId ?? 'acc-1',
+      transferAccountId: s.transferAccountId ?? null,
+      isTransfer: !!s.isTransfer,
+    }));
+
+/** One server occurrence, for a test that programs the endpoint itself. */
+const makeOccurrence = (overrides: Record<string, unknown> = {}): any => ({
+  scheduledTransactionId: 'st-1',
+  originalDate: '2026-02-19',
+  dueDate: '2026-02-19',
+  amount: -100,
+  amountComplete: true,
+  currencyCode: 'CAD',
+  overrideId: null,
+  moved: false,
+  accountId: 'acc-1',
+  transferAccountId: null,
+  isTransfer: false,
+  ...overrides,
+});
+
+const defaultOccurrences = async () =>
+  occurrencesFrom((await mockGetAll()) ?? []);
+
+const mockGetOccurrences = vi.fn<(params?: unknown) => Promise<any[]>>(
+  defaultOccurrences,
+);
+
 vi.mock('@/lib/scheduled-transactions', () => ({
   scheduledTransactionsApi: {
     getAll: (...args: any[]) => mockGetAll(...args),
+    getOccurrences: (...args: any[]) => mockGetOccurrences(...args),
   },
 }));
 
@@ -40,6 +94,26 @@ vi.mock('@/lib/logger', () => ({
 }));
 
 const mockExportToCsv = vi.fn();
+/**
+ * A rate table rather than an identity conversion.
+ *
+ * `convertToDefault` as `(n) => n` would make every currency behave like the
+ * default, which is exactly the blindness this report had: it summed a CAD
+ * occurrence beside a USD one as bare numbers. CAD is the default here, so the
+ * existing single-currency fixtures convert 1:1 and only the mixed-currency
+ * cases below can tell the difference. JPY deliberately has no rate.
+ */
+vi.mock('@/hooks/useExchangeRates', () => ({
+  useExchangeRates: () => ({
+    defaultCurrency: 'CAD',
+    convertToDefault: (amount: number, from: string): number | null => {
+      if (from === 'CAD') return amount;
+      if (from === 'USD') return amount * 1.4;
+      return null;
+    },
+  }),
+}));
+
 vi.mock('@/lib/csv-export', () => ({
   exportToCsv: (...args: any[]) => mockExportToCsv(...args),
 }));
@@ -80,6 +154,10 @@ describe('UpcomingBillsReport', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockPush.mockReset();
+    // `clearAllMocks` clears calls, not implementations: a `mockResolvedValue`
+    // from one test would otherwise answer every later one.
+    mockGetOccurrences.mockReset();
+    mockGetOccurrences.mockImplementation(defaultOccurrences);
     vi.useFakeTimers({ now, shouldAdvanceTime: true });
   });
 
@@ -438,56 +516,152 @@ describe('UpcomingBillsReport', () => {
     });
   });
 
-  describe('Frequency Types', () => {
-    const testFrequency = async (frequency: string, expectedCount: number) => {
-      mockGetAll.mockResolvedValue([
-        makeTransaction({ nextDueDate: '2026-02-15', frequency }),
+  /**
+   * Recurrence expansion is the server's answer now
+   * (`backend/src/common/scheduled-occurrences.spec.ts` proves the walk, the
+   * window and the override date move). What matters here is that the report
+   * draws exactly the occurrences it was given, and asks for the window it
+   * claims to project.
+   */
+  describe('server-expanded occurrences', () => {
+    it('asks for the three months it projects', async () => {
+      mockGetAll.mockResolvedValue([makeTransaction()]);
+      render(<UpcomingBillsReport />);
+      await waitFor(() => expect(mockGetOccurrences).toHaveBeenCalled());
+      // Fixed clock: 2026-02-14, so three months out is 2026-05-14.
+      expect(mockGetOccurrences).toHaveBeenCalledWith({ through: '2026-05-14' });
+    });
+
+    it('draws one row per occurrence the server sent', async () => {
+      const st = makeTransaction({ nextDueDate: '2026-02-15', frequency: 'MONTHLY' });
+      mockGetAll.mockResolvedValue([st]);
+      mockGetOccurrences.mockResolvedValue([
+        { ...occurrencesFrom([st])[0], dueDate: '2026-02-15', originalDate: '2026-02-15' },
+        { ...occurrencesFrom([st])[0], dueDate: '2026-03-15', originalDate: '2026-03-15' },
+        { ...occurrencesFrom([st])[0], dueDate: '2026-04-15', originalDate: '2026-04-15' },
       ]);
       render(<UpcomingBillsReport />);
       await waitFor(() => expect(screen.getByText('List')).toBeInTheDocument());
       fireEvent.click(screen.getByText('List'));
       await waitFor(() => {
-        // At least the expected count of Rent entries appears in list view
-        const rents = screen.getAllByText('Rent');
-        expect(rents.length).toBeGreaterThanOrEqual(expectedCount);
+        expect(screen.getAllByText('Rent')).toHaveLength(3);
       });
-    };
+    });
 
-    it('handles ONCE frequency (single occurrence)', async () => {
-      mockGetAll.mockResolvedValue([
-        makeTransaction({ nextDueDate: '2026-02-15', frequency: 'ONCE' }),
-      ]);
+    it('does not invent occurrences the server did not send', async () => {
+      const st = makeTransaction({ nextDueDate: '2026-02-15', frequency: 'DAILY' });
+      mockGetAll.mockResolvedValue([st]);
+      mockGetOccurrences.mockResolvedValue([occurrencesFrom([st])[0]]);
       render(<UpcomingBillsReport />);
       await waitFor(() => expect(screen.getByText('List')).toBeInTheDocument());
       fireEvent.click(screen.getByText('List'));
       await waitFor(() => {
-        const rents = screen.getAllByText('Rent');
-        expect(rents.length).toBe(1);
+        expect(screen.getAllByText('Rent')).toHaveLength(1);
       });
     });
 
-    it('handles DAILY frequency (multiple occurrences)', async () => {
-      await testFrequency('DAILY', 2);
+    /**
+     * The defect the audit of the first pass found: one schedule-level figure was
+     * applied to every projected occurrence, so an occurrence the user had
+     * re-priced was listed, totalled and exported at the template's amount.
+     */
+    it('prices each occurrence from its own override', async () => {
+      const st = makeTransaction({
+        nextDueDate: '2026-02-15',
+        frequency: 'MONTHLY',
+        amount: -1350,
+        effectiveAmount: -1350,
+      });
+      mockGetAll.mockResolvedValue([st]);
+      const base = occurrencesFrom([st])[0];
+      mockGetOccurrences.mockResolvedValue([
+        {
+          ...base,
+          dueDate: '2026-02-20',
+          originalDate: '2026-02-15',
+          amount: -675,
+          overrideId: 'ovr-1',
+          moved: true,
+        },
+        { ...base, dueDate: '2026-03-15', originalDate: '2026-03-15' },
+      ]);
+      render(<UpcomingBillsReport />);
+      await waitFor(() => expect(screen.getByText('List')).toBeInTheDocument());
+      fireEvent.click(screen.getByText('List'));
+
+      // The list prints each occurrence's own amount; the schedule's 1350 belongs
+      // only to the March occurrence that has no override.
+      await waitFor(() => {
+        expect(screen.getAllByText('$675').length).toBeGreaterThan(0);
+      });
+      expect(screen.getByText('$1350')).toBeInTheDocument();
+      // The moved date, not the recurrence slot it replaced.
+      expect(screen.getByText('Feb 20, 2026')).toBeInTheDocument();
+      expect(screen.queryByText('Feb 15, 2026')).not.toBeInTheDocument();
+      // February's total is the overridden 675, not the template's 1350.
+      const thisMonthCard = screen.getByText('This Month').parentElement!;
+      expect(thisMonthCard).toHaveTextContent('$675');
+      expect(thisMonthCard).not.toHaveTextContent('$1350');
     });
 
-    it('handles WEEKLY frequency', async () => {
-      await testFrequency('WEEKLY', 2);
+    it('exports the overridden occurrence amount, not the schedule amount', async () => {
+      const st = makeTransaction({
+        nextDueDate: '2026-02-15',
+        frequency: 'MONTHLY',
+        amount: -1350,
+        effectiveAmount: -1350,
+      });
+      mockGetAll.mockResolvedValue([st]);
+      mockGetOccurrences.mockResolvedValue([
+        {
+          ...occurrencesFrom([st])[0],
+          dueDate: '2026-02-20',
+          originalDate: '2026-02-15',
+          amount: -675,
+          overrideId: 'ovr-1',
+          moved: true,
+        },
+      ]);
+      render(<UpcomingBillsReport />);
+      await waitFor(() => expect(screen.getByTestId('export-csv')).toBeInTheDocument());
+      fireEvent.click(screen.getByTestId('export-csv'));
+
+      const rows = mockExportToCsv.mock.calls[0][2];
+      expect(rows[0][1]).toBe('2026-02-20');
+      expect(rows[0][2]).toBe(-675);
+
+      await act(async () => {
+        fireEvent.click(screen.getByTestId('export-pdf'));
+      });
+      const pdfRows = mockExportToPdf.mock.calls[0][0].tableData.rows;
+      expect(pdfRows[0][2]).toBe(-675);
     });
 
-    it('handles BIWEEKLY frequency', async () => {
-      await testFrequency('BIWEEKLY', 2);
-    });
+    it('marks an unresolvable overridden occurrence unavailable and withholds the total', async () => {
+      const st = makeTransaction({
+        nextDueDate: '2026-02-15',
+        frequency: 'MONTHLY',
+        amount: -1350,
+        effectiveAmount: -1350,
+        autoPost: false,
+      });
+      mockGetAll.mockResolvedValue([st]);
+      mockGetOccurrences.mockResolvedValue([
+        {
+          ...occurrencesFrom([st])[0],
+          amount: null,
+          amountComplete: false,
+          overrideId: 'ovr-1',
+        },
+      ]);
+      render(<UpcomingBillsReport />);
+      await waitFor(() => expect(screen.getByText('List')).toBeInTheDocument());
 
-    it('handles EVERY4WEEKS frequency', async () => {
-      await testFrequency('EVERY4WEEKS', 1);
-    });
-
-    it('handles QUARTERLY frequency', async () => {
-      await testFrequency('QUARTERLY', 1);
-    });
-
-    it('handles YEARLY frequency', async () => {
-      await testFrequency('YEARLY', 1);
+      // The card under "This Month" carries the marker, not a figure -- and
+      // certainly not the schedule's own 1350.
+      const thisMonthCard = screen.getByText('This Month').parentElement!;
+      expect(thisMonthCard.textContent).not.toMatch(/\$\s?[\d,]/);
+      expect(screen.queryByText('$1350')).not.toBeInTheDocument();
     });
   });
 
@@ -518,16 +692,28 @@ describe('UpcomingBillsReport', () => {
       });
     });
 
+    /**
+     * The cell under a named column of the first exported row.
+     *
+     * By name, not by index: these assertions were positional, so adding the
+     * Currency column moved every one of them and three tests failed for a
+     * reason that had nothing to do with what they were testing.
+     */
+    const exportedCell = (column: string): string | number => {
+      const headers: string[] = mockExportToCsv.mock.calls[0][1];
+      const rows: (string | number)[][] = mockExportToCsv.mock.calls[0][2];
+      const index = headers.indexOf(column);
+      expect(index).toBeGreaterThanOrEqual(0);
+      return rows[0][index];
+    };
+
     it('exports correct status for autoPost bill', async () => {
       mockGetAll.mockResolvedValue([makeTransaction({ nextDueDate: '2026-02-19', autoPost: true, account: { name: 'Savings' } })]);
       render(<UpcomingBillsReport />);
       await waitFor(() => expect(screen.getByTestId('export-csv')).toBeInTheDocument());
       fireEvent.click(screen.getByTestId('export-csv'));
-      const rows: (string | number)[][] = mockExportToCsv.mock.calls[0][2];
-      // Status column (index 5) should be 'Auto'
-      expect(rows[0][5]).toBe('Auto');
-      // Account column (index 4) should be 'Savings'
-      expect(rows[0][4]).toBe('Savings');
+      expect(exportedCell('Status')).toBe('Auto');
+      expect(exportedCell('Account')).toBe('Savings');
     });
 
     it('exports correct status for manual bill', async () => {
@@ -535,8 +721,7 @@ describe('UpcomingBillsReport', () => {
       render(<UpcomingBillsReport />);
       await waitFor(() => expect(screen.getByTestId('export-csv')).toBeInTheDocument());
       fireEvent.click(screen.getByTestId('export-csv'));
-      const rows: (string | number)[][] = mockExportToCsv.mock.calls[0][2];
-      expect(rows[0][5]).toBe('Manual');
+      expect(exportedCell('Status')).toBe('Manual');
     });
 
     it('exports overdue bill with Overdue status', async () => {
@@ -545,8 +730,22 @@ describe('UpcomingBillsReport', () => {
       render(<UpcomingBillsReport />);
       await waitFor(() => expect(screen.getByTestId('export-csv')).toBeInTheDocument());
       fireEvent.click(screen.getByTestId('export-csv'));
-      const rows: (string | number)[][] = mockExportToCsv.mock.calls[0][2];
-      expect(rows[0][5]).toBe('Overdue');
+      expect(exportedCell('Status')).toBe('Overdue');
+    });
+
+    it('exports the occurrence currency beside its amount', async () => {
+      // A number with no currency is a number a spreadsheet will happily total
+      // against a different one: the settlement currency is the other half of
+      // what the amount means (issue #1247).
+      mockGetAll.mockResolvedValue([makeTransaction({ nextDueDate: '2026-02-19' })]);
+      mockGetOccurrences.mockResolvedValue([
+        makeOccurrence({ dueDate: '2026-02-19', amount: -1350, currencyCode: 'CAD' }),
+      ]);
+      render(<UpcomingBillsReport />);
+      await waitFor(() => expect(screen.getByTestId('export-csv')).toBeInTheDocument());
+      fireEvent.click(screen.getByTestId('export-csv'));
+      expect(exportedCell('Amount')).toBe(-1350);
+      expect(exportedCell('Currency')).toBe('CAD');
     });
 
     it('export dropdown is disabled when no bills', async () => {
@@ -581,6 +780,188 @@ describe('UpcomingBillsReport', () => {
       await waitFor(() => {
         expect(screen.getByText('Try again')).toBeInTheDocument();
       });
+    });
+  });
+
+  // ---- Effective amounts (issue #1247) ----
+
+  describe('effective amounts', () => {
+    it("uses the server's effective amount in the list and the totals", async () => {
+      mockGetAll.mockResolvedValue([
+        makeTransaction({
+          id: 'st-inv',
+          name: 'Monthly ETF buy',
+          frequency: 'ONCE',
+          nextDueDate: '2026-02-19',
+          // The security-currency cash impact, pinned at 1.50 when it was EUR.
+          amount: -1000,
+          isInvestment: true,
+          // The security is USD now, and USD -> CAD resolves at 1.35.
+          effectiveAmount: -1350,
+          effectiveAmountComplete: true,
+          effectiveCurrencyCode: 'CAD',
+        }),
+      ]);
+      render(<UpcomingBillsReport />);
+      await waitFor(() => {
+        expect(screen.getByText('This Month')).toBeInTheDocument();
+      });
+
+      const thisMonthCard = screen.getByText('This Month').parentElement!;
+      expect(thisMonthCard).toHaveTextContent('$1350');
+      // Neither the pre-FX impact nor the stale 1.50 figure.
+      expect(thisMonthCard).not.toHaveTextContent('$1000');
+      expect(thisMonthCard).not.toHaveTextContent('$1500');
+    });
+
+    it('withholds a total containing an unresolvable occurrence', async () => {
+      mockGetAll.mockResolvedValue([
+        makeTransaction({
+          id: 'st-inv',
+          name: 'Monthly ETF buy',
+          frequency: 'ONCE',
+          nextDueDate: '2026-02-19',
+          amount: -1000,
+          isInvestment: true,
+          effectiveAmount: null,
+          effectiveAmountComplete: false,
+          effectiveCurrencyCode: 'CAD',
+        }),
+        makeTransaction({
+          id: 'st-rent',
+          name: 'Rent',
+          frequency: 'ONCE',
+          nextDueDate: '2026-02-20',
+          amount: -1500,
+          effectiveAmount: -1500,
+          effectiveAmountComplete: true,
+        }),
+      ]);
+      render(<UpcomingBillsReport />);
+      await waitFor(() => {
+        expect(screen.getByText('This Month')).toBeInTheDocument();
+      });
+
+      const thisMonthCard = screen.getByText('This Month').parentElement!;
+      // Not the known part on its own under a total's caption, and not the
+      // stale figure either.
+      expect(thisMonthCard).not.toHaveTextContent('$1500');
+      expect(thisMonthCard).not.toHaveTextContent('$2500');
+      expect(thisMonthCard).not.toHaveTextContent('$3000');
+      expect(screen.getAllByTestId('unknown-amount').length).toBeGreaterThan(0);
+    });
+
+    it('degrades instead of failing when the occurrences endpoint is unavailable', async () => {
+      // The endpoint is newer than the page, so during a rolling deploy the new
+      // client can be served while a pod still runs the previous backend. A
+      // rejected leg inside `Promise.all` took the whole report down.
+      mockGetAll.mockResolvedValue([makeTransaction({ nextDueDate: '2026-02-19' })]);
+      mockGetOccurrences.mockRejectedValue(new Error('404 Not Found'));
+      render(<UpcomingBillsReport />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('occurrences-unavailable')).toBeInTheDocument();
+      });
+      // The page is up: the schedule count still renders from the other leg.
+      expect(screen.getByText('Active Bills')).toBeInTheDocument();
+      // And the money is unknown, not a measured zero for a state nobody measured.
+      const thisMonthCard = screen.getByText('This Month').parentElement!;
+      expect(thisMonthCard).not.toHaveTextContent('$0');
+      expect(screen.getAllByTestId('unknown-amount').length).toBeGreaterThan(0);
+    });
+
+    it('keeps rendering a genuinely empty projection as empty', async () => {
+      // `[]` is a real answer -- "nothing scheduled in the window" -- and must not
+      // be shown as unavailable.
+      mockGetAll.mockResolvedValue([makeTransaction({ nextDueDate: '2026-02-19' })]);
+      mockGetOccurrences.mockResolvedValue([]);
+      render(<UpcomingBillsReport />);
+
+      await waitFor(() => {
+        expect(screen.getByText('This Month')).toBeInTheDocument();
+      });
+      expect(
+        screen.queryByTestId('occurrences-unavailable'),
+      ).not.toBeInTheDocument();
+      expect(screen.getByText('This Month').parentElement!).toHaveTextContent(
+        '$0',
+      );
+    });
+
+    it('converts each occurrence before totalling, instead of adding currencies', async () => {
+      mockGetAll.mockResolvedValue([
+        makeTransaction({ id: 'st-usd', name: 'US subscription', frequency: 'ONCE', nextDueDate: '2026-02-19' }),
+        makeTransaction({ id: 'st-cad', name: 'Rent', frequency: 'ONCE', nextDueDate: '2026-02-20' }),
+      ]);
+      mockGetOccurrences.mockResolvedValue([
+        makeOccurrence({ scheduledTransactionId: 'st-usd', dueDate: '2026-02-19', amount: -500, currencyCode: 'USD' }),
+        makeOccurrence({ scheduledTransactionId: 'st-cad', dueDate: '2026-02-20', amount: -1000, currencyCode: 'CAD' }),
+      ]);
+      render(<UpcomingBillsReport />);
+      await waitFor(() => {
+        expect(screen.getByText('This Month')).toBeInTheDocument();
+      });
+
+      // 500 USD at 1.4 is 700 CAD, beside 1,000 CAD: 1,700 CAD.
+      const thisMonthCard = screen.getByText('This Month').parentElement!;
+      expect(thisMonthCard).toHaveTextContent('$1700');
+      // What adding the two figures as bare numbers gave -- 12% light, printed
+      // in the reader's own currency (issue #1247).
+      expect(thisMonthCard).not.toHaveTextContent('$1500');
+    });
+
+    it('withholds a total it cannot convert, and says the rate is the reason', async () => {
+      mockGetAll.mockResolvedValue([
+        makeTransaction({ id: 'st-jpy', name: 'Tokyo rent', frequency: 'ONCE', nextDueDate: '2026-02-19' }),
+        makeTransaction({ id: 'st-cad', name: 'Rent', frequency: 'ONCE', nextDueDate: '2026-02-20' }),
+      ]);
+      mockGetOccurrences.mockResolvedValue([
+        makeOccurrence({ scheduledTransactionId: 'st-jpy', dueDate: '2026-02-19', amount: -90000, currencyCode: 'JPY' }),
+        makeOccurrence({ scheduledTransactionId: 'st-cad', dueDate: '2026-02-20', amount: -1000, currencyCode: 'CAD' }),
+      ]);
+      render(<UpcomingBillsReport />);
+      await waitFor(() => {
+        expect(screen.getByText('This Month')).toBeInTheDocument();
+      });
+
+      const thisMonthCard = screen.getByText('This Month').parentElement!;
+      // Neither the convertible part under the total's caption nor the two
+      // amounts added as numbers.
+      expect(thisMonthCard).not.toHaveTextContent('$1000');
+      expect(thisMonthCard).not.toHaveTextContent('$91000');
+      expect(screen.getAllByTestId('unknown-amount').length).toBeGreaterThan(0);
+      // The row itself still shows its own amount in its own currency: what is
+      // missing is the display rate, not the occurrence's amount.
+      expect(screen.getByText('Tokyo rent')).toBeInTheDocument();
+    });
+
+    it('exports an explicit marker rather than a stale or empty amount', async () => {
+      mockGetAll.mockResolvedValue([
+        makeTransaction({
+          id: 'st-inv',
+          name: 'Monthly ETF buy',
+          frequency: 'ONCE',
+          nextDueDate: '2026-02-19',
+          amount: -1000,
+          isInvestment: true,
+          effectiveAmount: null,
+          effectiveAmountComplete: false,
+          effectiveCurrencyCode: 'CAD',
+        }),
+      ]);
+      render(<UpcomingBillsReport />);
+      await waitFor(() => {
+        expect(screen.getByTestId('export-csv')).toBeInTheDocument();
+      });
+
+      await act(async () => {
+        fireEvent.click(screen.getByTestId('export-csv'));
+      });
+
+      const [, , rows] = mockExportToCsv.mock.calls[0];
+      // The amount column carries the marker, not -1000 and not an empty cell a
+      // spreadsheet would total as zero.
+      expect(rows[0][2]).toBe('Not available (no current exchange rate)');
     });
   });
 

@@ -27,6 +27,8 @@
     "loanRequiresInstitution": "Leningrekeningen vereisen een instellingsnaam",
     "mortgageRequiredFields": "Hypotheekrekeningen vereisen mortgagePaymentFrequency, paymentStartDate, sourceAccountId en amortizationMonths",
     "mortgageRequiresInterestRate": "Hypotheekrekeningen vereisen een rentepercentage",
+    "mortgageFrequencyUnsupported": "Canadese hypotheken kunnen niet worden ingepland met betalingsfrequentie {frequency}",
+    "paymentFrequencyUnsupported": "Een betalingsfrequentie {frequency} kan niet worden ingepland",
     "mortgageRequiresInstitution": "Hypotheekrekeningen vereisen een instellingsnaam",
     "onlyMortgageAccounts": "Deze bewerking is alleen geldig voor hypotheekrekeningen",
     "updateRateClosed": "Kan het tarief van een gesloten rekening niet bijwerken",
@@ -193,13 +195,16 @@
     "reauthUnavailable": "Stel eerst het wachtwoord van je account in voordat je een back-up terugzet.",
     "supportPasswordRequired": "Een supportback-up moet versleuteld zijn: geef een wachtwoord op.",
     "passwordHeaderNotBase64": "De header {header} moet base64-gecodeerd zijn.",
-    "decompressTooLarge": "Back-up is te groot om terug te zetten: uitgepakt komt deze boven de ingestelde limiet van {limit} bytes. Verhoog BACKUP_RESTORE_EXPANDED_LIMIT als dit een echte back-up is.",
+    "decompressTooLarge": "De back-up is te groot om te herstellen: uitgepakt overschrijdt hij de limiet van {limit} bytes van deze installatie. Die bovengrens is afgeleid van het geheugen van de container en een gemeten kost per byte, dus alleen die verhogen beschrijft een herstelbewerking die het proces niet kan afmaken -- verhoog in plaats daarvan de geheugenlimiet van de container (Kubernetes: backend.resources.limits.memory).",
     "exportTooLarge": "Deze back-up is te groot om in één keer te maken (voorbij {limit} bytes bij tabel \"{table}\"). Automatische en supportback-ups moeten in het geheugen worden gehouden; download een handmatige back-up, die streamt, of verhoog BACKUP_EXPORT_BUFFER_LIMIT.",
     "supportExportTooLarge": "Deze supportback-up zou {{ size }} MiB JSON zijn, boven de limiet van {{ limit }} MiB. Beperk deze met een rekeningselectie of een datumbereik, of verhoog BACKUP_EXPORT_BUFFER_LIMIT.",
     "folderUnusable": "Map \"{{ path }}\" kan niet als directory worden gebruikt ({{ reason }}).",
     "folderOutsideAllowedRoots": "Back-upmap \"{path}\" ligt buiten de toegestane roots ({roots}). Stel BACKUP_ALLOWED_ROOTS in om deze toe te staan.",
     "noBackupStorage": "Deze installatie heeft geen beschrijfbare back-upopslag: {{ safePath }} bestaat niet en kan niet worden aangemaakt ({{ reason }}). Koppel daar een volume aan (Docker: bind mount of named volume; Kubernetes: stel backend.persistence.backups in de Helm-chart in) en probeer het opnieuw.",
-    "restoreNoMemoryHeadroom": "Deze installatie heeft geen geheugenruimte voor een restore: de gemodelleerde piek van één restore past niet in de container. Verhoog de geheugenlimiet van de container of verlaag BACKUP_RESTORE_EXPANDED_LIMIT."
+    "restoreNoMemoryHeadroom": "Deze installatie heeft geen geheugenruimte voor een restore: de gemodelleerde piek van één restore past niet in de container. Verhoog de geheugenlimiet van de container of verlaag BACKUP_RESTORE_EXPANDED_LIMIT.",
+    "restoreQueueFull": "Er wachten al te veel herstelbewerkingen op de herstelcapaciteit van deze installatie. Probeer het over een moment opnieuw.",
+    "restoreQueueWaitTimeout": "Time-out bij het wachten op herstelcapaciteit: een andere herstelbewerking is nog bezig. Probeer het over een moment opnieuw.",
+    "restoreTicketUnavailable": "Deze installatie kan herstel-uploads niet autoriseren."
   },
   "budgets": {
     "notFound": "Budget met ID {{ id }} niet gevonden",

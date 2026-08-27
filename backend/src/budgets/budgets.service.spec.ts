@@ -3,6 +3,13 @@ import { getRepositoryToken } from "@nestjs/typeorm";
 import { DataSource } from "typeorm";
 import { NotFoundException, BadRequestException } from "@nestjs/common";
 import { BudgetsService } from "./budgets.service";
+import { ScheduledEffectiveAmountService } from "../scheduled-transactions/scheduled-effective-amount.service";
+import { ScheduledOccurrenceService } from "../scheduled-transactions/scheduled-occurrence.service";
+import { InvestmentTransactionsService } from "../securities/investment-transactions.service";
+import {
+  createInvestmentFxMock,
+  InvestmentFxMock,
+} from "../test-helpers/investment-fx-testing";
 import { Budget, BudgetType, BudgetStrategy } from "./entities/budget.entity";
 import {
   BudgetCategory,
@@ -19,6 +26,8 @@ import { Category } from "../categories/entities/category.entity";
 import { ScheduledTransaction } from "../scheduled-transactions/entities/scheduled-transaction.entity";
 import { ScheduledTransactionOverride } from "../scheduled-transactions/entities/scheduled-transaction-override.entity";
 import { ActionHistoryService } from "../action-history/action-history.service";
+import { ExchangeRateService } from "../currencies/exchange-rate.service";
+import { addDaysYMD, todayYMD } from "../common/date-utils";
 import {
   createScopedDbMocks,
   DataSourceMock,
@@ -41,6 +50,10 @@ describe("BudgetsService", () => {
   let categoriesRepository: Record<string, jest.Mock>;
   let scheduledTransactionsRepository: Record<string, jest.Mock>;
   let overridesRepository: Record<string, jest.Mock>;
+  let investmentTransactionsService: InvestmentFxMock;
+  let exchangeRateService: jest.Mocked<
+    Pick<ExchangeRateService, "getRateForDate" | "getLatestRate">
+  >;
 
   const mockBudget: Budget = {
     id: "budget-1",
@@ -192,6 +205,9 @@ describe("BudgetsService", () => {
     };
 
     overridesRepository = {
+      // The occurrence contract loads a schedule's overrides with `find`, keyed
+      // by schedule id, and matches them on `originalDate` itself.
+      find: jest.fn().mockResolvedValue([]),
       createQueryBuilder: jest.fn(() => createMockQueryBuilder()),
     };
 
@@ -214,9 +230,32 @@ describe("BudgetsService", () => {
     // EntityManager directly (it used to be queryRunner.manager.save).
     scopedManager.save.mockImplementation((entity: unknown) => entity);
 
+    // Issue #1247: the settlement pair the effective-amount resolver derives.
+    // Same-currency by default, so a plain schedule's effective amount equals its
+    // stored one; the stale/unknown-rate cases override these per test.
+    investmentTransactionsService = createInvestmentFxMock();
+    // The display conversion into the budget's currency. A rate of 1 by default,
+    // which is only ever asked for when the two currencies differ -- a
+    // same-currency bill never reaches it.
+    exchangeRateService = {
+      getRateForDate: jest.fn().mockResolvedValue(1),
+      getLatestRate: jest.fn().mockResolvedValue(1),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         BudgetsService,
+        // The real effective-amount resolver over a mocked
+        // InvestmentTransactionsService (issue #1247): the budget's upcoming-bill
+        // figures ARE its output, so a double would test nothing. The default
+        // pair is same-currency, so a plain schedule's effective amount equals
+        // its stored one and every pre-existing expectation still holds.
+        ScheduledEffectiveAmountService,
+        ScheduledOccurrenceService,
+        {
+          provide: InvestmentTransactionsService,
+          useValue: investmentTransactionsService,
+        },
         { provide: DataSource, useValue: scopedDataSource },
         { provide: getRepositoryToken(Budget), useValue: budgetsRepository },
         {
@@ -251,6 +290,10 @@ describe("BudgetsService", () => {
           provide: ActionHistoryService,
           useValue: mockActionHistoryService,
         },
+        // An occurrence's amount is in the occurrence's own currency; the budget
+        // converts it into the budget's before totalling (issue #1247). Typed,
+        // so a return shape the real service cannot produce is a compile error.
+        { provide: ExchangeRateService, useValue: exchangeRateService },
       ],
     }).compile();
 
@@ -850,6 +893,332 @@ describe("BudgetsService", () => {
       expect(result.currentSpent).toBe(150);
       expect(result.budgetTotal).toBe(100);
     });
+
+    // ---- Effective amounts and completeness (issue #1247) ----
+
+    /**
+     * A budget with one 600 category, 200 spent, and whatever upcoming bills the
+     * scheduled-transaction query returns.
+     */
+    const stubVelocityBudget = (bills: unknown[]) => {
+      budgetsRepository.findOne.mockResolvedValue({
+        ...mockBudget,
+        categories: [
+          {
+            ...mockBudgetCategory,
+            id: "bc-1",
+            categoryId: "cat-1",
+            amount: 600,
+            isIncome: false,
+            category: { name: "Groceries" },
+          },
+        ],
+      });
+      transactionsRepository.createQueryBuilder.mockReturnValue(
+        createMockQueryBuilder({
+          getRawMany: jest
+            .fn()
+            .mockResolvedValue([{ categoryId: "cat-1", total: "-200" }]),
+        }),
+      );
+      splitsRepository.createQueryBuilder.mockReturnValue(
+        createMockQueryBuilder({ getRawMany: jest.fn().mockResolvedValue([]) }),
+      );
+      scheduledTransactionsRepository.createQueryBuilder.mockReturnValue(
+        createMockQueryBuilder({
+          getMany: jest.fn().mockResolvedValue(bills),
+        }),
+      );
+    };
+
+    /**
+     * The issue's schedule: 10 x 100, pinned at 1.50 while priced in EUR.
+     *
+     * Due today, because the period `getVelocity` reports on is the CURRENT
+     * month and the occurrence window is now filtered in code rather than by a
+     * mocked SQL predicate -- a fixture dated outside the window is simply not
+     * an upcoming bill.
+     */
+    const staleInvestmentBill = () => ({
+      id: "st-inv",
+      userId: "user-1",
+      name: "Monthly ETF buy",
+      amount: -1000,
+      currencyCode: "CAD",
+      frequency: "MONTHLY",
+      nextDueDate: todayYMD(),
+      categoryId: null,
+      isActive: true,
+      isSplit: false,
+      isInvestment: true,
+      investmentAction: "BUY",
+      investmentSecurityId: "SEC-1",
+      investmentQuantity: 10,
+      investmentPrice: 100,
+      investmentCommission: 0,
+      investmentExchangeRate: 1.5,
+      investmentExchangeRateFromCurrency: "EUR",
+      investmentExchangeRateToCurrency: "CAD",
+      splits: [],
+    });
+
+    it("counts an upcoming bill at its current amount, not its persisted one", async () => {
+      stubVelocityBudget([staleInvestmentBill()]);
+      // The security is USD now, and USD -> CAD is 1.35.
+      investmentTransactionsService.resolveSettlementCurrencyPair.mockResolvedValue(
+        { from: "USD", to: "CAD" },
+      );
+      investmentTransactionsService.resolveCashExchangeRateOrNull.mockResolvedValue(
+        1.35,
+      );
+
+      // The budget reports in USD (`mockBudget`) and this occurrence settles in
+      // CAD, so the total needs the display conversion as well as the settlement
+      // one: 1,350 CAD is 999 USD at 0.74.
+      exchangeRateService.getRateForDate.mockResolvedValue(0.74);
+
+      const result = await service.getVelocity("user-1", "budget-1");
+
+      expect(result.upcomingBills[0].amount).toBe(1350);
+      // What the persisted 1.50 rate would have given.
+      expect(result.upcomingBills[0].amount).not.toBe(1500);
+      // The amount is meaningless without this, and the budget is not in it.
+      expect(result.upcomingBills[0].currencyCode).toBe("CAD");
+      expect(exchangeRateService.getRateForDate).toHaveBeenCalledWith(
+        "CAD",
+        "USD",
+        expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+      );
+      expect(result.totalUpcomingBills).toBe(999);
+      // The CAD figure wearing the budget's USD label -- 35% over.
+      expect(result.totalUpcomingBills).not.toBe(1350);
+      expect(result.upcomingBillsComplete).toBe(true);
+      expect(result.upcomingBillsMissingRates).toEqual([]);
+      // 600 budgeted - 200 spent - 999 upcoming, all in USD.
+      expect(result.trulyAvailable).toBe(-599);
+    });
+
+    it("treats a zero or negative stored rate as no rate at all", async () => {
+      stubVelocityBudget([staleInvestmentBill()]);
+      investmentTransactionsService.resolveSettlementCurrencyPair.mockResolvedValue(
+        { from: "USD", to: "CAD" },
+      );
+      investmentTransactionsService.resolveCashExchangeRateOrNull.mockResolvedValue(
+        1.35,
+      );
+      // A bad provider bar or a truncated import. Multiplying by it converted the
+      // whole bill to zero and reported the total COMPLETE -- understating what is
+      // owed and overstating what is available, both as settled figures.
+      exchangeRateService.getRateForDate.mockResolvedValue(0);
+
+      const result = await service.getVelocity("user-1", "budget-1");
+
+      expect(result.totalUpcomingBills).toBeNull();
+      expect(result.totalUpcomingBills).not.toBe(0);
+      expect(result.upcomingBillsComplete).toBe(false);
+      expect(result.upcomingBillsMissingRates).toEqual(["CAD->USD"]);
+      expect(result.trulyAvailable).toBeNull();
+    });
+
+    it("asks for each currency pair once, however many bills share it", async () => {
+      stubVelocityBudget([
+        staleInvestmentBill(),
+        { ...staleInvestmentBill(), id: "st-inv-2", name: "Second ETF buy" },
+        { ...staleInvestmentBill(), id: "st-inv-3", name: "Third ETF buy" },
+      ]);
+      investmentTransactionsService.resolveSettlementCurrencyPair.mockResolvedValue(
+        { from: "USD", to: "CAD" },
+      );
+      investmentTransactionsService.resolveCashExchangeRateOrNull.mockResolvedValue(
+        1.35,
+      );
+      exchangeRateService.getRateForDate.mockResolvedValue(0.74);
+
+      const result = await service.getVelocity("user-1", "budget-1");
+
+      expect(result.upcomingBills).toHaveLength(3);
+      // Three CAD bills, one CAD->USD question: the rate belongs to the pair.
+      expect(exchangeRateService.getRateForDate).toHaveBeenCalledTimes(1);
+      expect(result.totalUpcomingBills).toBe(2997);
+    });
+
+    it("withholds the total when a bill cannot be converted into the budget's currency", async () => {
+      stubVelocityBudget([staleInvestmentBill()]);
+      investmentTransactionsService.resolveSettlementCurrencyPair.mockResolvedValue(
+        { from: "USD", to: "CAD" },
+      );
+      investmentTransactionsService.resolveCashExchangeRateOrNull.mockResolvedValue(
+        1.35,
+      );
+      // The occurrence's own amount is known; what is missing is the rate from
+      // its currency to the budget's. A figure nobody can convert is not a
+      // smaller figure, and 1,350 is not 1,350 USD.
+      exchangeRateService.getRateForDate.mockResolvedValue(null);
+
+      const result = await service.getVelocity("user-1", "budget-1");
+
+      expect(result.upcomingBills[0].amount).toBe(1350);
+      expect(result.upcomingBills[0].amountComplete).toBe(true);
+      expect(result.totalUpcomingBills).toBeNull();
+      expect(result.knownUpcomingBillsSubtotal).toBe(0);
+      expect(result.upcomingBillsComplete).toBe(false);
+      // The reader is told which pair to fix, not just that something is missing.
+      expect(result.upcomingBillsMissingRates).toEqual(["CAD->USD"]);
+      expect(result.trulyAvailable).toBeNull();
+      expect(result.safeDailySpend).toBeNull();
+    });
+
+    it("withholds the upcoming total and truly-available when a bill's rate is unknown", async () => {
+      stubVelocityBudget([
+        staleInvestmentBill(),
+        {
+          id: "st-rent",
+          userId: "user-1",
+          name: "Rent",
+          amount: -1200,
+          currencyCode: "CAD",
+          frequency: "MONTHLY",
+          nextDueDate: todayYMD(),
+          categoryId: "cat-1",
+          isActive: true,
+          isSplit: false,
+          isInvestment: false,
+          splits: [],
+        },
+      ]);
+      investmentTransactionsService.resolveSettlementCurrencyPair.mockResolvedValue(
+        { from: "USD", to: "CAD" },
+      );
+      investmentTransactionsService.resolveCashExchangeRateOrNull.mockResolvedValue(
+        null,
+      );
+
+      const result = await service.getVelocity("user-1", "budget-1");
+
+      expect(result.upcomingBills[0].amount).toBeNull();
+      expect(result.upcomingBills[0].amountComplete).toBe(false);
+      expect(result.totalUpcomingBills).toBeNull();
+      // The part that did resolve, under its own name -- never the total's.
+      expect(result.knownUpcomingBillsSubtotal).toBe(1200);
+      expect(result.upcomingBillsComplete).toBe(false);
+      // Both derived figures are unknown, not larger.
+      expect(result.trulyAvailable).toBeNull();
+      expect(result.safeDailySpend).toBeNull();
+    });
+
+    // ---- Occurrence selection (issue #1247) ----
+
+    it("counts the occurrence's override amount, not the schedule's", async () => {
+      stubVelocityBudget([
+        {
+          id: "st-rent",
+          userId: "user-1",
+          name: "Rent",
+          amount: -1350,
+          currencyCode: "USD",
+          frequency: "MONTHLY",
+          nextDueDate: todayYMD(),
+          categoryId: "cat-1",
+          isActive: true,
+          isSplit: false,
+          isInvestment: false,
+          splits: [],
+        },
+      ]);
+      overridesRepository.find.mockResolvedValue([
+        {
+          id: "ovr-1",
+          scheduledTransactionId: "st-rent",
+          originalDate: todayYMD(),
+          overrideDate: todayYMD(),
+          amount: -675,
+        },
+      ]);
+
+      const result = await service.getVelocity("user-1", "budget-1");
+
+      expect(result.upcomingBills[0].amount).toBe(675);
+      expect(result.totalUpcomingBills).toBe(675);
+      // 600 budgeted - 200 spent - 675 upcoming.
+      expect(result.trulyAvailable).toBe(-275);
+    });
+
+    /**
+     * The override's identity is `originalDate`. Keying the lookup on
+     * `overrideDate` -- which is what the alert path did -- silently returns the
+     * template's amount for every occurrence the user MOVED, and the two dates
+     * are equal in the ordinary case, so nothing notices.
+     */
+    it("honours an override that also moved the occurrence, and reports the moved date", async () => {
+      const slot = todayYMD();
+      const movedTo = addDaysYMD(slot, 3);
+      stubVelocityBudget([
+        {
+          id: "st-rent",
+          userId: "user-1",
+          name: "Rent",
+          amount: -1350,
+          currencyCode: "USD",
+          frequency: "MONTHLY",
+          nextDueDate: slot,
+          categoryId: "cat-1",
+          isActive: true,
+          isSplit: false,
+          isInvestment: false,
+          splits: [],
+        },
+      ]);
+      overridesRepository.find.mockResolvedValue([
+        {
+          id: "ovr-1",
+          scheduledTransactionId: "st-rent",
+          originalDate: slot,
+          overrideDate: movedTo,
+          amount: -675,
+        },
+      ]);
+
+      const result = await service.getVelocity("user-1", "budget-1");
+
+      expect(result.upcomingBills[0].amount).toBe(675);
+      expect(result.upcomingBills[0].dueDate).toBe(movedTo);
+      expect(result.totalUpcomingBills).toBe(675);
+    });
+
+    it("drops an occurrence an override moved past the end of the period", async () => {
+      const slot = todayYMD();
+      stubVelocityBudget([
+        {
+          id: "st-rent",
+          userId: "user-1",
+          name: "Rent",
+          amount: -1350,
+          currencyCode: "USD",
+          frequency: "ONCE",
+          nextDueDate: slot,
+          categoryId: "cat-1",
+          isActive: true,
+          isSplit: false,
+          isInvestment: false,
+          splits: [],
+        },
+      ]);
+      overridesRepository.find.mockResolvedValue([
+        {
+          id: "ovr-1",
+          scheduledTransactionId: "st-rent",
+          originalDate: slot,
+          // Pushed into next year: it is not this period's bill any more.
+          overrideDate: addDaysYMD(slot, 400),
+          amount: -675,
+        },
+      ]);
+
+      const result = await service.getVelocity("user-1", "budget-1");
+
+      expect(result.upcomingBills).toEqual([]);
+      expect(result.totalUpcomingBills).toBe(0);
+    });
   });
 
   describe("getAlerts", () => {
@@ -931,9 +1300,7 @@ describe("BudgetsService", () => {
         getMany: jest.fn().mockResolvedValue([]),
       });
       budgetAlertsRepository.createQueryBuilder.mockReturnValue(alertQb);
-      overridesRepository.createQueryBuilder.mockReturnValue(
-        createMockQueryBuilder({ getMany: jest.fn().mockResolvedValue([]) }),
-      );
+      overridesRepository.find.mockResolvedValue([]);
       budgetAlertsRepository.save.mockImplementation((data: BudgetAlert) => ({
         ...data,
         id: "new-alert-1",
@@ -983,17 +1350,18 @@ describe("BudgetsService", () => {
         getMany: jest.fn().mockResolvedValue([]),
       });
       budgetAlertsRepository.createQueryBuilder.mockReturnValue(alertQb);
-      overridesRepository.createQueryBuilder.mockReturnValue(
-        createMockQueryBuilder({
-          getMany: jest.fn().mockResolvedValue([
-            {
-              scheduledTransactionId: "st-1",
-              overrideDate: tomorrowStr,
-              amount: -312.65,
-            },
-          ]),
-        }),
-      );
+      overridesRepository.find.mockResolvedValue([
+        {
+          // A stored override always carries an id and the original date it
+          // replaces (the `(scheduled_transaction_id, original_date)` unique
+          // index), and the occurrence contract matches on that date.
+          id: "ovr-1",
+          scheduledTransactionId: "st-1",
+          originalDate: tomorrowStr,
+          overrideDate: tomorrowStr,
+          amount: -312.65,
+        },
+      ]);
       budgetAlertsRepository.save.mockImplementation((data: BudgetAlert) => ({
         ...data,
         id: "new-alert-1",
@@ -1007,6 +1375,190 @@ describe("BudgetsService", () => {
           message: expect.stringContaining("312.65"),
         }),
       );
+    });
+
+    it("says the amount is unavailable rather than naming a stale one (issue #1247)", async () => {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const tomorrowStr = tomorrow.toISOString().split("T")[0];
+
+      scheduledTransactionsRepository.createQueryBuilder.mockReturnValue(
+        createMockQueryBuilder({
+          getMany: jest.fn().mockResolvedValue([
+            {
+              id: "st-inv",
+              userId: "user-1",
+              name: "Monthly ETF buy",
+              payee: null,
+              payeeName: null,
+              // -1,000 in the security's currency, pinned at 1.50 EUR/CAD.
+              amount: -1000,
+              currencyCode: "CAD",
+              nextDueDate: tomorrowStr,
+              isActive: true,
+              autoPost: false,
+              reminderDaysBefore: 3,
+              isSplit: false,
+              isInvestment: true,
+              investmentAction: "BUY",
+              investmentSecurityId: "SEC-1",
+              investmentQuantity: 10,
+              investmentPrice: 100,
+              investmentCommission: 0,
+              investmentExchangeRate: 1.5,
+              investmentExchangeRateFromCurrency: "EUR",
+              investmentExchangeRateToCurrency: "CAD",
+              splits: [],
+            },
+          ]),
+          leftJoinAndSelect: jest.fn().mockReturnThis(),
+        }),
+      );
+      budgetAlertsRepository.createQueryBuilder.mockReturnValue(
+        createMockQueryBuilder({ getMany: jest.fn().mockResolvedValue([]) }),
+      );
+      overridesRepository.find.mockResolvedValue([]);
+      budgetAlertsRepository.save.mockImplementation((data: BudgetAlert) => ({
+        ...data,
+        id: "new-alert-1",
+      }));
+      budgetAlertsRepository.find.mockResolvedValue([]);
+      // The security is USD now and no USD -> CAD rate can be resolved.
+      investmentTransactionsService.resolveSettlementCurrencyPair.mockResolvedValue(
+        { from: "USD", to: "CAD" },
+      );
+      investmentTransactionsService.resolveCashExchangeRateOrNull.mockResolvedValue(
+        null,
+      );
+
+      await service.getAlerts("user-1");
+
+      const saved = budgetAlertsRepository.save.mock.calls[0][0] as BudgetAlert;
+      expect(saved.message).toContain("Amount unavailable");
+      // Not the persisted snapshot, at either rate.
+      expect(saved.message).not.toContain("1,500");
+      expect(saved.message).not.toContain("1,000");
+      expect((saved.data as Record<string, unknown>).amount).toBeNull();
+      expect((saved.data as Record<string, unknown>).amountComplete).toBe(
+        false,
+      );
+    });
+
+    /**
+     * The regression the audit of the first pass found: the override lookup was
+     * keyed on `overrideDate` while the occurrence's identity is `originalDate`,
+     * so a bill the user had MOVED fell back to the template's amount -- and the
+     * alert announced the template's date. The previous test cannot see it,
+     * because there the two dates are equal.
+     */
+    it("prices a moved occurrence from its override and announces the moved date", async () => {
+      const slot = addDaysYMD(todayYMD(), 1);
+      const movedTo = addDaysYMD(todayYMD(), 2);
+
+      scheduledTransactionsRepository.createQueryBuilder.mockReturnValue(
+        createMockQueryBuilder({
+          getMany: jest.fn().mockResolvedValue([
+            {
+              id: "st-1",
+              userId: "user-1",
+              name: "Electric",
+              payee: { name: "Power Co" },
+              payeeName: null,
+              amount: -250.0,
+              currencyCode: "USD",
+              frequency: "MONTHLY",
+              nextDueDate: slot,
+              isActive: true,
+              autoPost: false,
+              reminderDaysBefore: 3,
+            },
+          ]),
+          leftJoinAndSelect: jest.fn().mockReturnThis(),
+        }),
+      );
+      budgetAlertsRepository.createQueryBuilder.mockReturnValue(
+        createMockQueryBuilder({ getMany: jest.fn().mockResolvedValue([]) }),
+      );
+      overridesRepository.find.mockResolvedValue([
+        {
+          id: "ovr-1",
+          scheduledTransactionId: "st-1",
+          originalDate: slot,
+          overrideDate: movedTo,
+          amount: -312.65,
+        },
+      ]);
+      budgetAlertsRepository.save.mockImplementation((data: BudgetAlert) => ({
+        ...data,
+        id: "new-alert-1",
+      }));
+      budgetAlertsRepository.find.mockResolvedValue([]);
+
+      await service.getAlerts("user-1");
+
+      const saved = budgetAlertsRepository.save.mock.calls[0][0] as BudgetAlert;
+      expect(saved.message).toContain("312.65");
+      expect(saved.message).not.toContain("250");
+      const data = saved.data as Record<string, unknown>;
+      expect(data.amount).toBe(312.65);
+      expect(data.dueDate).toBe(movedTo);
+      // The occurrence's identity travels with the alert, so re-dating it again
+      // cannot raise a second alert for the same occurrence.
+      expect(data.originalDate).toBe(slot);
+      expect(saved.periodStart).toBe(movedTo);
+    });
+
+    it("does not re-alert an occurrence whose alert was filed under an earlier date", async () => {
+      const slot = addDaysYMD(todayYMD(), 1);
+
+      scheduledTransactionsRepository.createQueryBuilder.mockReturnValue(
+        createMockQueryBuilder({
+          getMany: jest.fn().mockResolvedValue([
+            {
+              id: "st-1",
+              userId: "user-1",
+              name: "Electric",
+              payee: { name: "Power Co" },
+              payeeName: null,
+              amount: -250.0,
+              currencyCode: "USD",
+              frequency: "MONTHLY",
+              nextDueDate: slot,
+              isActive: true,
+              autoPost: false,
+              reminderDaysBefore: 3,
+            },
+          ]),
+          leftJoinAndSelect: jest.fn().mockReturnThis(),
+        }),
+      );
+      // The stored alert announced the original date; the user has since moved
+      // the occurrence, so `periodStart` no longer matches -- the identity does.
+      budgetAlertsRepository.createQueryBuilder.mockReturnValue(
+        createMockQueryBuilder({
+          getMany: jest.fn().mockResolvedValue([
+            {
+              id: "alert-1",
+              periodStart: "1999-01-01",
+              data: { billId: "st-1", originalDate: slot },
+            },
+          ]),
+        }),
+      );
+      overridesRepository.find.mockResolvedValue([
+        {
+          id: "ovr-1",
+          scheduledTransactionId: "st-1",
+          originalDate: slot,
+          overrideDate: addDaysYMD(todayYMD(), 2),
+          amount: -312.65,
+        },
+      ]);
+      budgetAlertsRepository.find.mockResolvedValue([]);
+
+      await service.getAlerts("user-1");
+
+      expect(budgetAlertsRepository.save).not.toHaveBeenCalled();
     });
 
     it("skips bills outside their reminder window", async () => {
@@ -1648,9 +2200,7 @@ describe("BudgetsService", () => {
 
   describe("upcoming bills awareness", () => {
     it("getUpcomingBills returns scheduled transactions due in the period", async () => {
-      const today = new Date();
-      const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 1);
+      const tomorrow = addDaysYMD(todayYMD(), 1);
 
       const stQb = createMockQueryBuilder({
         getMany: jest.fn().mockResolvedValue([
@@ -1658,21 +2208,26 @@ describe("BudgetsService", () => {
             id: "st-1",
             name: "Netflix",
             amount: -15.99,
-            nextDueDate: tomorrow.toISOString().split("T")[0],
+            frequency: "MONTHLY",
+            nextDueDate: tomorrow,
             categoryId: "cat-ent",
           },
           {
             id: "st-2",
             name: "Internet",
             amount: -79.99,
-            nextDueDate: tomorrow.toISOString().split("T")[0],
+            frequency: "MONTHLY",
+            nextDueDate: tomorrow,
             categoryId: "cat-util",
           },
         ]),
       });
       scheduledTransactionsRepository.createQueryBuilder.mockReturnValue(stQb);
 
-      const result = await service.getUpcomingBills("user-1", "2026-02-28");
+      const result = await service.getUpcomingBills(
+        "user-1",
+        addDaysYMD(todayYMD(), 7),
+      );
 
       expect(result).toHaveLength(2);
       expect(result[0].name).toBe("Netflix");
@@ -1687,7 +2242,10 @@ describe("BudgetsService", () => {
       });
       scheduledTransactionsRepository.createQueryBuilder.mockReturnValue(stQb);
 
-      const result = await service.getUpcomingBills("user-1", "2026-02-28");
+      const result = await service.getUpcomingBills(
+        "user-1",
+        addDaysYMD(todayYMD(), 7),
+      );
 
       expect(result).toHaveLength(0);
     });
@@ -1719,15 +2277,14 @@ describe("BudgetsService", () => {
       transactionsRepository.createQueryBuilder.mockReturnValue(directQb);
       splitsRepository.createQueryBuilder.mockReturnValue(splitQb);
 
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
       const stQb = createMockQueryBuilder({
         getMany: jest.fn().mockResolvedValue([
           {
             id: "st-1",
             name: "Rent",
             amount: -200,
-            nextDueDate: tomorrow.toISOString().split("T")[0],
+            frequency: "MONTHLY",
+            nextDueDate: todayYMD(),
             categoryId: "cat-rent",
           },
         ]),
@@ -1773,15 +2330,14 @@ describe("BudgetsService", () => {
       transactionsRepository.createQueryBuilder.mockReturnValue(directQb);
       splitsRepository.createQueryBuilder.mockReturnValue(splitQb);
 
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
       const stQb = createMockQueryBuilder({
         getMany: jest.fn().mockResolvedValue([
           {
             id: "st-1",
             name: "Large Bill",
             amount: -200,
-            nextDueDate: tomorrow.toISOString().split("T")[0],
+            frequency: "MONTHLY",
+            nextDueDate: todayYMD(),
             categoryId: null,
           },
         ]),

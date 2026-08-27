@@ -123,6 +123,10 @@
       "status": "स्थिति",
       "actions": "क्रियाएं"
     },
+    "dateDisplay": {
+      "toggleLabel": "वर्ष छिपाएँ",
+      "toggleTitle": "तिथियों से वर्ष हटाएँ ताकि भुगतानकर्ता का नाम अधिक दिखे"
+    },
     "attachmentsCount": "{count, plural, one {# अटैचमेंट} other {# अटैचमेंट}}",
     "today": "आज",
     "export": {

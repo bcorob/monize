@@ -14,6 +14,14 @@
       "warning": "Waarschuwing",
       "success": "Goed nieuws",
       "info": "Info"
+    },
+    "billDue": {
+      "titleOverdue": "{payee} achterstallig",
+      "titleToday": "{payee} vandaag verschuldigd",
+      "titleTomorrow": "{payee} morgen verschuldigd",
+      "titleInDays": "{payee} over {days} dagen verschuldigd",
+      "amountDue": "{amount} te betalen op {date}",
+      "amountUnavailable": "Bedrag niet beschikbaar (geen actuele wisselkoers), te betalen op {date}"
     }
   },
   "summary503020": {

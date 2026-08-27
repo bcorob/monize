@@ -18,6 +18,8 @@
     "colAmount": "金额",
     "typeIncome": "收入",
     "typeExpense": "支出",
+    "typeUnknown": "方向未知",
+    "amountUnavailable": "金额不可用",
     "button": "查看账单与存款"
   },
   "mortgageReminder": {

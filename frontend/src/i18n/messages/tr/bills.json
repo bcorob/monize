@@ -6,6 +6,11 @@
     "summaryActiveBills": "Aktif Faturalar",
     "summaryActiveDeposits": "Aktif Mevduatlar",
     "summaryMonthlyNet": "Aylık Net",
+    "summaryAmountUnavailable": "Kullanılamıyor",
+    "summaryNetRatesUnavailable": "Döviz kurları şu anda kullanılamıyor, bu nedenle net tutar hesaplanamıyor.",
+    "summaryNetMissingRates": "{currencies} için döviz kuru yok — Para Birimleri sayfasından ekleyin",
+    "summaryNetMissingRatesAndUnpriceable": "{currencies} için döviz kuru yok ve bir veya daha fazla planın tutarı hesaplanamadı.",
+    "summaryNetUnpriceable": "Bir veya daha fazla planın tutarı hesaplanamadı",
     "summaryDueNow": "Şimdi Vadesi Gelen",
     "loadingText": "Zamanlanmış işlemler yükleniyor...",
     "chartUnavailable": "Grafik geçici olarak kullanılamıyor"

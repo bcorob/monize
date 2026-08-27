@@ -33,15 +33,69 @@ export function isLiabilityAccountType(type: AccountType | undefined | null): bo
 export type InterestBookingMode = 'AUTO' | 'SPLIT' | 'SEPARATE';
 export const INTEREST_BOOKING_MODES: InterestBookingMode[] = ['AUTO', 'SPLIT', 'SEPARATE'];
 
-export type PaymentFrequency = 'WEEKLY' | 'BIWEEKLY' | 'MONTHLY' | 'QUARTERLY' | 'YEARLY';
+/**
+ * Payment frequencies a loan account can carry, mirroring the backend's
+ * `PAYMENT_FREQUENCIES`.
+ *
+ * `SEMIMONTHLY` (no underscore) is here because the loan-payment setup dialog
+ * offers it and the backend writes it to `accounts.payment_frequency` -- the
+ * mortgage enum's `SEMI_MONTHLY` is the other spelling of the same cadence, and
+ * both reach this field.
+ *
+ * Declared as a runtime list with the type derived from it, so `AccountForm`'s
+ * Zod enum can be built from the same values instead of a third copy. That
+ * matters more than tidiness here: `optionalEnum` maps an unlisted value to
+ * `undefined`, so a list missing SEMIMONTHLY would silently ERASE the frequency
+ * of any loan the setup dialog created, the first time somebody edited it.
+ * `frontend/src/lib/loan-frequency.guard.test.ts` holds the lists against the
+ * label catalog.
+ */
+export const PAYMENT_FREQUENCIES = [
+  'WEEKLY',
+  'BIWEEKLY',
+  'SEMIMONTHLY',
+  'MONTHLY',
+  'QUARTERLY',
+  'YEARLY',
+] as const;
+
+export type PaymentFrequency = (typeof PAYMENT_FREQUENCIES)[number];
+
+export const MORTGAGE_PAYMENT_FREQUENCIES = [
+  'MONTHLY',
+  'SEMI_MONTHLY',
+  'BIWEEKLY',
+  'ACCELERATED_BIWEEKLY',
+  'WEEKLY',
+  'ACCELERATED_WEEKLY',
+] as const;
 
 export type MortgagePaymentFrequency =
-  | 'MONTHLY'
-  | 'SEMI_MONTHLY'
-  | 'BIWEEKLY'
-  | 'ACCELERATED_BIWEEKLY'
-  | 'WEEKLY'
-  | 'ACCELERATED_WEEKLY';
+  (typeof MORTGAGE_PAYMENT_FREQUENCIES)[number];
+
+/**
+ * The mortgage-domain spelling of a payment frequency, or `null` when the
+ * mortgage helpers cannot express it -- the browser-side twin of the backend's
+ * `toMortgagePaymentFrequency` (`backend/src/accounts/payment-frequency.util.ts`).
+ *
+ * Quarterly and yearly return `null`: a mortgage in this model has no such
+ * cadence, and the server refuses one with a 400 rather than splitting the
+ * payment at a confidently wrong rate. The setup dialog exists on this side of
+ * that refusal, so it must not OFFER a cadence the server will reject -- it
+ * offered quarterly and yearly to Canadian mortgages and turned a working flow
+ * into a hard failure the user could not read off the form.
+ *
+ * `loan-frequency.guard.test.ts` reads the backend switch and fails when the two
+ * disagree, so this is a copy the machine checks rather than one it trusts.
+ */
+export function toMortgagePaymentFrequency(
+  frequency: string,
+): MortgagePaymentFrequency | null {
+  if ((MORTGAGE_PAYMENT_FREQUENCIES as readonly string[]).includes(frequency)) {
+    return frequency as MortgagePaymentFrequency;
+  }
+  return frequency === 'SEMIMONTHLY' ? 'SEMI_MONTHLY' : null;
+}
 
 export interface Account {
   id: string;
@@ -235,6 +289,18 @@ export interface MortgageAmortizationPreview {
   principalPayment: number;
   interestPayment: number;
   totalPayments: number;
+  /**
+   * The last payment: the residual payoff, not another full installment. Only an
+   * accelerated schedule (or a rounding remainder) makes it differ from
+   * `paymentAmount`, so the preview shows it only when it does. -1 when the
+   * payment never amortizes. Absent during a rolling deploy of an older API.
+   *
+   * Deliberately not `finalPaymentAmount`: `LoanScheduleResult` already uses
+   * that name for the ending regular *installment*, and both are loan-domain
+   * numbers of the same type reachable from the same component tree.
+   */
+  residualPayoffAmount?: number;
+  /** Date of the final payment (the first payment date is payment 1) */
   endDate: string;
   totalInterest: number;
   effectiveAnnualRate: number;

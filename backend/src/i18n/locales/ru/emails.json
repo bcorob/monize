@@ -18,6 +18,8 @@
     "colAmount": "Сумма",
     "typeIncome": "Доход",
     "typeExpense": "Расход",
+    "typeUnknown": "Направление неизвестно",
+    "amountUnavailable": "Сумма недоступна",
     "button": "Просмотреть счета &amp; поступления"
   },
   "mortgageReminder": {

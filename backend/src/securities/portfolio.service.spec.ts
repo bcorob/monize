@@ -642,7 +642,18 @@ describe("PortfolioService", () => {
     });
 
     describe("when user has no preferences", () => {
-      it("defaults to CAD as the default currency", async () => {
+      /**
+       * This case was titled "defaults to CAD as the default currency" and
+       * asserted only that the totals were zero, so it stayed green through the
+       * change that moved this surface's fallback from CAD to the shared USD --
+       * a title claiming more than the body checks is a test that cannot fail
+       * for the reason it names. The currency claim now lives where it is
+       * observable and machine-checked (`common/default-currency.guard.spec.ts`
+       * routes every reader through one constant and pins it to the column's own
+       * default); what is asserted HERE is what this case really covers: a
+       * missing preference row is not an error.
+       */
+      it("still answers when no preference row exists", async () => {
         prefRepository.findOne.mockResolvedValue(null);
         accountsRepository.find.mockResolvedValue([]);
         holdingsRepository.find.mockResolvedValue([]);
@@ -650,7 +661,8 @@ describe("PortfolioService", () => {
 
         const result = await service.getPortfolioSummary(userId);
 
-        // Should still succeed with defaults
+        // Zero, not unknown: an empty portfolio holds nothing, and that is a
+        // settled answer needing no exchange rate at all.
         expect(result.totalCashValue).toBe(0);
         expect(result.totalPortfolioValue).toBe(0);
       });

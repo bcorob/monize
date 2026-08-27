@@ -27,6 +27,8 @@
     "loanRequiresInstitution": "贷款账户需要机构名称",
     "mortgageRequiredFields": "抵押贷款账户需要 mortgagePaymentFrequency、paymentStartDate、sourceAccountId 和 amortizationMonths",
     "mortgageRequiresInterestRate": "抵押贷款账户需要利率",
+    "mortgageFrequencyUnsupported": "加拿大抵押贷款无法按 {frequency} 的还款频率安排",
+    "paymentFrequencyUnsupported": "无法按 {frequency} 的还款频率安排",
     "mortgageRequiresInstitution": "抵押贷款账户需要机构名称",
     "onlyMortgageAccounts": "此操作仅适用于抵押贷款账户",
     "updateRateClosed": "无法更新已关闭账户的利率",
@@ -193,13 +195,16 @@
     "reauthUnavailable": "请先完成账户密码设置，然后再恢复备份。",
     "supportPasswordRequired": "支持用备份必须加密：请提供密码。",
     "passwordHeaderNotBase64": "{header} 标头必须使用 base64 编码。",
-    "decompressTooLarge": "备份过大，无法恢复：解压后超出配置的 {limit} 字节上限。如果这是正常备份，请提高 BACKUP_RESTORE_EXPANDED_LIMIT。",
+    "decompressTooLarge": "备份过大，无法恢复：解压后超过此部署的 {limit} 字节上限。该上限由容器内存和实测的每字节开销推导而来，因此单独提高上限只会描述一次进程无法完成的恢复 —— 请改为提高容器的内存上限（Kubernetes：backend.resources.limits.memory）。",
     "exportTooLarge": "此备份过大，无法一次性生成（在表 \"{table}\" 处超出 {limit} 字节）。自动备份和支持用备份必须保存在内存中；请下载采用流式处理的手动备份，或提高 BACKUP_EXPORT_BUFFER_LIMIT。",
     "supportExportTooLarge": "此支持用备份将有 {{ size }} MiB 的 JSON，超过 {{ limit }} MiB 上限。请通过选择账户或日期范围缩小范围，或提高 BACKUP_EXPORT_BUFFER_LIMIT。",
     "folderUnusable": "文件夹 \"{{ path }}\" 无法作为目录使用（{{ reason }}）。",
     "folderOutsideAllowedRoots": "备份文件夹 \"{path}\" 位于允许的根目录（{roots}）之外。请设置 BACKUP_ALLOWED_ROOTS 以允许它。",
     "noBackupStorage": "此部署没有可写的备份存储：{{ safePath }} 不存在且无法创建（{{ reason }}）。请在该位置挂载卷（Docker：绑定挂载或命名卷；Kubernetes：在 Helm chart 中设置 backend.persistence.backups），然后重试。",
-    "restoreNoMemoryHeadroom": "此部署没有用于恢复的内存余量：单次恢复的估计峰值无法容纳于容器内。请提高容器内存上限，或降低 BACKUP_RESTORE_EXPANDED_LIMIT。"
+    "restoreNoMemoryHeadroom": "此部署没有用于恢复的内存余量：单次恢复的估计峰值无法容纳于容器内。请提高容器内存上限，或降低 BACKUP_RESTORE_EXPANDED_LIMIT。",
+    "restoreQueueFull": "已有太多恢复操作在等待此部署的恢复处理能力。请稍后重试。",
+    "restoreQueueWaitTimeout": "等待恢复处理能力超时：另一个恢复操作仍在进行。请稍后重试。",
+    "restoreTicketUnavailable": "此部署无法授权恢复上传。"
   },
   "budgets": {
     "notFound": "未找到 ID 为 {{ id }} 的预算",

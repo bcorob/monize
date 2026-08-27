@@ -8,18 +8,19 @@ import * as pg from "pg";
 import { AppModule } from "./app.module";
 import {
   PEAK_MULTIPLE,
-  UPLOAD_WARNING_SHARE,
   detectProcessMemoryLimitBytes,
   resolveRestoreExpandedLimitBytes,
   resolveRestoreUploadLimitBytes,
-  warnIfLimitExceedsMemory,
   warnIfRestoreUploadLimitIsCramped,
+  warnIfRestoreUploadLimitIsUnsafe,
 } from "./backup/backup-limits";
 import { createRestoreUploadAdmission } from "./backup/restore-upload-admission";
 import {
   computeRestoreProcessingSlots,
   restoreProcessingGate,
 } from "./backup/restore-processing-gate";
+import { resolveRestoreQueueConfig } from "./backup/restore-queue-config";
+import { createRestoreTicketAuthorizer } from "./backup/restore-upload-ticket";
 import { OAuthProviderService } from "./oauth/oauth-provider.service";
 import { oauthDebugLogger } from "./oauth/oauth-debug-logger.middleware";
 import { isOidcProviderPath } from "./oauth/oidc-provider-paths";
@@ -193,12 +194,11 @@ async function bootstrap() {
   // it from a restart. Checked against the same share the default is derived from,
   // in the same units the operator sets, so the derived default never warns about
   // itself and the figure suggested is one they can paste back.
-  warnIfLimitExceedsMemory(
-    "BACKUP_RESTORE_LIMIT",
+  warnIfRestoreUploadLimitIsUnsafe(
     backupRestoreLimit,
+    process.env.BACKUP_RESTORE_LIMIT,
     (message) => bootstrapLogger.warn(message),
-    undefined,
-    UPLOAD_WARNING_SHARE,
+    memoryLimitBytes,
   );
   // On a small container the safe upload limit can drop below what ordinary
   // backups need. It stays safe rather than flooring into a number the pod cannot
@@ -216,13 +216,25 @@ async function bootstrap() {
   const restoreExpandedLimit = resolveRestoreExpandedLimitBytes(
     process.env.BACKUP_RESTORE_EXPANDED_LIMIT,
     memoryLimitBytes,
+    (message) => bootstrapLogger.warn(message),
   );
   const honestSlots = computeRestoreProcessingSlots(
     memoryLimitBytes,
     restoreExpandedLimit,
   );
-  restoreProcessingGate.configure(honestSlots);
-  bootstrapLogger.log(`Concurrent restore processing slots: ${honestSlots}`);
+  // The queue behind those slots is bounded and deadlined (DR-F3RB-002): an
+  // unbounded array of waiters is a way to hold sockets and upload reservations,
+  // and a waiter whose client disconnected used to run its destructive restore
+  // anyway when a slot freed.
+  const restoreQueue = resolveRestoreQueueConfig(process.env, (message) =>
+    bootstrapLogger.warn(message),
+  );
+  restoreProcessingGate.configure(honestSlots, restoreQueue);
+  bootstrapLogger.log(
+    `Concurrent restore processing slots: ${honestSlots} ` +
+      `(queue limit ${restoreQueue.queueLimit}, ` +
+      `wait ${Math.round(restoreQueue.waitTimeoutMs / 1000)}s)`,
+  );
   if (honestSlots < 1) {
     // Zero means zero (F3RB-005): the gate refuses a restore with 503 rather
     // than admitting one that its own model says cannot fit. Flooring to one
@@ -249,16 +261,13 @@ async function bootstrap() {
     // replica serves.
     backupRestoreLimit * PEAK_MULTIPLE,
     (message) => bootstrapLogger.warn(`Restore upload refused: ${message}`),
+    undefined,
+    // Authorization ahead of the reservation (DR-F3RB-003): a request with no
+    // ticket is refused 403 having claimed no memory at all. The ticket comes
+    // from POST /api/v1/backup/restore/ticket, which is behind the JWT guard.
+    // 403 rather than 401 on purpose -- see restore-upload-ticket.ts.
+    createRestoreTicketAuthorizer(process.env.JWT_SECRET),
   );
-  app.use("/api/v1/backup/restore", restoreAdmission.middleware);
-  app.use(
-    "/api/v1/backup/restore",
-    express.raw({
-      limit: backupRestoreLimit,
-      type: ["application/gzip", "application/octet-stream"],
-    }),
-  );
-
   // Default body size limit for regular endpoints (QIF imports, etc.).
   // Skip body parsing for /oauth/* so node-oidc-provider parses requests
   // itself — otherwise it logs "already parsed request body detected" on
@@ -395,11 +404,39 @@ async function bootstrap() {
         "X-CSRF-Token",
         "X-Restore-Password",
         "X-Restore-OIDC-Token",
+        // Sent by the client on an encrypted restore whose backup password
+        // differs from the login one. Missing here, that restore died at the
+        // preflight -- the same argument as the ticket header below, and a gap
+        // that predates it.
+        "X-Backup-Password",
+        // Without this a cross-origin restore upload never leaves the browser:
+        // the preflight refuses the header, so the upload is "blocked by CORS"
+        // rather than refused with the 403 that says what to do.
+        "X-Restore-Upload-Ticket",
         "Mcp-Session-Id",
       ],
       exposedHeaders: ["Mcp-Session-Id"],
     });
   });
+
+  // The restore mount goes AFTER CORS, and that ordering is the point: the
+  // admission middleware below answers requests itself (403 with no ticket, 413
+  // oversized, 503 out of budget or out of headroom, 408 on a body that never
+  // arrived). A response written from inside the middleware chain with no
+  // Access-Control-Allow-Origin reaches a cross-origin browser as an opaque CORS
+  // failure instead of the actionable status it is. What it must stay ahead of is
+  // express.raw below -- that is the allocation it exists to refuse. The generic
+  // JSON and urlencoded parsers are mounted earlier and pass these requests
+  // straight through: they match on content type, and a restore body is
+  // application/gzip or application/octet-stream.
+  app.use("/api/v1/backup/restore", restoreAdmission.middleware);
+  app.use(
+    "/api/v1/backup/restore",
+    express.raw({
+      limit: backupRestoreLimit,
+      type: ["application/gzip", "application/octet-stream"],
+    }),
+  );
 
   // Global validation pipe
   app.useGlobalPipes(

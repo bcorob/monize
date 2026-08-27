@@ -27,6 +27,8 @@
     "loanRequiresInstitution": "Les comptes de prêt nécessitent un nom d'établissement",
     "mortgageRequiredFields": "Les comptes hypothécaires nécessitent mortgagePaymentFrequency, paymentStartDate, sourceAccountId et amortizationMonths",
     "mortgageRequiresInterestRate": "Les comptes hypothécaires nécessitent un taux d'intérêt",
+    "mortgageFrequencyUnsupported": "Les prêts hypothécaires canadiens ne peuvent pas être planifiés à une fréquence de paiement {frequency}",
+    "paymentFrequencyUnsupported": "Une fréquence de paiement {frequency} ne peut pas être planifiée",
     "mortgageRequiresInstitution": "Les comptes hypothécaires nécessitent un nom d'établissement",
     "onlyMortgageAccounts": "Cette opération n'est valide que pour les comptes hypothécaires",
     "updateRateClosed": "Impossible de mettre à jour le taux d'un compte fermé",
@@ -193,13 +195,16 @@
     "reauthUnavailable": "Terminez la configuration du mot de passe de votre compte avant de restaurer une sauvegarde.",
     "supportPasswordRequired": "Une sauvegarde de support doit être chiffrée : fournissez un mot de passe.",
     "passwordHeaderNotBase64": "L'en-tête {header} doit être encodé en base64.",
-    "decompressTooLarge": "La sauvegarde est trop volumineuse pour être restaurée : décompressée, elle dépasse la limite configurée de {limit} octets. Augmentez BACKUP_RESTORE_EXPANDED_LIMIT s'il s'agit d'une sauvegarde légitime.",
+    "decompressTooLarge": "La sauvegarde est trop volumineuse pour être restaurée : décompressée, elle dépasse la limite de {limit} octets de ce déploiement. Ce plafond est dérivé de la mémoire du conteneur et d'un coût mesuré par octet ; l'augmenter seul décrit une restauration que le processus ne peut pas terminer -- augmentez plutôt la limite de mémoire du conteneur (Kubernetes : backend.resources.limits.memory).",
     "exportTooLarge": "Cette sauvegarde est trop volumineuse pour être produite d'un seul bloc (au-delà de {limit} octets à la table \"{table}\"). Les sauvegardes automatiques et de support doivent être conservées en mémoire ; téléchargez une sauvegarde manuelle, qui diffuse, ou augmentez BACKUP_EXPORT_BUFFER_LIMIT.",
     "supportExportTooLarge": "Cette sauvegarde de support représenterait {{ size }} Mio de JSON, au-delà de la limite de {{ limit }} Mio. Restreignez-la avec une sélection de comptes ou une plage de dates, ou augmentez BACKUP_EXPORT_BUFFER_LIMIT.",
     "folderUnusable": "Le dossier \"{{ path }}\" ne peut pas être utilisé comme répertoire ({{ reason }}).",
     "folderOutsideAllowedRoots": "Le dossier de sauvegarde \"{path}\" se trouve en dehors des racines autorisées ({roots}). Définissez BACKUP_ALLOWED_ROOTS pour l'autoriser.",
     "noBackupStorage": "Cette installation n'a aucun stockage de sauvegarde inscriptible : {{ safePath }} n'existe pas et ne peut pas être créé ({{ reason }}). Montez-y un volume (Docker : bind mount ou volume nommé ; Kubernetes : définissez backend.persistence.backups dans le chart Helm) puis réessayez.",
-    "restoreNoMemoryHeadroom": "Cette installation n'a pas de marge mémoire pour une restauration : le pic modélisé d'une restauration ne tient pas dans le conteneur. Augmentez la limite mémoire du conteneur ou réduisez BACKUP_RESTORE_EXPANDED_LIMIT."
+    "restoreNoMemoryHeadroom": "Cette installation n'a pas de marge mémoire pour une restauration : le pic modélisé d'une restauration ne tient pas dans le conteneur. Augmentez la limite mémoire du conteneur ou réduisez BACKUP_RESTORE_EXPANDED_LIMIT.",
+    "restoreQueueFull": "Trop de restaurations attendent déjà la capacité de restauration de ce déploiement. Réessayez dans un instant.",
+    "restoreQueueWaitTimeout": "Délai dépassé en attendant la capacité de restauration : une autre restauration est encore en cours. Réessayez dans un instant.",
+    "restoreTicketUnavailable": "Ce déploiement ne peut pas autoriser les téléversements de restauration."
   },
   "budgets": {
     "notFound": "Budget avec l'ID {{ id }} introuvable",

@@ -6,6 +6,11 @@
     "summaryActiveBills": "सक्रिय बिल",
     "summaryActiveDeposits": "सक्रिय जमा",
     "summaryMonthlyNet": "मासिक शुद्ध",
+    "summaryAmountUnavailable": "उपलब्ध नहीं",
+    "summaryNetRatesUnavailable": "विनिमय दरें अभी उपलब्ध नहीं हैं, इसलिए शुद्ध राशि तय नहीं की जा सकती।",
+    "summaryNetMissingRates": "{currencies} के लिए कोई विनिमय दर नहीं — मुद्राएं में एक जोड़ें",
+    "summaryNetMissingRatesAndUnpriceable": "{currencies} के लिए कोई विनिमय दर नहीं, और एक या अधिक शेड्यूल की राशि तय नहीं की जा सकी।",
+    "summaryNetUnpriceable": "एक या अधिक शेड्यूल की राशि तय नहीं की जा सकी",
     "summaryDueNow": "अभी देय",
     "loadingText": "निर्धारित लेनदेन लोड हो रहे हैं...",
     "chartUnavailable": "चार्ट अस्थायी रूप से अनुपलब्ध"

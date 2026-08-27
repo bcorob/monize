@@ -245,20 +245,24 @@ describe('InvestmentValueChart', () => {
   it('passes accountIds to API when provided', async () => {
     render(<InvestmentValueChart accountIds={['acc-1', 'acc-2']} />);
     await screen.findByText('Portfolio Value Over Time');
-    expect(netWorthApi.getInvestmentsDaily).toHaveBeenCalledWith(
-      expect.objectContaining({
-        accountIds: 'acc-1,acc-2',
-      })
+    await waitFor(() =>
+      expect(netWorthApi.getInvestmentsDaily).toHaveBeenCalledWith(
+        expect.objectContaining({
+          accountIds: 'acc-1,acc-2',
+        })
+      )
     );
   });
 
   it('does not pass accountIds when empty array', async () => {
     render(<InvestmentValueChart accountIds={[]} />);
     await screen.findByText('Portfolio Value Over Time');
-    expect(netWorthApi.getInvestmentsDaily).toHaveBeenCalledWith(
-      expect.objectContaining({
-        accountIds: undefined,
-      })
+    await waitFor(() =>
+      expect(netWorthApi.getInvestmentsDaily).toHaveBeenCalledWith(
+        expect.objectContaining({
+          accountIds: undefined,
+        })
+      )
     );
   });
 
@@ -287,15 +291,21 @@ describe('InvestmentValueChart', () => {
     });
     render(<InvestmentValueChart />);
     await screen.findByText('Portfolio Value Over Time');
-    expect(investmentsApi.getIntradayValue).toHaveBeenCalledWith(
-      expect.objectContaining({ range: '1m' }),
+    await waitFor(() =>
+      expect(investmentsApi.getIntradayValue).toHaveBeenCalledWith(
+        expect.objectContaining({ range: '1m' }),
+      )
     );
     // The daily endpoint is still reached, but only for the prior-close
     // baseline -- its window ends the day before the chart's first point, so
     // none of the plotted series comes from it.
-    expect(netWorthApi.getInvestmentsDaily).toHaveBeenCalledTimes(1);
-    expect(netWorthApi.getInvestmentsDaily).toHaveBeenCalledWith(
-      expect.objectContaining({ endDate: '2023-12-31' }),
+    await waitFor(() =>
+      expect(netWorthApi.getInvestmentsDaily).toHaveBeenCalledTimes(1)
+    );
+    await waitFor(() =>
+      expect(netWorthApi.getInvestmentsDaily).toHaveBeenCalledWith(
+        expect.objectContaining({ endDate: '2023-12-31' }),
+      )
     );
   });
 
@@ -338,7 +348,9 @@ describe('InvestmentValueChart', () => {
   it('uses daily API for 1y range (DAILY_RANGES)', async () => {
     render(<InvestmentValueChart />);
     await screen.findByText('Portfolio Value Over Time');
-    expect(netWorthApi.getInvestmentsDaily).toHaveBeenCalled();
+    await waitFor(() =>
+      expect(netWorthApi.getInvestmentsDaily).toHaveBeenCalled()
+    );
     expect(netWorthApi.getInvestmentsMonthly).not.toHaveBeenCalled();
   });
 
@@ -347,7 +359,9 @@ describe('InvestmentValueChart', () => {
     dateRangeState.resolvedRange = { start: '2022-01-01', end: '2024-01-01' };
     render(<InvestmentValueChart />);
     await screen.findByText('Portfolio Value Over Time');
-    expect(netWorthApi.getInvestmentsDaily).toHaveBeenCalled();
+    await waitFor(() =>
+      expect(netWorthApi.getInvestmentsDaily).toHaveBeenCalled()
+    );
     expect(netWorthApi.getInvestmentsMonthly).not.toHaveBeenCalled();
   });
 
@@ -368,14 +382,20 @@ describe('InvestmentValueChart', () => {
     });
     render(<InvestmentValueChart />);
     await screen.findByText('Portfolio Value Over Time');
-    expect(investmentsApi.getIntradayValue).toHaveBeenCalledWith(
-      expect.objectContaining({ range: '1d' }),
+    await waitFor(() =>
+      expect(investmentsApi.getIntradayValue).toHaveBeenCalledWith(
+        expect.objectContaining({ range: '1d' }),
+      )
     );
     // As above: the only daily call is the prior-close baseline, whose window
     // ends the day before the session on screen.
-    expect(netWorthApi.getInvestmentsDaily).toHaveBeenCalledTimes(1);
-    expect(netWorthApi.getInvestmentsDaily).toHaveBeenCalledWith(
-      expect.objectContaining({ endDate: '2024-01-01' }),
+    await waitFor(() =>
+      expect(netWorthApi.getInvestmentsDaily).toHaveBeenCalledTimes(1)
+    );
+    await waitFor(() =>
+      expect(netWorthApi.getInvestmentsDaily).toHaveBeenCalledWith(
+        expect.objectContaining({ endDate: '2024-01-01' }),
+      )
     );
   });
 
@@ -520,7 +540,9 @@ describe('InvestmentValueChart', () => {
 
       // From 9000, not from the 10000 first point.
       await waitFor(() => expect(card('Change')).toContain('+$2000.00'));
-      expect(netWorthApi.getInvestmentsDaily).toHaveBeenCalled();
+      await waitFor(() =>
+        expect(netWorthApi.getInvestmentsDaily).toHaveBeenCalled()
+      );
     });
 
     it('still measures a long range from the first point plotted', async () => {
@@ -532,9 +554,13 @@ describe('InvestmentValueChart', () => {
       await screen.findByText('Portfolio Value Over Time');
       await waitFor(() => expect(card('Change')).toContain('+$5000.00'));
       // One call, for the chart itself -- no baseline lookup.
-      expect(netWorthApi.getInvestmentsDaily).toHaveBeenCalledTimes(1);
-      expect(netWorthApi.getInvestmentsDaily).toHaveBeenCalledWith(
-        expect.objectContaining({ endDate: '2024-01-01' }),
+      await waitFor(() =>
+        expect(netWorthApi.getInvestmentsDaily).toHaveBeenCalledTimes(1)
+      );
+      await waitFor(() =>
+        expect(netWorthApi.getInvestmentsDaily).toHaveBeenCalledWith(
+          expect.objectContaining({ endDate: '2024-01-01' }),
+        )
       );
     });
 
@@ -549,14 +575,25 @@ describe('InvestmentValueChart', () => {
       vi.setSystemTime(new Date(2026, 7, 12));
       try {
         render(<InvestmentValueChart />);
-        await vi.waitFor(() =>
-          expect(netWorthApi.getInvestmentsDaily).toHaveBeenCalled(),
-        );
+        // Not `vi.waitFor`: it polls outside act, so the state the response
+        // sets commits outside it and the assertions below read a tree React
+        // has not finished with. Draining the fake clock inside `act` settles
+        // the request and its render together. RTL's own `waitFor` is not the
+        // way out either -- it cannot drive Vitest's fake timers.
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(1000);
+        });
+        // Bare, not `waitFor`: the fake clock is still installed here and RTL's
+        // `waitFor` cannot drive it, so it would hang until the test times out.
+        // The act-wrapped drain above is this assertion's barrier.
+        expect(netWorthApi.getInvestmentsDaily).toHaveBeenCalled();
       } finally {
         vi.useRealTimers();
       }
-      expect(netWorthApi.getInvestmentsDaily).toHaveBeenCalledWith(
-        expect.objectContaining({ startDate: '2025-08-11' }),
+      await waitFor(() =>
+        expect(netWorthApi.getInvestmentsDaily).toHaveBeenCalledWith(
+          expect.objectContaining({ startDate: '2025-08-11' }),
+        )
       );
     });
   });
@@ -819,7 +856,9 @@ describe('InvestmentValueChart', () => {
     ]);
     render(<InvestmentValueChart />);
     await screen.findByText('Portfolio Value Over Time');
-    expect(netWorthApi.getInvestmentsMonthly).toHaveBeenCalled();
+    await waitFor(() =>
+      expect(netWorthApi.getInvestmentsMonthly).toHaveBeenCalled()
+    );
     expect(netWorthApi.getInvestmentsDaily).not.toHaveBeenCalled();
   });
 
@@ -838,16 +877,20 @@ describe('InvestmentValueChart', () => {
   it('passes displayCurrency to API when it differs from defaultCurrency', async () => {
     render(<InvestmentValueChart displayCurrency="USD" />);
     await screen.findByText('Portfolio Value Over Time');
-    expect(netWorthApi.getInvestmentsDaily).toHaveBeenCalledWith(
-      expect.objectContaining({ displayCurrency: 'USD' }),
+    await waitFor(() =>
+      expect(netWorthApi.getInvestmentsDaily).toHaveBeenCalledWith(
+        expect.objectContaining({ displayCurrency: 'USD' }),
+      )
     );
   });
 
   it('does not pass displayCurrency to API when it matches defaultCurrency', async () => {
     render(<InvestmentValueChart displayCurrency="CAD" />);
     await screen.findByText('Portfolio Value Over Time');
-    expect(netWorthApi.getInvestmentsDaily).toHaveBeenCalledWith(
-      expect.objectContaining({ displayCurrency: undefined }),
+    await waitFor(() =>
+      expect(netWorthApi.getInvestmentsDaily).toHaveBeenCalledWith(
+        expect.objectContaining({ displayCurrency: undefined }),
+      )
     );
   });
 
@@ -1000,7 +1043,9 @@ describe('InvestmentValueChart', () => {
     ]);
     render(<InvestmentValueChart />);
     await screen.findByText('Portfolio Value Over Time');
-    expect(netWorthApi.getInvestmentsMonthly).toHaveBeenCalled();
+    await waitFor(() =>
+      expect(netWorthApi.getInvestmentsMonthly).toHaveBeenCalled()
+    );
     expect(netWorthApi.getInvestmentsDaily).not.toHaveBeenCalled();
   });
 
@@ -1018,8 +1063,10 @@ describe('InvestmentValueChart', () => {
     });
     render(<InvestmentValueChart displayCurrency="USD" />);
     await screen.findByText('Portfolio Value Over Time');
-    expect(investmentsApi.getIntradayValue).toHaveBeenCalledWith(
-      expect.objectContaining({ displayCurrency: 'USD' }),
+    await waitFor(() =>
+      expect(investmentsApi.getIntradayValue).toHaveBeenCalledWith(
+        expect.objectContaining({ displayCurrency: 'USD' }),
+      )
     );
   });
 

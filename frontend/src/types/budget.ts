@@ -274,7 +274,19 @@ export interface BudgetSummary {
 export interface UpcomingBill {
   id: string;
   name: string;
-  amount: number;
+  /**
+   * What this occurrence would cost today, as a positive magnitude, from the
+   * server's effective-amount contract. `null` when it cannot be determined --
+   * never the persisted snapshot (issue #1247).
+   */
+  amount: number | null;
+  /**
+   * The currency `amount` is in -- the occurrence's own settlement currency,
+   * which need not be the budget's. Half of what the amount means: formatting a
+   * figure without it prints a CAD bill under a USD symbol.
+   */
+  currencyCode: string;
+  amountComplete: boolean;
   dueDate: string;
   categoryId: string | null;
 }
@@ -284,15 +296,31 @@ export interface BudgetVelocity {
   projectedTotal: number;
   budgetTotal: number;
   projectedVariance: number;
-  safeDailySpend: number;
+  /** `null` when `trulyAvailable` is unknown -- it is derived from it. */
+  safeDailySpend: number | null;
   daysElapsed: number;
   daysRemaining: number;
   totalDays: number;
   currentSpent: number;
   paceStatus: 'under' | 'on_track' | 'over';
   upcomingBills: UpcomingBill[];
-  totalUpcomingBills: number;
-  trulyAvailable: number;
+  /**
+   * `null` when any upcoming bill's current amount is unknown (issue #1247):
+   * `knownUpcomingBillsSubtotal` then holds what did resolve, and
+   * `upcomingBillsComplete` is false. Render the null as unavailable; a
+   * `?? 0` here is the defect this field exists to prevent.
+   */
+  totalUpcomingBills: number | null;
+  knownUpcomingBillsSubtotal: number;
+  upcomingBillsComplete: boolean;
+  /**
+   * The currency pairs a bill could not be converted through, so a withheld
+   * total can say why. Empty when the shortfall was an occurrence with no
+   * resolvable amount at all -- that one has no pair to name.
+   */
+  upcomingBillsMissingRates: string[];
+  /** `null` when the upcoming-bills total is unknown. */
+  trulyAvailable: number | null;
 }
 
 // --- Report Types ---

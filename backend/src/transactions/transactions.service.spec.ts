@@ -2590,8 +2590,13 @@ describe("TransactionsService", () => {
       // also matched so the list agrees with the account-detail breakdown.
       expect(mockQb.orWhere).toHaveBeenCalledWith(
         expect.stringContaining(
-          "transaction.isSplit = true AND transaction.isTransfer = false AND account.accountType != 'INVESTMENT' AND splits.categoryId IS NULL AND splits.transferAccountId IS NULL",
+          "transaction.isSplit = true AND transaction.isTransfer = false AND splits.categoryId IS NULL AND splits.transferAccountId IS NULL",
         ),
+      );
+      // An investment line embedded in a split has no category by definition,
+      // so it is not what "uncategorised" means (issue #1257).
+      expect(mockQb.orWhere).toHaveBeenCalledWith(
+        expect.stringContaining("its.transaction_split_id = splits.id"),
       );
     });
 

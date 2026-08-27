@@ -22,25 +22,34 @@ export function useTransactionSelection(
   transactions: Transaction[],
   totalMatching: number,
   currentFilters: BulkUpdateFilters,
+  // The criteria the *user* chose, as a stable string. The selection resets on
+  // this and never on `currentFilters`, because `currentFilters` carries a
+  // scope the page derives from data that is still loading -- see the effect
+  // below. Required (not defaulted to `currentFilters`) so a call site has to
+  // decide which of the two it means.
+  userFilterKey: string,
 ): UseTransactionSelectionReturn {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [excludedIds, setExcludedIds] = useState<Set<string>>(new Set());
   const [selectAllMatching, setSelectAllMatching] = useState(false);
 
-  // Track filter changes to clear selection
-  const filtersRef = useRef(currentFilters);
+  // Clear the selection when the user changes what they are filtering by.
+  //
+  // This keys off `userFilterKey`, never off `currentFilters`. `currentFilters`
+  // is the resolved scope the server payload needs, and its account list falls
+  // back to every visible account -- so it changes the moment the accounts
+  // request lands. That is data arriving, not the user changing a filter, and
+  // clearing on it silently dropped a selection made while the page was still
+  // loading.
+  const filterKeyRef = useRef(userFilterKey);
   /* eslint-disable react-hooks/set-state-in-effect -- clearing selection when filters change */
   useEffect(() => {
-    const prev = filtersRef.current;
-    const changed =
-      JSON.stringify(prev) !== JSON.stringify(currentFilters);
-    if (changed) {
-      setSelectedIds(new Set());
-      setExcludedIds(new Set());
-      setSelectAllMatching(false);
-      filtersRef.current = currentFilters;
-    }
-  }, [currentFilters]);
+    if (filterKeyRef.current === userFilterKey) return;
+    filterKeyRef.current = userFilterKey;
+    setSelectedIds(new Set());
+    setExcludedIds(new Set());
+    setSelectAllMatching(false);
+  }, [userFilterKey]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
   // Clear individual selections on page change (but not selectAllMatching/excludedIds,
@@ -49,10 +58,16 @@ export function useTransactionSelection(
   const prevTransactionIdsKey = useRef(transactionIdsKey);
   /* eslint-disable react-hooks/set-state-in-effect -- clearing selection on page change */
   useEffect(() => {
-    if (prevTransactionIdsKey.current !== transactionIdsKey && !selectAllMatching) {
+    const prev = prevTransactionIdsKey.current;
+    prevTransactionIdsKey.current = transactionIdsKey;
+    // An empty row set is not a page the user could have navigated away from,
+    // so rows arriving into one is a load finishing, not a page change.
+    // Clearing there drops a selection that outlived an empty or failed load,
+    // and there is no page it could be stale against.
+    if (prev === '') return;
+    if (prev !== transactionIdsKey && !selectAllMatching) {
       setSelectedIds(new Set());
     }
-    prevTransactionIdsKey.current = transactionIdsKey;
   }, [transactionIdsKey, selectAllMatching]);
   /* eslint-enable react-hooks/set-state-in-effect */
 

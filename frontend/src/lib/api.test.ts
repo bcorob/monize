@@ -227,6 +227,29 @@ describe('apiClient interceptors', () => {
       expect(mockAxiosGet).not.toHaveBeenCalled();
     });
 
+    /**
+     * Why the restore upload's ticket refusal is a 403 and not a 401. The upload
+     * body is the whole backup artifact, so a retry is a silent re-upload of it,
+     * and a failed refresh logs the user out mid-restore. This pins the property
+     * that choice depends on: a 403 that is not a CSRF error is handed back
+     * untouched, whatever route it came from.
+     */
+    it('does not re-upload a restore refused for a missing upload ticket', async () => {
+      const error = makeError({
+        config: { url: '/backup/restore', headers: {} },
+        response: {
+          status: 403,
+          data: {
+            message:
+              'A restore upload needs a current upload ticket. Request one from POST /api/v1/backup/restore/ticket and retry.',
+          },
+        },
+      });
+      await expect(responseHandlers.onRejected!(error)).rejects.toBe(error);
+      expect(clientCalls.length).toBe(0);
+      expect(mockAxiosPost).not.toHaveBeenCalled();
+    });
+
     it('refreshes token and retries on 401', async () => {
       mockAxiosPost.mockResolvedValue({});
       mockCookieGet.mockReturnValue('csrf-after-refresh');

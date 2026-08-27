@@ -65,6 +65,12 @@ that cannot must say so in the pull request.
 `required` means the invariant is not verified without it. `supporting` means it
 adds value but proves nothing on its own. `--` means not applicable.
 
+`required (not yet met)` is the one cell that is a statement about the code
+rather than about the test kind: the invariant needs that test and does not have
+it. It is spelled out because `--` reads as "nothing owed", and an acknowledged
+gap recorded as "not applicable" is a gap that disappears from the audit --
+INV-LOAN-002's entry names the missing source scan while its row said `--`.
+
 | Invariant | Unit | Source scan | PG integration | Two connections | Two instances | Failpoint | Provider | E2E |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | INV-IMPORT-001 one active import | supporting | -- | required | **required** | required | supporting | -- | optional |
@@ -77,8 +83,15 @@ adds value but proves nothing on its own. `--` means not applicable.
 | INV-REDEEM-001 accrued interest | required | **required** | required | -- | -- | -- | -- | optional |
 | INV-RECONCILE-001 reconciled lock | supporting | **required** | required | required | -- | -- | -- | optional |
 | INV-FX-001 no 1:1 fallback | **required** | **required** | required | -- | -- | required | optional | required |
+| INV-REPORT-001 report account scope | supporting | **required** | **required** | -- | -- | -- | -- | optional |
+| INV-LOAN-001 overpayment cadence | **required** | -- | -- | -- | -- | -- | -- | optional |
+| INV-LOAN-002 no truncated total | **required** | **required** (not yet met) | -- | -- | -- | -- | -- | optional |
+| INV-LOAN-003 compounding convention | **required** | **required** | -- | -- | -- | -- | -- | -- |
+| INV-LOAN-004 residual final payment | **required** | -- | -- | -- | -- | -- | -- | -- |
+| INV-LOAN-005 first payment is payment 1 | **required** | **required** | -- | -- | -- | -- | -- | -- |
 | INV-OCCURRENCE-001 one effect | supporting | -- | required | required | **required** | required | -- | required |
 | INV-OCCURRENCE-002 override price | required | -- | -- | -- | -- | -- | -- | required |
+| INV-OCCURRENCE-003 one effective occurrence | **required** | **required** | -- | -- | -- | -- | optional | optional |
 | INV-CLAIM-001 single-use claim | supporting | -- | required | **required** | optional | optional | -- | required |
 | INV-AUTH-001 refresh rotation | supporting | -- | required | **required** | -- | -- | -- | optional |
 | INV-AUTH-002 login counter | supporting | -- | required | **required** | -- | -- | -- | -- |
@@ -157,9 +170,14 @@ count.** `test:integration` previously carried an unconditional
 `--passWithNoTests`, so a renamed directory or an edited `testPathPatterns` regex
 turned a discovery failure into a green check across all six kinds at once. That
 flag has since been removed from `backend/package.json`, so an empty match now
-exits non-zero and fails the job. What is still owed is the weaker guard against a
-regex that matches *some* suites but silently drops a class: nothing asserts that
-the number of suites under `backend/test/integration/` does not shrink.
+exits non-zero and fails the job, and
+`backend/src/common/jest-config.guard.spec.ts` fails if the flag reappears on
+any tracked surface that can start a runner -- manifest, runner config,
+workflow, shell script or Dockerfile -- in every spelling the runners accept. What is still owed is the weaker guard against a regex that matches *some*
+suites but silently drops a class: that guard asserts every tracked suite under
+`backend/test/integration/` is discoverable by `test/jest-e2e.json`, but nothing
+asserts what the runner executed, and the CLI `--testPathPatterns` filter is
+outside its model.
 `docs/release-integrity.md` REL-001 and REL-002 cover the history and the
 consequence, which is a verification one, not merely CI hygiene.
 
@@ -265,6 +283,13 @@ differences produce failures that look like regressions and are not.
   completed periods against fixtures; under another offset they land on the wrong
   side of a boundary. `insights-aggregator.service.spec.ts` and
   `net-worth.service.spec.ts` are the ones that bite.
+- `npm test` in `backend/` runs `test:unit && test:integration` -- the two CI
+  commands above, in that order, never concurrently. The integration suites share
+  one `monize_test` and rebuild its schema (`synchronize` + `dropSchema`), so a
+  second Jest worker is a race rather than a speedup: the parallel config pins
+  `roots: ["<rootDir>/src"]` and `test/jest-e2e.json` pins `maxWorkers: 1`, both
+  asserted by `backend/src/common/jest-config.guard.spec.ts`. The default command
+  therefore needs a reachable PostgreSQL; `npm run test:unit` is the offline path.
 - `--workers=1` for the whole E2E suite. `playwright.config.ts` sets one worker
   only when `CI` is set, and `e2e/tests/zz-danger-zone.spec.ts` deletes the
   shared account -- the `zz-` prefix orders it last, which only means anything

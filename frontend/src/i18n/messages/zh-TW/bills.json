@@ -6,6 +6,11 @@
     "summaryActiveBills": "有效帳單",
     "summaryActiveDeposits": "有效存款",
     "summaryMonthlyNet": "每月淨額",
+    "summaryAmountUnavailable": "不可用",
+    "summaryNetRatesUnavailable": "目前無法取得匯率，因此無法計算淨額。",
+    "summaryNetMissingRates": "沒有 {currencies} 的匯率 — 請在「貨幣」中新增",
+    "summaryNetMissingRatesAndUnpriceable": "沒有 {currencies} 的匯率，且有一個或多個排程無法計算金額。",
+    "summaryNetUnpriceable": "一個或多個排程無法計算金額",
     "summaryDueNow": "即將到期",
     "loadingText": "正在載入排程交易...",
     "chartUnavailable": "圖表暫時無法使用"

@@ -20,6 +20,7 @@ import {
   ForecastRiskFlag,
   ForecastKeyExpense,
 } from "./dto/ai-forecast.dto";
+import { preferredCurrency } from "../../common/default-currency.util";
 
 const MIN_FORECAST_INTERVAL_HOURS = 6;
 const DEFAULT_FORECAST_MONTHS = 3;
@@ -52,7 +53,7 @@ export class AiForecastService {
         where: { userId },
       }),
     );
-    const currency = preferences?.defaultCurrency || "USD";
+    const currency = preferredCurrency(preferences);
 
     let aggregates: ForecastAggregates;
     try {
@@ -198,10 +199,26 @@ export class AiForecastService {
 
     sections.push("\n--- SCHEDULED/RECURRING FUTURE TRANSACTIONS ---");
     for (const st of aggregates.scheduledTransactions.slice(0, 20)) {
-      const type = st.isIncome ? "INCOME" : "EXPENSE";
+      // An occurrence whose direction the server could not derive is stated as
+      // such: a mixed-sign split with an unpriceable investment line posts on
+      // either side of zero, and "EXPENSE" would be a guess the model then
+      // reasons from (issue #1247 re-audit).
+      const type =
+        st.isIncome === null
+          ? "DIRECTION UNKNOWN"
+          : st.isIncome
+            ? "INCOME"
+            : "EXPENSE";
       if (!st.isTransfer) {
+        // An amount the server could not resolve is stated as unknown rather
+        // than quoted from the persisted snapshot, which was calculated at an
+        // older exchange rate (issue #1247).
+        const amount =
+          st.amount === null
+            ? "unknown (no current exchange rate)"
+            : st.amount.toFixed(2);
         sections.push(
-          `${sanitizePromptValue(st.name)}: ${st.amount.toFixed(2)} (${st.frequency}, next: ${st.nextDueDate}, ${type}, category: ${sanitizePromptValue(st.categoryName || "unknown")})`,
+          `${sanitizePromptValue(st.name)}: ${amount} (${st.frequency}, next: ${st.nextDueDate}, ${type}, category: ${sanitizePromptValue(st.categoryName || "unknown")})`,
         );
       }
     }

@@ -210,6 +210,7 @@
     "frequencyOptions": {
       "weekly": "Mingguan",
       "biweekly": "Setiap 2 Minggu",
+      "semiMonthly": "Dua Kali Sebulan",
       "monthly": "Bulanan",
       "quarterly": "Kuartalan",
       "yearly": "Tahunan"
@@ -308,12 +309,13 @@
     "previewFirstInterest": "Bunga Pembayaran Pertama:",
     "previewTotalPayments": "Total Pembayaran:",
     "previewTotalInterest": "Total Bunga:",
+    "previewFinalPayment": "Pembayaran terakhir:",
     "previewPayoffDate": "Est. Tanggal Pelunasan:",
     "previewNA": "T/A",
     "calculatingPreview": "Menghitung pratinjau...",
     "frequencyOptions": {
       "monthly": "Bulanan",
-      "semiMonthly": "Dua Kali Sebulan (tgl 1 & 15)",
+      "semiMonthly": "Dua Kali Sebulan (tanggal 15 & akhir bulan)",
       "biweekly": "Dua Mingguan",
       "acceleratedBiweekly": "Dua Mingguan Dipercepat",
       "weekly": "Mingguan",
@@ -367,6 +369,7 @@
       "WEEKLY": "Mingguan",
       "BIWEEKLY": "Dua mingguan",
       "SEMI_MONTHLY": "Dua kali sebulan",
+      "SEMIMONTHLY": "Dua kali sebulan",
       "MONTHLY": "Bulanan",
       "QUARTERLY": "Triwulanan",
       "YEARLY": "Tahunan",
@@ -436,7 +439,8 @@
         "effect": "→ menghemat {interest}, pelunasan {date}",
         "alreadyMet": "Sudah tercapai tanpa pembayaran ekstra.",
         "unreachableInterest": "Tidak terjangkau — pembayaran ekstra yang sangat besar pun tidak dapat menghemat bunga sebanyak itu.",
-        "unreachableDate": "Tidak terjangkau — bulan itu lebih awal dari pelunasan tercepat yang mungkin."
+        "unreachableDate": "Tidak terjangkau — bulan itu lebih awal dari pelunasan tercepat yang mungkin.",
+        "baselineIncomplete": "Pinjaman ini tidak lunas dalam periode proyeksi, jadi tidak ada total bunga sebagai titik awal perhitungan."
       },
       "simulationTypeLabel": "Jenis simulasi",
       "overpaymentAmount": "Jumlah pembayaran ekstra",
@@ -463,6 +467,7 @@
       "interestSaved": "Bunga yang Dihemat",
       "totalExtraContributed": "Total Pembayaran Tambahan",
       "beyondProjection": "Di luar proyeksi",
+      "unknown": "Tidak diketahui",
       "newInstallment": "Angsuran Baru",
       "installmentDrop": "{payment} (−{reduction})",
       "monthlyPayment": "Pembayaran bulanan",
@@ -505,7 +510,9 @@
       "colOverpayment": "Pembayaran ekstra",
       "overpaymentWithFrequency": "{amount} ({frequency})",
       "loadAria": "Muat skenario \"{name}\"",
-      "budgetSummary": "Anggaran {amount}/bulan"
+      "budgetSummary": "Anggaran {amount}/bulan",
+      "chartExcludedUnknown": "{count, plural, other {# skenario tidak ditampilkan: penghematan bunganya tidak diketahui.}}",
+      "chartNeedsTwoKnown": "Grafik perbandingan memerlukan setidaknya dua skenario dengan penghematan bunga yang diketahui."
     },
     "scenarioChart": {
       "title": "Perbandingan skenario",

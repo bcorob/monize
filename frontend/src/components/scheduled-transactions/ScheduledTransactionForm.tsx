@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useRef, MutableRefObject } from 'react';
 import { useForm, Controller, Resolver } from 'react-hook-form';
 import '@/lib/zodConfig';
+import { MAX_REMINDER_DAYS_BEFORE } from '@/lib/scheduled-reminder-bounds';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
@@ -87,7 +88,16 @@ const buildScheduledTransactionSchema = (t: (key: string) => string) => z.object
   occurrencesRemaining: optionalNumber,
   isActive: z.boolean().default(true),
   autoPost: z.boolean().default(false),
-  reminderDaysBefore: z.number().min(0).default(3),
+  // Bounded like the server bounds it: the value reaches a date computation, and
+  // an out-of-range one used to come back as a raw 400 from a form that had
+  // happily accepted it (issue #1247 review).
+  reminderDaysBefore: z
+    .number()
+    .min(0)
+    .max(MAX_REMINDER_DAYS_BEFORE, {
+      message: `Must be ${MAX_REMINDER_DAYS_BEFORE} days or fewer`,
+    })
+    .default(3),
 });
 
 type ScheduledTransactionFormData = z.infer<ReturnType<typeof buildScheduledTransactionSchema>>;
@@ -1523,6 +1533,7 @@ export function ScheduledTransactionForm({
                   label={t('form.remindDaysBeforeLabel')}
                   decimalPlaces={0}
                   min={0}
+                  max={MAX_REMINDER_DAYS_BEFORE}
                   error={errors.reminderDaysBefore?.message}
                   value={field.value}
                   onChange={field.onChange}
@@ -1672,6 +1683,7 @@ export function ScheduledTransactionForm({
                   label={t('form.remindDaysBeforeLabel')}
                   decimalPlaces={0}
                   min={0}
+                  max={MAX_REMINDER_DAYS_BEFORE}
                   error={errors.reminderDaysBefore?.message}
                   value={field.value}
                   onChange={field.onChange}
@@ -1808,6 +1820,7 @@ export function ScheduledTransactionForm({
                   label={t('form.remindDaysBeforeLabel')}
                   decimalPlaces={0}
                   min={0}
+                  max={MAX_REMINDER_DAYS_BEFORE}
                   error={errors.reminderDaysBefore?.message}
                   value={field.value}
                   onChange={field.onChange}
@@ -1997,6 +2010,7 @@ export function ScheduledTransactionForm({
                   label={t('form.remindDaysBeforeLabel')}
                   decimalPlaces={0}
                   min={0}
+                  max={MAX_REMINDER_DAYS_BEFORE}
                   error={errors.reminderDaysBefore?.message}
                   value={field.value}
                   onChange={field.onChange}

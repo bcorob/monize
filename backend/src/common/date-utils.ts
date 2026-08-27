@@ -15,6 +15,34 @@ export function formatDateYMD(date: Date): string {
 }
 
 /**
+ * A `Date` at LOCAL midnight on the calendar day `value` names.
+ *
+ * The shape a TypeORM `date` COLUMN needs. `DateUtils.mixedDateToDateString`
+ * serializes a `Date` with `getFullYear/getMonth/getDate` -- local components --
+ * so a UTC-midnight `Date` (which is what `new Date("2026-01-31")` gives you)
+ * is written to the column as 2026-01-30 anywhere west of Greenwich. Verified
+ * against TypeORM's own helper; a local-midnight `Date` and a plain
+ * `"YYYY-MM-DD"` string both round-trip correctly in every offset.
+ *
+ * This is the OPPOSITE requirement to `formatDateYMD`, which reads UTC
+ * components, so the two cannot share a convention: which one applies is decided
+ * by where the value is going, not by where it came from. A value bound for a
+ * `date` column goes through here; a value bound for a YMD string in a response
+ * or a DTO goes through `formatDateYMD`.
+ *
+ * Accepts either spelling of a calendar day: a `YYYY-MM-DD` string, an ISO
+ * timestamp (the day is taken from it), or a `Date` already carrying one.
+ */
+export function localDateForColumn(value: string | Date): Date {
+  const [year, month, day] = (
+    typeof value === "string" ? value.split("T")[0] : formatDateYMD(value)
+  )
+    .split("-")
+    .map(Number);
+  return new Date(year, month - 1, day);
+}
+
+/**
  * Format a Date object as YYYY-MM-DD using its LOCAL components.
  *
  * Use this for values derived from local-time arithmetic (e.g. `new Date()`
@@ -118,4 +146,18 @@ export function formatMonthKey(year: number, month: number): string {
  */
 export function isTransactionInFuture(transactionDate: string): boolean {
   return transactionDate > todayYMD();
+}
+
+/**
+ * Add whole days to a `YYYY-MM-DD` string, returning `YYYY-MM-DD`.
+ *
+ * Arithmetic in UTC on purpose: the input carries no time and no zone, so a
+ * local-time step would shift the day either side of a DST boundary.
+ */
+export function addDaysYMD(ymd: string, days: number): string {
+  const [y, m, d] = ymd.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + days);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${dt.getUTCFullYear()}-${p(dt.getUTCMonth() + 1)}-${p(dt.getUTCDate())}`;
 }

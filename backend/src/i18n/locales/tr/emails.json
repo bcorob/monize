@@ -18,6 +18,8 @@
     "colAmount": "Miktar",
     "typeIncome": "Gelir",
     "typeExpense": "Harcama",
+    "typeUnknown": "Yön bilinmiyor",
+    "amountUnavailable": "Tutar kullanılamıyor",
     "button": "Faturaları ve Mevduatları Görüntüle"
   },
   "mortgageReminder": {

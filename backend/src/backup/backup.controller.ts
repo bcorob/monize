@@ -10,6 +10,7 @@ import {
   HttpCode,
   HttpStatus,
   BadRequestException,
+  ServiceUnavailableException,
 } from "@nestjs/common";
 import { AuthGuard } from "@nestjs/passport";
 import {
@@ -27,6 +28,14 @@ import { SetBackupPasswordDto } from "./dto/backup-encryption.dto";
 import { DemoRestricted } from "../common/decorators/demo-restricted.decorator";
 import { tr } from "../i18n/translate";
 import { releaseRestoreReservation } from "./restore-upload-admission";
+import {
+  CLIENT_CLOSED_REQUEST,
+  RestoreQueueBusyException,
+} from "./restore-processing-gate";
+import {
+  RESTORE_TICKET_HEADER,
+  mintRestoreUploadTicket,
+} from "./restore-upload-ticket";
 
 /**
  * Drop trailing `=` padding without a regular expression.
@@ -162,6 +171,35 @@ export class BackupController {
     return this.supportBackupService.preview(req.user.id, dto);
   }
 
+  @Post("restore/ticket")
+  @DemoRestricted()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: "Mint a short-lived ticket authorizing one restore upload",
+    description:
+      "The restore upload's memory admission has to run in front of the body parser, which is in front of every Nest guard -- so it cannot authenticate the request it is budgeting for (DR-F3RB-003). This route can: it is ordinary authenticated JSON, and it hands back a signed ticket the admission middleware verifies before reserving anything. Without one, an upload is refused 403 having claimed no memory -- 403 rather than 401 because the session is fine and it is this request that carries no authorization, and because a client reads a 401 as an expired session and retries the whole upload.",
+  })
+  @ApiResponse({ status: 200, description: "Ticket minted" })
+  mintRestoreUploadTicket(@Request() req) {
+    const secret = process.env.JWT_SECRET;
+    if (!secret) {
+      // Startup refuses to run without it, so this is unreachable in a live
+      // deployment -- but a ticket signed with an empty key would be forgeable by
+      // anyone, so the failure has to be loud rather than convenient.
+      throw new ServiceUnavailableException(
+        tr(
+          "errors.backup.restoreTicketUnavailable",
+          "This deployment cannot authorize restore uploads.",
+        ),
+      );
+    }
+    const { ticket, expiresInSeconds } = mintRestoreUploadTicket(
+      req.user.id,
+      secret,
+    );
+    return { ticket, expiresInSeconds, header: RESTORE_TICKET_HEADER };
+  }
+
   @Post("restore")
   @DemoRestricted()
   @HttpCode(HttpStatus.OK)
@@ -189,7 +227,12 @@ export class BackupController {
   @ApiResponse({
     status: 503,
     description:
-      "Two different conditions, distinguishable by the header: the aggregate upload budget is occupied, which is transient and carries Retry-After; or modeled processing capacity is zero, which persists until an operator raises the container memory or lowers BACKUP_RESTORE_EXPANDED_LIMIT and carries no Retry-After. Contention for a slot while capacity is positive queues rather than answering 503.",
+      "Four conditions, and the header separates them into two kinds. Transient, carrying Retry-After: the aggregate upload budget is occupied; the processing queue is full (BACKUP_RESTORE_QUEUE_LIMIT); or the wait for a processing slot exceeded BACKUP_RESTORE_QUEUE_WAIT_MS. Persistent, carrying no Retry-After: modeled processing capacity is zero, which lasts until an operator raises the container memory or lowers BACKUP_RESTORE_EXPANDED_LIMIT. Contention for a slot while capacity is positive queues, up to the queue limit, rather than answering 503 immediately.",
+  })
+  @ApiResponse({
+    status: CLIENT_CLOSED_REQUEST,
+    description:
+      "The caller disconnected while queued for a processing slot, so the restore was never started. Nothing reads this response by construction; it exists so the access log distinguishes an abandoned wait from a fault. A disconnect after the slot is granted does NOT cancel the restore.",
   })
   async restoreBackup(@Request() req) {
     const body: unknown = req.body;
@@ -222,14 +265,40 @@ export class BackupController {
       "x-backup-password",
     );
 
+    // A restore that has to wait for a processing slot should not still run if
+    // the caller has hung up in the meantime -- the operation is destructive, and
+    // nobody is left to see its result (DR-F3RB-002). The signal bounds the wait
+    // only: `RestoreProcessingGate` unsubscribes when it grants the slot, so a
+    // disconnect during the restore itself changes nothing.
+    const response = req.res as Response | undefined;
+    const abandoned = new AbortController();
+    const onClose = () => {
+      if (response && !response.writableEnded) abandoned.abort();
+    };
+    response?.once("close", onClose);
+
     try {
       return await this.backupService.restoreData(req.user.id, {
         compressedData: body,
         password,
         oidcIdToken,
         backupPassword,
+        queueAbortSignal: abandoned.signal,
       });
+    } catch (error) {
+      // A Nest exception cannot set a header, and the difference between the two
+      // 503s on this route is exactly that header: this one is worth retrying,
+      // zero modeled capacity is not.
+      if (
+        error instanceof RestoreQueueBusyException &&
+        response &&
+        !response.headersSent
+      ) {
+        response.setHeader("Retry-After", String(error.retryAfterSeconds));
+      }
+      throw error;
     } finally {
+      response?.removeListener("close", onClose);
       // The upload's memory reservation is held from before the body was parsed
       // (see `createRestoreUploadAdmission`) and only the handler knows when the
       // expensive work is over. Releasing on the response socket closing instead

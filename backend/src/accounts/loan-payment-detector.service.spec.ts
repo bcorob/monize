@@ -911,6 +911,34 @@ describe("LoanPaymentDetectorService", () => {
       expect(result!.suggestedNextDueDate).toBe("2026-01-01");
     });
 
+    it("clamps a month-end monthly cadence instead of overflowing it", async () => {
+      // A detected next due date is a prediction about what the scheduler will
+      // post, so it must be a date the scheduler reaches. This method was a
+      // fourth hand-rolled copy of that calendar and its month cadences used
+      // `Date.setMonth(+1)`, which OVERFLOWS: 31 January became 3 March,
+      // skipping February entirely, while the engine clamps to 28 February.
+      accountsRepository.findOne.mockResolvedValue(mockLoanAccount);
+
+      const dates = ["2024-10-31", "2024-11-30", "2024-12-31", "2025-01-31"];
+      transactionRepository.find.mockResolvedValue(
+        dates.map((transactionDate, i) => ({
+          id: `tx-${i}`,
+          accountId: "loan-1",
+          userId: "user-1",
+          transactionDate,
+          amount: 1500,
+          isTransfer: false,
+          isSplit: false,
+          linkedTransactionId: null,
+        })),
+      );
+
+      const result = await service.detectPaymentPattern("user-1", "loan-1");
+      expect(result).not.toBeNull();
+      expect(result!.paymentFrequency).toBe("MONTHLY");
+      expect(result!.suggestedNextDueDate).toBe("2025-02-28");
+    });
+
     it("detects yearly payment frequency", async () => {
       accountsRepository.findOne.mockResolvedValue(mockLoanAccount);
 

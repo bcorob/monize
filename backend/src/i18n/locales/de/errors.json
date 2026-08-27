@@ -27,6 +27,8 @@
     "loanRequiresInstitution": "Darlehenskonten erfordern einen Institutsnamen",
     "mortgageRequiredFields": "Hypothekenkonten erfordern mortgagePaymentFrequency, paymentStartDate, sourceAccountId und amortizationMonths",
     "mortgageRequiresInterestRate": "Hypothekenkonten erfordern einen Zinssatz",
+    "mortgageFrequencyUnsupported": "Kanadische Hypotheken können nicht mit der Zahlungsfrequenz {frequency} geplant werden",
+    "paymentFrequencyUnsupported": "Eine Zahlungsfrequenz von {frequency} kann nicht als Zahlungsplan angelegt werden",
     "mortgageRequiresInstitution": "Hypothekenkonten erfordern einen Institutsnamen",
     "onlyMortgageAccounts": "Dieser Vorgang ist nur für Hypothekenkonten gültig",
     "updateRateClosed": "Zinssatz eines geschlossenen Kontos kann nicht aktualisiert werden",
@@ -193,13 +195,16 @@
     "reauthUnavailable": "Legen Sie zuerst das Passwort für Ihr Konto fest, bevor Sie ein Backup wiederherstellen.",
     "supportPasswordRequired": "Ein Support-Backup muss verschlüsselt sein: Bitte ein Passwort angeben.",
     "passwordHeaderNotBase64": "Der Header {header} muss base64-codiert sein.",
-    "decompressTooLarge": "Backup ist zu groß zum Wiederherstellen: Es entpackt sich über das konfigurierte Limit von {limit} Bytes hinaus. Erhöhe BACKUP_RESTORE_EXPANDED_LIMIT, wenn dies ein echtes Backup ist.",
+    "decompressTooLarge": "Backup ist zu groß zum Wiederherstellen: Es entpackt sich über das Limit dieser Instanz von {limit} Bytes hinaus. Diese Obergrenze wird aus dem Speicher des Containers und einem gemessenen Aufwand pro Byte abgeleitet -- sie allein zu erhöhen, modelliert eine Wiederherstellung, die der Prozess nicht abschließen kann. Erhöhen Sie stattdessen das Speicherlimit des Containers (Kubernetes: backend.resources.limits.memory).",
     "exportTooLarge": "Dieses Backup ist zu groß, um in einem Stück erzeugt zu werden (über {limit} Bytes bei Tabelle \"{table}\"). Automatische und Support-Backups müssen im Speicher gehalten werden; lade ein manuelles Backup herunter, das streamt, oder erhöhe BACKUP_EXPORT_BUFFER_LIMIT.",
     "supportExportTooLarge": "Dieses Support-Backup wäre {{ size }} MiB JSON und liegt damit über dem Limit von {{ limit }} MiB. Schränke es mit einer Kontoauswahl oder einem Zeitraum ein, oder erhöhe BACKUP_EXPORT_BUFFER_LIMIT.",
     "folderUnusable": "Ordner \"{{ path }}\" kann nicht als Verzeichnis verwendet werden ({{ reason }}).",
     "folderOutsideAllowedRoots": "Backup-Ordner \"{path}\" liegt außerhalb der erlaubten Wurzelverzeichnisse ({roots}). Setze BACKUP_ALLOWED_ROOTS, um ihn zuzulassen.",
     "noBackupStorage": "Diese Installation hat keinen beschreibbaren Backup-Speicher: {{ safePath }} existiert nicht und kann nicht erstellt werden ({{ reason }}). Binde dort ein Volume ein (Docker: Bind-Mount oder benanntes Volume; Kubernetes: backend.persistence.backups im Helm-Chart setzen) und versuche es erneut.",
-    "restoreNoMemoryHeadroom": "Diese Installation hat keinen Speicherspielraum für eine Wiederherstellung: Der modellierte Spitzenbedarf einer Wiederherstellung passt nicht in den Container. Erhöhe das Speicherlimit des Containers oder senke BACKUP_RESTORE_EXPANDED_LIMIT."
+    "restoreNoMemoryHeadroom": "Diese Installation hat keinen Speicherspielraum für eine Wiederherstellung: Der modellierte Spitzenbedarf einer Wiederherstellung passt nicht in den Container. Erhöhe das Speicherlimit des Containers oder senke BACKUP_RESTORE_EXPANDED_LIMIT.",
+    "restoreQueueFull": "Zu viele Wiederherstellungen warten bereits auf die Wiederherstellungskapazität dieser Instanz. Versuchen Sie es in einem Moment erneut.",
+    "restoreQueueWaitTimeout": "Zeitüberschreitung beim Warten auf Wiederherstellungskapazität: Eine andere Wiederherstellung läuft noch. Versuchen Sie es in einem Moment erneut.",
+    "restoreTicketUnavailable": "Diese Instanz kann Wiederherstellungs-Uploads nicht autorisieren."
   },
   "budgets": {
     "notFound": "Budget mit ID {{ id }} nicht gefunden",

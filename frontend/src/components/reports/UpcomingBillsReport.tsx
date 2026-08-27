@@ -14,7 +14,6 @@ import {
   addMonths,
   subMonths,
   getDay,
-  isSameDay,
 } from 'date-fns';
 import { scheduledTransactionsApi } from '@/lib/scheduled-transactions';
 import { ScheduledTransaction } from '@/types/scheduled-transaction';
@@ -22,26 +21,59 @@ import { parseLocalDate } from '@/lib/utils';
 import {
   SCHEDULED_KIND_AMOUNT_CLASSES,
   SCHEDULED_KIND_CHIP_CLASSES,
-  scheduledKind,
+  occurrenceKind,
 } from '@/lib/scheduled-kind';
-import { advanceByFrequency, isOneTime } from '@/lib/frequency';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
 import { ExportDropdown } from '@/components/ui/ExportDropdown';
 import { exportToCsv } from '@/lib/csv-export';
 import { useReportData } from '@/hooks/useReportData';
 import { ReportError } from '@/components/reports/ReportError';
+import { UnknownAmount } from '@/components/ui/UnknownAmount';
+import { sumEffectiveOccurrences } from '@/lib/scheduled-effective-amount';
+import { useExchangeRates } from '@/hooks/useExchangeRates';
+import { isComplete, type ConvertedTotal } from '@/lib/currency-total';
+
+/** How far ahead the report projects, matching the three months it always has. */
+const HORIZON_MONTHS = 3;
+
+/**
+ * Why a withheld total is withheld, which decides where the reader goes to fix
+ * it: a named currency is a display rate to refresh on the Currencies page, an
+ * unnamed shortfall is one occurrence's own settlement rate.
+ */
+function unknownReason(total: ConvertedTotal): 'displayFx' | 'scheduledFx' {
+  return total.missingCurrencies.length > 0 ? 'displayFx' : 'scheduledFx';
+}
 
 interface CalendarDay {
   date: Date;
   isCurrentMonth: boolean;
   isToday: boolean;
-  bills: ScheduledTransaction[];
+  bills: UpcomingBill[];
 }
 
 interface UpcomingBill {
   scheduledTransaction: ScheduledTransaction;
   dueDate: Date;
-  amount: number;
+  /**
+   * What THIS occurrence would post today, from the server's occurrence contract;
+   * `null` when it cannot be determined (issue #1247). Never the persisted
+   * `amount`, and never the schedule-level figure applied to every projected
+   * occurrence -- this report used to do the second, so an occurrence the user
+   * had re-priced was listed, totalled and exported at the template's amount.
+   */
+  amount: number | null;
+  /**
+   * The currency `amount` is in -- the occurrence's own, which for an investment
+   * schedule is the settlement currency rather than the brokerage account's.
+   */
+  currencyCode: string;
+  /**
+   * The signed amount that decides direction, `null` when the server could not
+   * derive it. Carried so `occurrenceKind` reads the occurrence rather than
+   * falling back to the schedule's snapshot sign.
+   */
+  directionAmount: number | null;
   isOverdue: boolean;
 }
 
@@ -49,47 +81,78 @@ export function UpcomingBillsReport() {
   const t = useTranslations('reports');
   const router = useRouter();
   const { formatCurrencyCompact: formatCurrency } = useNumberFormat();
+  // Every occurrence is priced in its own currency, so a single total needs a
+  // conversion rather than an addition (issue #1247).
+  const { convertToDefault, defaultCurrency } = useExchangeRates();
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [viewType, setViewType] = useState<'calendar' | 'list'>('calendar');
 
-  const { data: response, isLoading, error, reload } = useReportData(
-    () => scheduledTransactionsApi.getAll(),
-    [],
+  // The window is fixed for the life of the mount, so the request key is stable
+  // across re-renders (the month arrows move the calendar, not the horizon).
+  const [through] = useState(() =>
+    format(addMonths(new Date(), HORIZON_MONTHS), 'yyyy-MM-dd'),
   );
+
+  // Schedules for their names, kinds and accounts; occurrences for the dates and
+  // the amounts. The browser cannot derive the second from the first: expanding
+  // the recurrence here gives dates with no per-occurrence amount, which is how
+  // one schedule-level figure came to be printed against every occurrence and
+  // exported (issue #1247).
+  const { data: response, isLoading, error, reload } = useReportData(
+    async () => {
+      const [schedules, occurrences] = await Promise.all([
+        scheduledTransactionsApi.getAll(),
+        // A failed occurrences read is "no information", not a failed report.
+        // This endpoint is newer than the page, so during a rolling deploy the new
+        // client can be served while a pod still runs the previous backend: a
+        // rejected leg inside `Promise.all` took the whole report down, retry
+        // button and all, for something the schedules leg could still describe.
+        // `null` is distinguishable from `[]` -- an empty array means "no
+        // occurrences", which is a real answer and must keep rendering as one.
+        scheduledTransactionsApi
+          .getOccurrences({ through })
+          .catch(() => null),
+      ]);
+      return { schedules, occurrences };
+    },
+    [through],
+  );
+
+  /** The projection could not be loaded -- not the same as having none. */
+  const occurrencesUnavailable = response != null && response.occurrences === null;
 
   // Every active schedule is reported, whatever its kind: a transfer between the
   // user's own accounts and a zero-amount reminder both have due dates, and
   // leaving them out made them vanish from the calendar (issue #1124). Their
   // amounts are kept out of the money totals below -- see `summary`.
   const scheduledTransactions = useMemo(
-    () => (response ?? []).filter((st) => st.isActive),
+    () => (response?.schedules ?? []).filter((st) => st.isActive),
     [response],
   );
 
-  // Generate upcoming occurrences for each scheduled transaction
-  const getNextOccurrences = (st: ScheduledTransaction, monthsAhead: number = 3): Date[] => {
-    const occurrences: Date[] = [];
-    const startDate = new Date();
-    const endDate = addMonths(startDate, monthsAhead);
-    let nextDate = parseLocalDate(st.nextDueDate);
+  const upcomingBills = useMemo((): UpcomingBill[] => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const byId = new Map(scheduledTransactions.map((st) => [st.id, st]));
 
-    const maxOccurrences = 100;
-    let count = 0;
-
-    while (nextDate <= endDate && count < maxOccurrences) {
-      if (nextDate >= startDate || isSameDay(nextDate, startDate) || nextDate < startDate) {
-        // Include past due dates too
-        occurrences.push(new Date(nextDate));
-      }
-
-      // Calculate next occurrence based on frequency
-      if (isOneTime(st.frequency)) return occurrences;
-      nextDate = advanceByFrequency(nextDate, st.frequency);
-      count++;
-    }
-
-    return occurrences;
-  };
+    // The server orders by due date already; an occurrence whose schedule is not
+    // in the active list is skipped rather than drawn without its name.
+    return (response?.occurrences ?? []).flatMap((occurrence) => {
+      const scheduledTransaction = byId.get(occurrence.scheduledTransactionId);
+      if (!scheduledTransaction) return [];
+      const dueDate = parseLocalDate(occurrence.dueDate);
+      return [
+        {
+          scheduledTransaction,
+          dueDate,
+          amount: occurrence.amount,
+          currencyCode: occurrence.currencyCode,
+          directionAmount: occurrence.directionAmount,
+          isOverdue: dueDate < today,
+        },
+      ];
+    });
+  }, [response, scheduledTransactions]);
 
   const calendarDays = useMemo((): CalendarDay[] => {
     const monthStart = startOfMonth(currentMonth);
@@ -106,17 +169,12 @@ export function UpcomingBillsReport() {
 
     const days = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
 
-    // Build a map of bills by date
-    const billsByDate = new Map<string, ScheduledTransaction[]>();
-
-    scheduledTransactions.forEach((st) => {
-      const occurrences = getNextOccurrences(st, 3);
-      occurrences.forEach((date) => {
-        const key = format(date, 'yyyy-MM-dd');
-        const existing = billsByDate.get(key) || [];
-        existing.push(st);
-        billsByDate.set(key, existing);
-      });
+    // Build a map of occurrences by date, so the calendar and the list are the
+    // same set of occurrences rather than two expansions that can disagree.
+    const billsByDate = new Map<string, UpcomingBill[]>();
+    upcomingBills.forEach((bill) => {
+      const key = format(bill.dueDate, 'yyyy-MM-dd');
+      billsByDate.set(key, [...(billsByDate.get(key) ?? []), bill]);
     });
 
     return days.map((date) => ({
@@ -125,27 +183,7 @@ export function UpcomingBillsReport() {
       isToday: isToday(date),
       bills: billsByDate.get(format(date, 'yyyy-MM-dd')) || [],
     }));
-  }, [currentMonth, scheduledTransactions]);
-
-  const upcomingBills = useMemo((): UpcomingBill[] => {
-    const bills: UpcomingBill[] = [];
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    scheduledTransactions.forEach((st) => {
-      const occurrences = getNextOccurrences(st, 3);
-      occurrences.forEach((dueDate) => {
-        bills.push({
-          scheduledTransaction: st,
-          dueDate,
-          amount: st.amount,
-          isOverdue: dueDate < today,
-        });
-      });
-    });
-
-    return bills.sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime());
-  }, [scheduledTransactions]);
+  }, [currentMonth, upcomingBills]);
 
   const summary = useMemo(() => {
     const today = new Date();
@@ -159,11 +197,26 @@ export function UpcomingBillsReport() {
 
     // A transfer moves money between the user's own accounts, so it is counted
     // as something coming up but never added to a money total -- summing it
-    // beside bills and deposits would overstate both.
-    const totalOf = (bills: UpcomingBill[]) =>
-      bills
-        .filter((b) => !b.scheduledTransaction.isTransfer)
-        .reduce((sum, b) => sum + Math.abs(b.amount), 0);
+    // beside bills and deposits would overstate both. An occurrence whose
+    // current amount is unknown makes the total unknown rather than smaller
+    // (issue #1247); the known part is kept separately and never shown under
+    // the total's own caption.
+    // With no projection, a total of zero would be a measured zero for a state
+    // nobody measured. One excluded component makes `isComplete` false, so every
+    // figure below renders as unavailable and the notice above says why.
+    const totalOf = (bills: UpcomingBill[]): ConvertedTotal =>
+      occurrencesUnavailable
+        ? { value: 0, missingCurrencies: [], excludedCount: 1 }
+        : sumEffectiveOccurrences(
+            bills.filter((b) => !b.scheduledTransaction.isTransfer),
+            (b) => ({
+              amount: b.amount,
+              currencyCode: b.currencyCode,
+              complete: b.amount !== null,
+            }),
+            convertToDefault,
+            Math.abs,
+          );
 
     return {
       overdueCount: overdue.length,
@@ -171,7 +224,7 @@ export function UpcomingBillsReport() {
       thisMonthCount: thisMonth.length,
       thisMonthTotal: totalOf(thisMonth),
     };
-  }, [upcomingBills, currentMonth]);
+  }, [upcomingBills, currentMonth, convertToDefault, occurrencesUnavailable]);
 
   const handleBillClick = (_st: ScheduledTransaction) => {
     router.push('/bills');
@@ -182,6 +235,11 @@ export function UpcomingBillsReport() {
       t('upcomingBills.csvColBillName'),
       t('upcomingBills.csvColDueDate'),
       t('upcomingBills.csvColAmount'),
+      // The amount column holds the occurrence's own figure, so the currency is
+      // its own column rather than a fact the reader has to assume. A
+      // spreadsheet that sums a CAD row into a USD column is the export's
+      // version of the defect the totals above fix (issue #1247).
+      t('upcomingBills.csvColCurrency'),
       t('upcomingBills.csvColFrequency'),
       t('upcomingBills.csvColAccount'),
       t('upcomingBills.csvColStatus'),
@@ -189,7 +247,11 @@ export function UpcomingBillsReport() {
     const rows: (string | number)[][] = upcomingBills.map((bill) => [
       bill.scheduledTransaction.name,
       format(bill.dueDate, 'yyyy-MM-dd'),
-      bill.amount,
+      // An amount nobody can work out is exported as an explicit marker, not as
+      // an empty cell (indistinguishable from zero once a spreadsheet totals the
+      // column) and not as the stale stored figure (issue #1247).
+      bill.amount ?? t('upcomingBills.csvAmountUnavailable'),
+      bill.currencyCode,
       bill.scheduledTransaction.frequency,
       bill.scheduledTransaction.account?.name || '',
       bill.isOverdue ? t('upcomingBills.csvStatusOverdue') : bill.scheduledTransaction.autoPost ? t('upcomingBills.csvStatusAuto') : t('upcomingBills.csvStatusManual'),
@@ -208,7 +270,18 @@ export function UpcomingBillsReport() {
     const pdfCards = [
       { label: t('upcomingBills.pdfActiveBills'), value: String(scheduledTransactions.length), color: '#111827' },
       ...(summary.overdueCount > 0 ? [{ label: t('upcomingBills.pdfOverdue'), value: String(summary.overdueCount), color: '#dc2626' }] : []),
-      { label: t('upcomingBills.pdfThisMonth'), value: `${summary.thisMonthCount} (${formatCurrency(summary.thisMonthTotal)})`, color: '#2563eb' },
+      {
+        label: t('upcomingBills.pdfThisMonth'),
+        // The total is withheld when any occurrence in it is unknown or could
+        // not be converted into the reporting currency -- a PDF is a record, so
+        // a figure in it must not be a partial sum wearing a total's caption
+        // (issue #1247). `isComplete` covers both causes; a figure printed here
+        // is complete in `defaultCurrency` and says so.
+        value: !isComplete(summary.thisMonthTotal)
+          ? `${summary.thisMonthCount} (${t('upcomingBills.amountUnavailable')})`
+          : `${summary.thisMonthCount} (${formatCurrency(summary.thisMonthTotal.value, defaultCurrency)})`,
+        color: '#2563eb',
+      },
     ];
     await exportToPdf({
       title: t('upcomingBills.pdfTitle'),
@@ -236,6 +309,24 @@ export function UpcomingBillsReport() {
 
   return (
     <div className="space-y-6">
+      {occurrencesUnavailable && (
+        <div
+          className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200"
+          data-testid="occurrences-unavailable"
+          role="status"
+        >
+          <p>{t('upcomingBills.occurrencesUnavailable')}</p>
+          <button
+            type="button"
+            onClick={reload}
+            className="mt-2 inline-flex items-center rounded-md bg-amber-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+            data-testid="occurrences-retry"
+          >
+            {t('error.retry')}
+          </button>
+        </div>
+      )}
+
       {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-4">
@@ -251,7 +342,11 @@ export function UpcomingBillsReport() {
               {summary.overdueCount}
             </div>
             <div className="text-sm text-red-600 dark:text-red-400">
-              {formatCurrency(summary.overdueTotal)}
+              {isComplete(summary.overdueTotal) ? (
+                formatCurrency(summary.overdueTotal.value, defaultCurrency)
+              ) : (
+                <UnknownAmount reason={unknownReason(summary.overdueTotal)} />
+              )}
             </div>
           </div>
         )}
@@ -261,7 +356,11 @@ export function UpcomingBillsReport() {
             {summary.thisMonthCount}
           </div>
           <div className="text-sm text-blue-600 dark:text-blue-400">
-            {formatCurrency(summary.thisMonthTotal)}
+            {isComplete(summary.thisMonthTotal) ? (
+              formatCurrency(summary.thisMonthTotal.value, defaultCurrency)
+            ) : (
+              <UnknownAmount reason={unknownReason(summary.thisMonthTotal)} />
+            )}
           </div>
         </div>
       </div>
@@ -366,21 +465,22 @@ export function UpcomingBillsReport() {
                 </div>
                 <div className="space-y-0.5">
                   {day.bills.slice(0, 3).map((bill, billIndex) => {
+                    const st = bill.scheduledTransaction;
                     return (
                       <div
                         key={billIndex}
-                        onClick={() => handleBillClick(bill)}
+                        onClick={() => handleBillClick(st)}
                         className={`px-1 py-0.5 text-xs rounded truncate cursor-pointer flex items-center gap-0.5 ${
-                          SCHEDULED_KIND_CHIP_CLASSES[scheduledKind(bill)]
+                          SCHEDULED_KIND_CHIP_CLASSES[occurrenceKind(bill, st)]
                         } hover:opacity-80`}
-                        title={bill.autoPost ? t('upcomingBills.calendarAutoTitle', { name: bill.name }) : t('upcomingBills.calendarManualTitle', { name: bill.name })}
+                        title={st.autoPost ? t('upcomingBills.calendarAutoTitle', { name: st.name }) : t('upcomingBills.calendarManualTitle', { name: st.name })}
                       >
-                        {!bill.autoPost && (
+                        {!st.autoPost && (
                           <svg className="h-3 w-3 flex-shrink-0 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 9v2m0 4h.01" />
                           </svg>
                         )}
-                        <span className="truncate">{bill.name}</span>
+                        <span className="truncate">{st.name}</span>
                       </div>
                     );
                   })}
@@ -436,9 +536,19 @@ export function UpcomingBillsReport() {
                 </div>
                 <div className="text-right">
                   <div className={`font-medium ${
-                    SCHEDULED_KIND_AMOUNT_CLASSES[scheduledKind(bill.scheduledTransaction)]
+                    SCHEDULED_KIND_AMOUNT_CLASSES[
+                      occurrenceKind(bill, bill.scheduledTransaction)
+                    ]
                   }`}>
-                    {formatCurrency(Math.abs(bill.amount))}
+                    {bill.amount === null ? (
+                      <UnknownAmount />
+                    ) : (
+                      // In the occurrence's OWN currency: the settlement one for
+                      // an investment, which need not be the reader's default.
+                      // Omitting the code formatted a CAD figure with a USD
+                      // symbol (issue #1247).
+                      formatCurrency(Math.abs(bill.amount), bill.currencyCode)
+                    )}
                   </div>
                   <div className="text-sm text-gray-500 dark:text-gray-400">
                     {format(bill.dueDate, 'MMM d, yyyy')}

@@ -18,6 +18,8 @@ import {
   collectPragmas,
   lintSql,
   lintDirectory,
+  NON_RERUNNABLE_DATA_MIGRATIONS,
+  missingOneShotMigrations,
 } from "./migration-lint.mjs";
 
 const rulesOf = (sql) => lintSql(sql).findings.map((f) => f.rule);
@@ -437,4 +439,27 @@ test("the repository's migrations lint clean", () => {
     findings.map((f) => `${f.file}:${f.line} [${f.rule}] ${f.message}`),
     [],
   );
+});
+
+test("every registered one-shot data migration still exists, with a reason", () => {
+  // The register excuses a file from the "a second pass matches nothing"
+  // assumption the whole lint rests on, so a stale entry silently excuses a file
+  // that is not there -- and a new one with no reason excuses it with no
+  // argument. Both are the register failing at the only job it has.
+  const dir = fileURLToPath(new URL("../../database/migrations", import.meta.url));
+  const { files } = lintDirectory(dir);
+  assert.deepEqual(missingOneShotMigrations(files), []);
+  for (const [name, reason] of NON_RERUNNABLE_DATA_MIGRATIONS) {
+    assert.ok(
+      typeof reason === "string" && reason.length > 40,
+      `${name} needs a reason saying what a second pass would do`,
+    );
+  }
+});
+
+test("a registered one-shot migration that has been deleted is reported", () => {
+  assert.deepEqual(missingOneShotMigrations([]), [
+    ...NON_RERUNNABLE_DATA_MIGRATIONS.keys(),
+  ]);
+  assert.ok(NON_RERUNNABLE_DATA_MIGRATIONS.size > 0);
 });

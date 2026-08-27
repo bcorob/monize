@@ -190,9 +190,12 @@ export function OverpaymentSimulator({
 
   // Resolve the plan for a form state, live-solving goal targets. Sets the goal
   // status note and emits the plan. A payoff-month goal forces SHORTEN_TERM
-  // (lowering the installment keeps the end date). Solved amounts come back in
-  // per-payment terms and are converted to the chosen cadence for the plan; the
-  // engine levels them back across payments when projecting.
+  // (lowering the installment keeps the end date). The cadence is passed to the
+  // solver, so a solved amount is already the amount PER OCCURRENCE of the
+  // chosen frequency and goes onto the plan unchanged -- there is no per-payment
+  // conversion to undo. (There used to be: the engine levelled a cadence across
+  // payments. It now dates each occurrence and applies the full amount, so
+  // scaling a solved amount here would double it.)
   const apply = (next: SimulatorFormState) => {
     let status: SolveStatus | null = null;
     let plan: OverpaymentPlan | null = null;
@@ -486,6 +489,11 @@ export function OverpaymentSimulator({
               ? 'loanDetail.simulator.goalSeek.unreachableDate'
               : 'loanDetail.simulator.goalSeek.unreachableInterest',
           )}
+        </p>
+      )}
+      {goalStatus === 'baseline-incomplete' && (
+        <p className="mt-2 text-sm text-amber-700 dark:text-amber-400">
+          {t('loanDetail.simulator.goalSeek.baselineIncomplete')}
         </p>
       )}
       {goalStatus === 'already-met' && (

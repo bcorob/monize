@@ -15,6 +15,7 @@ import { GroupedTotal, TransactionSummary } from '@/types/transaction';
 import { transactionsApi } from '@/lib/transactions';
 import { payeesApi } from '@/lib/payees';
 import { getNextScheduled } from '@/lib/scheduled-utils';
+import { UnknownAmount } from '@/components/ui/UnknownAmount';
 import { buildCategoryLabelMap } from '@/lib/categoryUtils';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
 import { useDateFormat } from '@/hooks/useDateFormat';
@@ -267,12 +268,19 @@ export function PayeeInfoWidget({
               </p>
               <p
                 className={`text-base font-semibold ${
-                  nextBill.amount < 0
+                  nextBill.amount !== null && nextBill.amount < 0
                     ? 'text-red-600 dark:text-red-400'
                     : 'text-green-600 dark:text-green-400'
                 }`}
               >
-                {formatCurrency(Math.abs(nextBill.amount), nextBill.currencyCode)}
+                {/* An occurrence whose current amount could not be resolved is shown
+                  as unavailable, never as its stale stored figure (issue
+                  #1247). */}
+              {nextBill.amount === null ? (
+                <UnknownAmount />
+              ) : (
+                formatCurrency(Math.abs(nextBill.amount), nextBill.currencyCode)
+              )}
               </p>
             </div>
             <p className="text-base font-semibold text-gray-700 dark:text-gray-300 text-right">

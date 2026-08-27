@@ -62,15 +62,24 @@ backend:
   # request can be refused with a readable error.
   #
   # Leave these unset and the backend derives them from the container's cgroup
-  # memory limit, which tracks whatever you set above. exportBuffer and
-  # restoreExpanded derive to about a quarter of it. restoreUpload is not a
-  # quarter and not a fixed fraction: it bounds *compressed wire bytes*, and the
-  # request that uploads them goes on to hold the envelope, the decrypted
-  # plaintext, the decompressed payload, the string and the parsed object graph.
-  # So it derives to the half-share peak divided by a peak multiple (~a sixth on a
-  # normal pod), and on a small container it drops below that rather than flooring
-  # into a number the pod cannot survive -- the backend warns at startup when the
-  # derived value is small enough to refuse ordinary backups.
+  # memory limit, which tracks whatever you set above. exportBuffer derives to
+  # about a quarter of it.
+  #
+  # The two restore ceilings are derived differently, and from a measurement. A
+  # restore holds the envelope, the decrypted plaintext, the decompressed payload,
+  # the UTF-8 string, the parsed object graph and the remapped copy of it -- about
+  # 6.1x the expanded payload PLUS a fixed ~78Mi, measured (issue #1073), where the
+  # model used to assume three times the payload and nothing fixed. So
+  # restoreExpanded is solved out of the capacity instead of taken as a share of
+  # it: the memory left after the ordinary process is reserved, less a margin, less
+  # that fixed cost, divided by 6.1. On this chart's default 400Mi backend that is
+  # about 23 MiB, and restoreUpload follows it -- gzip output is never smaller than
+  # what it expands to, so a larger upload is one the deployment could not
+  # decompress anyway.
+  #
+  # On a container too small for any restore it derives to zero and restores are
+  # refused with a 503 naming the lever, rather than flooring into a number the pod
+  # cannot survive. The backend warns at startup when the derived value is small.
   #
   # The compressed limit does not bound decompressed memory: a small gzip expands
   # to the restoreExpanded ceiling regardless of its wire size. Concurrent restore
@@ -97,10 +106,30 @@ backend:
   backupLimits:
     # -- Artifact a buffered export may accumulate (e.g. "96mb")
     exportBuffer: ""
-    # -- Decompressed size a restore payload may reach (e.g. "96mb")
+    # -- Decompressed size a restore payload may reach (e.g. "23mb")
     restoreExpanded: ""
-    # -- Compressed upload the restore endpoint accepts (e.g. "64mb")
+    # -- Compressed upload the restore endpoint accepts (e.g. "23mb")
     restoreUpload: ""
+
+  # -- How many restores may WAIT for a processing slot, and for how long
+  #
+  # Restore processing is capped separately from the upload: a small gzip expands
+  # to the expanded ceiling regardless of its wire size, so the compressed budget
+  # cannot bound decompressed memory. On the default pod that cap is one, and a
+  # second restore waits rather than decompressing beside the first.
+  #
+  # Waiting rather than being refused outright is deliberate -- the caller has
+  # already uploaded the artifact, and a 503 makes them upload it again -- but a
+  # wait that is neither bounded nor deadlined holds a socket and the upload's
+  # memory reservation for as long as the client keeps them. A request arriving at
+  # a full queue, or one whose wait runs out, is refused with 503 and a
+  # Retry-After; a caller who disconnects while queued is dropped and its restore
+  # never runs.
+  restoreQueue:
+    # -- Restores that may wait for a processing slot before a 503 (e.g. "4")
+    limit: ""
+    # -- Milliseconds a restore may wait for a processing slot (e.g. "120000")
+    waitMs: ""
 
   # -- Microsoft Money (.mny) import
   mnyImport:

@@ -3,6 +3,7 @@
 import { useTranslations } from 'next-intl';
 import type { BudgetVelocity } from '@/types/budget';
 import { gainLossColor } from '@/lib/format';
+import { UnknownAmount } from '@/components/ui/UnknownAmount';
 
 interface BudgetVelocityWidgetProps {
   velocity: BudgetVelocity;
@@ -38,6 +39,14 @@ export function BudgetVelocityWidget({
   const t = useTranslations('budgets');
   const paceColor = getPaceColor(velocity.paceStatus);
   const paceBgColor = getPaceBgColor(velocity.paceStatus);
+  // Why the figure is missing decides which screen fixes it: a named pair is a
+  // display rate to refresh on Currencies, an unnamed shortfall is the
+  // occurrence's own settlement rate. Read defensively -- an older backend
+  // mid-deploy sends no field at all, which is "no information", not "no pairs".
+  const unknownReason =
+    (velocity.upcomingBillsMissingRates?.length ?? 0) > 0
+      ? 'displayFx'
+      : 'scheduledFx';
   const paceLabel = t(`velocity.paceStatus.${velocity.paceStatus}`);
 
   return (
@@ -63,9 +72,16 @@ export function BudgetVelocityWidget({
           <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">
             {t('velocity.safeToSpend')}
           </div>
-          <div className="text-lg font-semibold text-green-600 dark:text-green-400">
-            {formatCurrency(velocity.safeDailySpend)}/day
-          </div>
+          {/* Derived from "truly available", so it is unknown whenever an
+              upcoming bill's current amount is (issue #1247). A `?? 0` here
+              would present the unknown as a measured zero. */}
+          {velocity.safeDailySpend === null ? (
+            <UnknownAmount />
+          ) : (
+            <div className="text-lg font-semibold text-green-600 dark:text-green-400">
+              {formatCurrency(velocity.safeDailySpend)}/day
+            </div>
+          )}
         </div>
         <div>
           <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">
@@ -88,26 +104,39 @@ export function BudgetVelocityWidget({
           </div>
         </div>
       </div>
-      {velocity.totalUpcomingBills > 0 && (
+      {/* Drawn when there is something to say: a positive total, or a total the
+          server could not complete. Hiding the section on an incomplete total
+          would make an unresolvable bill indistinguishable from no bills at all
+          (issue #1247). */}
+      {(velocity.totalUpcomingBills === null ||
+        velocity.totalUpcomingBills > 0) && (
         <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 grid grid-cols-2 gap-4">
           <div>
             <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">
               {t('velocity.billsComing')}
             </div>
-            <div className="text-lg font-semibold text-red-600 dark:text-red-400">
-              {formatCurrency(velocity.totalUpcomingBills)}
-            </div>
+            {velocity.totalUpcomingBills === null ? (
+              <UnknownAmount reason={unknownReason} />
+            ) : (
+              <div className="text-lg font-semibold text-red-600 dark:text-red-400">
+                {formatCurrency(velocity.totalUpcomingBills)}
+              </div>
+            )}
           </div>
           <div>
             <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">
               {t('velocity.trulyAvailable')}
             </div>
-            <div className={`text-lg font-semibold ${
-              gainLossColor(velocity.trulyAvailable)
-            }`}>
-              {formatCurrency(Math.abs(velocity.trulyAvailable))}
-              {velocity.trulyAvailable < 0 && t('velocity.over')}
-            </div>
+            {velocity.trulyAvailable === null ? (
+              <UnknownAmount reason={unknownReason} />
+            ) : (
+              <div className={`text-lg font-semibold ${
+                gainLossColor(velocity.trulyAvailable)
+              }`}>
+                {formatCurrency(Math.abs(velocity.trulyAvailable))}
+                {velocity.trulyAvailable < 0 && t('velocity.over')}
+              </div>
+            )}
           </div>
         </div>
       )}

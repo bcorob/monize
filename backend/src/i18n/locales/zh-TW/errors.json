@@ -27,6 +27,8 @@
     "loanRequiresInstitution": "貸款科目需要機構名稱",
     "mortgageRequiredFields": "抵押貸款科目需要 mortgagePaymentFrequency、paymentStartDate、sourceAccountId 和 amortizationMonths",
     "mortgageRequiresInterestRate": "抵押貸款科目需要利率",
+    "mortgageFrequencyUnsupported": "加拿大抵押貸款無法按 {frequency} 的還款頻率安排",
+    "paymentFrequencyUnsupported": "無法按 {frequency} 的還款頻率安排",
     "mortgageRequiresInstitution": "抵押貸款科目需要機構名稱",
     "onlyMortgageAccounts": "此操作僅適用於抵押貸款科目",
     "updateRateClosed": "無法更新已關閉科目的利率",
@@ -193,13 +195,16 @@
     "reauthUnavailable": "請先完成帳戶密碼設定，再還原備份。",
     "supportPasswordRequired": "支援用備份必須加密：請提供密碼。",
     "passwordHeaderNotBase64": "{header} 標頭必須使用 base64 編碼。",
-    "decompressTooLarge": "備份過大，無法還原：解壓後超出設定的 {limit} 位元組上限。若這是正常備份，請提高 BACKUP_RESTORE_EXPANDED_LIMIT。",
+    "decompressTooLarge": "備份過大，無法還原：解壓後超過此部署的 {limit} 位元組上限。該上限由容器記憶體與實測的每位元組開銷推導而來，因此單獨提高上限只會描述一次程序無法完成的還原 —— 請改為提高容器的記憶體上限（Kubernetes：backend.resources.limits.memory）。",
     "exportTooLarge": "此備份過大，無法一次生成（在表 \"{table}\" 處超出 {limit} 位元組）。自動備份與支援用備份必須保存在記憶體中；請下載採用串流的手動備份，或提高 BACKUP_EXPORT_BUFFER_LIMIT。",
     "supportExportTooLarge": "此支援用備份將有 {{ size }} MiB 的 JSON，超過 {{ limit }} MiB 上限。請透過選擇帳戶或日期範圍縮小範圍，或提高 BACKUP_EXPORT_BUFFER_LIMIT。",
     "folderUnusable": "資料夾 \"{{ path }}\" 無法作為目錄使用（{{ reason }}）。",
     "folderOutsideAllowedRoots": "備份資料夾 \"{path}\" 位於允許的根目錄（{roots}）之外。請設定 BACKUP_ALLOWED_ROOTS 以允許它。",
     "noBackupStorage": "此部署沒有可寫入的備份儲存空間：{{ safePath }} 不存在且無法建立（{{ reason }}）。請在該位置掛載卷（Docker：繫結掛載或具名卷；Kubernetes：在 Helm chart 中設定 backend.persistence.backups），然後重試。",
-    "restoreNoMemoryHeadroom": "此部署沒有用於還原的記憶體餘量：單次還原的估計峰值無法容納於容器內。請提高容器記憶體上限，或降低 BACKUP_RESTORE_EXPANDED_LIMIT。"
+    "restoreNoMemoryHeadroom": "此部署沒有用於還原的記憶體餘量：單次還原的估計峰值無法容納於容器內。請提高容器記憶體上限，或降低 BACKUP_RESTORE_EXPANDED_LIMIT。",
+    "restoreQueueFull": "已有太多還原作業在等待此部署的還原處理能力。請稍後再試。",
+    "restoreQueueWaitTimeout": "等待還原處理能力逾時：另一個還原作業仍在進行。請稍後再試。",
+    "restoreTicketUnavailable": "此部署無法授權還原上傳。"
   },
   "budgets": {
     "notFound": "找不到 ID 為 {{ id }} 的預算",

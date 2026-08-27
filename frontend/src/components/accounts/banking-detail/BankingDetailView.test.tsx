@@ -69,6 +69,8 @@ beforeEach(() => {
       { date: '2026-06-15', balance: 1500 },
       { date: '2026-07-01', balance: 2200 },
     ],
+    complete: true,
+    gaps: [],
   });
   mockGetSummary.mockResolvedValue({
     totalIncome: 2000,
@@ -117,6 +119,116 @@ describe('BankingDetailView', () => {
     // Projected balance = last forecast point (2200); average from history = 1250.
     expect(screen.getByText('$2200.00')).toBeInTheDocument();
     expect(screen.getByText('$1250.00')).toBeInTheDocument();
+  });
+
+  // ---- An incomplete projection (issue #1247) ----
+
+  describe('when the server could not complete the projection', () => {
+    /** Only today's anchor comes back, with the reason beside it. */
+    const withdrawnForecast = (
+      gaps: Array<Record<string, unknown>>,
+    ) =>
+      mockGetBalanceForecast.mockResolvedValue({
+        accountId: 'chq-1',
+        currencyCode: 'CAD',
+        points: [{ date: '2026-06-15', balance: 1500 }],
+        complete: false,
+        gaps,
+      });
+
+    it('shows the projected balance as unavailable rather than as today\'s figure', async () => {
+      withdrawnForecast([
+        {
+          scheduledTransactionId: 'st-inv',
+          name: 'Monthly ETF buy',
+          reason: 'unresolvedSettlementRate',
+          fromCurrency: 'USD',
+          toCurrency: 'CAD',
+        },
+      ]);
+
+      await renderView();
+
+      // Assert inside the card: 1500 is also this account's Money Out, so a
+      // document-wide query would pass for the wrong reason.
+      const card = screen.getByLabelText('Projected Balance');
+      expect(card).toContainElement(screen.getByTestId('unknown-amount'));
+      // Today's balance is not a stand-in for a projection: the card carries no
+      // money figure at all. (The note and the tooltip are prose, hence the
+      // currency-shaped pattern rather than any digit.)
+      expect(card.textContent).not.toMatch(/\$\s?[\d,]/);
+    });
+
+    it('says which schedule stopped it, names the pair, and how to fix it', async () => {
+      withdrawnForecast([
+        {
+          scheduledTransactionId: 'st-inv',
+          name: 'Monthly ETF buy',
+          reason: 'unresolvedSettlementRate',
+          fromCurrency: 'USD',
+          toCurrency: 'CAD',
+        },
+      ]);
+
+      await renderView();
+
+      const panel = screen.getByTestId('balance-forecast-unavailable');
+      expect(panel).toHaveTextContent('Monthly ETF buy');
+      expect(panel).toHaveTextContent('USD');
+      expect(panel).toHaveTextContent('CAD');
+      // The fix, not just the diagnosis.
+      expect(panel).toHaveTextContent(/refresh the rates/i);
+    });
+
+    it('explains a cross-currency transfer without offering a rate fix', async () => {
+      withdrawnForecast([
+        {
+          scheduledTransactionId: 'st-xfer',
+          name: 'From USD savings',
+          reason: 'crossCurrencyTransfer',
+          fromCurrency: 'USD',
+          toCurrency: 'CAD',
+        },
+      ]);
+
+      await renderView();
+
+      const panel = screen.getByTestId('balance-forecast-unavailable');
+      expect(panel).toHaveTextContent('From USD savings');
+      expect(panel).toHaveTextContent(/set when the transfer posts/i);
+      // Refreshing rates would not help here, so it is not suggested.
+      expect(panel).not.toHaveTextContent(/refresh the rates/i);
+    });
+
+    it('draws the line when an older backend sends no completeness at all', async () => {
+      // Mid rolling deploy the field is simply absent. That is not the server
+      // saying it withheld anything -- those points are the ones it has always
+      // sent -- so blanking the chart would invent a problem it never reported.
+      mockGetBalanceForecast.mockResolvedValue({
+        accountId: 'chq-1',
+        currencyCode: 'CAD',
+        points: [
+          { date: '2026-06-15', balance: 1500 },
+          { date: '2026-07-01', balance: 2200 },
+        ],
+      });
+
+      await renderView();
+
+      expect(
+        screen.queryByTestId('balance-forecast-unavailable'),
+      ).not.toBeInTheDocument();
+      expect(screen.getByText('$2200.00')).toBeInTheDocument();
+    });
+
+    it('keeps the history line and says nothing when the forecast IS complete', async () => {
+      await renderView();
+
+      expect(
+        screen.queryByTestId('balance-forecast-unavailable'),
+      ).not.toBeInTheDocument();
+      expect(screen.getByText('$2200.00')).toBeInTheDocument();
+    });
   });
 
   it('renders the cash-flow report and top categories', async () => {

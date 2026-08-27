@@ -123,6 +123,10 @@
       "status": "상태",
       "actions": "작업"
     },
+    "dateDisplay": {
+      "toggleLabel": "연도 숨기기",
+      "toggleTitle": "날짜에서 연도를 빼서 수취인 이름이 더 많이 보이도록 합니다"
+    },
     "attachmentsCount": "{count, plural, other {# 개의 첨부 파일}}",
     "today": "오늘",
     "export": {

@@ -14,6 +14,20 @@ import {
   IncomeVsExpensesResponse,
   MonthlyIncomeExpenseItem,
 } from "./dto";
+import { investmentExclusionSql } from "../common/investment-filter.util";
+
+/**
+ * Investment scope is LINKAGE, never account type (INV-REPORT-001, issue #1257):
+ * the cash sleeve of an INVESTMENT account holds ordinary money, while the cash
+ * leg a trade generated is not spending or income. Both halves of the predicate,
+ * and why the account type cannot express either, live in
+ * `common/investment-filter.util.ts`.
+ */
+const INVESTMENT_EXCLUSION = investmentExclusionSql({
+  accountAlias: "a",
+  transactionAlias: "t",
+  splitAlias: "ts",
+});
 
 @Injectable()
 export class IncomeReportsService {
@@ -47,7 +61,7 @@ export class IncomeReportsService {
         AND t.is_transfer = false
         AND (t.status IS NULL OR t.status != 'VOID')
         AND t.parent_transaction_id IS NULL
-        AND a.account_type != 'INVESTMENT'
+        AND ${INVESTMENT_EXCLUSION}
         AND (ts.transfer_account_id IS NULL OR ts.id IS NULL)
         AND NOT EXISTS (
           SELECT 1 FROM accounts ax
@@ -166,7 +180,7 @@ export class IncomeReportsService {
         AND t.is_transfer = false
         AND (t.status IS NULL OR t.status != 'VOID')
         AND t.parent_transaction_id IS NULL
-        AND a.account_type != 'INVESTMENT'
+        AND ${INVESTMENT_EXCLUSION}
         AND (ts.transfer_account_id IS NULL OR ts.id IS NULL)
         AND NOT EXISTS (
           SELECT 1 FROM accounts ax

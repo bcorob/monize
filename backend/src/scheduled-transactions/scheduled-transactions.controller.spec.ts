@@ -15,6 +15,7 @@ describe("ScheduledTransactionsController", () => {
       findAll: jest.fn(),
       findDue: jest.fn(),
       findUpcoming: jest.fn(),
+      findEffectiveOccurrences: jest.fn(),
       findOne: jest.fn(),
       update: jest.fn(),
       remove: jest.fn(),
@@ -158,6 +159,79 @@ describe("ScheduledTransactionsController", () => {
       await controller.findUpcoming(mockReq, 7);
 
       expect(mockService.findUpcoming).toHaveBeenCalledWith("user-1", 7);
+    });
+  });
+
+  describe("findOccurrences()", () => {
+    it("passes the window through and defaults the per-schedule cap", async () => {
+      const expected = [
+        {
+          scheduledTransactionId: "st-1",
+          originalDate: "2026-09-01",
+          dueDate: "2026-09-05",
+          amount: -1650,
+          amountComplete: true,
+          currencyCode: "USD",
+          overrideId: "ovr-1",
+          moved: true,
+          accountId: "acc-1",
+          transferAccountId: null,
+          isTransfer: false,
+        },
+      ];
+      mockService.findEffectiveOccurrences.mockResolvedValue(expected);
+
+      const result = await controller.findOccurrences(mockReq, {
+        through: "2026-11-30",
+      });
+
+      expect(result).toEqual(expected);
+      expect(mockService.findEffectiveOccurrences).toHaveBeenCalledWith(
+        "user-1",
+        { through: "2026-11-30", maxPerSchedule: undefined },
+      );
+    });
+
+    it("forwards an explicit per-schedule cap", async () => {
+      mockService.findEffectiveOccurrences.mockResolvedValue([]);
+
+      await controller.findOccurrences(mockReq, {
+        through: "2026-11-30",
+        maxPerSchedule: 3,
+      });
+
+      expect(mockService.findEffectiveOccurrences).toHaveBeenCalledWith(
+        "user-1",
+        { through: "2026-11-30", maxPerSchedule: 3 },
+      );
+    });
+
+    /**
+     * The occurrence payload carries `accountId` / `transferAccountId` /
+     * `isTransfer` precisely so the delegate filter can work on it, exactly as it
+     * does on a schedule list.
+     */
+    it("hides an occurrence on an account the delegate cannot read", async () => {
+      mockService.findEffectiveOccurrences.mockResolvedValue([
+        {
+          scheduledTransactionId: "st-1",
+          accountId: "readable",
+          isTransfer: false,
+        },
+        {
+          scheduledTransactionId: "st-2",
+          accountId: "hidden",
+          isTransfer: false,
+        },
+      ]);
+      delegationMock.readableAccountIds.mockResolvedValue(["readable"]);
+
+      const result = (await controller.findOccurrences(
+        { user: { id: "user-1", isActing: true, delegationId: "del-1" } },
+        { through: "2026-11-30" },
+      )) as { scheduledTransactionId: string }[];
+
+      expect(result.map((r) => r.scheduledTransactionId)).toEqual(["st-1"]);
     });
   });
 

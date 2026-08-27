@@ -123,6 +123,10 @@
       "status": "Status",
       "actions": "Aktionen"
     },
+    "dateDisplay": {
+      "toggleLabel": "Jahr ausblenden",
+      "toggleTitle": "Das Jahr aus den Datumsangaben entfernen, damit mehr vom Zahlungsempfänger sichtbar ist"
+    },
     "attachmentsCount": "{count, plural, one {# Anhang} other {# Anhänge}}",
     "today": "Heute",
     "export": {

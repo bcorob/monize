@@ -34,14 +34,24 @@ import { TransactionsService } from "../transactions/transactions.service";
 import { InvestmentTransactionsService } from "../securities/investment-transactions.service";
 import { InvestmentAction } from "../securities/entities/investment-transaction.entity";
 import { FUNDING_ACCOUNT_ACTIONS } from "../securities/investment-replay.util";
-import {
-  investmentSplitCashAmount,
-  computeInvestmentCashImpact,
-} from "../securities/cash-impact.util";
 import { Account, AccountSubType } from "../accounts/entities/account.entity";
+import {
+  SECURITY_REQUIRED_ACTIONS,
+  QUANTITY_PRICE_ACTIONS,
+  QUANTITY_ONLY_ACTIONS,
+  AMOUNT_ONLY_ACTIONS,
+} from "./scheduled-investment-actions";
+import {
+  ScheduledEffectiveAmountService,
+  overrideEffectiveKey,
+} from "./scheduled-effective-amount.service";
+import {
+  ResolvedScheduledOccurrence,
+  ScheduledOccurrenceService,
+} from "./scheduled-occurrence.service";
 import { ScheduledTransactionOverrideService } from "./scheduled-transaction-override.service";
 import { ScheduledTransactionLoanService } from "./scheduled-transaction-loan.service";
-import { todayInTimezone, todayYMD } from "../common/date-utils";
+import { addDaysYMD, todayInTimezone, todayYMD } from "../common/date-utils";
 import {
   calculateNextDueDate as calcNextDueDate,
   ensureYMD,
@@ -53,16 +63,33 @@ import { withScopedDb } from "../common/db/scoped-db";
 import { affectedRowCount } from "../common/db/query-result";
 import { validateSplitAmountSum } from "../common/split-amount.util";
 import { roundMoney, sumMoney } from "../common/round.util";
-import { mapWithConcurrency } from "../common/concurrency.util";
 import {
   applyFxConversion,
   normalizeFxEntry,
   roundFxRate,
 } from "../common/fx-entry.util";
 import { ExchangeRateService } from "../currencies/exchange-rate.service";
+import {
+  convertingTotal,
+  memoizedRateResolver,
+} from "../common/converting-total";
+import { resolveUserDefaultCurrency } from "../common/default-currency.util";
 import { tr } from "../i18n/translate";
 
-export type LlmScheduledKind = "bill" | "deposit" | "transfer" | "investment";
+/**
+ * What one scheduled occurrence is, for a model reading the list.
+ *
+ * `unknown` is a real answer, not a gap: an unpriceable mixed-sign split posts on
+ * either side of zero, so neither "bill" nor "deposit" is derivable and asserting
+ * one gives the model a classification to reason from that the data cannot
+ * support (issue #1247 re-audit).
+ */
+export type LlmScheduledKind =
+  | "bill"
+  | "deposit"
+  | "transfer"
+  | "investment"
+  | "unknown";
 
 export interface LlmScheduledItem {
   id: string;
@@ -71,7 +98,20 @@ export interface LlmScheduledItem {
   accountName: string;
   payeeName: string | null;
   categoryName: string | null;
-  amount: number;
+  /**
+   * The cash amount this occurrence would post *today*, in `currency` -- the
+   * server-resolved effective amount, not the persisted snapshot (issue #1247).
+   * `null` when a component of it is unknown (a cross-currency settlement rate
+   * that cannot be resolved); never a fallback to the stored `amount`, which was
+   * written at whatever rate was current then.
+   */
+  amount: number | null;
+  /** `amount !== null`. False means the current amount could not be determined. */
+  amountComplete: boolean;
+  /**
+   * The currency `amount` is in. For an investment schedule this is the
+   * *settlement* currency the cash lands in, not the brokerage account's.
+   */
   currency: string;
   frequency: FrequencyType;
   nextDueDate: string;
@@ -86,8 +126,35 @@ export interface LlmUpcomingScheduledResult {
   daysWindow: number;
   itemCount: number;
   overdueCount: number;
-  totalUpcomingBills: number;
-  totalUpcomingDeposits: number;
+  /**
+   * `null` when any included bill's current amount is unknown, or when one of
+   * them is in a currency with no rate into `totalsCurrency` -- an aggregate is
+   * only a total when every component is known AND in one currency, and
+   * substituting a stale persisted amount or adding two currencies as numbers
+   * both report a confident wrong number (issue #1247).
+   * `knownUpcomingBillsSubtotal` then carries what did convert.
+   */
+  totalUpcomingBills: number | null;
+  totalUpcomingDeposits: number | null;
+  /**
+   * The currency both totals are expressed in: the user's default. Each item
+   * keeps its OWN `currency`, which need not be this one -- a scheduled
+   * investment settles in its settlement account's currency.
+   */
+  totalsCurrency: string;
+  /** Present only when the matching total is `null`. Never a total's stand-in. */
+  knownUpcomingBillsSubtotal?: number;
+  knownUpcomingDepositsSubtotal?: number;
+  /** False when ANY listed item's current amount is unknown, totals included. */
+  amountsComplete: boolean;
+  /** The items whose current amount is unknown, so an answer can name them. */
+  unknownAmountItems?: string[];
+  /**
+   * The currency pairs a component could not be converted through, so a withheld
+   * total says why rather than leaving a bare `null`. Empty when every component
+   * converted.
+   */
+  missingRatePairs?: string[];
   items: LlmScheduledItem[];
 }
 
@@ -99,6 +166,77 @@ export interface LlmScheduledFilter {
 
 export interface LlmUpcomingFilter extends LlmScheduledFilter {
   days?: number;
+}
+
+/**
+ * One per-occurrence override as the list read returns it: the stored row plus
+ * the server's answer for what that occurrence would post today (issue #1247).
+ */
+export type ScheduledTransactionOverrideReadModel =
+  ScheduledTransactionOverride & {
+    investmentForecastAmount: number | null;
+    effectiveAmount: number | null;
+    effectiveAmountComplete: boolean;
+  };
+
+/**
+ * A scheduled transaction as `findAll` returns it: the stored row, its
+ * overrides, and the effective-amount contract every consumer reads instead of
+ * the persisted `amount` (issue #1247).
+ *
+ * `effectiveAmount` is the cash amount this schedule's un-overridden occurrences
+ * would post today, in `effectiveCurrencyCode`; `null` (with
+ * `effectiveAmountComplete` false) when a component of it -- today, a
+ * cross-currency settlement rate -- cannot be determined. A consumer renders
+ * that as unavailable or withholds the total it belongs to; it never falls back
+ * to `amount`, which is a snapshot at whatever rate was current when it was
+ * written.
+ */
+export type ScheduledTransactionReadModel = ScheduledTransaction & {
+  overrideCount?: number;
+  nextOverride?: ScheduledTransactionOverrideReadModel | null;
+  futureOverrides?: ScheduledTransactionOverrideReadModel[];
+  investmentForecastExchangeRate: number | null;
+  investmentForecastAmount: number | null;
+  effectiveAmount: number | null;
+  effectiveAmountComplete: boolean;
+  effectiveCurrencyCode: string;
+};
+
+/**
+ * One occurrence, as a client receives it (issue #1247, INV-OCCURRENCE-003).
+ *
+ * `amount` is already the effective amount for THIS occurrence -- the override's
+ * when one governs it, the schedule's otherwise -- so there is no base-versus-
+ * override choice left for a consumer to make, and no persisted snapshot in the
+ * payload to reach for. `null` (with `amountComplete` false) means the current
+ * amount cannot be determined: render it unavailable and withhold any total
+ * containing it.
+ *
+ * `originalDate` is the recurrence slot (the occurrence's identity, and what an
+ * override edit addresses); `dueDate` is when it actually falls.
+ */
+export interface ScheduledOccurrenceReadModel {
+  scheduledTransactionId: string;
+  originalDate: string;
+  dueDate: string;
+  amount: number | null;
+  amountComplete: boolean;
+  /**
+   * The signed amount that decides this occurrence's direction, or `null` when
+   * the direction cannot be derived (an unpriceable mixed-sign split posts on
+   * either side of zero). A client must not substitute the schedule's stored
+   * amount for a `null` here -- that is the substitution `occurrenceKind` exists
+   * to prevent.
+   */
+  directionAmount: number | null;
+  currencyCode: string;
+  overrideId: string | null;
+  /** True when an override moved this occurrence off its recurrence slot. */
+  moved: boolean;
+  accountId: string;
+  transferAccountId: string | null;
+  isTransfer: boolean;
 }
 
 const INVESTMENT_RELATIONS = [
@@ -114,59 +252,6 @@ const INVESTMENT_RELATIONS = [
   "splits.tags",
   "splits.investmentSecurity",
 ];
-
-// Bound on how many scheduled rows resolve their #1167 forecast FX concurrently
-// in findAll (issue #1167 review). Rows are independent and the pair/rate/tuple
-// caches store Promises and are populated with a synchronous get->set (no await
-// between), so concurrent rows join the same in-flight work rather than
-// duplicating a provider fetch or a pair derivation. The cap keeps distinct
-// currency pairs from serializing their external FX lookups end-to-end while
-// staying within provider limits, matching the fan-out bound the FX subsystem
-// already uses.
-const SCHEDULED_FORECAST_CONCURRENCY = 6;
-
-// Each Money-vocabulary refinement (REDEEM, CAPITAL_GAIN_SHORT/LONG,
-// REINVEST_*) validates exactly as its base action does.
-const SECURITY_REQUIRED_ACTIONS = new Set<InvestmentAction>([
-  InvestmentAction.BUY,
-  InvestmentAction.SELL,
-  InvestmentAction.REDEEM,
-  InvestmentAction.DIVIDEND,
-  InvestmentAction.CAPITAL_GAIN,
-  InvestmentAction.CAPITAL_GAIN_SHORT,
-  InvestmentAction.CAPITAL_GAIN_LONG,
-  InvestmentAction.SPLIT,
-  InvestmentAction.REINVEST,
-  InvestmentAction.REINVEST_INTEREST,
-  InvestmentAction.REINVEST_CAPITAL_GAIN_SHORT,
-  InvestmentAction.REINVEST_CAPITAL_GAIN_LONG,
-  InvestmentAction.ADD_SHARES,
-  InvestmentAction.REMOVE_SHARES,
-]);
-
-const QUANTITY_PRICE_ACTIONS = new Set<InvestmentAction>([
-  InvestmentAction.BUY,
-  InvestmentAction.SELL,
-  InvestmentAction.REDEEM,
-  InvestmentAction.REINVEST,
-  InvestmentAction.REINVEST_INTEREST,
-  InvestmentAction.REINVEST_CAPITAL_GAIN_SHORT,
-  InvestmentAction.REINVEST_CAPITAL_GAIN_LONG,
-]);
-
-const QUANTITY_ONLY_ACTIONS = new Set<InvestmentAction>([
-  InvestmentAction.ADD_SHARES,
-  InvestmentAction.REMOVE_SHARES,
-  InvestmentAction.SPLIT,
-]);
-
-const AMOUNT_ONLY_ACTIONS = new Set<InvestmentAction>([
-  InvestmentAction.DIVIDEND,
-  InvestmentAction.INTEREST,
-  InvestmentAction.CAPITAL_GAIN,
-  InvestmentAction.CAPITAL_GAIN_SHORT,
-  InvestmentAction.CAPITAL_GAIN_LONG,
-]);
 
 /**
  * On an update, an omitted key means "leave the stored value"; an explicit null
@@ -320,8 +405,30 @@ export class ScheduledTransactionsService {
   constructor(
     @Inject(forwardRef(() => AccountsService))
     private accountsService: AccountsService,
+    // forwardRef on the next four: each of these classes sits on a require
+    // cycle back to this file, so its reflected parameter type is `undefined`
+    // under some load orders and Nest reports "can't resolve dependencies of
+    // the ScheduledTransactionsService (..., ?, ...)" at boot. The occurrence
+    // pair joined that cycle with issue #1247, through
+    // ScheduledEffectiveAmountService -> InvestmentTransactionsService ->
+    // AccountsService. See `src/module-graph.spec.ts`.
+    @Inject(forwardRef(() => TransactionsService))
     private transactionsService: TransactionsService,
+    @Inject(forwardRef(() => InvestmentTransactionsService))
     private investmentTransactionsService: InvestmentTransactionsService,
+    // The single server-side answer to "what would this occurrence post today"
+    // (issue #1247). Every FX/provenance decision the schedule makes -- the
+    // projection, the posting and the read models AI, MCP, the dashboard, the
+    // budget and the reports consume -- comes from here, so no surface can grow
+    // its own copy of the #1167 rules.
+    @Inject(forwardRef(() => ScheduledEffectiveAmountService))
+    private effectiveAmounts: ScheduledEffectiveAmountService,
+    // The single server-side answer to "which occurrence is due, and when"
+    // (issue #1247). Centralizing the arithmetic was half the fix: every surface
+    // still chose its own member of the resolver's result, so this owns the
+    // recurrence expansion and the override selection as well.
+    @Inject(forwardRef(() => ScheduledOccurrenceService))
+    private occurrences: ScheduledOccurrenceService,
     private overrideService: ScheduledTransactionOverrideService,
     private loanService: ScheduledTransactionLoanService,
     private dataSource: DataSource,
@@ -576,240 +683,6 @@ export class ScheduledTransactionsService {
     return new Set(rows.map((r) => r.id as string));
   }
 
-  /**
-   * The currency-pair provenance to persist beside a scheduled investment's FX
-   * rate (issue #1167). When there is no rate, the pair is null too -- the pair
-   * travels with the rate as one tuple. When there is a rate, the pair is
-   * derived through the very resolver the posting path uses
-   * (`resolveSettlementCurrencyPair`), so the pair a stored rate is later
-   * validated against is the pair it would be resolved for.
-   */
-  private async resolveInvestmentRateProvenance(
-    userId: string,
-    rate: number | null | undefined,
-    settlement: {
-      accountId: string;
-      fundingAccountId: string | null | undefined;
-      securityId: string | null | undefined;
-    },
-  ): Promise<{ from: string | null; to: string | null }> {
-    if (rate === null || rate === undefined) {
-      return { from: null, to: null };
-    }
-    const pair =
-      await this.investmentTransactionsService.resolveSettlementCurrencyPair(
-        userId,
-        settlement.accountId,
-        settlement.fundingAccountId,
-        settlement.securityId,
-      );
-    return { from: pair.from, to: pair.to };
-  }
-
-  /**
-   * The settlement currency pair for a tuple, deduped within one list read
-   * (issue #1167 review). `resolveSettlementCurrencyPair` is 2-3 sequential DB
-   * reads (brokerage / linked-cash / security currency lookups), and every
-   * forecast resolver in `findAll` derives the SAME pair more than once per row:
-   * the stored-current check derives it, and the pair-rate cache key derives it
-   * again. Across N rows sharing one `(accountId, fundingAccountId, securityId)`
-   * that is O(N) identical lookups even though the currencies are constant within
-   * a read. This memo (a Promise per tuple, so concurrent callers join one
-   * in-flight derivation) collapses them to one. The cache is passed in -- never
-   * an instance field -- so it is scoped to a single `findAll`; callers outside a
-   * list read omit it and derive directly, unchanged. This memoizes the pair
-   * DERIVATION only; the pair-rate FETCH stays deduped by `pairRateCache`, and
-   * `InvestmentTransactionsService` remains the sole owner of FX precedence.
-   */
-  private resolveForecastSettlementPair(
-    userId: string,
-    accountId: string,
-    fundingAccountId: string | null | undefined,
-    securityId: string | null | undefined,
-    cache?: Map<string, Promise<{ from: string; to: string }>>,
-  ): Promise<{ from: string; to: string }> {
-    const fetch = () =>
-      this.investmentTransactionsService.resolveSettlementCurrencyPair(
-        userId,
-        accountId,
-        fundingAccountId,
-        securityId,
-      );
-    if (!cache) return fetch();
-    const key = `${accountId}|${fundingAccountId ?? ""}|${securityId ?? ""}`;
-    let pending = cache.get(key);
-    if (!pending) {
-      pending = fetch();
-      cache.set(key, pending);
-    }
-    return pending;
-  }
-
-  /**
-   * Whether a stored FX rate may be reused for the current settlement pair
-   * (issue #1167). A rate is reused only when its recorded pair still matches
-   * the current settlement pair; a rate whose recorded pair no longer matches --
-   * or that carries no recorded pair at all -- is not proven to belong to the
-   * current pair, so this returns false and the caller forwards no rate, letting
-   * the posting resolver re-resolve (and fail loudly if no current rate exists)
-   * rather than posting a rate for an unknown pair.
-   *
-   * A missing pair is "unknown", not "current": every rate the app writes after
-   * #1167 carries its pair, so the only rows without one predate the migration,
-   * and an unprovable scalar must never be applied to a pair it may not describe.
-   */
-  private async storedInvestmentRateIsCurrent(
-    userId: string,
-    storedFrom: string | null | undefined,
-    storedTo: string | null | undefined,
-    settlement: {
-      accountId: string;
-      fundingAccountId: string | null | undefined;
-      securityId: string | null | undefined;
-    },
-    pairCache?: Map<string, Promise<{ from: string; to: string }>>,
-  ): Promise<boolean> {
-    if (!storedFrom || !storedTo) {
-      // No recorded pair: unknown, not current -- re-resolve rather than trust.
-      return false;
-    }
-    const pair = await this.resolveForecastSettlementPair(
-      userId,
-      settlement.accountId,
-      settlement.fundingAccountId,
-      settlement.securityId,
-      pairCache,
-    );
-    // Same-currency settlement resolves to 1 by definition (issue #1167), so a
-    // stored non-1 scalar recorded against an X->X pair is never "the current
-    // rate" even when its from/to still equal the pair -- e.g. a 1.50 EUR/CAD
-    // rate stamped CAD/CAD after the security's currency changed to CAD, or an
-    // explicit re-entry on a since-same-currency pair. Refusing reuse here routes
-    // every effective-rate path (parent forecast, split/override, post) through
-    // `resolveCashExchangeRateOrNull`, which returns 1 for same-currency, rather
-    // than reusing the scalar directly. A stored rate that genuinely is 1 gets
-    // the identical result from the resolver, so nothing is lost.
-    if (pair.from === pair.to) {
-      return false;
-    }
-    return pair.from === storedFrom && pair.to === storedTo;
-  }
-
-  /**
-   * The effective FX rate *and* recomputed cash amount for an embedded/override
-   * investment split at posting (issue #1167). A split settles through the
-   * parent's INVESTMENT_CASH account (no separate funding account), and its cash
-   * `amount` is `cashImpact(security currency) x rate` -- so a stale rate makes
-   * the stored amount inconsistent with a re-resolved rate, which
-   * `createEmbeddedForSplit` would reject (`embeddedSplitAmountMismatch`).
-   *
-   * The effective rate is the stored one when its recorded pair still matches the
-   * current settlement pair, otherwise a freshly resolved rate for the current
-   * pair (through the same path posting uses). The cash amount is recomputed from
-   * that effective rate so the two always agree. When no current rate can be
-   * determined for a genuine cross-currency pair, this throws
-   * `exchangeRateUnavailable` -- posting refuses rather than committing a wrong
-   * amount, the same as the non-split investment path.
-   */
-  private async resolveEffectiveSplitCashOrNull(
-    userId: string,
-    accountId: string,
-    securityId: string | null | undefined,
-    action: InvestmentAction,
-    quantity: number,
-    price: number,
-    commission: number,
-    storedRate: number | null | undefined,
-    storedFrom: string | null | undefined,
-    storedTo: string | null | undefined,
-    asOf: string | Date,
-    cache?: Map<string, Promise<number | null>>,
-    pairCache?: Map<string, Promise<{ from: string; to: string }>>,
-  ): Promise<{ rate: number; amount: number } | null> {
-    let effectiveRate: number | null = null;
-    if (storedRate !== null && storedRate !== undefined) {
-      const isCurrent = await this.storedInvestmentRateIsCurrent(
-        userId,
-        storedFrom,
-        storedTo,
-        { accountId, fundingAccountId: null, securityId: securityId ?? null },
-        pairCache,
-      );
-      if (isCurrent) effectiveRate = Number(storedRate);
-    }
-    if (effectiveRate === null) {
-      effectiveRate = await this.resolveForecastPairRate(
-        userId,
-        accountId,
-        null,
-        securityId ?? null,
-        asOf,
-        cache,
-        pairCache,
-      );
-    }
-    if (effectiveRate === null) {
-      return null;
-    }
-    return {
-      rate: effectiveRate,
-      amount: investmentSplitCashAmount(
-        action,
-        quantity,
-        price,
-        commission,
-        effectiveRate,
-      ),
-    };
-  }
-
-  private async resolveEffectiveSplitCash(
-    userId: string,
-    accountId: string,
-    securityId: string | null | undefined,
-    action: InvestmentAction,
-    quantity: number,
-    price: number,
-    commission: number,
-    storedRate: number | null | undefined,
-    storedFrom: string | null | undefined,
-    storedTo: string | null | undefined,
-    asOf: string | Date,
-    cache?: Map<string, Promise<number | null>>,
-  ): Promise<{ rate: number; amount: number }> {
-    const eff = await this.resolveEffectiveSplitCashOrNull(
-      userId,
-      accountId,
-      securityId,
-      action,
-      quantity,
-      price,
-      commission,
-      storedRate,
-      storedFrom,
-      storedTo,
-      asOf,
-      cache,
-    );
-    if (eff === null) {
-      const pair =
-        await this.investmentTransactionsService.resolveSettlementCurrencyPair(
-          userId,
-          accountId,
-          null,
-          securityId ?? null,
-        );
-      throw new BadRequestException(
-        tr(
-          "errors.securities.exchangeRateUnavailable",
-          `Could not determine an exchange rate for ${pair.from} -> ${pair.to} on the transaction date. Supply an explicit exchangeRate so the cash posting is correct.`,
-          { from: pair.from, to: pair.to },
-        ),
-      );
-    }
-    return eff;
-  }
-
   async create(
     userId: string,
     createDto: CreateScheduledTransactionDto,
@@ -888,7 +761,7 @@ export class ScheduledTransactionsService {
     // #1167). Only resolved when a rate is actually supplied, so a rateless
     // investment schedule adds no reads and no new failure modes.
     const investmentRateProvenance = isInvestment
-      ? await this.resolveInvestmentRateProvenance(
+      ? await this.effectiveAmounts.resolveInvestmentRateProvenance(
           userId,
           transactionData.investmentExchangeRate,
           {
@@ -1430,11 +1303,15 @@ export class ScheduledTransactionsService {
         const securityId = split.investment!.securityId;
         if (securityId) {
           const stampCurrent = () =>
-            this.resolveInvestmentRateProvenance(userId, incomingRate, {
-              accountId,
-              fundingAccountId: null,
-              securityId,
-            });
+            this.effectiveAmounts.resolveInvestmentRateProvenance(
+              userId,
+              incomingRate,
+              {
+                accountId,
+                fundingAccountId: null,
+                securityId,
+              },
+            );
           investmentRateProvenance =
             provenanceSource === "fresh"
               ? // A brand-new schedule: every line's rate is for the current pair.
@@ -1506,371 +1383,7 @@ export class ScheduledTransactionsService {
     return savedSplits;
   }
 
-  /**
-   * The *effective* FX rate a cash-flow forecast should apply to a scheduled
-   * investment's projected cash impact (issue #1167). This is a read-only,
-   * server-resolved value that must equal what {@link postInvestment} will use,
-   * so the forecast agrees with the posting it predicts. That means the same
-   * stored-if-current-else-resolve decision the posting makes -- NOT
-   * unconditionally the current market rate (Round 6 F1): a valid persisted rate
-   * whose recorded pair still matches the current settlement pair is *reused* by
-   * posting, so the forecast must reuse it too, or a schedule pinned at 1.50
-   * forecasts 1.35 and posts 1.50.
-   *
-   *   - stored rate present AND its pair still current -> that stored rate;
-   *   - stored rate stale / absent provenance / no stored rate -> a fresh rate
-   *     for the current pair (`resolveCashExchangeRateOrNull`, no supplied rate);
-   *   - same currency -> `1`;
-   *   - a genuine cross-currency pair with no determinable rate -> `null`
-   *     (unknown), rendered as an unavailable projection. `null` is never a
-   *     same-currency pair, so the forecast cannot mistake "1:1" for "missing".
-   * Returns `null` for a non-investment schedule (the forecast ignores it there).
-   *
-   * `asOf` is today: the forecast's occurrences are future-dated, and
-   * `getRateForDate` clamps a future date to today. Passing a date (rather than
-   * omitting it) is deliberate -- it takes the same provider-capable rate path
-   * posting uses, so the forecast does not say "unavailable" for a pair posting
-   * could resolve. Because that path can perform an external fetch (and persist
-   * the result), the caller runs this *outside* the `findAll` transaction.
-   */
-  /**
-   * The effective FX rate for an investment settlement (Round 6 F1): the stored
-   * rate when its recorded pair still matches the current settlement pair (posting
-   * reuses it), otherwise a freshly resolved one; `null` for an unresolvable
-   * cross-currency pair, `1` for same-currency. The single definition of "the rate
-   * posting will use", shared by the parent forecast rate and the top-level
-   * investment override amount.
-   */
-  private async resolveEffectiveInvestmentRate(
-    userId: string,
-    settlement: {
-      accountId: string;
-      fundingAccountId: string | null | undefined;
-      securityId: string | null | undefined;
-    },
-    stored: {
-      rate: number | null;
-      from: string | null | undefined;
-      to: string | null | undefined;
-    },
-    asOf: Date,
-    // Per-list-read negative cache for the pair-rate fetch (issue #1167 review
-    // R14-F1); omitted outside a list read, where the fetch runs directly.
-    cache?: Map<string, Promise<number | null>>,
-    // Per-list-read memo for the settlement-pair DERIVATION (issue #1167 review),
-    // shared by the stored-current check and the pair-rate cache key below.
-    pairCache?: Map<string, Promise<{ from: string; to: string }>>,
-  ): Promise<number | null> {
-    if (
-      stored.rate !== null &&
-      (await this.storedInvestmentRateIsCurrent(
-        userId,
-        stored.from,
-        stored.to,
-        settlement,
-        pairCache,
-      ))
-    ) {
-      return stored.rate;
-    }
-    return this.resolveForecastPairRate(
-      userId,
-      settlement.accountId,
-      settlement.fundingAccountId,
-      settlement.securityId,
-      asOf,
-      cache,
-      pairCache,
-    );
-  }
-
-  /**
-   * The settlement-pair FX rate a forecast resolver needs, deduped within one
-   * list read (issue #1167 review R14-F1). Every forecast path -- parent rate,
-   * split-amount and override-amount -- resolves an unchanged pair through the
-   * same `resolveCashExchangeRateOrNull(..., undefined, asOf)`, and a pair that
-   * does not resolve persists nothing, so without a shared negative cache each
-   * of N schedules on the same unfetchable pair re-hits the external FX provider
-   * on every list read. The cache is passed in (never an instance field) so it
-   * is scoped to one `findAll`; callers outside a list read omit it and fetch
-   * directly, unchanged.
-   */
-  private async resolveForecastPairRate(
-    userId: string,
-    accountId: string,
-    fundingAccountId: string | null | undefined,
-    securityId: string | null | undefined,
-    asOf: string | Date,
-    cache?: Map<string, Promise<number | null>>,
-    pairCache?: Map<string, Promise<{ from: string; to: string }>>,
-  ): Promise<number | null> {
-    const fetch = () =>
-      this.investmentTransactionsService.resolveCashExchangeRateOrNull(
-        userId,
-        accountId,
-        fundingAccountId,
-        securityId,
-        undefined,
-        asOf,
-      );
-    if (!cache) return fetch();
-    // Key the negative cache by the DIRECTIONAL CURRENCY PAIR, not the entity
-    // tuple (issue #1167 review, R14 follow-up): twenty different securities that
-    // all settle USD->CAD ask the provider one and the same question, and a
-    // failed lookup persists nothing -- so an (account, security) key would still
-    // hit the provider once per security. Derive the pair (a cheap account/
-    // security currency read, not a provider call) and key by `from->to`; the
-    // rate for a cross-currency pair is a property of the pair, and same-currency
-    // resolves to 1 inside `fetch()` regardless of which security asked. `asOf`
-    // is constant across one findAll, so the pair is the whole key.
-    const pair = await this.resolveForecastSettlementPair(
-      userId,
-      accountId,
-      fundingAccountId,
-      securityId,
-      pairCache,
-    );
-    const key = `${pair.from}->${pair.to}`;
-    let pending = cache.get(key);
-    if (!pending) {
-      pending = fetch();
-      cache.set(key, pending);
-    }
-    return pending;
-  }
-
-  private async resolveInvestmentForecastRate(
-    userId: string,
-    transaction: ScheduledTransaction,
-    asOf: Date,
-    cache?: Map<string, Promise<number | null>>,
-    pairCache?: Map<string, Promise<{ from: string; to: string }>>,
-  ): Promise<number | null> {
-    if (!transaction.isInvestment || !transaction.investmentAction) {
-      return null;
-    }
-    const action = transaction.investmentAction as InvestmentAction;
-    return this.resolveEffectiveInvestmentRate(
-      userId,
-      {
-        accountId: transaction.accountId,
-        fundingAccountId: FUNDING_ACCOUNT_ACTIONS.has(action)
-          ? transaction.investmentFundingAccountId
-          : null,
-        securityId: transaction.investmentSecurityId,
-      },
-      {
-        rate:
-          transaction.investmentExchangeRate !== null &&
-          transaction.investmentExchangeRate !== undefined
-            ? Number(transaction.investmentExchangeRate)
-            : null,
-        from: transaction.investmentExchangeRateFromCurrency,
-        to: transaction.investmentExchangeRateToCurrency,
-      },
-      asOf,
-      cache,
-      pairCache,
-    );
-  }
-
-  /**
-   * The effective total amount a split-investment schedule would post *today*
-   * (issue #1167 F-rev3.2), for the forecast to project instead of the stored
-   * parent amount -- which is stale once a referenced security's or settlement
-   * account's currency changes. It re-sums the base scheduled splits with each
-   * investment split's *effective* cash amount (stored rate when its recorded
-   * pair still matches, otherwise a freshly resolved one, through the same path
-   * posting uses), leaving non-investment splits at their stored amount.
-   *
-   * Returns `null` for a schedule that is not a split-investment one (so the
-   * forecast uses `amount` unchanged), and also `null` when any investment
-   * split's current rate cannot be resolved -- the forecast then withholds the
-   * whole projection, matching what posting would do (refuse) rather than
-   * projecting a stale figure. This covers the base schedule only; a
-   * per-occurrence override carries its own stored amount, as every other
-   * override does.
-   */
-  private async resolveInvestmentForecastSplitAmount(
-    userId: string,
-    transaction: ScheduledTransaction,
-    asOf: Date,
-    cache?: Map<string, Promise<number | null>>,
-    pairCache?: Map<string, Promise<{ from: string; to: string }>>,
-  ): Promise<number | null> {
-    if (!transaction.isSplit || !transaction.splits?.length) {
-      return null;
-    }
-    const hasInvestmentSplit = transaction.splits.some(
-      (s) => s.kind === SplitKind.INVESTMENT && s.investmentAction,
-    );
-    if (!hasInvestmentSplit) {
-      return null;
-    }
-    const amounts: number[] = [];
-    for (const split of transaction.splits) {
-      if (split.kind === SplitKind.INVESTMENT && split.investmentAction) {
-        const quantity =
-          split.investmentQuantity !== null &&
-          split.investmentQuantity !== undefined
-            ? Number(split.investmentQuantity)
-            : 0;
-        const price =
-          split.investmentPrice !== null && split.investmentPrice !== undefined
-            ? Number(split.investmentPrice)
-            : 0;
-        const commission =
-          split.investmentCommission !== null &&
-          split.investmentCommission !== undefined
-            ? Number(split.investmentCommission)
-            : 0;
-        const eff = await this.resolveEffectiveSplitCashOrNull(
-          userId,
-          transaction.accountId,
-          split.investmentSecurityId,
-          split.investmentAction,
-          quantity,
-          price,
-          commission,
-          split.investmentExchangeRate,
-          split.investmentExchangeRateFromCurrency,
-          split.investmentExchangeRateToCurrency,
-          asOf,
-          cache,
-          pairCache,
-        );
-        if (eff === null) {
-          // Current rate unknown -> the whole projection is unknown.
-          return null;
-        }
-        amounts.push(eff.amount);
-      } else {
-        amounts.push(Number(split.amount));
-      }
-    }
-    return sumMoney(amounts);
-  }
-
-  /**
-   * The effective cash total a *per-occurrence override* would post today (issue
-   * #1167, F5-2 + Round 6 F3). An override's stored `amount` is a snapshot at the
-   * rate current when it was created, and a top-level investment override stores
-   * quantity/price/total rather than an amount at all -- so the forecast must
-   * recompute what posting will do, not read the stale scalar.
-   *
-   * Three shapes:
-   *   - **top-level investment override** (parent schedule is an investment): the
-   *     signed cash impact of the override-or-base quantity/price/total at the
-   *     effective rate. Computed for *every* override of an investment schedule,
-   *     even a date-only one, so `null` stays reserved for a genuinely unknown FX
-   *     rate rather than "no investment override".
-   *   - **split-investment override**: its base splits re-summed at current FX.
-   *   - **anything else**: `undefined`, so the forecast keeps using the override's
-   *     own stored `amount`.
-   * `null` means investment-related but the current rate is unknown -- the forecast
-   * withholds that occurrence.
-   */
-  private async resolveOverrideInvestmentForecastAmount(
-    userId: string,
-    scheduled: ScheduledTransaction,
-    override: ScheduledTransactionOverride,
-    asOf: Date,
-    cache?: Map<string, Promise<number | null>>,
-    pairCache?: Map<string, Promise<{ from: string; to: string }>>,
-  ): Promise<number | null | undefined> {
-    // Top-level investment override: same precedence as postInvestment
-    // (override value -> base fallback) at the effective (stored-or-resolved) rate.
-    if (scheduled.isInvestment && scheduled.investmentAction) {
-      const action = scheduled.investmentAction as InvestmentAction;
-      const rate = await this.resolveEffectiveInvestmentRate(
-        userId,
-        {
-          accountId: scheduled.accountId,
-          fundingAccountId: FUNDING_ACCOUNT_ACTIONS.has(action)
-            ? scheduled.investmentFundingAccountId
-            : null,
-          securityId: scheduled.investmentSecurityId,
-        },
-        {
-          rate:
-            scheduled.investmentExchangeRate !== null &&
-            scheduled.investmentExchangeRate !== undefined
-              ? Number(scheduled.investmentExchangeRate)
-              : null,
-          from: scheduled.investmentExchangeRateFromCurrency,
-          to: scheduled.investmentExchangeRateToCurrency,
-        },
-        asOf,
-        cache,
-        pairCache,
-      );
-      if (rate === null) {
-        return null;
-      }
-      const quantity = Number(
-        override.investmentQuantity ?? scheduled.investmentQuantity ?? 0,
-      );
-      const price = Number(
-        override.investmentPrice ?? scheduled.investmentPrice ?? 0,
-      );
-      const commission = Number(scheduled.investmentCommission ?? 0);
-      const total =
-        override.investmentTotalAmount ?? scheduled.investmentTotalAmount;
-      // Amount-only income actions carry their cash directly (positive); every
-      // other action derives it from quantity/price/commission, signed by side.
-      const cashSecurity = AMOUNT_ONLY_ACTIONS.has(action)
-        ? Number(total ?? 0)
-        : computeInvestmentCashImpact(action, quantity, price, commission);
-      return roundMoney(cashSecurity * rate);
-    }
-
-    // Split-investment override: re-sum its base splits at current FX.
-    if (!override.isSplit || !override.splits?.length) {
-      return undefined;
-    }
-    const hasInvestmentSplit = override.splits.some((s) => s.investment);
-    if (!hasInvestmentSplit) {
-      return undefined;
-    }
-    const amounts: number[] = [];
-    for (const split of override.splits) {
-      const inv = split.investment;
-      if (inv) {
-        const eff = await this.resolveEffectiveSplitCashOrNull(
-          userId,
-          scheduled.accountId,
-          inv.securityId,
-          inv.action as InvestmentAction,
-          Number(inv.quantity ?? 0),
-          Number(inv.price ?? 0),
-          Number(inv.commission ?? 0),
-          inv.exchangeRate,
-          inv.exchangeRateFromCurrency,
-          inv.exchangeRateToCurrency,
-          asOf,
-          cache,
-          pairCache,
-        );
-        if (eff === null) {
-          return null;
-        }
-        amounts.push(eff.amount);
-      } else {
-        amounts.push(Number(split.amount));
-      }
-    }
-    return sumMoney(amounts);
-  }
-
-  async findAll(userId: string): Promise<
-    (ScheduledTransaction & {
-      overrideCount?: number;
-      nextOverride?: ScheduledTransactionOverride | null;
-      futureOverrides?: ScheduledTransactionOverride[];
-      investmentForecastExchangeRate?: number | null;
-      investmentForecastAmount?: number | null;
-    })[]
-  > {
+  async findAll(userId: string): Promise<ScheduledTransactionReadModel[]> {
     const rows = await withScopedDb(this.dataSource, async (m) => {
       const transactions = await m
         .getRepository(ScheduledTransaction)
@@ -1967,129 +1480,51 @@ export class ScheduledTransactionsService {
       }));
     });
 
-    // Resolve the forecast FX rate for each investment schedule OUTSIDE the list
+    // Resolve the effective amount for each schedule OUTSIDE the list
     // transaction (issue #1167). The provider-capable rate path can perform an
     // external fetch and persist the result, which must not run inside the long
-    // read transaction. Sequential so the first resolution of a pair persists it
-    // before the next schedule needs it (a natural dedup within one list read);
-    // same-currency rows short-circuit to 1 with no rate lookup at all.
-    const asOf = new Date();
-    // Dedup the settlement-pair FX fetch across EVERY forecast resolver within
-    // this one list read (issue #1167 review R14-F1). The parent rate, the
-    // split-investment amount and each override amount all resolve an unchanged
-    // pair through the same external `resolveCashExchangeRateOrNull`, and a pair
-    // that does not resolve persists nothing -- so without this shared negative
-    // cache each of N schedules on the same unfetchable pair re-hits the FX
-    // provider on every list read. Passed into all three resolvers; keyed on the
-    // settlement pair (`asOf` is constant across the read). A same-currency row
-    // still short-circuits to 1 with no lookup at all.
-    const pairRateCache = new Map<string, Promise<number | null>>();
-    // Dedup the settlement-pair DERIVATION (2-3 DB reads each) across every
-    // forecast resolver in this read (issue #1167 review): the stored-current
-    // check and the pair-rate cache key both derive the same tuple's pair, once
-    // per parent/split/override row, so without this memo a user with many
-    // investment schedules sharing one settlement tuple pays O(rows) identical
-    // account/security lookups even when every rate is already cached. Keyed by
-    // the entity tuple (the derivation's whole input); the rate FETCH stays keyed
-    // by the resolved pair in `pairRateCache`.
-    const pairCache = new Map<string, Promise<{ from: string; to: string }>>();
-    // A second, higher-level memo for the parent rate: dedups the stored-current
-    // decision as well as the fetch, so two rows with the same settlement tuple,
-    // stored rate/pair and action resolve once. It shares `pairRateCache` for the
-    // fetch, so the parent path and the amount paths never fetch the same pair
-    // twice.
-    const forecastRateCache = new Map<string, Promise<number | null>>();
-    const forecastRateFor = (
-      row: ScheduledTransaction,
-    ): Promise<number | null> => {
-      if (!(row.isInvestment && row.investmentAction)) {
-        return Promise.resolve(null);
-      }
-      const key = [
-        row.accountId,
-        row.investmentFundingAccountId ?? "",
-        row.investmentSecurityId ?? "",
-        row.investmentExchangeRate ?? "",
-        row.investmentExchangeRateFromCurrency ?? "",
-        row.investmentExchangeRateToCurrency ?? "",
-        row.investmentAction,
-      ].join("|");
-      let pending = forecastRateCache.get(key);
-      if (!pending) {
-        pending = this.resolveInvestmentForecastRate(
-          userId,
-          row,
-          asOf,
-          pairRateCache,
-          pairCache,
-        );
-        forecastRateCache.set(key, pending);
-      }
-      return pending;
-    };
-    // Resolve rows with bounded concurrency rather than end-to-end sequentially
-    // (issue #1167 review): each row's forecast work is independent and the
-    // shared caches join in-flight work safely (see SCHEDULED_FORECAST_CONCURRENCY),
-    // so N schedules across K distinct currency pairs no longer make K external FX
-    // lookups additive. Output order is preserved by `mapWithConcurrency`, so the
-    // list order is unchanged from the sequential version.
-    return mapWithConcurrency(
-      rows,
-      SCHEDULED_FORECAST_CONCURRENCY,
-      async (row) => {
-        const investmentForecastExchangeRate = await forecastRateFor(row);
-        // A split-investment schedule projects its *effective* total (re-summed
-        // with current FX) rather than the stored parent amount (issue #1167);
-        // null for every other schedule leaves the forecast on `amount`.
-        const investmentForecastAmount =
-          await this.resolveInvestmentForecastSplitAmount(
-            userId,
-            row,
-            asOf,
-            pairRateCache,
-            pairCache,
-          );
-        // Each override that carries investment splits gets its own effective
-        // total too (F5-2): a per-occurrence override with investment splits is
-        // FX-sensitive the same way the base schedule is, and its stored `amount`
-        // is a stale snapshot once a security's currency changes.
-        const augmentOverride = async (
-          override: ScheduledTransactionOverride | null | undefined,
-        ) => {
-          if (!override) return override ?? null;
-          const overrideForecastAmount =
-            await this.resolveOverrideInvestmentForecastAmount(
-              userId,
-              row,
-              override,
-              asOf,
-              pairRateCache,
-              pairCache,
-            );
-          // Return a new object rather than mutating the loaded entity in place
-          // (immutability rule): the override entities are shared read models, and
-          // stamping a derived field onto them in the loop mutates what other
-          // readers of the same transaction hold.
-          return {
-            ...override,
-            investmentForecastAmount: overrideForecastAmount,
-          };
-        };
-        const nextOverride = await augmentOverride(row.nextOverride);
-        const futureOverrides = row.futureOverrides
-          ? await Promise.all(row.futureOverrides.map(augmentOverride))
-          : row.futureOverrides;
+    // read transaction. `ScheduledEffectiveAmountService` owns the FX caches, the
+    // provenance rules and the combination of rate and stored scalar, so this
+    // list read and every other consumer (AI, MCP, dashboard, budget, reports)
+    // read one server-authoritative answer rather than each deriving its own
+    // (issue #1247).
+    const effective = await this.effectiveAmounts.resolveMany(userId, rows);
+
+    return rows.map((row) => {
+      const resolved = effective.get(row.id)!;
+      // Each override that carries an investment gets its own effective total
+      // too (#1167 F5-2): a per-occurrence override is FX-sensitive the same way
+      // the base schedule is, and its stored `amount` is a stale snapshot once a
+      // security's currency changes. Return new objects rather than mutating the
+      // loaded entities in place (immutability rule): the override entities are
+      // shared read models, and stamping a derived field onto them here mutates
+      // what other readers of the same transaction hold.
+      const augmentOverride = (override: ScheduledTransactionOverride) => {
+        const own = resolved.overrides.get(overrideEffectiveKey(override));
         return {
-          ...row,
-          nextOverride,
-          futureOverrides: futureOverrides as
-            | ScheduledTransactionOverride[]
-            | undefined,
-          investmentForecastExchangeRate,
-          investmentForecastAmount,
+          ...override,
+          investmentForecastAmount: own?.investmentForecastAmount ?? null,
+          effectiveAmount: own?.effective.amount ?? null,
+          effectiveAmountComplete: own?.effective.complete ?? false,
+          effectiveDirectionAmount: own?.effective.directionAmount ?? null,
         };
-      },
-    );
+      };
+      return {
+        ...row,
+        nextOverride: row.nextOverride
+          ? augmentOverride(row.nextOverride)
+          : null,
+        futureOverrides: row.futureOverrides?.map(augmentOverride),
+        investmentForecastExchangeRate: resolved.investmentForecastExchangeRate,
+        investmentForecastAmount: resolved.investmentForecastAmount,
+        effectiveAmount: resolved.base.amount,
+        effectiveAmountComplete: resolved.base.complete,
+        effectiveCurrencyCode: resolved.base.currencyCode,
+        // Whether the direction is derivable at all, so a client never has to
+        // reach for the snapshot's sign (issue #1247 re-audit).
+        effectiveDirectionAmount: resolved.base.directionAmount,
+      };
+    });
   }
 
   async findOne(userId: string, id: string): Promise<ScheduledTransaction> {
@@ -2218,27 +1653,162 @@ export class ScheduledTransactionsService {
     filter: LlmUpcomingFilter = {},
   ): Promise<LlmUpcomingScheduledResult> {
     const days = filter.days ?? 30;
-    const rows = await this.findUpcoming(userId, days);
     const today = todayYMD();
-    const items = rows
-      .map((r) => toLlmScheduledItem(r, today))
-      .filter((item) => matchesScheduledFilter(item, filter));
+    // The *occurrence* that is next due, not the schedule's template: an
+    // occurrence the user re-priced or moved is what will actually post, so
+    // reporting the base amount here made the assistant and MCP disagree with
+    // the register about a bill the user had already changed (issue #1247).
+    // `maxOccurrences: 1` keeps this payload one row per schedule, which is the
+    // shape both tool layers publish.
+    const occurrences = await this.occurrences.findOccurrences(userId, {
+      through: addDaysYMD(today, days),
+      maxOccurrences: 1,
+    });
+    // Everything the window holds that the caller's OTHER filters accept. The
+    // rollups are built from this rather than from the kind-filtered list,
+    // because an occurrence whose direction is not derivable is exactly what a
+    // `kind: "bill"` filter must not be allowed to hide: dropping it first
+    // returned a complete-looking `totalUpcomingBills` with
+    // `amountsComplete: true`, which is what the tool descriptions promise never
+    // happens (issue #1247 re-audit).
+    const rollupBase = occurrences
+      .map((occurrence) => toLlmScheduledItem(occurrence, today))
+      .filter((item) =>
+        matchesScheduledFilter(item, { ...filter, kind: undefined }),
+      );
+    const items = rollupBase.filter((item) =>
+      matchesScheduledFilter(item, filter),
+    );
 
-    const billAmounts = items
-      .filter((i) => i.kind === "bill")
-      .map((i) => Math.abs(i.amount));
-    const depositAmounts = items
-      .filter((i) => i.kind === "deposit")
-      .map((i) => i.amount);
+    // From the ROLLUP BASE, not from the kind-filtered list.
+    //
+    // A rollup total is a statement about the window, and a caller narrowing the
+    // LIST to deposits has not said the bills stopped existing. Taken from
+    // `items`, `kind: "deposit"` made `bills` empty and published
+    // `totalUpcomingBills: 0` with `amountsComplete: true` -- a confident "no
+    // bills are coming" over a window holding a 1,200 bill. That is the same
+    // defect the `unclassified` line below already guards against, and the
+    // previous pass fixed only that half of it: the unknown bucket was moved off
+    // the filtered list while these two were left on it (issue #1247, round 4).
+    const bills = rollupBase.filter((i) => i.kind === "bill");
+    const deposits = rollupBase.filter((i) => i.kind === "deposit");
+    // An occurrence whose direction is not derivable could belong to EITHER
+    // bucket, so it withholds both totals rather than being quietly left out of
+    // both -- its amount is null, which is what `totalConvertedInto` withholds
+    // on. It stays out of the two item lists, because a list of bills that
+    // includes something that might be a deposit is a worse answer than a named
+    // unknown (issue #1247 re-audit).
+    const unclassified = rollupBase.filter((i) => i.kind === "unknown");
+    // A bucket's total exists only when every item in it resolved AND every one
+    // of them converted into the currency the total is reported in; the partial
+    // sum travels in its own explicitly-named field so nothing reads it as a
+    // total. Each bucket otherwise answers for itself -- an unknown deposit does
+    // not make the bills total unknowable.
+    //
+    // An item's `currency` is its SETTLEMENT currency, which for an investment
+    // schedule is neither the brokerage account's nor the reader's: summing the
+    // raw numbers published a 1,350 CAD occurrence beside a 500 USD bill as a
+    // confident `1850` under one label, which is the exact figure both tool
+    // descriptions promise cannot appear (issue #1247 re-audit).
+    const totalsCurrency = await resolveUserDefaultCurrency(
+      this.dataSource,
+      userId,
+    );
+    // One cache across BOTH buckets: an unclassified occurrence is in each of
+    // them, so a per-bucket cache would ask for its pair twice.
+    const rateFor = memoizedRateResolver(
+      this.exchangeRateService,
+      totalsCurrency,
+      today,
+    );
+    const billsTotal = await convertingTotal(
+      [...bills, ...unclassified],
+      totalsCurrency,
+      rateFor,
+      (a) => Math.abs(a),
+    );
+    const depositsTotal = await convertingTotal(
+      [...deposits, ...unclassified],
+      totalsCurrency,
+      rateFor,
+    );
+    const missingRatePairs = [
+      ...new Set([...billsTotal.missingPairs, ...depositsTotal.missingPairs]),
+    ].sort();
+    // Named from the rollup base, which is what the totals now cover: an item
+    // the kind filter removed from the LIST still makes a total incomplete, so
+    // the caller has to be told which item it was. Reading `items` here named
+    // only the ones that survived the filter, so an unpriceable bill under
+    // `kind: "deposit"` went unmentioned while making the bills total unknown.
+    const unknownAmountItems = [
+      ...new Set(
+        rollupBase.filter((i) => !i.amountComplete).map((i) => i.name),
+      ),
+    ];
 
     return {
       daysWindow: days,
       itemCount: items.length,
       overdueCount: items.filter((i) => i.daysUntilDue < 0).length,
-      totalUpcomingBills: sumMoney(billAmounts),
-      totalUpcomingDeposits: sumMoney(depositAmounts),
+      totalUpcomingBills: billsTotal.total,
+      totalUpcomingDeposits: depositsTotal.total,
+      totalsCurrency,
+      ...(billsTotal.total === null
+        ? { knownUpcomingBillsSubtotal: billsTotal.knownSubtotal }
+        : {}),
+      ...(depositsTotal.total === null
+        ? { knownUpcomingDepositsSubtotal: depositsTotal.knownSubtotal }
+        : {}),
+      // A withheld total has two causes and the reader needs to know which:
+      // an item whose own amount could not be worked out (named here) and an
+      // item in a currency with no rate into the reporting one (named below).
+      // Reporting the second as the first sends the reader to the schedule
+      // instead of to the rate.
+      amountsComplete:
+        unknownAmountItems.length === 0 && missingRatePairs.length === 0,
+      ...(unknownAmountItems.length > 0 ? { unknownAmountItems } : {}),
+      ...(missingRatePairs.length > 0 ? { missingRatePairs } : {}),
       items,
     };
+  }
+
+  /**
+   * The occurrences due through `through`, priced at what each would post today
+   * (issue #1247).
+   *
+   * This is what a client renders a bills calendar, list or export from. It
+   * exists because the browser cannot answer the question: expanding the
+   * recurrence client-side gives you dates but no per-occurrence amount, so the
+   * Upcoming Bills report applied one schedule-level figure to every projected
+   * occurrence and exported it -- wrong for every occurrence the user had
+   * re-priced, and wrong by the FX drift for an investment schedule.
+   *
+   * `accountId` / `transferAccountId` / `isTransfer` travel with each occurrence
+   * so the delegate filter and the transfer mask can do their work on this
+   * payload exactly as they do on a schedule list.
+   */
+  async findEffectiveOccurrences(
+    userId: string,
+    options: { through: string; maxPerSchedule?: number },
+  ): Promise<ScheduledOccurrenceReadModel[]> {
+    const occurrences = await this.occurrences.findOccurrences(userId, {
+      through: options.through,
+      maxOccurrences: options.maxPerSchedule ?? 100,
+    });
+    return occurrences.map((occurrence) => ({
+      scheduledTransactionId: occurrence.scheduledTransactionId,
+      originalDate: occurrence.originalDate,
+      dueDate: occurrence.dueDate,
+      amount: occurrence.amount,
+      amountComplete: occurrence.complete,
+      directionAmount: occurrence.directionAmount,
+      currencyCode: occurrence.currencyCode,
+      overrideId: occurrence.overrideId,
+      moved: occurrence.moved,
+      accountId: occurrence.schedule.accountId,
+      transferAccountId: occurrence.schedule.transferAccountId ?? null,
+      isTransfer: !!occurrence.schedule.isTransfer,
+    }));
   }
 
   async update(
@@ -2660,15 +2230,16 @@ export class ScheduledTransactionsService {
           // the current pair (`investmentExchangeRateExplicit`, R11-F1) even when
           // its value equals the stored one, was just resolved for the current
           // pair -- so record the current pair.
-          const provenance = await this.resolveInvestmentRateProvenance(
-            userId,
-            writtenRate,
-            {
-              accountId: updateData.accountId ?? scheduled.accountId,
-              fundingAccountId: effectiveFundingForFx,
-              securityId: effectiveSecurityIdForFx,
-            },
-          );
+          const provenance =
+            await this.effectiveAmounts.resolveInvestmentRateProvenance(
+              userId,
+              writtenRate,
+              {
+                accountId: updateData.accountId ?? scheduled.accountId,
+                fundingAccountId: effectiveFundingForFx,
+                securityId: effectiveSecurityIdForFx,
+              },
+            );
           fieldsToUpdate.investmentExchangeRateFromCurrency = provenance.from;
           fieldsToUpdate.investmentExchangeRateToCurrency = provenance.to;
         }
@@ -3131,7 +2702,7 @@ export class ScheduledTransactionsService {
                 fromCur = pair.from;
                 toCur = pair.to;
               }
-              const eff = await this.resolveEffectiveSplitCash(
+              const eff = await this.effectiveAmounts.resolveEffectiveSplitCash(
                 userId,
                 scheduled.accountId,
                 split.investment.securityId,
@@ -3170,7 +2741,7 @@ export class ScheduledTransactionsService {
               // Recompute the override split's effective rate AND cash amount so
               // a re-resolved rate never disagrees with a stale stored amount
               // (issue #1167).
-              const eff = await this.resolveEffectiveSplitCash(
+              const eff = await this.effectiveAmounts.resolveEffectiveSplitCash(
                 userId,
                 scheduled.accountId,
                 split.investment.securityId,
@@ -3225,7 +2796,7 @@ export class ScheduledTransactionsService {
               // (stored-if-valid, else re-resolved) rate so the two agree at
               // posting (issue #1167). Otherwise a re-resolved rate beside a
               // stale stored amount fails createEmbeddedForSplit's check.
-              const eff = await this.resolveEffectiveSplitCash(
+              const eff = await this.effectiveAmounts.resolveEffectiveSplitCash(
                 userId,
                 scheduled.accountId,
                 split.investmentSecurityId,
@@ -3686,7 +3257,7 @@ export class ScheduledTransactionsService {
     // not current, so it is dropped and re-resolved too -- never trusted.
     if (
       exchangeRate !== undefined &&
-      !(await this.storedInvestmentRateIsCurrent(
+      !(await this.effectiveAmounts.storedInvestmentRateIsCurrent(
         userId,
         scheduled.investmentExchangeRateFromCurrency,
         scheduled.investmentExchangeRateToCurrency,
@@ -3982,10 +3553,22 @@ export class ScheduledTransactionsService {
   }
 }
 
-function classifyScheduledKind(row: ScheduledTransaction): LlmScheduledKind {
+/**
+ * What ONE occurrence is, for a model reading the list.
+ *
+ * The direction comes from the occurrence (`directionAmount`), never from the
+ * schedule's stored amount: a mixed-sign split parent's effective amount can sit
+ * on the other side of zero from its snapshot, and reading the snapshot reported
+ * a re-priced inflow as a bill (see `ScheduledOccurrenceService`).
+ */
+function classifyScheduledKind(
+  occurrence: ResolvedScheduledOccurrence,
+): LlmScheduledKind {
+  const row = occurrence.schedule;
   if (row.isTransfer) return "transfer";
   if (row.isInvestment) return "investment";
-  return Number(row.amount) < 0 ? "bill" : "deposit";
+  if (occurrence.directionAmount === null) return "unknown";
+  return occurrence.directionAmount < 0 ? "bill" : "deposit";
 }
 
 function daysBetweenYMD(fromYMD: string, toYMD: string): number {
@@ -3994,11 +3577,19 @@ function daysBetweenYMD(fromYMD: string, toYMD: string): number {
   return Math.round((to - from) / (1000 * 60 * 60 * 24));
 }
 
+/**
+ * One occurrence, as the AI Assistant and MCP publish it.
+ *
+ * `nextDueDate` is the occurrence's own due date -- the moved date when an
+ * override moved it, not the recurrence slot it replaced. A schedule whose next
+ * occurrence was pushed a week out used to be announced on the original date and
+ * priced from the template, which is two wrong answers about one bill.
+ */
 function toLlmScheduledItem(
-  row: ScheduledTransaction,
+  occurrence: ResolvedScheduledOccurrence,
   todayYMDStr: string,
 ): LlmScheduledItem {
-  const nextDueDate = ensureYMD(row.nextDueDate);
+  const row = occurrence.schedule;
   return {
     id: row.id,
     name: row.name,
@@ -4006,14 +3597,15 @@ function toLlmScheduledItem(
     accountName: row.account?.name ?? "",
     payeeName: row.payee?.name ?? row.payeeName ?? null,
     categoryName: row.category?.name ?? null,
-    amount: roundMoney(Number(row.amount)),
-    currency: row.currencyCode,
+    amount: occurrence.amount,
+    amountComplete: occurrence.complete,
+    currency: occurrence.currencyCode,
     frequency: row.frequency,
-    nextDueDate,
-    daysUntilDue: daysBetweenYMD(todayYMDStr, nextDueDate),
+    nextDueDate: occurrence.dueDate,
+    daysUntilDue: daysBetweenYMD(todayYMDStr, occurrence.dueDate),
     isActive: row.isActive,
     autoPost: row.autoPost,
-    kind: classifyScheduledKind(row),
+    kind: classifyScheduledKind(occurrence),
     description: row.description ?? null,
   };
 }

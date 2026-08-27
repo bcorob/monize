@@ -128,7 +128,8 @@
     "backToReports": "[XX-Back to Reports-XX]",
     "switchReport": "[XX-Switch to another report-XX]",
     "switchPlaceholder": "[XX-Filter reports...-XX]",
-    "switchNoMatches": "[XX-No reports match-XX]"
+    "switchNoMatches": "[XX-No reports match-XX]",
+    "favourites": "[XX-Favourites-XX]"
   },
   "reportPage": {
     "notFound": "[XX-Report Not Found-XX]",
@@ -437,6 +438,7 @@
     "currentBalance": "[XX-Current Balance-XX]",
     "principalPaid": "[XX-Principal Paid-XX]",
     "estTotalInterest": "[XX-Est. Total Interest-XX]",
+    "interestOverProjection": "[XX-Interest Over Projection-XX]",
     "interestPaid": "[XX-Interest Paid-XX]",
     "progress": "[XX-Progress-XX]",
     "estPayoff": "[XX-Est. Payoff-XX]",
@@ -807,6 +809,7 @@
     "originalAmount": "[XX-Original Amount-XX]",
     "interestRate": "[XX-Interest Rate-XX]",
     "estTotalInterest": "[XX-Est. Total Interest-XX]",
+    "interestOverProjection": "[XX-Interest Over Projection-XX]",
     "totalInterestPaid": "[XX-Total Interest Paid-XX]",
     "paymentsMade": "[XX-Payments Made-XX]",
     "estPayoff": "[XX-Est. Payoff-XX]",
@@ -839,7 +842,8 @@
     "typeLineOfCredit": "[XX-Line of Credit-XX]",
     "typeLoan": "[XX-Loan-XX]",
     "typeMortgage": "[XX-Mortgage-XX]",
-    "pdfSubtitlePaymentsSummary": "[XX-{count} payments made, {interest} total interest-XX]"
+    "pdfSubtitlePaymentsSummary": "[XX-{count} payments made, {interest} total interest-XX]",
+    "pdfSubtitlePaymentsProjection": "[XX-{count} payments made, {interest} interest over projection-XX]"
   },
   "monteCarlo": {
     "toasts": {
@@ -1548,12 +1552,16 @@
     "csvColBillName": "[XX-Bill Name-XX]",
     "csvColDueDate": "[XX-Due Date-XX]",
     "csvColAmount": "[XX-Amount-XX]",
+    "csvColCurrency": "[XX-Currency-XX]",
     "csvColFrequency": "[XX-Frequency-XX]",
     "csvColAccount": "[XX-Account-XX]",
     "csvColStatus": "[XX-Status-XX]",
     "csvStatusOverdue": "[XX-Overdue-XX]",
     "csvStatusAuto": "[XX-Auto-XX]",
     "csvStatusManual": "[XX-Manual-XX]",
+    "amountUnavailable": "[XX-Not available-XX]",
+    "occurrencesUnavailable": "[XX-The projected occurrences could not be loaded, so the calendar and the amounts below are unavailable. Your bills themselves are unaffected.-XX]",
+    "csvAmountUnavailable": "[XX-Not available (no current exchange rate)-XX]",
     "pdfTitle": "[XX-Upcoming Bills Report-XX]",
     "pdfSubtitle": "[XX-{month} | {count} active bills-XX]",
     "pdfActiveBills": "[XX-Active Bills-XX]",

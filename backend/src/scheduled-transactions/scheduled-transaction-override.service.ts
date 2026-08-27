@@ -5,7 +5,7 @@ import {
   Logger,
 } from "@nestjs/common";
 import { randomUUID } from "crypto";
-import { DataSource } from "typeorm";
+import { DataSource, QueryFailedError } from "typeorm";
 import {
   ScheduledTransactionOverride,
   OverrideSplit,
@@ -28,6 +28,29 @@ export type OverrideInvestmentProvenance = Map<
 import { validateSplitAmountSum } from "../common/split-amount.util";
 import { withScopedDb } from "../common/db/scoped-db";
 import { tr } from "../i18n/translate";
+
+/** PostgreSQL's unique-violation SQLSTATE. */
+const UNIQUE_VIOLATION = "23505";
+
+/**
+ * The constraint that names an occurrence: one override per recurrence slot
+ * (migration 166). Matched by name, so a violation of some OTHER unique
+ * constraint on this table is not reported as "you already have an override for
+ * that occurrence" -- a message about the wrong thing sends the caller to fix
+ * something that is not broken.
+ */
+const OCCURRENCE_IDENTITY_CONSTRAINT = "uq_sched_txn_overrides_occurrence";
+
+function isOccurrenceAlreadyOverridden(error: unknown): boolean {
+  if (!(error instanceof QueryFailedError)) return false;
+  const driver = error.driverError as
+    | { code?: string; constraint?: string }
+    | undefined;
+  return (
+    driver?.code === UNIQUE_VIOLATION &&
+    driver?.constraint === OCCURRENCE_IDENTITY_CONSTRAINT
+  );
+}
 
 @Injectable()
 export class ScheduledTransactionOverrideService {
@@ -84,6 +107,13 @@ export class ScheduledTransactionOverrideService {
   ): Promise<ScheduledTransactionOverride> {
     return withScopedDb(this.dataSource, async (m) => {
       const repo = m.getRepository(ScheduledTransactionOverride);
+      // The friendly refusal, for the ordinary case. It is NOT what makes one
+      // override per occurrence true: a SELECT is not a lock, so two concurrent
+      // creates for one slot both read no existing row and both proceed. The
+      // database's `uq_sched_txn_overrides_occurrence` is the mechanism
+      // (migration 166); this read exists so the common case gets a 400 naming
+      // the date instead of a driver error, and the catch below turns the
+      // constraint's own refusal into the same message.
       const existing = await repo
         .createQueryBuilder("override")
         .where("override.scheduledTransactionId = :scheduledTransactionId", {
@@ -95,13 +125,7 @@ export class ScheduledTransactionOverrideService {
         .getOne();
 
       if (existing) {
-        throw new BadRequestException(
-          tr(
-            "errors.scheduled.overrideAlreadyExists",
-            `An override already exists for the ${createDto.originalDate} occurrence. Use update instead.`,
-            { originalDate: createDto.originalDate },
-          ),
-        );
+        throw this.occurrenceAlreadyOverridden(createDto.originalDate);
       }
 
       if (
@@ -137,8 +161,31 @@ export class ScheduledTransactionOverrideService {
         investmentTotalAmount: createDto.investmentTotalAmount ?? null,
       });
 
-      return repo.save(override);
+      try {
+        return await repo.save(override);
+      } catch (error) {
+        // The loser of a concurrent create. Rejected by the constraint before
+        // anything committed, and reported as the same 400 the pre-check gives
+        // -- a caller must not have to tell the two apart.
+        if (isOccurrenceAlreadyOverridden(error)) {
+          throw this.occurrenceAlreadyOverridden(createDto.originalDate);
+        }
+        throw error;
+      }
     });
+  }
+
+  /** One message for both routes to the same refusal. */
+  private occurrenceAlreadyOverridden(
+    originalDate: string,
+  ): BadRequestException {
+    return new BadRequestException(
+      tr(
+        "errors.scheduled.overrideAlreadyExists",
+        `An override already exists for the ${originalDate} occurrence. Use update instead.`,
+        { originalDate },
+      ),
+    );
   }
 
   async findOverrides(

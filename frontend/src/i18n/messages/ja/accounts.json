@@ -210,6 +210,7 @@
     "frequencyOptions": {
       "weekly": "毎週",
       "biweekly": "隔週",
+      "semiMonthly": "月2回",
       "monthly": "毎月",
       "quarterly": "四半期ごと",
       "yearly": "毎年"
@@ -308,12 +309,13 @@
     "previewFirstInterest": "初回支払い利息：",
     "previewTotalPayments": "総支払い回数：",
     "previewTotalInterest": "総利息：",
+    "previewFinalPayment": "最終返済額:",
     "previewPayoffDate": "完済予定日：",
     "previewNA": "N/A",
     "calculatingPreview": "プレビューを計算中...",
     "frequencyOptions": {
       "monthly": "毎月",
-      "semiMonthly": "月2回（1日と15日）",
+      "semiMonthly": "月2回（15日と月末）",
       "biweekly": "隔週",
       "acceleratedBiweekly": "加速隔週払い",
       "weekly": "毎週",
@@ -367,6 +369,7 @@
       "WEEKLY": "毎週",
       "BIWEEKLY": "隔週",
       "SEMI_MONTHLY": "月2回",
+      "SEMIMONTHLY": "月2回",
       "MONTHLY": "毎月",
       "QUARTERLY": "四半期ごと",
       "YEARLY": "毎年",
@@ -436,7 +439,8 @@
         "effect": "→ {interest} 節約、完済 {date}",
         "alreadyMet": "追加返済なしで既に達成しています。",
         "unreachableInterest": "達成不可 — どれほど大きな追加返済でもそこまで利息を節約できません。",
-        "unreachableDate": "達成不可 — その月は最短の完済時期より前です。"
+        "unreachableDate": "達成不可 — その月は最短の完済時期より前です。",
+        "baselineIncomplete": "このローンは予測期間内に完済しないため、逆算のもとになる利息総額がありません。"
       },
       "simulationTypeLabel": "シミュレーションの種類",
       "overpaymentAmount": "繰上返済額",
@@ -463,6 +467,7 @@
       "interestSaved": "節約できる利息",
       "totalExtraContributed": "追加返済の合計",
       "beyondProjection": "予測範囲外",
+      "unknown": "不明",
       "newInstallment": "新しい返済額",
       "installmentDrop": "{payment} (−{reduction})",
       "monthlyPayment": "毎月の返済額",
@@ -505,7 +510,9 @@
       "colOverpayment": "繰上返済",
       "overpaymentWithFrequency": "{amount} ({frequency})",
       "loadAria": "シナリオ「{name}」を読み込む",
-      "budgetSummary": "予算 {amount}/月"
+      "budgetSummary": "予算 {amount}/月",
+      "chartExcludedUnknown": "{count, plural, other {# 件のシナリオは表示されません: 利息の節約額が不明です。}}",
+      "chartNeedsTwoKnown": "比較チャートには、利息の節約額が判明しているシナリオが2件以上必要です。"
     },
     "scenarioChart": {
       "title": "シナリオ比較",

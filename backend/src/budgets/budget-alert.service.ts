@@ -748,13 +748,21 @@ export class BudgetAlertService {
             (a) => (a.data as Record<string, unknown>)?.billId === bill.id,
           );
           if (!alertForBill) continue;
-          const alertDueDate = (alertForBill.data as Record<string, unknown>)
-            ?.dueDate as string;
-          // Bill was posted and nextDueDate advanced past the alert's due date
+          const alertData = alertForBill.data as Record<string, unknown>;
+          // "Has the schedule moved past this occurrence" is a question about the
+          // occurrence's SLOT, not about the day it was announced for: an
+          // override can move an occurrence EARLIER, and comparing `nextDueDate`
+          // against the moved date then reads an unposted bill as already paid
+          // and drops it from the digest (issue #1247). `originalDate` is the
+          // slot; rows written before it was recorded fall back to the announced
+          // date, which is what they were compared against before.
+          const alertSlot =
+            (alertData?.originalDate as string) ||
+            (alertData?.dueDate as string);
           if (
-            alertDueDate &&
+            alertSlot &&
             bill.nextDueDate &&
-            String(bill.nextDueDate) > alertDueDate
+            String(bill.nextDueDate) > alertSlot
           ) {
             paidBillIds.add(bill.id);
           }

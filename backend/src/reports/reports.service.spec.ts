@@ -1687,7 +1687,11 @@ describe("ReportsService", () => {
         const andWhereCalls = qb.andWhere.mock.calls.map(
           (c: unknown[]) => c[0],
         );
-        expect(andWhereCalls).toContain("transaction.amount < 0");
+        // A split parent's own sign is the sum of its lines, so it passes this
+        // gate and is narrowed per line afterwards (audit F-CUSTOM-DIR-001).
+        expect(andWhereCalls).toContain(
+          "(transaction.isSplit = true OR transaction.amount < 0)",
+        );
       });
 
       it("applies direction filter for INCOME_ONLY", async () => {
@@ -1703,7 +1707,9 @@ describe("ReportsService", () => {
         const andWhereCalls = qb.andWhere.mock.calls.map(
           (c: unknown[]) => c[0],
         );
-        expect(andWhereCalls).toContain("transaction.amount > 0");
+        expect(andWhereCalls).toContain(
+          "(transaction.isSplit = true OR transaction.amount > 0)",
+        );
       });
 
       it("does not apply direction filter for BOTH", async () => {
@@ -1716,8 +1722,164 @@ describe("ReportsService", () => {
         const andWhereCalls = qb.andWhere.mock.calls.map(
           (c: unknown[]) => c[0],
         );
-        expect(andWhereCalls).not.toContain("transaction.amount > 0");
-        expect(andWhereCalls).not.toContain("transaction.amount < 0");
+        expect(andWhereCalls).not.toContain(
+          "(transaction.isSplit = true OR transaction.amount > 0)",
+        );
+        expect(andWhereCalls).not.toContain(
+          "(transaction.isSplit = true OR transaction.amount < 0)",
+        );
+      });
+
+      /**
+       * INV-REPORT-001 for the custom engine. Generated investment cash is
+       * never ordinary cash; the securities sleeve is dropped only from a report
+       * that did not ask for it, and "asked for it" has to mirror
+       * getFilteredTransactions' own precedence -- filter groups REPLACE the
+       * legacy filters, and a condition with no values restricts nothing.
+       */
+      describe("investment provenance", () => {
+        const brokerageClause =
+          "(account.accountSubType IS NULL OR account.accountSubType != 'INVESTMENT_BROKERAGE')";
+        const linkageClause =
+          "NOT EXISTS (SELECT 1 FROM investment_transactions it WHERE it.transaction_id = transaction.id)";
+        const explicitClause =
+          "transaction.accountId IN (:...explicitReportAccountIds)";
+
+        const andWheres = (qb: Record<string, jest.Mock>) =>
+          qb.andWhere.mock.calls.map((c: unknown[]) => c[0]);
+
+        /**
+         * The row-level sleeve exception is composed inside `Brackets`, so the
+         * clauses land on the inner builder the mock hands the factory. This
+         * collects them from every bracket the query built.
+         */
+        const bracketCalls = (
+          qb: Record<string, jest.Mock>,
+        ): Array<[string, Record<string, unknown> | undefined]> => {
+          const collected: Array<
+            [string, Record<string, unknown> | undefined]
+          > = [];
+          for (const [arg] of qb.andWhere.mock.calls) {
+            const factory = (arg as { whereFactory?: (qb: unknown) => void })
+              ?.whereFactory;
+            if (!factory) continue;
+            const record = (
+              clause: string,
+              params?: Record<string, unknown>,
+            ) => {
+              collected.push([clause, params]);
+              return inner;
+            };
+            const inner: Record<string, jest.Mock> = {
+              where: jest.fn().mockImplementation(record),
+              orWhere: jest.fn().mockImplementation(record),
+            };
+            factory(inner);
+          }
+          return collected;
+        };
+
+        const bracketClauses = (qb: Record<string, jest.Mock>): string[] =>
+          bracketCalls(qb).map(([clause]) => clause);
+
+        it("always excludes the cash leg a trade generated", async () => {
+          const { qb } = setupExecuteMocks({ filters: {} });
+
+          await service.execute("user-1", "report-1");
+
+          expect(andWheres(qb)).toContain(linkageClause);
+        });
+
+        it("excludes the securities sleeve outright from an unscoped report", async () => {
+          const { qb } = setupExecuteMocks({ filters: {} });
+
+          await service.execute("user-1", "report-1");
+
+          expect(andWheres(qb)).toContain(brokerageClause);
+        });
+
+        it("admits the sleeve only for the accounts a legacy filter names", async () => {
+          const { qb } = setupExecuteMocks({
+            filters: { accountIds: ["acc-1"] },
+          });
+
+          await service.execute("user-1", "report-1");
+
+          // Not an outright exclusion any more: a bracket that keeps the sleeve
+          // out EXCEPT for the named accounts.
+          expect(andWheres(qb)).not.toContain(brokerageClause);
+          expect(bracketClauses(qb)).toEqual(
+            expect.arrayContaining([brokerageClause, explicitClause]),
+          );
+        });
+
+        /**
+         * Conditions within a group are OR'd, so these two shapes mean opposite
+         * things about the sleeve and a whole-report boolean cannot tell them
+         * apart (audit F-CUSTOM-OR-001).
+         */
+        it("names the brokerage account from a mixed OR group", async () => {
+          const { qb } = setupExecuteMocks({
+            filters: {
+              filterGroups: [
+                {
+                  conditions: [
+                    { field: "account", value: ["brokerage-1"] },
+                    { field: "category", value: ["cat-1"] },
+                  ],
+                },
+              ],
+            },
+          });
+
+          await service.execute("user-1", "report-1");
+
+          const explicit = bracketCalls(qb).find(
+            ([clause]) => clause === explicitClause,
+          );
+          expect(explicit?.[1]).toEqual({
+            explicitReportAccountIds: ["brokerage-1"],
+          });
+          // ...and the sleeve is still excluded for every OTHER account, so the
+          // category arm cannot leak brokerage rows in.
+          expect(bracketClauses(qb)).toContain(brokerageClause);
+        });
+
+        it("names no account when the group's account arm is empty", async () => {
+          const { qb } = setupExecuteMocks({
+            filters: {
+              filterGroups: [
+                {
+                  conditions: [
+                    { field: "account", value: [] },
+                    { field: "payee", value: ["payee-1"] },
+                  ],
+                },
+              ],
+            },
+          });
+
+          await service.execute("user-1", "report-1");
+
+          expect(andWheres(qb)).toContain(brokerageClause);
+        });
+
+        it("ignores a stale accountIds when filter groups are in charge", async () => {
+          // getFilteredTransactions applies the groups and ignores accountIds,
+          // so this report names no account at all.
+          const { qb } = setupExecuteMocks({
+            filters: {
+              accountIds: ["acc-1"],
+              filterGroups: [
+                { conditions: [{ field: "category", value: ["cat-1"] }] },
+              ],
+            },
+          });
+
+          await service.execute("user-1", "report-1");
+
+          expect(andWheres(qb)).toContain(brokerageClause);
+        });
       });
 
       it("filters out transfers when includeTransfers is false", async () => {

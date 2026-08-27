@@ -540,7 +540,10 @@ const scheduledItem = looseObject({
   accountName: str,
   payeeName: strNull,
   categoryName: strNull,
-  amount: num,
+  // The effective amount this occurrence would post today, null when its current
+  // settlement rate is unknown -- never the stale persisted amount (issue #1247).
+  amount: numNull,
+  amountComplete: bool,
   currency: str,
   frequency: str,
   nextDueDate: str,
@@ -555,8 +558,21 @@ export const getUpcomingBillsOutput = {
   daysWindow: num,
   itemCount: num,
   overdueCount: num,
-  totalUpcomingBills: num,
-  totalUpcomingDeposits: num,
+  // Null when any item in the bucket has an unknown current amount, or when one
+  // of them is in a currency with no rate into `totalsCurrency`; the partial sum
+  // then travels in the `known*Subtotal` field beside it (issue #1247).
+  totalUpcomingBills: numNull,
+  totalUpcomingDeposits: numNull,
+  // The currency BOTH totals are in. Each item carries its own `currency`, which
+  // need not be this one -- so a total is only readable alongside this field.
+  totalsCurrency: str,
+  knownUpcomingBillsSubtotal: num.optional(),
+  knownUpcomingDepositsSubtotal: num.optional(),
+  amountsComplete: bool,
+  unknownAmountItems: z.array(str).optional(),
+  // `"CAD->USD"` per pair that could not be converted, so a withheld total says
+  // why. An unresolvable item amount has no pair and is named above instead.
+  missingRatePairs: z.array(str).optional(),
   items: z.array(scheduledItem),
 };
 
@@ -610,7 +626,10 @@ export const getBudgetStatusOutput = {
   velocity: z
     .object({
       dailyBurnRate: num,
+      // Null when an upcoming bill's current amount is unknown (issue #1247);
+      // `upcomingBillsComplete` says so explicitly.
       safeDailySpend: num,
+      upcomingBillsComplete: bool,
       projectedTotal: num,
       projectedVariance: num,
       daysRemaining: num,

@@ -8,6 +8,11 @@ import {
 } from '@/types/custom-report';
 import { getCached, setCache, invalidateCache } from './apiCache';
 
+// The saved-reports list lives under one cache key; keep the key and TTL in one
+// place so getAll and the optimistic favourite patch below cannot drift.
+const REPORTS_CACHE_KEY = 'reports:all';
+const REPORTS_CACHE_TTL = 300_000; // 5 minutes
+
 export interface ExecuteReportParams {
   timeframeType?: TimeframeType;
   startDate?: string;
@@ -24,10 +29,10 @@ export const customReportsApi = {
 
   // Get all custom reports for the current user
   getAll: async (): Promise<CustomReport[]> => {
-    const cached = getCached<CustomReport[]>('reports:all');
+    const cached = getCached<CustomReport[]>(REPORTS_CACHE_KEY);
     if (cached) return cached;
     const response = await apiClient.get<CustomReport[]>('/reports/custom');
-    setCache('reports:all', response.data, 300_000);
+    setCache(REPORTS_CACHE_KEY, response.data, REPORTS_CACHE_TTL);
     return response.data;
   },
 
@@ -61,10 +66,31 @@ export const customReportsApi = {
 
   // Toggle favourite status
   toggleFavourite: async (id: string, isFavourite: boolean): Promise<CustomReport> => {
-    const response = await apiClient.patch<CustomReport>(`/reports/custom/${id}`, {
-      isFavourite,
-    });
-    invalidateCache('reports:');
-    return response.data;
+    // Reflect the new favourite in the shared list cache the moment the toggle
+    // starts, so a surface re-reading getAll before the request settles -- the
+    // report switcher mounting as the user navigates straight to the report they
+    // just starred -- already shows the new order (issue #1224). The
+    // invalidateCache below drops this optimistic copy once the server answers,
+    // on either path, so the next read reconciles against the server.
+    const cached = getCached<CustomReport[]>(REPORTS_CACHE_KEY);
+    if (cached) {
+      setCache(
+        REPORTS_CACHE_KEY,
+        cached.map((report) =>
+          report.id === id ? { ...report, isFavourite } : report,
+        ),
+        REPORTS_CACHE_TTL,
+      );
+    }
+    try {
+      const response = await apiClient.patch<CustomReport>(`/reports/custom/${id}`, {
+        isFavourite,
+      });
+      invalidateCache('reports:');
+      return response.data;
+    } catch (error) {
+      invalidateCache('reports:');
+      throw error;
+    }
   },
 };

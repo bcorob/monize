@@ -128,7 +128,8 @@
     "backToReports": "Zurück zu Berichten",
     "switchReport": "Zu einem anderen Bericht wechseln",
     "switchPlaceholder": "Berichte filtern...",
-    "switchNoMatches": "Keine Berichte gefunden"
+    "switchNoMatches": "Keine Berichte gefunden",
+    "favourites": "Favoriten"
   },
   "reportPage": {
     "notFound": "Bericht nicht gefunden",
@@ -437,6 +438,7 @@
     "currentBalance": "Aktueller Saldo",
     "principalPaid": "Getilgte Summe",
     "estTotalInterest": "Gesch. Gesamtzinsen",
+    "interestOverProjection": "Zinsen im Prognosezeitraum",
     "interestPaid": "Gezahlte Zinsen",
     "progress": "Fortschritt",
     "estPayoff": "Gesch. Tilgung",
@@ -807,6 +809,7 @@
     "originalAmount": "Ursprünglicher Betrag",
     "interestRate": "Zinssatz",
     "estTotalInterest": "Gesch. Gesamtzinsen",
+    "interestOverProjection": "Zinsen im Prognosezeitraum",
     "totalInterestPaid": "Gezahlte Zinsen gesamt",
     "paymentsMade": "Geleistete Zahlungen",
     "estPayoff": "Gesch. Tilgung",
@@ -839,7 +842,8 @@
     "typeLineOfCredit": "Kreditlinie",
     "typeLoan": "Darlehen",
     "typeMortgage": "Hypothek",
-    "pdfSubtitlePaymentsSummary": "{count} Zahlungen geleistet, {interest} Zinsen gesamt"
+    "pdfSubtitlePaymentsSummary": "{count} Zahlungen geleistet, {interest} Zinsen gesamt",
+    "pdfSubtitlePaymentsProjection": "{count} Zahlungen geleistet, {interest} Zinsen über den Projektionszeitraum"
   },
   "monteCarlo": {
     "toasts": {
@@ -1548,12 +1552,16 @@
     "csvColBillName": "Rechnungsname",
     "csvColDueDate": "Fälligkeitsdatum",
     "csvColAmount": "Betrag",
+    "csvColCurrency": "Währung",
     "csvColFrequency": "Häufigkeit",
     "csvColAccount": "Konto",
     "csvColStatus": "Status",
     "csvStatusOverdue": "Überfällig",
     "csvStatusAuto": "Auto",
     "csvStatusManual": "Manuell",
+    "amountUnavailable": "Nicht verfügbar",
+    "occurrencesUnavailable": "Die geplanten Vorkommen konnten nicht geladen werden, daher sind der Kalender und die Beträge unten nicht verfügbar. Ihre Rechnungen selbst sind davon nicht betroffen.",
+    "csvAmountUnavailable": "Nicht verfügbar (kein aktueller Wechselkurs)",
     "pdfTitle": "Bevorstehende Rechnungen",
     "pdfSubtitle": "{month} | {count} aktive Rechnungen",
     "pdfActiveBills": "Aktive Rechnungen",

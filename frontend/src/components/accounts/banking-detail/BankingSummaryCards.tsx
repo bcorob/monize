@@ -7,11 +7,17 @@ import {
   SummaryCardItem,
   summaryGridClass,
 } from '@/components/accounts/shared/SummaryCardGrid';
+import { UnknownAmount } from '@/components/ui/UnknownAmount';
 import type { Account } from '@/types/account';
 
 interface BankingSummaryCardsProps {
   account: Account;
-  projectedBalance: number;
+  /**
+   * `null` when the server could not complete the projection (issue #1247): the
+   * current balance is NOT a stand-in, because a figure captioned "projected"
+   * that equals today's is a measurement the reader did not get.
+   */
+  projectedBalance: number | null;
   moneyIn: number;
   moneyOut: number;
   interestEarnedYtd: number;
@@ -50,8 +56,13 @@ export function BankingSummaryCards({
     },
     {
       label: t('summary.projectedBalance'),
-      value: formatCurrency(projectedBalance, currency),
-      valueClass: signClass(projectedBalance),
+      value:
+        projectedBalance === null ? (
+          <UnknownAmount />
+        ) : (
+          formatCurrency(projectedBalance, currency)
+        ),
+      valueClass: projectedBalance === null ? undefined : signClass(projectedBalance),
       note: t('summary.projectedNote'),
     },
     {

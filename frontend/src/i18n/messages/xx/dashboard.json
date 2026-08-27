@@ -27,7 +27,6 @@
     "manualTitle": "[XX-Requires manual posting-XX]",
     "negativeBalanceWarning": "[XX-This transaction will cause the account balance to go below zero-XX]",
     "viewAll": "[XX-View all bills & deposits-XX]",
-    "totalDue": "[XX-Total due-XX]",
     "totalIncoming": "[XX-Total incoming-XX]",
     "moreItems": "[XX-+{count} more-XX]",
     "overdue": "[XX-Overdue-XX]",
@@ -38,7 +37,8 @@
       "bill": "[XX-Bill-XX]",
       "deposit": "[XX-Deposit-XX]",
       "transfer": "[XX-Transfer-XX]",
-      "reminder": "[XX-Reminder-XX]"
+      "reminder": "[XX-Reminder-XX]",
+      "unknown": "[XX-Unknown-XX]"
     }
   },
   "gettingStarted": {

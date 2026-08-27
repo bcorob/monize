@@ -40,10 +40,12 @@ import { CurrenciesModule } from "../currencies/currencies.module";
     PayeesModule,
     TagsModule,
     ActionHistoryModule,
-    DelegationModule,
+    // forwardRef on both: each lies on a require cycle, so a bare reference is
+    // `undefined` here under some load orders -- see `src/module-graph.spec.ts`.
+    forwardRef(() => DelegationModule),
     // Transfers resolve a cross-currency rate server-side rather than posting
     // at 1:1 when the request omits one (audit P5-002).
-    CurrenciesModule,
+    forwardRef(() => CurrenciesModule),
   ],
   providers: [
     TransactionsService,

@@ -4,6 +4,7 @@ import { useMemo } from 'react';
 import { useTranslations } from 'next-intl';
 import { useRouter } from 'next/navigation';
 import { InfoTooltip } from '@/components/ui/InfoTooltip';
+import { UnknownAmount } from '@/components/ui/UnknownAmount';
 import { useDateFormat } from '@/hooks/useDateFormat';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
 import type { NextScheduledItem } from '@/lib/scheduled-utils';
@@ -81,12 +82,18 @@ export function PayeeRecurringPanel({
                 </p>
                 <p
                   className={`text-base font-semibold ${
-                    nextBill.amount < 0
+                    nextBill.amount !== null && nextBill.amount < 0
                       ? 'text-red-600 dark:text-red-400'
                       : 'text-green-600 dark:text-green-400'
                   }`}
                 >
-                  {formatCurrency(Math.abs(nextBill.amount), nextBill.currencyCode)}
+                  {/* Unresolvable current amount: shown as unavailable rather
+                      than as the stale stored figure (issue #1247). */}
+                  {nextBill.amount === null ? (
+                    <UnknownAmount />
+                  ) : (
+                    formatCurrency(Math.abs(nextBill.amount), nextBill.currencyCode)
+                  )}
                 </p>
               </div>
               <p className="text-base font-semibold text-gray-700 dark:text-gray-300 text-right">

@@ -6,6 +6,11 @@
     "summaryActiveBills": "[XX-Active Bills-XX]",
     "summaryActiveDeposits": "[XX-Active Deposits-XX]",
     "summaryMonthlyNet": "[XX-Monthly Net-XX]",
+    "summaryAmountUnavailable": "[XX-Not available-XX]",
+    "summaryNetRatesUnavailable": "[XX-Exchange rates are not available right now, so the net cannot be worked out.-XX]",
+    "summaryNetMissingRates": "[XX-No exchange rate for {currencies} — add one on Currencies-XX]",
+    "summaryNetMissingRatesAndUnpriceable": "[XX-No exchange rate for {currencies}, and one or more schedules could not be priced.-XX]",
+    "summaryNetUnpriceable": "[XX-One or more schedules could not be priced-XX]",
     "summaryDueNow": "[XX-Due Now-XX]",
     "loadingText": "[XX-Loading scheduled transactions...-XX]",
     "chartUnavailable": "[XX-Chart temporarily unavailable-XX]"

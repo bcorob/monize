@@ -6,6 +6,11 @@
     "summaryActiveBills": "Активные счета",
     "summaryActiveDeposits": "Активные поступления",
     "summaryMonthlyNet": "Чистый ежемесячный итог",
+    "summaryAmountUnavailable": "Недоступно",
+    "summaryNetRatesUnavailable": "Курсы обмена сейчас недоступны, поэтому итог рассчитать нельзя.",
+    "summaryNetMissingRates": "Нет курса обмена для {currencies} — добавьте его в разделе Валюты",
+    "summaryNetMissingRatesAndUnpriceable": "Нет курса обмена для {currencies}, и сумму одного или нескольких расписаний рассчитать не удалось.",
+    "summaryNetUnpriceable": "Не удалось рассчитать сумму одного или нескольких расписаний",
     "summaryDueNow": "К оплате сейчас",
     "loadingText": "Загрузка запланированных проводок...",
     "chartUnavailable": "График временно недоступен"

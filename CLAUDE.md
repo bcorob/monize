@@ -105,9 +105,10 @@ Any use of "atomic", "single-use", "exactly once", "retryable", "cannot", "alway
 CI runs in UTC with one Playwright worker; a local run does neither, and both differences produce failures that look like regressions and are not.
 
 - **`TZ=UTC npm run test:unit`** matches CI. A few tests count periods against `new Date()` and land on the wrong side of a boundary under other offsets (`backend/src/ai/insights/insights-aggregator.service.spec.ts`, `backend/src/net-worth/net-worth.service.spec.ts`).
+- **The backend's database-backed suites never run in parallel with anything, including each other.** `backend/test/integration/*` rebuilds the schema of one shared `monize_test` (`synchronize` + `dropSchema`), so a second Jest worker pulls the tables out from under a running suite. The parallel config (`backend/package.json`) is pinned to `roots: ["<rootDir>/src"]`, `test/jest-e2e.json` pins `maxWorkers: 1`, and `npm test` runs `test:unit` then `test:integration` -- so the default command covers both and needs a reachable PostgreSQL; `npm run test:unit` is the offline path, and a filtered run goes through one of those two, since `npm test` itself takes no arguments. `backend/src/common/jest-config.guard.spec.ts` fails if a spec under `test/` becomes reachable from the parallel config again. Serialization stays until each worker owns its own database or schema -- nothing short of that makes `dropSchema` suites safe to run beside each other.
 - **`--workers=1` for the whole E2E suite.** `playwright.config.ts` sets one worker only when `CI` is set, and `e2e/tests/zz-danger-zone.spec.ts` deletes the shared account -- its `zz-` ordering only means anything serially. A single spec file is safe without the flag.
 - **A test that reads the wall clock is a test about today's date** -- `TZ=UTC` pins the offset, not the day (auto-backup promotes artifacts on specific days of the month, so ten assertions failed on `main` with nothing changed). Pin the clock in the spec and derive the pinned value from the constants the behaviour branches on (`WEEKLY_DAYS`, `MONTHLY_DAY` are exported for this). `backend/src/backup/auto-backup.service.spec.ts` is the pattern: fake `Date` only (faking `nextTick`/`queueMicrotask` under real `fs.promises` deadlocks), install fake timers once, move the date through a single `withClockAt` helper, and let a source scan fail a second installation.
-- **A guard that walks the tree with `gitListFiles` cannot see an untracked file.** `doc-paths.spec.ts` and `source-comment-paths.spec.ts` list their subjects with `git ls-files` (`backend/src/common/repo-tree.util.ts`), so a brand-new file is invisible to them until staged. Green before `git add` and red in CI on the same content is not a flake -- run those guards after staging (`git add -N` is enough).
+- **A guard that walks the tree with `gitListFiles` cannot see an untracked file.** `doc-paths.spec.ts`, `source-comment-paths.spec.ts` and `jest-config.guard.spec.ts` list their subjects with `git ls-files` (`backend/src/common/repo-tree.util.ts`), so a brand-new file is invisible to them until staged. Green before `git add` and red in CI on the same content is not a flake -- run those guards after staging (`git add -N` is enough).
 - `scripts/verify-schema.sh` reproduces the "Schema vs Migrations Drift" job locally (needs only Docker). Every migration must replay as a no-op on top of `schema.sql` (`CREATE ... IF NOT EXISTS`, `DROP ... IF EXISTS` before `CREATE POLICY`/`TRIGGER`) because that is how the app boots; a migration missing its guard also aborts container start-up, and the E2E and Lighthouse jobs then report only "backend exited (1)".
 
 ### Code Intelligence
@@ -231,6 +232,28 @@ A transfer is the same rule twice, plus conservation: two same-currency accounts
 
 A preview that resolves a rate as `?? 1` while the commit resolves a real one has the user approve one figure and receive another (this has happened twice). Call the same resolver from both.
 
+### A stored amount is a snapshot of a rate; the *current* amount is resolved
+
+`ScheduledTransaction.amount` was computed at whatever FX rate was current when it was written, so for an FX-sensitive schedule (a top-level investment, or a split parent carrying an investment line) it stops describing the occurrence the moment a referenced security's or account's currency changes. Ask `ScheduledEffectiveAmountService.resolveMany` (`backend/src/scheduled-transactions/scheduled-effective-amount.service.ts`) and read `effectiveAmount` / `effectiveAmountComplete` / `effectiveCurrencyCode`; on the client that means `nextOccurrenceEffectiveAmount` (`frontend/src/lib/scheduled-effective-amount.ts`), never `nextOverride?.amount ?? amount`. `null` means unknown and is never a licence to fall back to the snapshot -- a total containing it is withheld and the occurrence renders as unavailable (`UnknownAmount`).
+
+**The amount is half the answer; the account is the other half.** A scheduled investment's `accountId` is the brokerage, but the cash settles in the funding account or the brokerage's linked cash account -- so `settlementAccountId` (from `resolveSettlementAccountId`, the decision the posting makes) says whose balance the figure belongs to. An account-level projection keyed on the stored column charged the brokerage for cash it never moved *and* left the funding account's chart missing the outflow it pays: swapping only the amount would have traded one wrong number for another. Ask which account before asking how much.
+
+**The fix for one surface is not the fix.** Issue #1167 taught the cash-flow forecast to re-resolve and left the same decision duplicated in the dashboard, the budget, the reports, the exports, the AI assistant, MCP, the bill reminder, the alert and the account balance projection -- so one schedule read 1,500 CAD on five screens and 1,350 CAD on the forecast that predicts its posting (#1247). When you fix a derived-figure defect, grep every consumer of the raw field in the same commit and give them all one server-authoritative answer; `frontend/src/lib/scheduled-effective-amount.guard.test.ts` is the scan that keeps them there. INV-OCCURRENCE-003 in `docs/system-invariants.md` records the contract.
+
+**Centralizing the arithmetic is not centralizing the answer.** The first pass at #1247 gave every surface one resolver and left each of them to decide *which occurrence* it was pricing: the identity is a recurrence slot (`original_date`), an override can move the occurrence to another date (`override_date`), and a consumer that keys the lookup on the moved date -- as the budget alert path did -- silently reads the template for every occurrence the user changed. So the unit a surface asks for is the **occurrence**, from `ScheduledOccurrenceService` (`backend/src/scheduled-transactions/scheduled-occurrence.service.ts`) and its one expander (`backend/src/common/scheduled-occurrences.ts`): amount, currency, completeness, the date it falls on, and the account whose balance it moves. `ScheduledEffectiveAmountService` stays the arithmetic beneath it, and a schedule-level read model (`findAll`) is the only place `base` is the question. `backend/src/scheduled-transactions/occurrence-selection.guard.spec.ts` fails a second expander, a second override lookup, a stray `base` read or a new resolver call site. **Ask which occurrence before asking how much.**
+
+**Ask which occurrence, then how much -- and its direction is part of "how much".** "An exchange rate is positive, so it cannot flip a sign" is true of one scalar times one rate and false of a **mixed-sign split parent**, where only the investment line re-prices: a parent stored at -200 posts +150 once that line moves. Three surfaces read the snapshot's sign, so AI/MCP called a re-priced deposit a bill, the forecast called an inflow an expense, and a SQL prefilter on `st.amount < 0` dropped the reverse case from the budget entirely. Direction comes from `EffectiveScheduledOccurrence.directionAmount` -- the occurrence's amount when known, and when it is not, the snapshot's sign **only where that sign is provable without the missing rate**: a top-level investment is one scalar times one positive rate, and a split whose lines all point the same way stays on that side of zero because an investment line's cash impact is signed by its action. A **mixed-sign** aggregate is where it is not provable and `directionAmount` is `null`: a +10 parent made of a fixed +100 beside an unpriceable BUY posts -20 at one rate and +20 at another, so both a red bill and a green deposit are inventions. `null` means unknown and travels -- AI/MCP report `kind: "unknown"` and withhold BOTH bucket totals, the reminder email draws a neutral badge, `occurrenceKind` answers `'unknown'`, and an outflow-only read KEEPS such an occurrence rather than dropping a possible payment behind a total that still looks complete. A candidate query may narrow on the stored sign only for shapes no rate can move; every FX-sensitive row stays in, and the direction is applied after pricing. `occurrence-selection.guard.spec.ts` fails a `Number(<anything>.amount)` compared against zero in any file that holds a resolved occurrence -- by shape, not by variable name, because the alias is how the last one got through.
+
+**An amount and its currency are one value, and an aggregate spans one currency or none.** A helper that takes a currency and never reads it is worse than one that has no currency at all: `sumEffectiveOccurrences`'s deleted predecessor accepted `{amount, currencyCode}` and summed only the numbers, so passing it the *right* code fixed nothing and a 1,350 CAD occurrence joined a 500 USD one as 1,850 in the reader's default currency. Convert before summing -- `FxAggregate` on the server, `sumConverted` / `sumEffectiveOccurrences` on the client -- and make the missing rate nameable: a pair with no rate withholds the total and is reported (`upcomingBillsMissingRates`, `LlmUpcomingScheduledResult.missingRatePairs`, `ConvertedTotal.missingCurrencies`), while a component whose own value is unknown is excluded by count, because it is unknown in *every* currency and naming a pair would send the reader to fix a rate that is already there -- two causes, two repairs, so a surface that folds them into one message sends the reader to the wrong one. **A total also has to say which currency it is in**: `totalsCurrency` travels beside the AI/MCP rollups and is named in the summary line a model quotes, because the items keep their own settlement currencies and a bare number is what let a CAD figure be read as USD. Formatting is the same rule at one row's scale: `formatCurrency(amount)` with no code prints whatever the reader's default is.
+
+**The currency a total falls back to is one constant, and it is derived, not restated.** Thirteen sites spelled out `pref?.defaultCurrency || "USD"`; ten said USD, two said CAD, and one hid CAD behind a local `DEFAULT_CURRENCY`, so Portfolio and the GEM report quoted one user's money in a currency Net Worth never used. It was **twenty-three** copies across both layers -- sixteen USD, seven CAD, one of those behind a local `DEFAULT_CURRENCY` alias -- so two widgets on one dashboard disagreed and a preference-less user's bills page converted and labelled in CAD while the assistant answered the same question in USD. `preferredCurrency` / `resolveUserDefaultCurrency` (`backend/src/common/default-currency.util.ts`) and `preferredCurrency` (`frontend/src/lib/default-currency.ts`) are the only readers, `FALLBACK_DEFAULT_CURRENCY` the only literal on each side -- and the currency the startup hook guarantees a `currencies` row for is that same constant, since a fallback to a code with no row resolves no rate and withholds every converted total. `default-currency.guard.spec.ts` and `default-currency.contract.test.ts` scan their own layer for the shape and for an aliased copy, check the constant against the column's own default, and check the two layers against each other -- because a per-layer constant is exactly how the drift came back.
+
+**A filter narrows the list it was applied to, never a total about the window.** `kind: "deposit"` on the AI/MCP rollup left `bills` empty and published `totalUpcomingBills: 0` with `amountsComplete: true` over a window holding a 1,200 bill -- a confident "nothing is due" in place of an answer nobody asked for. The buckets and the unknown-amount names all come from the rollup base (every filter except `kind`); only `items` and the counts follow the caller's filter, and both tool descriptions say so. The previous pass fixed exactly this for the `unknown` bucket and left the other two on the filtered list, which is the shape to look for: when a fix moves one member of a set off a wrong source, move all of them.
+
+**A rate table that has not loaded is not a table with no rate in it.** With no rates fetched every cross-currency `convert` returns `null`, so a surface reading only the missing-pair list tells the reader to add a rate that is already there -- an instruction built from an in-flight request or a failed one. `useExchangeRates().ratesUnavailable` (loading OR failed) is checked *before* any missing pair is named, and `ratesFailed` distinguishes an outage from a table still arriving. Same rule one level up: `readBalanceForecast` carries `unavailable` beside `withheld` because "the server declined to project", "we never heard back" and "this account has nothing scheduled" are three states and only the last has a number to show -- folded together, a 500 printed the current balance under "Projected".
+
+**Withholding a figure is only honest if the reader learns why.** A cumulative series with one unpriceable occurrence is withheld whole -- but a blank forward line is indistinguishable from "nothing scheduled". `BalanceForecastResult.gaps` names the schedule, the currency pair and the cause, and `BalanceForecastUnavailable` renders the fix (refresh rates on Currencies; check the security's and settlement account's currency). A `null` with no explanation is a dead end, not a correction.
+
 ### Missing data: a subtotal is not a total (CRITICAL)
 
 A field named `total*`, `portfolioValue`, `transferValue`, `gain`, `tax`, or `estimated*` may only carry a value when **every** component is known. If any component is unknown, the total is `null`, and the partial sum, if returned at all, goes in a separate explicitly named field (`knownMarketValueSubtotal`), never in the total's field. Never default an unknown price, cost basis, or rate to `0` (or an exchange rate to `1`), and never treat a missing period price as a 0% return.
@@ -316,6 +339,58 @@ The full rules -- cost basis and tax truth table, cash, valuation, materialized-
 A refund, return, chargeback or cashback filed against an expense category is a debit that came back, so it belongs in that category's total. Every surface that reached for the gross (`WHERE amount < 0` + `SUM(ABS(...))`, `if (amount >= 0) return`, `summary.totalExpenses` alone) disagreed with the register's own balance for the same filter (issue #1125). Sum the signed amount over rows of **both** signs, per category, and decide what the row *is* from the net: `isNetSpending` and `NET_SPEND_AMOUNT` (`backend/src/built-in-reports/spending-reports.service.ts`) on the server; `netEntityTotal` (`frontend/src/components/transactions/widget-shared.ts`) for a summary scoped to one category. Never take `totalIncome` or `totalExpenses` alone as a category's headline -- those are a register's in/out split.
 
 Dropping the sign filter means income now reaches the aggregate and has to leave by a different door: a bucket whose net is not spending is not a row in a spending report -- one predicate, not a per-call-site `> 0`. Netting is **within** one category, never across two; both halves come from the same filtered aggregate. (The payee surfaces are deliberately unchanged: `PayeeInfoWidget` prints received credits as their own line beside the spend, so netting them into the headline would count them twice.)
+
+### An INVESTMENT account is a pair, so account type is never the report's filter
+
+`INVESTMENT` is the `account_type` of *both* halves of a linked pair -- the
+`INVESTMENT_CASH` sleeve holding ordinary money and the `INVESTMENT_BROKERAGE`
+sleeve holding securities -- so `AND a.account_type != 'INVESTMENT'` deleted a
+real ledger from fifteen report queries: salary paid into a brokerage's cash
+side vanished from Cash Flow, Income by Source, spending, tax and the
+Uncategorized list (issue #1257). It never described the rows it was meant to
+remove either: the cash leg a BUY/SELL/DIVIDEND posts lives in that same cash
+account, carries no category and no transfer flag -- and when the action names an
+explicit `fundingAccountId`, that leg lands in an *ordinary* account where no
+account-type predicate could ever see it, reporting an investment purchase as
+spending nobody did.
+
+What a row *is* decides it, and the predicate is written once in
+`backend/src/common/investment-filter.util.ts` -- `investmentExclusionSql` for
+raw SQL, `applyInvestmentTransactionFilters` for a QueryBuilder, both built from
+the same fragments so the two dialects cannot drift. Use those; never spell an
+account-type or sub-type exclusion by hand.
+An investment line embedded in a split is the case a transaction-level linkage
+check alone gets wrong (its `transaction_id` is null; the split carries the cash),
+so it is excluded by both of its representations -- the split's `kind` and an
+`investment_transactions` row pointing at the split -- and **at split-row
+granularity**: excluding the parent would take the ordinary sibling line with it.
+
+**A report that reads only the parent row cannot exclude a line, so it excludes
+an amount.** `t.amount` on a split parent is the sum of every child, so Spending
+by Payee, Recurring Expenses, Bill Payment History and the Uncategorized list all
+reported a `-560` parent made of `-60` groceries and a `-500` embedded BUY as
+`560` of spending. They derive their figure through
+`reportableTransactionAmountSql` -- the children that are neither transfer nor
+investment, `NULL` when the row represents no ordinary cash at all. Duplicate
+Transactions is the one exception and says so in its SQL (`PARENT-IDENTITY
+REPORT`): its subject is the stored row, not its cash meaning. The guard checks
+the *representation*, not the presence of a token, because a parent-only query
+that reached for the no-splits variant is exactly the defect.
+`backend/src/common/investment-filter.guard.spec.ts` fails on either shape and
+on a built-in-report ledger query that carries no exclusion, and
+`backend/test/integration/report-investment-cash.integration.spec.ts` holds the
+behaviour against a real database. That guard's transfer-only exemption is
+positive proof, never the presence of the token -- the monthly breakdown reads
+ordinary rows *and* categorized transfer outflows, so a substring match exempted
+a split-joining query from the whole scan. The custom report engine
+(`backend/src/reports/`) aggregates hydrated entities in TypeScript, so it uses
+the same rule's other dialect -- `ordinarySplitLines` and
+`reportableTransactionAmount`, which live beside the SQL -- and its own scans
+check the loop rather than a query string. The two dialects differ by exactly one
+clause on purpose: the SQL drops transfer children, while a custom report keeps
+its own `includeTransfers` decision. The same rule governs what "Uncategorized"
+means: an auto-generated trade leg is not a row the user forgot to file, and a
+bulk update filtered to uncategorized must not reach it.
 
 ## Environment
 

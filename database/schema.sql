@@ -624,6 +624,11 @@ CREATE TABLE scheduled_transactions (
     total_occurrences INTEGER, -- original total if using occurrence limit
     is_active BOOLEAN DEFAULT true,
     auto_post BOOLEAN DEFAULT false, -- automatically create transaction when due
+    -- Bounded (issue #1247 review): this reaches a date computation, and a value
+    -- past JavaScript's Date range serialized the reminder window's upper bound
+    -- as "NaN-NaN-NaN", which the text-comparing occurrence expander read as an
+    -- unlimited window. See MAX_REMINDER_DAYS_BEFORE in
+    -- backend/src/scheduled-transactions/reminder-window.ts.
     reminder_days_before INTEGER DEFAULT 3,
     last_posted_date DATE, -- when the transaction was last posted
     is_split BOOLEAN DEFAULT false, -- indicates amounts are split across categories
@@ -648,6 +653,9 @@ CREATE TABLE scheduled_transactions (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT chk_scheduled_transactions_kind_exclusive CHECK (
         NOT (is_transfer = TRUE AND is_investment = TRUE)
+    ),
+    CONSTRAINT chk_scheduled_reminder_days_before CHECK (
+        reminder_days_before IS NULL OR (reminder_days_before BETWEEN 0 AND 366)
     )
 );
 
@@ -735,12 +743,23 @@ CREATE TABLE scheduled_transaction_overrides (
     investment_total_amount NUMERIC(20, 4),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(scheduled_transaction_id, override_date) -- NOTE: DB uses override_date, not original_date
+    -- An occurrence's IDENTITY is its recurrence slot, so that is what is
+    -- unique: `override_date` is the day the occurrence was moved TO, an
+    -- attribute of the override rather than its name. Keyed on override_date
+    -- (migration 166) this permitted two overrides for one slot -- the posting
+    -- then used whichever row the reader's map happened to keep -- and refused
+    -- two different occurrences moved onto the same day, which is legitimate.
+    CONSTRAINT uq_sched_txn_overrides_occurrence
+        UNIQUE (scheduled_transaction_id, original_date)
 );
 
 CREATE INDEX idx_sched_txn_overrides_sched_txn_id ON scheduled_transaction_overrides(scheduled_transaction_id);
 CREATE INDEX idx_sched_txn_overrides_date ON scheduled_transaction_overrides(override_date);
-CREATE INDEX idx_sched_txn_overrides_orig ON scheduled_transaction_overrides(scheduled_transaction_id, original_date);
+-- The override-due predicates every occurrence read runs are
+-- `(scheduled_transaction_id, override_date)`. Migration 166 retired the unique
+-- constraint that used to supply this index as a side effect of its own; it is
+-- declared explicitly now so nothing depends on a constraint for a lookup.
+CREATE INDEX idx_sched_txn_overrides_sched_txn_override_date ON scheduled_transaction_overrides(scheduled_transaction_id, override_date);
 
 -- Posted occurrences (migration 140). The occurrence -- not the schedule -- is
 -- the thing that must happen once, and this unique key is its name. Manual and

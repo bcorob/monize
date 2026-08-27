@@ -33,9 +33,12 @@ describe('useStaleReconciliation', () => {
     mockGetStale.mockResolvedValue(summary);
   });
 
-  it('is undefined before the answer arrives', () => {
+  it('is undefined before the answer arrives', async () => {
     const { result } = renderHook(() => useStaleReconciliation());
     expect(result.current).toBeUndefined();
+    // The request is still in flight. Let it land here rather than committing
+    // into whatever tree is mounted when the microtask finally runs.
+    await waitFor(() => expect(result.current).toBeDefined());
   });
 
   it('indexes the last reconciled date by account', async () => {

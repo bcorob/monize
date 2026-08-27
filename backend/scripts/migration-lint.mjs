@@ -262,7 +262,11 @@ export function collectDrops(statements, upToIndex) {
  * Statements that are inherently re-runnable are simply not covered by a rule:
  * `CREATE OR REPLACE`, `ALTER COLUMN ... TYPE/SET/DROP`, `COMMENT ON`, `GRANT`,
  * `ENABLE ROW LEVEL SECURITY`, and data `UPDATE`/`DELETE` (their WHERE clauses
- * select the pre-migration state and match nothing on a second pass).
+ * normally select the pre-migration state and match nothing on a second pass).
+ *
+ * `NON_RERUNNABLE_DATA_MIGRATIONS` names the exceptions to that last clause --
+ * data repairs whose WHERE cannot exclude their own result -- so the summary
+ * line stops claiming a property one file does not have.
  */
 /**
  * Normalized role names out of a `TO`/`FROM` grantee list ("PUBLIC,
@@ -640,6 +644,43 @@ export function lintSql(sql, filename = "<sql>") {
   return { findings };
 }
 
+/**
+ * Data repairs that are correct exactly once, with the reason their `WHERE`
+ * cannot select only the pre-migration state.
+ *
+ * The single-run mechanism is `schema_migrations`: `db-migrate` reads the
+ * applied filenames before each pass and executes only the ones missing, so a
+ * body listed here runs once per database. That is a real mechanism and it is
+ * named here rather than assumed -- what it does NOT survive is somebody
+ * replaying a file by hand against a populated database, which is why the entry
+ * says what a second pass would do.
+ *
+ * An entry is a claim about a file, so the lint fails when the file is gone.
+ */
+export const NON_RERUNNABLE_DATA_MIGRATIONS = new Map([
+  [
+    "166_heal_loan_schedule_end_dates.sql",
+    "Steps a loan/mortgage schedule's end_date back one interval. The healed " +
+      "value is still a whole number of intervals from start_date, which is " +
+      "the only signature a machine-written bound has, so a second pass would " +
+      "step it back again and retire the schedule one payment early.",
+  ],
+]);
+
+/**
+ * Registered one-shot migrations that are no longer on disk.
+ *
+ * An entry in the register is a claim about a file: once the file is renamed or
+ * deleted the entry is a note about nothing, and the summary line goes on
+ * excusing a body that is not there. Named and exported so the self-test can
+ * exercise the failure without running `main`.
+ */
+export function missingOneShotMigrations(files) {
+  return [...NON_RERUNNABLE_DATA_MIGRATIONS.keys()].filter(
+    (name) => !files.includes(name),
+  );
+}
+
 /** Lint every `.sql` file in `dir`, sorted by filename. */
 export function lintDirectory(dir) {
   const files = readdirSync(dir)
@@ -665,10 +706,32 @@ function main() {
   const { files, findings } = lintDirectory(dir);
   console.log(`Migration idempotency lint: ${files.length} file(s) in ${dir}`);
 
+  const missing = missingOneShotMigrations(files);
+  if (missing.length > 0) {
+    console.error("");
+    for (const name of missing) {
+      console.error(
+        `FAIL: ${name} is registered as a one-shot data migration but no longer exists -- ` +
+          "remove its entry from NON_RERUNNABLE_DATA_MIGRATIONS.",
+      );
+    }
+    process.exit(1);
+  }
+
   if (findings.length === 0) {
+    if (NON_RERUNNABLE_DATA_MIGRATIONS.size === 0) {
+      console.log(
+        "OK -- every migration body is re-runnable against an up-to-date database.",
+      );
+      return;
+    }
     console.log(
-      "OK -- every migration body is re-runnable against an up-to-date database.",
+      `OK -- every migration body is re-runnable against an up-to-date database, except ${NON_RERUNNABLE_DATA_MIGRATIONS.size} ` +
+        "registered one-shot data repair(s), run once each by schema_migrations:",
     );
+    for (const [name, reason] of NON_RERUNNABLE_DATA_MIGRATIONS) {
+      console.log(`  ${name}: ${reason}`);
+    }
     return;
   }
 

@@ -128,7 +128,8 @@
     "backToReports": "Back to Reports",
     "switchReport": "Switch to another report",
     "switchPlaceholder": "Filter reports...",
-    "switchNoMatches": "No reports match"
+    "switchNoMatches": "No reports match",
+    "favourites": "Favourites"
   },
   "reportPage": {
     "notFound": "Report Not Found",
@@ -437,6 +438,7 @@
     "currentBalance": "Current Balance",
     "principalPaid": "Principal Paid",
     "estTotalInterest": "Est. Total Interest",
+    "interestOverProjection": "Interest Over Projection",
     "interestPaid": "Interest Paid",
     "progress": "Progress",
     "estPayoff": "Est. Payoff",
@@ -807,6 +809,7 @@
     "originalAmount": "Original Amount",
     "interestRate": "Interest Rate",
     "estTotalInterest": "Est. Total Interest",
+    "interestOverProjection": "Interest Over Projection",
     "totalInterestPaid": "Total Interest Paid",
     "paymentsMade": "Payments Made",
     "estPayoff": "Est. Payoff",
@@ -839,7 +842,8 @@
     "typeLineOfCredit": "Line of Credit",
     "typeLoan": "Loan",
     "typeMortgage": "Mortgage",
-    "pdfSubtitlePaymentsSummary": "{count} payments made, {interest} total interest"
+    "pdfSubtitlePaymentsSummary": "{count} payments made, {interest} total interest",
+    "pdfSubtitlePaymentsProjection": "{count} payments made, {interest} interest over projection"
   },
   "monteCarlo": {
     "toasts": {
@@ -1548,12 +1552,16 @@
     "csvColBillName": "Bill Name",
     "csvColDueDate": "Due Date",
     "csvColAmount": "Amount",
+    "csvColCurrency": "Currency",
     "csvColFrequency": "Frequency",
     "csvColAccount": "Account",
     "csvColStatus": "Status",
     "csvStatusOverdue": "Overdue",
     "csvStatusAuto": "Auto",
     "csvStatusManual": "Manual",
+    "amountUnavailable": "Not available",
+    "occurrencesUnavailable": "The projected occurrences could not be loaded, so the calendar and the amounts below are unavailable. Your bills themselves are unaffected.",
+    "csvAmountUnavailable": "Not available (no current exchange rate)",
     "pdfTitle": "Upcoming Bills Report",
     "pdfSubtitle": "{month} | {count} active bills",
     "pdfActiveBills": "Active Bills",

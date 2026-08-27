@@ -47,6 +47,8 @@ describe("McpScheduledTools", () => {
         overdueCount: 0,
         totalUpcomingBills: 1200,
         totalUpcomingDeposits: 0,
+        totalsCurrency: "USD",
+        amountsComplete: true,
         items: [
           {
             id: "s1",
@@ -93,6 +95,8 @@ describe("McpScheduledTools", () => {
         overdueCount: 0,
         totalUpcomingBills: 0,
         totalUpcomingDeposits: 0,
+        totalsCurrency: "USD",
+        amountsComplete: true,
         items: [],
       });
 

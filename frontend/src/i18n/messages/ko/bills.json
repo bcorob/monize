@@ -6,6 +6,11 @@
     "summaryActiveBills": "활성 청구서",
     "summaryActiveDeposits": "활성 입금",
     "summaryMonthlyNet": "월 순액",
+    "summaryAmountUnavailable": "확인할 수 없음",
+    "summaryNetRatesUnavailable": "현재 환율을 사용할 수 없어 순액을 계산할 수 없습니다.",
+    "summaryNetMissingRates": "{currencies}의 환율이 없습니다 — 통화에서 추가하세요",
+    "summaryNetMissingRatesAndUnpriceable": "{currencies}의 환율이 없고, 하나 이상의 예약 항목의 금액도 계산할 수 없습니다.",
+    "summaryNetUnpriceable": "하나 이상의 예약 항목의 금액을 계산할 수 없습니다",
     "summaryDueNow": "현재 만기",
     "loadingText": "예정된 거래를 불러오는 중...",
     "chartUnavailable": "차트를 일시적으로 사용할 수 없습니다"

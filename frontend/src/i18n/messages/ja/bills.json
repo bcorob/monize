@@ -6,6 +6,11 @@
     "summaryActiveBills": "有効な請求",
     "summaryActiveDeposits": "有効な入金",
     "summaryMonthlyNet": "月次純額",
+    "summaryAmountUnavailable": "取得できません",
+    "summaryNetRatesUnavailable": "現在為替レートを取得できないため、収支を算出できません。",
+    "summaryNetMissingRates": "{currencies} の為替レートがありません — 通貨で追加してください",
+    "summaryNetMissingRatesAndUnpriceable": "{currencies} の為替レートがなく、1件以上の予定の金額も算出できませんでした。",
+    "summaryNetUnpriceable": "1件以上の予定の金額を算出できませんでした",
     "summaryDueNow": "今すぐ支払い期限",
     "loadingText": "スケジュール済み取引を読み込み中...",
     "chartUnavailable": "チャートは一時的に利用できません"

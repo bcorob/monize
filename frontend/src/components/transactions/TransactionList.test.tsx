@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor, act, cleanup } from '@/test/render'
 import { TransactionList } from './TransactionList';
 import { Transaction, TransactionStatus } from '@/types/transaction';
 import { useDensityStore } from '@/store/densityStore';
+import { useDateDisplayStore } from '@/store/dateDisplayStore';
 import { usePreferencesStore } from '@/store/preferencesStore';
 import toast from 'react-hot-toast';
 
@@ -17,6 +18,9 @@ vi.mock('@/lib/transactions', () => ({
 vi.mock('@/hooks/useDateFormat', () => ({
   useDateFormat: () => ({ dateFormat: 'browser', datePattern: 'YYYY-MM-DD',
     formatDate: (d: string) => d,
+    // Stands in for the real helper, which drops the year through the user's
+    // own pattern; under YYYY-MM-DD that leaves MM-DD.
+    formatDateWithoutYear: (d: Date | string) => String(d).slice(5),
   }),
 }));
 
@@ -3202,6 +3206,85 @@ describe('TransactionList', () => {
         expect(screen.getAllByText('Grocery Store').length).toBe(2);
       });
       expect(screen.queryByTestId('stale-reconciliation-chip')).not.toBeInTheDocument();
+    });
+  });
+});
+
+describe('TransactionList compact mobile dates', () => {
+  afterEach(() => {
+    // `cleanup()` first: vitest runs after-hooks in reverse registration
+    // order, so a store write here would re-render the still-mounted tree
+    // outside act. `src/test/test-hygiene.test.ts` is the rule.
+    cleanup();
+    useDateDisplayStore.setState({ compactMobileDates: false });
+  });
+
+  it('offers the toggle in the Date column header, off by default', () => {
+    render(<TransactionList transactions={[createTransaction()]} />);
+
+    const toggle = screen.getByRole('button', { name: 'Hide the year' });
+    expect(toggle.closest('th')).toHaveTextContent('Date');
+    expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    // Full date, single rendering -- no phone/desktop split.
+    expect(screen.getByText('2024-01-15')).toBeInTheDocument();
+    expect(screen.queryByText('01-15')).not.toBeInTheDocument();
+  });
+
+  it('drops the year for phones and keeps the full date for wider screens', async () => {
+    render(<TransactionList transactions={[createTransaction()]} />);
+
+    const toggle = screen.getByRole('button', { name: 'Hide the year' });
+    fireEvent.click(toggle);
+
+    await waitFor(() => {
+      expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    });
+
+    // The day is kept -- the year is the part a register row can spare.
+    const compact = screen.getByText('01-15');
+    expect(compact.className).toContain('sm:hidden');
+
+    // The full date is still rendered, gated to sm and up.
+    const full = screen.getByText('2024-01-15');
+    expect(full.className).toContain('hidden');
+    expect(full.className).toContain('sm:inline');
+  });
+
+  it('closes the gap between the Date and Payee columns, header and cells alike', async () => {
+    const { container } = render(<TransactionList transactions={[createTransaction()]} />);
+
+    const dateHeader = () => container.querySelectorAll('thead th')[0];
+    const payeeHeader = () => container.querySelectorAll('thead th')[2];
+    const dateCell = () => container.querySelectorAll('tbody td')[0];
+    const payeeCell = () => container.querySelectorAll('tbody td')[2];
+
+    // The ordinary inset while the full date is shown.
+    expect(dateHeader().className).not.toContain('max-sm:pr-1');
+    expect(dateCell().className).not.toContain('max-sm:pr-1');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Hide the year' }));
+
+    await waitFor(() => {
+      expect(dateCell().className).toContain('max-sm:pr-1');
+    });
+
+    // Both facing sides move, so the whole gap closes rather than half of it.
+    expect(payeeCell().className).toContain('max-sm:pl-1');
+
+    // And the header moves with its column: a `th` and its `td` that disagree
+    // about padding put the label and the values it labels at different
+    // offsets.
+    expect(dateHeader().className).toContain('max-sm:pr-1');
+    expect(payeeHeader().className).toContain('max-sm:pl-1');
+  });
+
+  it('remembers the choice in the shared register-wide store', async () => {
+    render(<TransactionList transactions={[createTransaction()]} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Hide the year' }));
+
+    await waitFor(() => {
+      expect(useDateDisplayStore.getState().compactMobileDates).toBe(true);
     });
   });
 });

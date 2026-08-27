@@ -1,4 +1,7 @@
-import { pointAsOf, PricePoint } from "../common/time-series/price-boundary.util";
+import {
+  pointAsOf,
+  PricePoint,
+} from "../common/time-series/price-boundary.util";
 
 export { PricePoint } from "../common/time-series/price-boundary.util";
 

@@ -18,6 +18,8 @@
     "colAmount": "राशि",
     "typeIncome": "आय",
     "typeExpense": "व्यय",
+    "typeUnknown": "दिशा अज्ञात",
+    "amountUnavailable": "राशि उपलब्ध नहीं",
     "button": "बिल और जमा राशि देखें"
   },
   "mortgageReminder": {

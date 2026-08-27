@@ -1,6 +1,8 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup } from '@testing-library/react';
-import { afterEach, vi } from 'vitest';
+import { afterAll, afterEach, vi } from 'vitest';
+
+import { failOnActWarnings, recordIfActWarning } from './act-guard';
 
 afterEach(async () => {
   cleanup();
@@ -8,6 +10,14 @@ afterEach(async () => {
   // filter a test selects is written to localStorage, and without this the
   // next test in the file would start with that filter still applied.
   window.localStorage?.clear();
+  // sessionStorage is the same hazard and was missed. The Portfolio Value
+  // chart caches its intraday response there, and a leaked entry hydrates the
+  // next test's chart *synchronously on mount* -- which moves the prior-close
+  // baseline request from second-stage to immediate. Tests asserting on that
+  // request then passed or failed on whether an earlier test happened to leave
+  // a usable entry behind, which is how `InvestmentValueChart` went green in
+  // isolation and red in a full suite (CI run #2877).
+  window.sessionStorage?.clear();
   // Row density is one store for every view, so clearing its localStorage
   // entry is not enough -- the module-level state outlives it. Reset after `cleanup()`,
   // never before: writing to a store while the tree is still mounted
@@ -21,7 +31,14 @@ afterEach(async () => {
   // assertion read the mock. The two would never see each other's writes.
   const { useDensityStore } = await import('@/store/densityStore');
   useDensityStore.setState({ densities: {} });
+  // Last, so an update React commits during `cleanup()` is counted against the
+  // test that mounted the tree rather than the next one.
+  failOnActWarnings();
 });
+
+// `cleanup()` for the file's final test runs inside that test's own afterEach
+// above, but a warning React logs after the last hook has nowhere else to go.
+afterAll(failOnActWarnings);
 
 // Suppress known-harmless jsdom warnings for SVG elements used by Recharts.
 // Also suppress tagged output from the project's `createLogger` (e.g.
@@ -32,6 +49,12 @@ const LOGGER_TAG_RE = /^\[[A-Za-z][\w-]*\]$/;
 const originalConsoleError = console.error;
 console.error = (...args: unknown[]) => {
   const msg = typeof args[0] === 'string' ? args[0] : '';
+  // Recorded rather than printed: the failure raised in `afterEach` names the
+  // test, which one line on stderr in a 14,000-test run does not. See
+  // `act-guard.ts` for why these are failures and not noise.
+  if (recordIfActWarning(args)) {
+    return;
+  }
   if (
     msg.includes('is unrecognized in this browser') ||
     msg.includes('is using incorrect casing') ||

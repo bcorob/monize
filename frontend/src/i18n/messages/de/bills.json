@@ -6,6 +6,11 @@
     "summaryActiveBills": "Aktive Rechnungen",
     "summaryActiveDeposits": "Aktive Einzahlungen",
     "summaryMonthlyNet": "Monatliches Netto",
+    "summaryAmountUnavailable": "Nicht verfügbar",
+    "summaryNetRatesUnavailable": "Wechselkurse sind derzeit nicht verfügbar, daher kann der Saldo nicht ermittelt werden.",
+    "summaryNetMissingRates": "Kein Wechselkurs für {currencies} — fügen Sie einen unter Währungen hinzu",
+    "summaryNetMissingRatesAndUnpriceable": "Kein Wechselkurs für {currencies}, und ein oder mehrere Zeitpläne konnten nicht bewertet werden.",
+    "summaryNetUnpriceable": "Ein oder mehrere Zeitpläne konnten nicht bewertet werden",
     "summaryDueNow": "Jetzt fällig",
     "loadingText": "Terminierte Buchungen werden geladen...",
     "chartUnavailable": "Diagramm vorübergehend nicht verfügbar"

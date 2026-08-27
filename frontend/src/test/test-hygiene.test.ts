@@ -60,3 +60,51 @@ describe('a shared store is reset only after the tree is unmounted', () => {
     expect(offenders).toEqual([]);
   });
 });
+
+describe('a mocked selector hook applies its selector', () => {
+  /**
+   * `usePreferencesStore` and its siblings are Zustand hooks: called with a
+   * selector, they return that selector applied to the state. A mock written as
+   * `usePreferencesStore: () => ({ preferences: { ... } })` returns the whole
+   * state whatever it is asked for -- so `usePreferencesStore((s) => s.preferences)`
+   * receives `{ preferences: ... }`, one level too deep, and every read off it is
+   * `undefined`.
+   *
+   * That is worse than a failing test: the component silently takes its
+   * no-preferences branch while the fixture claims to have set a preference, so
+   * the case pins the opposite of what it says. `FavouriteAccounts.test.tsx`
+   * asserted balances under `defaultCurrency: "CAD"` and had been running on the
+   * fallback since it was written; it only surfaced when the fallback's VALUE
+   * changed, and then as four failures in a file nothing had touched.
+   *
+   * `frontend/CLAUDE.md`: a mock must return what the real collaborator returns.
+   */
+  const SELECTOR_STORES = [
+    'usePreferencesStore',
+    'useAuthStore',
+    'useDemoStore',
+    'useDensityPreference',
+  ];
+
+  it('has no store mock that ignores the selector it is handed', () => {
+    const offenders: string[] = [];
+    for (const [path, content] of Object.entries(sources)) {
+      for (const store of SELECTOR_STORES) {
+        // The mock's own factory: `<store>: <arrow or fn>` inside a vi.mock.
+        const declaration = new RegExp(
+          `${store}:\\s*(\\(([^)]*)\\)|[A-Za-z_$][\\w$]*)\\s*=>`,
+          'g',
+        );
+        let match: RegExpExecArray | null;
+        while ((match = declaration.exec(content)) !== null) {
+          const params = match[2] ?? match[1];
+          // A zero-argument mock cannot apply a selector. `vi.fn()` is fine --
+          // those files set a return value per case and are not claiming to
+          // model the store's shape.
+          if (params.trim() === '') offenders.push(`${path} (${store})`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+});

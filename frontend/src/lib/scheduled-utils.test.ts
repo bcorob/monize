@@ -125,4 +125,68 @@ describe('getUpcomingScheduled', () => {
   it('returns an empty list when nothing matches', () => {
     expect(getUpcomingScheduled([makeScheduled()], () => false, 5)).toEqual([]);
   });
+
+  // Issue #1247: the amount is what the occurrence would post today, in the
+  // settlement currency, from the server's effective-amount contract.
+  it("reports the server's effective amount and currency, not the stored pair", () => {
+    const result = getUpcomingScheduled(
+      [
+        makeScheduled({
+          isInvestment: true,
+          // The security-currency cash impact, under the brokerage's code.
+          amount: -1000,
+          currencyCode: 'USD',
+          effectiveAmount: -1350,
+          effectiveAmountComplete: true,
+          effectiveCurrencyCode: 'CAD',
+        }),
+      ],
+      () => true,
+      5,
+    );
+
+    expect(result[0]).toMatchObject({ amount: -1350, currencyCode: 'CAD' });
+  });
+
+  it('reports an unresolvable occurrence as unknown, never as its stored amount', () => {
+    const result = getUpcomingScheduled(
+      [
+        makeScheduled({
+          isInvestment: true,
+          amount: -1000,
+          currencyCode: 'CAD',
+          effectiveAmount: null,
+          effectiveAmountComplete: false,
+          effectiveCurrencyCode: 'CAD',
+        }),
+      ],
+      () => true,
+      5,
+    );
+
+    expect(result[0].amount).toBeNull();
+    expect(result[0].amount).not.toBe(-1000);
+  });
+
+  it('prefers an override effective amount over the base occurrence', () => {
+    const result = getUpcomingScheduled(
+      [
+        makeScheduled({
+          effectiveAmount: -120,
+          effectiveAmountComplete: true,
+          nextOverride: {
+            overrideDate: '2026-08-20T00:00:00.000Z',
+            originalDate: '2026-08-01',
+            amount: -99,
+            effectiveAmount: -99,
+            effectiveAmountComplete: true,
+          } as ScheduledTransaction['nextOverride'],
+        }),
+      ],
+      () => true,
+      5,
+    );
+
+    expect(result[0]).toMatchObject({ date: '2026-08-20', amount: -99 });
+  });
 });

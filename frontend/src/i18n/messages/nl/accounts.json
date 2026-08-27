@@ -210,6 +210,7 @@
     "frequencyOptions": {
       "weekly": "Wekelijks",
       "biweekly": "Elke 2 weken",
+      "semiMonthly": "Halfmaandelijks",
       "monthly": "Maandelijks",
       "quarterly": "Driemaandelijks",
       "yearly": "Jaarlijks"
@@ -308,12 +309,13 @@
     "previewFirstInterest": "Rente eerste betaling:",
     "previewTotalPayments": "Totale betalingen:",
     "previewTotalInterest": "Totale rente:",
+    "previewFinalPayment": "Laatste betaling:",
     "previewPayoffDate": "Gesch. afloopdatum:",
     "previewNA": "N/A",
     "calculatingPreview": "Voorbeeld berekenen...",
     "frequencyOptions": {
       "monthly": "Maandelijks",
-      "semiMonthly": "Twee keer per maand (1e & 15e)",
+      "semiMonthly": "Halfmaandelijks (15e & einde maand)",
       "biweekly": "Twee keer per week",
       "acceleratedBiweekly": "Versneld twee keer per week",
       "weekly": "Wekelijks",
@@ -367,6 +369,7 @@
       "WEEKLY": "Wekelijks",
       "BIWEEKLY": "Tweewekelijks",
       "SEMI_MONTHLY": "Halfmaandelijks",
+      "SEMIMONTHLY": "Halfmaandelijks",
       "MONTHLY": "Maandelijks",
       "QUARTERLY": "Per kwartaal",
       "YEARLY": "Jaarlijks",
@@ -436,7 +439,8 @@
         "effect": "→ bespaart {interest}, aflossing {date}",
         "alreadyMet": "Al bereikt zonder extra aflossing.",
         "unreachableInterest": "Onhaalbaar — zelfs een zeer grote extra aflossing kan niet zoveel rente besparen.",
-        "unreachableDate": "Onhaalbaar — die maand ligt vóór de vroegst mogelijke aflossing."
+        "unreachableDate": "Onhaalbaar — die maand ligt vóór de vroegst mogelijke aflossing.",
+        "baselineIncomplete": "Deze lening wordt niet binnen de geprojecteerde periode afgelost, dus er is geen totale rente om vanuit terug te rekenen."
       },
       "simulationTypeLabel": "Simulatietype",
       "overpaymentAmount": "Bedrag extra aflossing",
@@ -463,6 +467,7 @@
       "interestSaved": "Bespaarde rente",
       "totalExtraContributed": "Totaal extra ingelegd",
       "beyondProjection": "Buiten de projectie",
+      "unknown": "Onbekend",
       "newInstallment": "Nieuwe termijn",
       "installmentDrop": "{payment} (−{reduction})",
       "monthlyPayment": "Maandelijkse betaling",
@@ -505,7 +510,9 @@
       "colOverpayment": "Extra aflossing",
       "overpaymentWithFrequency": "{amount} ({frequency})",
       "loadAria": "Scenario \"{name}\" laden",
-      "budgetSummary": "Budget {amount}/maand"
+      "budgetSummary": "Budget {amount}/maand",
+      "chartExcludedUnknown": "{count, plural, one {# scenario wordt niet weergegeven: de rentebesparing is onbekend.} other {# scenario’s worden niet weergegeven: hun rentebesparing is onbekend.}}",
+      "chartNeedsTwoKnown": "De vergelijkingsgrafiek heeft minstens twee scenario’s met een bekende rentebesparing nodig."
     },
     "scenarioChart": {
       "title": "Scenariovergelijking",

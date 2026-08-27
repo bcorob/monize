@@ -237,6 +237,12 @@
     "explanation": "Suma częściowa: {count, plural, one {# kwoty} few {# kwot} many {# kwot} other {# kwoty}} nie udało się uwzględnić, więc pokazana wartość ich nie obejmuje. Brak kursu do {displayCurrency} dla {currencies}.",
     "explanationExcluded": "Suma częściowa: {count, plural, one {# kwoty} few {# kwot} many {# kwot} other {# kwoty}} nie udało się ustalić, więc pokazana liczba ich nie obejmuje."
   },
+  "unknownAmount": {
+    "marker": "—",
+    "srLabel": "Kwota niedostępna",
+    "scheduledFx": "Nie można ustalić aktualnej kwoty: brak kursu wymiany dla pary walutowej rozliczenia tej zaplanowanej pozycji. Zapisana kwota została obliczona po starszym kursie, więc nie jest wyświetlana.",
+    "displayFx": "Tej kwoty nie można tu pokazać: sama kwota jest znana, ale brakuje kursu wymiany, aby przeliczyć ją na walutę tej sumy. Odśwież kursy na stronie Waluty."
+  },
   "density": {
     "title": "Przełącz gęstość wierszy",
     "normal": "Normalna",

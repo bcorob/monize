@@ -9,9 +9,15 @@ vi.mock("next/navigation", () => ({
 }));
 
 vi.mock("@/store/preferencesStore", () => ({
-  usePreferencesStore: () => ({
-    preferences: { defaultCurrency: "CAD" },
-  }),
+  // The selector has to be applied. Returning the whole state object regardless
+  // meant `usePreferencesStore((s) => s.preferences)` got `{ preferences: ... }`,
+  // so `preferences?.defaultCurrency` was undefined and every case below ran on
+  // the fallback while the fixture claimed to set CAD -- a mock that cannot do
+  // what the real hook does, hiding the branch the fixture was written to pin.
+  usePreferencesStore: (selector?: (state: unknown) => unknown) => {
+    const state = { preferences: { defaultCurrency: "CAD" } };
+    return selector ? selector(state) : state;
+  },
 }));
 
 vi.mock("@/hooks/useNumberFormat", () => ({

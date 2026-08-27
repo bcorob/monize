@@ -41,6 +41,7 @@ import {
 } from './portfolio-chart-utils';
 import { isoDatePart, priorCloseChange } from './portfolio-change-baseline';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { preferredCurrency } from '@/lib/default-currency';
 
 const logger = createLogger('InvestmentChart');
 
@@ -130,7 +131,7 @@ export function InvestmentValueChart({ accountIds, displayCurrency, titleSuffix,
   const foreignCurrency = displayCurrency && displayCurrency !== defaultCurrency
     ? displayCurrency
     : null;
-  const effectiveCurrency = foreignCurrency || defaultCurrency || 'USD';
+  const effectiveCurrency = foreignCurrency || preferredCurrency(defaultCurrency);
 
   const fmtVal = useCallback((value: number) => {
     if (foreignCurrency) return `${formatCurrencyCompact(value, foreignCurrency)} ${foreignCurrency}`;

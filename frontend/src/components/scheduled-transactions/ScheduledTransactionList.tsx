@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, memo, type JSX } from 'react';
-import { baseInvestmentAction } from '@/lib/investment-actions';
 import { useTranslations } from 'next-intl';
 import { isPast, isToday, addDays, isBefore } from 'date-fns';
 import toast from 'react-hot-toast';
@@ -11,9 +10,11 @@ import { parseLocalDate } from '@/lib/utils';
 import { getErrorMessage } from '@/lib/errors';
 import { useDateFormat } from '@/hooks/useDateFormat';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
-import { computeInvestmentCashImpact } from '@/lib/investmentCashImpact';
 import { formatAmountWithCommas, getDecimalPlacesForCurrency } from '@/lib/format';
-import { InvestmentAction } from '@/types/investment';
+import {
+  overrideEffectiveAmount,
+  scheduleEffectiveAmount,
+} from '@/lib/scheduled-effective-amount';
 import { useLongPress, type LongPressRowHandlers } from '@/hooks/useLongPress';
 import { RowActions } from '@/components/ui/row-actions/RowActions';
 import { RowActionSheet } from '@/components/ui/row-actions/RowActionSheet';
@@ -100,44 +101,26 @@ function buildScheduledActions(
 
 /**
  * Cash impact of a scheduled transaction occurrence, taking nextOverride into
- * account when useOverride is true. For investment-kind rows the amount column
- * isn't simply `transaction.amount`; it's derived from qty * price + commission
- * (or totalAmount for amount-only actions), and the override may carry a
- * different qty / price / total than the base row.
+ * account when `useOverride` is true.
+ *
+ * This is the server's effective amount -- what the occurrence would post
+ * *today* -- not the persisted `amount` and not a locally recomputed one (issue
+ * #1247). A scheduled investment's stored `amount` is its security-currency cash
+ * impact, and it is converted at the *current* settlement rate; recomputing the
+ * pre-FX figure here (which this list used to do) showed a number in one currency
+ * under another currency's code, and disagreed with both the cash-flow forecast
+ * and the posting. `null` means the current amount is unknown.
  */
 function scheduledOccurrenceAmount(
   transaction: ScheduledTransaction,
   useOverride: boolean,
 ): number | null {
-  if (transaction.isInvestment) {
-    const action = transaction.investmentAction as InvestmentAction | null;
-    if (!action) return null;
-    const override = useOverride ? transaction.nextOverride : null;
-    const commission = Number(transaction.investmentCommission ?? 0);
-
-    if (['BUY', 'SELL', 'REINVEST'].includes(baseInvestmentAction(action))) {
-      const qty = Number(
-        override?.investmentQuantity ?? transaction.investmentQuantity ?? 0,
-      );
-      const price = Number(
-        override?.investmentPrice ?? transaction.investmentPrice ?? 0,
-      );
-      if (qty <= 0 || price <= 0) return null;
-      return computeInvestmentCashImpact(action, qty, price, commission);
-    }
-    if (['DIVIDEND', 'INTEREST', 'CAPITAL_GAIN'].includes(baseInvestmentAction(action))) {
-      const total =
-        override?.investmentTotalAmount ?? transaction.investmentTotalAmount;
-      return total != null ? Number(total) : null;
-    }
-    // ADD_SHARES / REMOVE_SHARES / SPLIT -- shares move, no cash impact.
-    return 0;
-  }
-  if (useOverride && transaction.nextOverride?.amount != null) {
-    return Number(transaction.nextOverride.amount);
-  }
-  return Number(transaction.amount);
+  const override = useOverride ? transaction.nextOverride : null;
+  return override
+    ? overrideEffectiveAmount(transaction, override).amount
+    : scheduleEffectiveAmount(transaction).amount;
 }
+
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
 
@@ -304,6 +287,11 @@ const ScheduledTransactionRow = memo(function ScheduledTransactionRow({
       <td className={`${cellPadding} whitespace-nowrap text-sm font-medium text-right`}>
         {(() => {
           const baseAmount = scheduledOccurrenceAmount(transaction, false);
+          // The currency the effective amount is expressed in -- the settlement
+          // account's for an investment schedule, which is not the brokerage's
+          // `currencyCode` (issue #1247).
+          const amountCurrency =
+            scheduleEffectiveAmount(transaction).currencyCode;
           const overrideAmount = transaction.nextOverride
             ? scheduledOccurrenceAmount(transaction, true)
             : null;
@@ -331,10 +319,10 @@ const ScheduledTransactionRow = memo(function ScheduledTransactionRow({
             return (
               <div className="flex flex-col items-end">
                 <span className="text-xs text-gray-400 dark:text-gray-500 line-through">
-                  {formatAmount(baseAmount, transaction.currencyCode)}
+                  {formatAmount(baseAmount, amountCurrency)}
                 </span>
                 <span title={t('list.modifiedAmountTitle')}>
-                  {formatAmount(overrideAmount, transaction.currencyCode)}
+                  {formatAmount(overrideAmount, amountCurrency)}
                 </span>
                 {foreignLine}
               </div>
@@ -342,7 +330,7 @@ const ScheduledTransactionRow = memo(function ScheduledTransactionRow({
           }
           return (
             <>
-              {formatAmount(baseAmount, transaction.currencyCode)}
+              {formatAmount(baseAmount, amountCurrency)}
               {foreignLine}
             </>
           );

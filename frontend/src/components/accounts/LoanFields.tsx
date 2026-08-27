@@ -6,7 +6,13 @@ import { UseFormRegister, UseFormSetValue, FieldErrors } from 'react-hook-form';
 import { DateInput } from '@/components/ui/DateInput';
 import { CurrencyInput } from '@/components/ui/CurrencyInput';
 import { Select } from '@/components/ui/Select';
-import { Account, AmortizationPreview, PaymentFrequency, InterestBookingMode } from '@/types/account';
+import {
+  Account,
+  AmortizationPreview,
+  PAYMENT_FREQUENCIES,
+  PaymentFrequency,
+  InterestBookingMode,
+} from '@/types/account';
 import { Category } from '@/types/category';
 import { accountsApi } from '@/lib/accounts';
 import { buildAccountDropdownOptions } from '@/lib/account-utils';
@@ -40,6 +46,20 @@ interface LoanFieldsProps {
   handleOverpaymentPayeeChange: (payeeId: string) => void;
 }
 
+/**
+ * Catalog key for each loan cadence. A `Record` over the shared list, so adding
+ * a frequency without a label is a compile error rather than a
+ * `loanFields.frequencyOptions.undefined` rendered as its own key path.
+ */
+const LOAN_FREQUENCY_LABEL_KEY: Record<PaymentFrequency, string> = {
+  WEEKLY: 'weekly',
+  BIWEEKLY: 'biweekly',
+  SEMIMONTHLY: 'semiMonthly',
+  MONTHLY: 'monthly',
+  QUARTERLY: 'quarterly',
+  YEARLY: 'yearly',
+};
+
 export function LoanFields({
   currencySymbol,
   watchedCurrency,
@@ -66,18 +86,33 @@ export function LoanFields({
   const t = useTranslations('accounts');
   const { formatDate } = useDateFormat();
 
-  const paymentFrequencyOptions = [
-    { value: 'WEEKLY', label: t('loanFields.frequencyOptions.weekly') },
-    { value: 'BIWEEKLY', label: t('loanFields.frequencyOptions.biweekly') },
-    { value: 'MONTHLY', label: t('loanFields.frequencyOptions.monthly') },
-    { value: 'QUARTERLY', label: t('loanFields.frequencyOptions.quarterly') },
-    { value: 'YEARLY', label: t('loanFields.frequencyOptions.yearly') },
-  ];
+  // Every cadence `PAYMENT_FREQUENCIES` admits, in its order -- built from the
+  // shared list rather than typed out again. The local copy was missing
+  // SEMIMONTHLY, so the cadence the setup dialog writes, the DTO validates and
+  // `AccountForm`'s Zod enum accepts could not be chosen when CREATING a loan:
+  // the only route to a semi-monthly loan was the setup dialog.
+  // `loan-frequency.guard.test.ts` reads both option lists out of the source.
+  const paymentFrequencyOptions = PAYMENT_FREQUENCIES.map((value) => ({
+    value,
+    label: t(`loanFields.frequencyOptions.${LOAN_FREQUENCY_LABEL_KEY[value]}`),
+  }));
   const [amortizationPreview, setAmortizationPreview] = useState<AmortizationPreview | null>(null);
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
 
   const calculatePreview = useCallback(async () => {
-    if (!openingBalance || !interestRate || !paymentAmount || !paymentFrequency || !paymentStartDate) {
+    // `interestRate == null`, not `!interestRate`: 0% is a real loan rate (an
+    // interest-free family loan, a promotional deal; LoanPreviewDto validates
+    // `@Min(0)`), so a falsy check read a KNOWN zero as "not filled in" and
+    // showed no preview at all. Same rule as MortgageFields. The others stay
+    // falsy-checked: a zero balance, a zero payment or an empty date genuinely
+    // mean unfilled.
+    if (
+      !openingBalance ||
+      interestRate == null ||
+      !paymentAmount ||
+      !paymentFrequency ||
+      !paymentStartDate
+    ) {
       setAmortizationPreview(null);
       return;
     }
@@ -196,7 +231,7 @@ export function LoanFields({
               <span className="text-gray-500 dark:text-gray-400">{t('loanFields.previewEstPayoff')}</span>{' '}
               <span className="font-medium">
                 {amortizationPreview.totalPayments > 0
-                  ? formatDate(new Date(amortizationPreview.endDate))
+                  ? formatDate(amortizationPreview.endDate)
                   : t('loanFields.previewNA')}
               </span>
             </div>

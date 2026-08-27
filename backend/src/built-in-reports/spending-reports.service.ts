@@ -19,6 +19,34 @@ import {
   MonthlySpendingItem,
   MonthlyCategorySpending,
 } from "./dto";
+import {
+  investmentExclusionSql,
+  reportableTransactionAmountSql,
+} from "../common/investment-filter.util";
+
+/**
+ * Investment scope is LINKAGE, never account type (INV-REPORT-001, issue #1257):
+ * the cash sleeve of an INVESTMENT account holds ordinary money, while the cash
+ * leg a trade generated is not spending or income. Both halves of the predicate,
+ * and why the account type cannot express either, live in
+ * `common/investment-filter.util.ts`.
+ */
+const INVESTMENT_EXCLUSION = investmentExclusionSql({
+  accountAlias: "a",
+  transactionAlias: "t",
+  splitAlias: "ts",
+});
+const INVESTMENT_EXCLUSION_NO_SPLITS = investmentExclusionSql({
+  accountAlias: "a",
+  transactionAlias: "t",
+});
+
+/**
+ * The ordinary cash the parent row represents. A payee total reads only the
+ * parent, so a split's embedded investment or transfer line has to come out of
+ * the amount rather than out of the row (branch audit F-RPT-001).
+ */
+const REPORTABLE_TX_AMOUNT = reportableTransactionAmountSql("t");
 
 /**
  * Spending in a category is the DEBITS NET OF THE CREDITS filed against it: a
@@ -76,7 +104,7 @@ export class SpendingReportsService {
         AND t.is_transfer = false
         AND (t.status IS NULL OR t.status != 'VOID')
         AND t.parent_transaction_id IS NULL
-        AND a.account_type != 'INVESTMENT'
+        AND ${INVESTMENT_EXCLUSION}
         AND (ts.transfer_account_id IS NULL OR ts.id IS NULL)
         AND NOT EXISTS (
           SELECT 1 FROM accounts ax
@@ -211,16 +239,16 @@ export class SpendingReportsService {
         t.payee_id,
         t.payee_name,
         t.currency_code,
-        SUM(ABS(t.amount)) as total
+        SUM(ABS(${REPORTABLE_TX_AMOUNT})) as total
       FROM transactions t
       LEFT JOIN accounts a ON a.id = t.account_id
       WHERE t.user_id = $1
         AND t.transaction_date <= $2
-        AND t.amount < 0
+        AND ${REPORTABLE_TX_AMOUNT} < 0
         AND t.is_transfer = false
         AND (t.status IS NULL OR t.status != 'VOID')
         AND t.parent_transaction_id IS NULL
-        AND a.account_type != 'INVESTMENT'
+        AND ${INVESTMENT_EXCLUSION_NO_SPLITS}
         AND NOT EXISTS (
           SELECT 1 FROM accounts ax
           WHERE ax.user_id = t.user_id
@@ -321,7 +349,7 @@ export class SpendingReportsService {
         AND t.is_transfer = false
         AND (t.status IS NULL OR t.status != 'VOID')
         AND t.parent_transaction_id IS NULL
-        AND a.account_type != 'INVESTMENT'
+        AND ${INVESTMENT_EXCLUSION}
         AND (ts.transfer_account_id IS NULL OR ts.id IS NULL)
         AND NOT EXISTS (
           SELECT 1 FROM accounts ax

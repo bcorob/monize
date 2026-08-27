@@ -1,3 +1,5 @@
+import { FALLBACK_DEFAULT_CURRENCY } from './default-currency';
+
 /**
  * Best-effort detection of the currency a new user most likely wants, derived
  * from the locales their browser reports. Used to pre-fill the onboarding
@@ -9,8 +11,16 @@
  * detection result is offered by the picker.
  */
 
-/** Used when nothing can be detected, matching the backend's default. */
-export const FALLBACK_CURRENCY = "USD";
+/**
+ * Used when nothing can be detected.
+ *
+ * Derived from the reporting fallback rather than restating it: the comment here
+ * used to claim it matched "the backend's default", which is a claim about
+ * another file that nothing checked -- and pre-filling onboarding with one
+ * currency while every total falls back to another is the drift that claim was
+ * meant to rule out.
+ */
+export const FALLBACK_CURRENCY: string = FALLBACK_DEFAULT_CURRENCY;
 
 /**
  * ISO 3166-1 alpha-2 region -> ISO 4217 currency. Only regions whose currency

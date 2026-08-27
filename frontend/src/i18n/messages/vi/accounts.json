@@ -210,6 +210,7 @@
     "frequencyOptions": {
       "weekly": "Hàng tuần",
       "biweekly": "Mỗi 2 tuần",
+      "semiMonthly": "Hai lần một tháng",
       "monthly": "Hàng tháng",
       "quarterly": "Hàng quý",
       "yearly": "Hàng năm"
@@ -308,12 +309,13 @@
     "previewFirstInterest": "Lãi thanh toán đầu tiên:",
     "previewTotalPayments": "Tổng số thanh toán:",
     "previewTotalInterest": "Tổng lãi:",
+    "previewFinalPayment": "Khoản trả cuối:",
     "previewPayoffDate": "Dự kiến ngày tất toán:",
     "previewNA": "N/A",
     "calculatingPreview": "Đang tính xem trước...",
     "frequencyOptions": {
       "monthly": "Hàng tháng",
-      "semiMonthly": "Nửa tháng (ngày 1 & 15)",
+      "semiMonthly": "Hai lần một tháng (ngày 15 & cuối tháng)",
       "biweekly": "Mỗi 2 tuần",
       "acceleratedBiweekly": "Mỗi 2 tuần tăng tốc",
       "weekly": "Hàng tuần",
@@ -367,6 +369,7 @@
       "WEEKLY": "Hằng tuần",
       "BIWEEKLY": "Hai tuần một lần",
       "SEMI_MONTHLY": "Hai lần mỗi tháng",
+      "SEMIMONTHLY": "Hai lần mỗi tháng",
       "MONTHLY": "Hằng tháng",
       "QUARTERLY": "Hằng quý",
       "YEARLY": "Hằng năm",
@@ -436,7 +439,8 @@
         "effect": "→ tiết kiệm {interest}, tất toán {date}",
         "alreadyMet": "Đã đạt được mà không cần trả thêm.",
         "unreachableInterest": "Ngoài tầm với — khoản trả thêm rất lớn cũng không thể tiết kiệm được nhiều lãi đến vậy.",
-        "unreachableDate": "Ngoài tầm với — tháng đó sớm hơn thời điểm tất toán sớm nhất có thể."
+        "unreachableDate": "Ngoài tầm với — tháng đó sớm hơn thời điểm tất toán sớm nhất có thể.",
+        "baselineIncomplete": "Khoản vay này không tất toán trong kỳ dự báo, nên không có tổng lãi để tính ngược lại."
       },
       "simulationTypeLabel": "Loại mô phỏng",
       "overpaymentAmount": "Số tiền trả thêm",
@@ -463,6 +467,7 @@
       "interestSaved": "Tiền lãi tiết kiệm",
       "totalExtraContributed": "Tổng số tiền trả thêm",
       "beyondProjection": "Ngoài phạm vi dự báo",
+      "unknown": "Không rõ",
       "newInstallment": "Kỳ trả mới",
       "installmentDrop": "{payment} (−{reduction})",
       "monthlyPayment": "Khoản trả hàng tháng",
@@ -505,7 +510,9 @@
       "colOverpayment": "Trả thêm",
       "overpaymentWithFrequency": "{amount} ({frequency})",
       "loadAria": "Tải kịch bản \"{name}\"",
-      "budgetSummary": "Ngân sách {amount}/tháng"
+      "budgetSummary": "Ngân sách {amount}/tháng",
+      "chartExcludedUnknown": "{count, plural, other {# kịch bản không được hiển thị: khoản lãi tiết kiệm chưa xác định.}}",
+      "chartNeedsTwoKnown": "Biểu đồ so sánh cần ít nhất hai kịch bản có khoản lãi tiết kiệm đã xác định."
     },
     "scenarioChart": {
       "title": "So sánh kịch bản",

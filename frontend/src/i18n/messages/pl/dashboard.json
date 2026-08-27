@@ -27,7 +27,6 @@
     "manualTitle": "Wymaga ręcznego zaksięgowania",
     "negativeBalanceWarning": "Ta transakcja spowoduje, że saldo konta spadnie poniżej zera",
     "viewAll": "Zobacz wszystkie rachunki i wpłaty",
-    "totalDue": "Łącznie do zapłaty",
     "totalIncoming": "Łącznie przychodzące",
     "moreItems": "+{count} więcej",
     "overdue": "Zaległe",
@@ -38,7 +37,8 @@
       "bill": "Rachunek",
       "deposit": "Wpłata",
       "transfer": "Przelew",
-      "reminder": "Przypomnienie"
+      "reminder": "Przypomnienie",
+      "unknown": "Nieznany"
     }
   },
   "gettingStarted": {

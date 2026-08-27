@@ -1,9 +1,13 @@
-import { Injectable, Logger } from "@nestjs/common";
+import { Inject, Injectable, Logger, forwardRef } from "@nestjs/common";
 import { Cron, CronExpression } from "@nestjs/schedule";
 import { DataSource } from "typeorm";
 import { ConfigService } from "@nestjs/config";
 import { I18nService } from "nestjs-i18n";
 import { ScheduledTransaction } from "../scheduled-transactions/entities/scheduled-transaction.entity";
+import { ScheduledOccurrenceService } from "../scheduled-transactions/scheduled-occurrence.service";
+import { expandOccurrenceSlots } from "../common/scheduled-occurrences";
+import { todayYMD } from "../common/date-utils";
+import { reminderWindowThrough } from "../scheduled-transactions/reminder-window";
 import { UserPreference } from "../users/entities/user-preference.entity";
 import { User } from "../users/entities/user.entity";
 import { EmailService } from "./email.service";
@@ -43,6 +47,11 @@ export class BillReminderService {
     private configService: ConfigService,
     private readonly i18n: I18nService,
     private readonly jobClaims: JobClaimService,
+    // Which occurrence is due, when it falls and what it will cost -- all from
+    // the one server-side occurrence contract rather than the persisted snapshot
+    // or a private copy of the override rules (issue #1247).
+    @Inject(forwardRef(() => ScheduledOccurrenceService))
+    private readonly occurrences: ScheduledOccurrenceService,
   ) {}
 
   /**
@@ -81,7 +90,10 @@ export class BillReminderService {
       withScopedDb(this.dataSource, (manager) =>
         manager.getRepository(ScheduledTransaction).find({
           where: { isActive: true, autoPost: false },
-          relations: ["payee", "overrides"],
+          // `splits` is what tells the effective-amount resolver whether a
+          // schedule's cash total re-prices at the current FX rate (issue
+          // #1247); without it an embedded-investment schedule looks fixed.
+          relations: ["payee", "overrides", "splits"],
         }),
       ),
     );
@@ -91,28 +103,40 @@ export class BillReminderService {
       return;
     }
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    // Group bills by userId where due date is within reminderDaysBefore window
+    // Group bills by userId where an occurrence falls inside the bill's own
+    // reminder window. One "today", as a YYYY-MM-DD string: the local-midnight
+    // `Date` this used to keep beside it fed the old day-count comparison and was
+    // left behind when the expander replaced it -- two "today"s that are not
+    // interchangeable is how the wrong one gets picked up.
     const billsByUser = new Map<string, ScheduledTransaction[]>();
 
+    // ONE date for the whole run, read once and passed down.
+    //
+    // The two passes each used to call `todayYMD()` for themselves, so a run that
+    // crossed local midnight between them asked two different questions: pass one
+    // selected against D and pass two re-expanded against D+1, dropping every
+    // bill due exactly on D. The survivors were emailed and `delivered_at` was
+    // written for a claim key fingerprinted on the FULL set -- and the next run,
+    // now on D+1, no longer selects the D bill either, so its reminder was never
+    // sent and nothing recorded that it was owed. A window is only reproducible
+    // if the date it is measured from is a value, not a second clock read.
+    const todayStr = todayYMD();
     for (const bill of manualBills) {
-      // Check for an override matching the next due date (user may have changed the date)
-      const nextDueDateStr = String(bill.nextDueDate).split("T")[0];
-      const override = bill.overrides?.find(
-        (o) => String(o.originalDate).split("T")[0] === nextDueDateStr,
-      );
-      const effectiveDueDate = override
-        ? new Date(override.overrideDate)
-        : new Date(bill.nextDueDate);
-      effectiveDueDate.setHours(0, 0, 0, 0);
-
-      const daysUntilDue = Math.ceil(
-        (effectiveDueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
-      );
-
-      if (daysUntilDue >= 0 && daysUntilDue <= bill.reminderDaysBefore) {
+      // "Is this bill due inside its own reminder window" is a question about an
+      // OCCURRENCE, so it is asked through the one expander: the override that
+      // matters is the one on the recurrence slot, and it may have moved the
+      // occurrence's date (issue #1247). This half runs cross-user, so it cannot
+      // price anything -- `deliverForUser` does that under the owner's identity.
+      // The window bound goes through `reminderWindowThrough`, which owns the
+      // nullable column (null is "due today only") and the ceiling. A raw
+      // `addDaysYMD` on an unbounded value produced "NaN-NaN-NaN", and the
+      // expander's text comparison read that as "every bill is due today".
+      const due = expandOccurrenceSlots(bill, bill.overrides ?? [], {
+        from: todayStr,
+        through: reminderWindowThrough(todayStr, bill.reminderDaysBefore),
+        maxOccurrences: 1,
+      });
+      if (due.length > 0) {
         const existing = billsByUser.get(bill.userId) || [];
         existing.push(bill);
         billsByUser.set(bill.userId, existing);
@@ -145,7 +169,7 @@ export class BillReminderService {
       // the delivery record and the release share one identity with the reads
       // between them.
       const sent = await withUserContext(userId, () =>
-        this.deliverForUser(userId, bills, appUrl),
+        this.deliverForUser(userId, bills, appUrl, todayStr),
       );
       if (sent) sentCount++;
       else skipCount++;
@@ -167,6 +191,12 @@ export class BillReminderService {
     userId: string,
     bills: readonly ScheduledTransaction[],
     appUrl: string,
+    /**
+     * The run's date, from the caller. Deliberately NOT read here: this pass and
+     * the selecting pass have to measure their windows from the same day, and a
+     * second `todayYMD()` is how they came to disagree across midnight.
+     */
+    todayStr: string,
   ): Promise<boolean> {
     // Claim this user's reminder for today before doing anything that leaves
     // the process.
@@ -179,7 +209,7 @@ export class BillReminderService {
     // The key is the local date plus a hash of what the email says, so a bill
     // that becomes due later the same day still produces a reminder while an
     // identical run does not.
-    const claimKey = buildReminderClaimKey(bills);
+    const claimKey = buildReminderClaimKey(bills, todayStr);
     // A **lease**, not a permanent claim, plus a durable delivery record.
     //
     // `claimOnce` was taken before the send and was the only record that the
@@ -233,20 +263,96 @@ export class BillReminderService {
         return false;
       }
 
-      const billData = bills.map((b) => {
-        const dueDateStr = String(b.nextDueDate).split("T")[0];
-        const ov = b.overrides?.find(
-          (o) => String(o.originalDate).split("T")[0] === dueDateStr,
-        );
-        const rawAmount = Number(ov?.amount ?? b.amount);
+      // What each occurrence would actually post, and when, from the one
+      // server-side occurrence contract (issue #1247). The persisted `amount` is
+      // a snapshot at whatever rate was current when it was written, so a
+      // reminder built from it can name a figure the posting will not use -- and
+      // the occurrence the user re-dated is not the one the template describes.
+      // The direction comes from the occurrence too (`directionAmount`), which is
+      // the occurrence's own amount when known and the snapshot's sign only when
+      // it is not.
+      //
+      // `todayStr` is the caller's, so this window and the selecting pass's are
+      // measured from one day.
+      // Reduced rather than spread: `Math.max(...xs)` over a per-user array is a
+      // stack-depth limit disguised as an aggregate, and this array is as long as
+      // the user's manual-bill list.
+      //
+      // No clamp here: `reminderWindowThrough` owns the ceiling, and its own doc
+      // says why it lives there rather than at a call site. A second copy of the
+      // bound is a second thing to move when the bound moves.
+      const longestWindow = bills.reduce(
+        (widest, b) => Math.max(widest, b.reminderDaysBefore ?? 0),
+        0,
+      );
+      const occurrences = await this.occurrences.expand(userId, [...bills], {
+        from: todayStr,
+        through: reminderWindowThrough(todayStr, longestWindow),
+        maxOccurrences: 1,
+      });
+      const billData = occurrences.map((occurrence) => {
+        const schedule = occurrence.schedule;
         return {
-          payee: b.payee?.name || b.payeeName || b.name,
-          amount: Math.abs(rawAmount),
-          dueDate: ov ? String(ov.overrideDate).split("T")[0] : dueDateStr,
-          currencyCode: b.currencyCode,
-          isIncome: rawAmount > 0,
+          payee: schedule.payee?.name || schedule.payeeName || schedule.name,
+          amount:
+            occurrence.amount === null ? null : Math.abs(occurrence.amount),
+          dueDate: occurrence.dueDate,
+          currencyCode: occurrence.currencyCode,
+          // The occurrence's own direction. This read the occurrence's amount
+          // with the SCHEDULE's as its fallback, which is neither the same
+          // question nor the same row: an override re-pricing a -200 charge into
+          // a +500 refund, on a pair whose rate cannot be resolved, fell through
+          // to the schedule and the email called the refund an expense.
+          // `null` travels: an unpriceable mixed-sign occurrence posts on either
+          // side of zero, so the row shows a neutral badge rather than asserting
+          // an expense the data cannot support (issue #1247 re-audit).
+          isIncome:
+            occurrence.directionAmount === null
+              ? null
+              : occurrence.directionAmount > 0,
         };
       });
+
+      // Nothing to say means nothing to send, and nothing to record.
+      //
+      // The two halves of this cron each ask their own question: the cross-user
+      // pass selects bills against one `todayStr`, and this pass re-expands them
+      // under the owner's identity against its own. They can disagree -- the run
+      // crosses midnight, an override moves in between, a long-overdue daily
+      // schedule truncates at the walk guard -- and the old code then sent an
+      // email with an empty table under a subject counted from the pre-expansion
+      // list ("1 upcoming bill needs attention"), and wrote `delivered_at` for a
+      // claim key fingerprinted on those same bills. That record is what makes
+      // the reminder single-shot, so the genuine one could never be sent again
+      // that day. Hand the lease back instead and let the next run decide.
+      if (billData.length === 0) {
+        this.logger.warn(
+          `Bill reminder for user ${userId} matched ${bills.length} bill(s) in the ` +
+            `cross-user pass but no occurrence under the owner's own window; ` +
+            `nothing sent, claim released`,
+        );
+        await this.releaseClaim(userId, claimKey, leaseToken);
+        return false;
+      }
+
+      // A PARTIAL disagreement is sent, and said out loud.
+      //
+      // With one pinned date the two passes ask the same question, so a bill that
+      // drops out here did so for a real reason -- an override moved its
+      // occurrence, or the walk guard truncated a long-overdue daily schedule --
+      // and a bill that is no longer due is one there is nothing to remind about.
+      // So the email carries the survivors and `delivered_at` still settles the
+      // claim key, which fingerprints the pass-one set. What must not happen is
+      // this passing unremarked: the claim key covering more bills than the email
+      // listed is exactly the shape of the empty-email defect above, one bill
+      // short of it, and the log line is how a recurring cause gets noticed.
+      if (billData.length < bills.length) {
+        this.logger.warn(
+          `Bill reminder for user ${userId}: ${bills.length} bill(s) selected, ` +
+            `${billData.length} with an occurrence to report; emailing those and ` +
+            `settling the claim for the selected set`,
+        );
+      }
 
       const lang = prefs?.language || DEFAULT_LOCALE;
       const t = emailTranslator(this.i18n, lang);
@@ -256,16 +362,18 @@ export class BillReminderService {
         appUrl,
         t,
       );
+      // Counted from what the email actually lists, not from what phase one
+      // selected: the two can differ, and the subject is a claim about the body.
       const subject =
-        bills.length === 1
+        billData.length === 1
           ? t(
               "emails.billReminder.subjectOne",
               "Monize: 1 upcoming bill needs attention",
             )
           : t(
               "emails.billReminder.subjectMany",
-              `Monize: ${bills.length} upcoming bills need attention`,
-              { count: bills.length },
+              `Monize: ${billData.length} upcoming bills need attention`,
+              { count: billData.length },
             );
 
       await this.emailService.sendMail(user.email, subject, html);
@@ -294,18 +402,33 @@ export class BillReminderService {
 
 /**
  * The delivery key for one user's bill reminder: today's date plus a digest of
- * exactly what the email will say.
+ * WHICH bills it covers.
  *
  * The date alone would suppress a legitimate second reminder when another bill
  * falls due later the same day. The digest alone would let the same set be
  * re-sent tomorrow. Together they mean "this reminder, today", which is what the
  * claim is asserting.
+ *
+ * Deliberately fingerprinted on the stored scalars rather than on the effective
+ * amounts the email quotes: the claim answers "have we already reminded this
+ * user about these bills today", and a mid-day exchange-rate move is not a
+ * second reminder to send (issue #1247).
+ *
+ * `todayStr` is the RUN's date, supplied by the caller and never read here.
+ * This was the last clock read in the cron, and it governs the value the whole
+ * single-shot guarantee rests on: with the two expansion passes pinned but the
+ * key still reading `new Date()` per user, a run spanning local midnight claimed
+ * the early users under `key(D)` and the rest under `key(D+1)` while every
+ * window was measured from D -- so the next run re-selected a user emailed at
+ * 23:59:59, found no delivery record under its own `key(D+1)`, and sent the same
+ * reminder twice. Pinning the windows and leaving the key unpinned moved the
+ * midnight bug rather than fixing it.
  */
 export function buildReminderClaimKey(
   bills: readonly ScheduledTransaction[],
+  todayStr: string,
 ): string {
-  const today = new Date();
-  const date = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  const date = todayStr;
   const fingerprint = [...bills]
     .map((b) => `${b.id}:${String(b.nextDueDate).split("T")[0]}:${b.amount}`)
     .sort()

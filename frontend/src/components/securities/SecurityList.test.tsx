@@ -73,7 +73,13 @@ describe('SecurityList', () => {
     expect(screen.getByText('Bonds')).toBeInTheDocument();
     expect(screen.queryByText('Global aggregate bond ETF.')).not.toBeInTheDocument();
 
-    useDensityStore.setState({ densities: { securities: 'dense' } });
+    // The density store is subscribed to by the mounted tree, so this write
+    // re-renders it -- act-wrapped, unlike the `compact` write above, which
+    // runs before anything is mounted. (Same rule as the reset in
+    // `src/test/setup.ts`.)
+    act(() => {
+      useDensityStore.setState({ densities: { securities: 'dense' } });
+    });
     rerender(
       <SecurityList securities={securities} onEdit={onEdit} onToggleActive={onToggleActive} onOpen={onOpen} />,
     );

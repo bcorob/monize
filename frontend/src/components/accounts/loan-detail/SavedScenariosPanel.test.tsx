@@ -99,6 +99,64 @@ describe('SavedScenariosPanel', () => {
     expect(screen.getByText('$15000.00')).toBeInTheDocument();
   });
 
+  it('says why the chart is gone instead of just dropping the toggle', () => {
+    // The arc's height IS the interest saving, so a scenario whose saving is
+    // unknown cannot be drawn. With every scenario excluded the chart toggle is
+    // gone too -- which is exactly when the reader needs the reason.
+    renderPanel({ chartOutcomes: [], chartExcludedCount: 3 });
+
+    expect(
+      screen.getByText(
+        'The comparison chart needs at least two scenarios with a known interest saving.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Show scenario comparison chart')).not.toBeInTheDocument();
+  });
+
+  it('says the chart needs two known savings when too few are drawable', () => {
+    // One drawable and one unknown: the chart is suppressed entirely, so naming
+    // only the unknown one would claim half the scenarios are missing when both
+    // are. The message names the condition instead of a count.
+    renderPanel({ chartOutcomes: [], chartExcludedCount: 1 });
+
+    expect(
+      screen.getByText(
+        'The comparison chart needs at least two scenarios with a known interest saving.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/1 scenario is not shown/)).not.toBeInTheDocument();
+  });
+
+  it('names the excluded count when the chart is drawn without them', () => {
+    renderPanel({
+      chartOutcomes: [
+        { id: 's1', name: 'A', recurringExtra: 100, lumpSumCount: 0, interestSaved: 1000, payoffDate: '2030-01-01' },
+        { id: 's2', name: 'B', recurringExtra: 200, lumpSumCount: 0, interestSaved: 2000, payoffDate: '2029-01-01' },
+      ],
+      chartBaseline: { payoffDate: '2032-01-01' },
+      chartExcludedCount: 1,
+    });
+
+    expect(
+      screen.getByText('1 scenario is not shown: its interest saving is unknown.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/needs at least two/)).not.toBeInTheDocument();
+  });
+
+  it('says nothing about exclusions when every scenario is drawable', () => {
+    renderPanel({
+      chartOutcomes: [
+        { id: 's1', name: 'A', recurringExtra: 100, lumpSumCount: 0, interestSaved: 1000, payoffDate: '2030-01-01' },
+        { id: 's2', name: 'B', recurringExtra: 200, lumpSumCount: 0, interestSaved: 2000, payoffDate: '2029-01-01' },
+      ],
+      chartBaseline: { payoffDate: '2032-01-01' },
+      chartExcludedCount: 0,
+    });
+
+    expect(screen.queryByText(/are not shown/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/is not shown/)).not.toBeInTheDocument();
+  });
+
   it('shows an empty state without scenarios', () => {
     renderPanel({ scenarios: [] });
     expect(screen.getByText(/No saved scenarios yet/)).toBeInTheDocument();

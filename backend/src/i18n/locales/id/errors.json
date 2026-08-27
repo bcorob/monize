@@ -27,6 +27,8 @@
     "loanRequiresInstitution": "Akun pinjaman memerlukan nama institusi",
     "mortgageRequiredFields": "Akun hipotek memerlukan mortgagePaymentFrequency, paymentStartDate, sourceAccountId, dan amortizationMonths",
     "mortgageRequiresInterestRate": "Akun hipotek memerlukan tingkat bunga",
+    "mortgageFrequencyUnsupported": "Hipotek Kanada tidak dapat dijadwalkan dengan frekuensi pembayaran {frequency}",
+    "paymentFrequencyUnsupported": "Frekuensi pembayaran {frequency} tidak dapat dijadwalkan",
     "mortgageRequiresInstitution": "Akun hipotek memerlukan nama institusi",
     "onlyMortgageAccounts": "Operasi ini hanya berlaku untuk akun hipotek",
     "updateRateClosed": "Tidak dapat memperbarui tarif pada akun yang sudah ditutup",
@@ -193,13 +195,16 @@
     "reauthUnavailable": "Selesaikan pengaturan kata sandi akun Anda sebelum memulihkan cadangan.",
     "supportPasswordRequired": "Backup dukungan harus dienkripsi: masukkan kata sandi.",
     "passwordHeaderNotBase64": "Header {header} harus dikodekan base64.",
-    "decompressTooLarge": "Backup terlalu besar untuk dipulihkan: ukurannya melampaui batas {limit} byte yang dikonfigurasi setelah diekstrak. Naikkan BACKUP_RESTORE_EXPANDED_LIMIT jika ini backup yang sah.",
+    "decompressTooLarge": "Cadangan terlalu besar untuk dipulihkan: setelah diekstrak melebihi batas {limit} byte pada instalasi ini. Batas itu diturunkan dari memori kontainer dan biaya terukur per byte, jadi menaikkannya saja menggambarkan pemulihan yang tidak dapat diselesaikan prosesnya -- naikkan batas memori kontainer (Kubernetes: backend.resources.limits.memory).",
     "exportTooLarge": "Backup ini terlalu besar untuk dibuat sekaligus (melewati {limit} byte pada tabel \"{table}\"). Backup otomatis dan dukungan harus disimpan di memori; unduh backup manual yang melakukan streaming, atau naikkan BACKUP_EXPORT_BUFFER_LIMIT.",
     "supportExportTooLarge": "Backup dukungan ini akan berukuran {{ size }} MiB JSON, di atas batas {{ limit }} MiB. Persempit dengan pemilihan akun atau rentang tanggal, atau naikkan BACKUP_EXPORT_BUFFER_LIMIT.",
     "folderUnusable": "Folder \"{{ path }}\" tidak dapat digunakan sebagai direktori ({{ reason }}).",
     "folderOutsideAllowedRoots": "Folder backup \"{path}\" berada di luar root yang diizinkan ({roots}). Setel BACKUP_ALLOWED_ROOTS untuk mengizinkannya.",
     "noBackupStorage": "Deployment ini tidak memiliki penyimpanan backup yang dapat ditulisi: {{ safePath }} tidak ada dan tidak dapat dibuat ({{ reason }}). Pasang volume di sana (Docker: bind mount atau named volume; Kubernetes: setel backend.persistence.backups di chart Helm) lalu coba lagi.",
-    "restoreNoMemoryHeadroom": "Deployment ini tidak memiliki ruang memori untuk pemulihan: puncak yang dimodelkan untuk satu pemulihan tidak muat dalam kontainer. Naikkan batas memori kontainer atau turunkan BACKUP_RESTORE_EXPANDED_LIMIT."
+    "restoreNoMemoryHeadroom": "Deployment ini tidak memiliki ruang memori untuk pemulihan: puncak yang dimodelkan untuk satu pemulihan tidak muat dalam kontainer. Naikkan batas memori kontainer atau turunkan BACKUP_RESTORE_EXPANDED_LIMIT.",
+    "restoreQueueFull": "Terlalu banyak pemulihan yang sudah menunggu kapasitas pemulihan pada instalasi ini. Coba lagi sebentar.",
+    "restoreQueueWaitTimeout": "Waktu tunggu kapasitas pemulihan habis: pemulihan lain masih berjalan. Coba lagi sebentar.",
+    "restoreTicketUnavailable": "Instalasi ini tidak dapat mengizinkan unggahan pemulihan."
   },
   "budgets": {
     "notFound": "Anggaran dengan ID {{ id }} tidak ditemukan",

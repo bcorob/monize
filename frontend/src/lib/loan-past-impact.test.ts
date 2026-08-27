@@ -466,10 +466,20 @@ describe('computePastImpact', () => {
     const paidPrincipals = original.rows.slice(0, 4).map((row) => row.principal);
     const remaining = original.rows[3].balance;
     const history = makeHistory(makeAccount({ currentBalance: -remaining }), paidPrincipals);
+    // The real caller always supplies the forward projection; without one the
+    // remaining interest is unknown, which the next test covers.
+    const currentProjection = generateLoanSchedule({
+      startingBalance: remaining,
+      annualRate: 6,
+      paymentAmount: 500,
+      frequency: 'MONTHLY',
+      firstPaymentDate: new Date(2025, 4, 15),
+    });
 
     const impact = computePastImpact(
       makeAccount({ currentBalance: -remaining }),
       history,
+      currentProjection,
     );
 
     expect(impact).not.toBeNull();
@@ -478,6 +488,61 @@ describe('computePastImpact', () => {
     // No interest was recorded in history (no linked splits), so the saving
     // is capped rather than negative
     expect(impact!.interestAlreadySaved).toBeGreaterThanOrEqual(0);
+  });
+
+  it('reports an unknown saving when the remaining interest is unknown', () => {
+    // No forward projection and an outstanding balance: what is still to pay is
+    // not known, so the saving is null rather than the whole original interest
+    // (which is what treating the absent projection as zero produced).
+    const original = generateLoanSchedule({
+      startingBalance: 10000,
+      annualRate: 6,
+      paymentAmount: 500,
+      frequency: 'MONTHLY',
+      firstPaymentDate: new Date(2025, 0, 15),
+    });
+    const paidPrincipals = original.rows.slice(0, 4).map((row) => row.principal);
+    const remaining = original.rows[3].balance;
+    const account = makeAccount({ currentBalance: -remaining });
+
+    const impact = computePastImpact(account, makeHistory(account, paidPrincipals));
+
+    expect(impact).not.toBeNull();
+    expect(impact!.currentProjection).toBeNull();
+    expect(impact!.interestAlreadySaved).toBeNull();
+  });
+
+  it('reports an unknown saving when the forward projection hits its horizon', () => {
+    const original = generateLoanSchedule({
+      startingBalance: 10000,
+      annualRate: 6,
+      paymentAmount: 500,
+      frequency: 'MONTHLY',
+      firstPaymentDate: new Date(2025, 0, 15),
+    });
+    const paidPrincipals = original.rows.slice(0, 4).map((row) => row.principal);
+    const remaining = original.rows[3].balance;
+    const account = makeAccount({ currentBalance: -remaining });
+    // A projection capped after two payments: its accumulated interest is a
+    // subtotal, so subtracting it from the original's lifetime interest would
+    // report a saving the borrower has not made.
+    const truncated = generateLoanSchedule({
+      startingBalance: remaining,
+      annualRate: 6,
+      paymentAmount: 500,
+      frequency: 'MONTHLY',
+      firstPaymentDate: new Date(2025, 4, 15),
+      maxPayments: 2,
+    });
+
+    const impact = computePastImpact(
+      account,
+      makeHistory(account, paidPrincipals),
+      truncated,
+    );
+
+    expect(truncated.paidOff).toBe(false);
+    expect(impact!.interestAlreadySaved).toBeNull();
   });
 
   it('derives the mortgage contractual payment from the amortization period', () => {

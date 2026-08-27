@@ -40,8 +40,20 @@ export function CompleteStep({
     accountName: string;
     accountType: string;
     currencyCode?: string;
+    isCanadianMortgage?: boolean;
+    isVariableRate?: boolean;
   } | null>(null);
   const [completedSetups, setCompletedSetups] = useState<Set<string>>(new Set());
+
+  // The two mortgage flags for a matched account, read from the accounts list
+  // rather than from the import summary, which never carried them.
+  const mortgageFlagsOf = (accountId: string) => {
+    const account = accounts.find((a) => a.id === accountId);
+    return {
+      isCanadianMortgage: account?.isCanadianMortgage,
+      isVariableRate: account?.isVariableRate,
+    };
+  };
 
   // Collect loan accounts needing setup from import results
   const loanAccountsNeedingSetup = useMemo(() => {
@@ -316,7 +328,14 @@ export function CompleteStep({
         <LoanPaymentSetupDialog
           isOpen={true}
           onClose={() => setSetupDialogAccount(null)}
-          loanAccount={setupDialogAccount}
+          loanAccount={{
+            ...setupDialogAccount,
+            // The dialog submits its own checkboxes, so an unseeded `false` on a
+            // matched existing Canadian mortgage turns semi-annual compounding
+            // off for every future split. The import list carries only what the
+            // import knew, so the flags are read from the account itself.
+            ...mortgageFlagsOf(setupDialogAccount.accountId),
+          }}
           accounts={accounts}
           onSetupComplete={() => {
             setCompletedSetups((prev) => new Set([...prev, setupDialogAccount.accountId]));

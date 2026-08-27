@@ -27,7 +27,6 @@
     "manualTitle": "Manuel kayıt gerektirir",
     "negativeBalanceWarning": "Bu işlem hesap bakiyesinin sıfırın altına düşmesine yol açacak",
     "viewAll": "Tüm fatura ve ödemeleri görüntüle",
-    "totalDue": "Toplam borç",
     "totalIncoming": "Toplam gelen",
     "moreItems": "+{count} daha",
     "overdue": "Vadesi geçmiş",
@@ -38,7 +37,8 @@
       "bill": "Fatura",
       "deposit": "Ödeme",
       "transfer": "Transfer",
-      "reminder": "Hatırlatma"
+      "reminder": "Hatırlatma",
+      "unknown": "Bilinmiyor"
     }
   },
   "gettingStarted": {

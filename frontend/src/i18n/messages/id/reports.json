@@ -128,7 +128,8 @@
     "backToReports": "Kembali ke Laporan",
     "switchReport": "Pindah ke laporan lain",
     "switchPlaceholder": "Saring laporan...",
-    "switchNoMatches": "Tidak ada laporan yang cocok"
+    "switchNoMatches": "Tidak ada laporan yang cocok",
+    "favourites": "Favorit"
   },
   "reportPage": {
     "notFound": "Laporan Tidak Ditemukan",
@@ -437,6 +438,7 @@
     "currentBalance": "Saldo Saat Ini",
     "principalPaid": "Pokok Dibayar",
     "estTotalInterest": "Perkiraan Total Bunga",
+    "interestOverProjection": "Bunga selama proyeksi",
     "interestPaid": "Bunga Dibayar",
     "progress": "Kemajuan",
     "estPayoff": "Perkiraan Pelunasan",
@@ -807,6 +809,7 @@
     "originalAmount": "Jumlah Awal",
     "interestRate": "Suku Bunga",
     "estTotalInterest": "Perkiraan Total Bunga",
+    "interestOverProjection": "Bunga selama proyeksi",
     "totalInterestPaid": "Total Bunga Dibayar",
     "paymentsMade": "Pembayaran Dilakukan",
     "estPayoff": "Perkiraan Pelunasan",
@@ -839,7 +842,8 @@
     "typeLineOfCredit": "Jalur Kredit",
     "typeLoan": "Pinjaman",
     "typeMortgage": "Hipotek",
-    "pdfSubtitlePaymentsSummary": "{count} pembayaran dilakukan, {interest} total bunga"
+    "pdfSubtitlePaymentsSummary": "{count} pembayaran dilakukan, {interest} total bunga",
+    "pdfSubtitlePaymentsProjection": "{count} pembayaran dilakukan, bunga {interest} selama proyeksi"
   },
   "monteCarlo": {
     "toasts": {
@@ -1548,12 +1552,16 @@
     "csvColBillName": "Nama Tagihan",
     "csvColDueDate": "Tanggal Jatuh Tempo",
     "csvColAmount": "Jumlah",
+    "csvColCurrency": "Mata Uang",
     "csvColFrequency": "Frekuensi",
     "csvColAccount": "Akun",
     "csvColStatus": "Status",
     "csvStatusOverdue": "Terlambat",
     "csvStatusAuto": "Otomatis",
     "csvStatusManual": "Manual",
+    "amountUnavailable": "Tidak tersedia",
+    "occurrencesUnavailable": "Kemunculan yang diproyeksikan tidak dapat dimuat, sehingga kalender dan jumlah di bawah tidak tersedia. Tagihan Anda sendiri tidak terpengaruh.",
+    "csvAmountUnavailable": "Tidak tersedia (tidak ada nilai tukar saat ini)",
     "pdfTitle": "Laporan Tagihan yang Akan Datang",
     "pdfSubtitle": "{month} | {count} tagihan aktif",
     "pdfActiveBills": "Tagihan Aktif",

@@ -13,6 +13,15 @@ import { Modal } from '@/components/ui/Modal';
 import { createLogger } from '@/lib/logger';
 import type { RecurringChargeInfo, Transaction } from '@/types/transaction';
 import type { ScheduledTransaction } from '@/types/scheduled-transaction';
+import {
+  SCHEDULED_KIND_AMOUNT_CLASSES,
+  occurrenceKind,
+} from '@/lib/scheduled-kind';
+import {
+  nextOccurrenceDueDate,
+  nextOccurrenceEffectiveAmount,
+} from '@/lib/scheduled-effective-amount';
+import { UnknownAmount } from '@/components/ui/UnknownAmount';
 
 // The scheduled-transaction form is heavy and only needed once the user opens
 // the "create bill" modal, so load it lazily.
@@ -40,20 +49,32 @@ function normaliseName(value: string | null | undefined): string {
 }
 
 /**
- * Colour a scheduled bill's amount by kind, matching the app convention:
- * transfers blue, income (positive) green, expense (negative) red.
+ * Colour and sign a scheduled bill's amount by the kind of the OCCURRENCE whose
+ * magnitude is printed beside them: transfers blue, income green, expense red.
+ *
+ * Both used to key off the stored sign, on the argument that "an exchange rate is
+ * positive, so it cannot flip the direction". That is true of one scalar times one
+ * rate and false of a mixed-sign split parent, where only the investment line
+ * re-prices -- so a parent stored at -10 that now posts +20 rendered as
+ * "-$20.00" in red: the sign, the colour and the number describing two different
+ * events. `occurrenceKind` is the one place this decision is made, and it already
+ * falls back to the schedule's sign when the occurrence cannot be priced (issue
+ * #1247).
  */
 function scheduledAmountClass(s: ScheduledTransaction): string {
-  if (s.isTransfer) return 'text-blue-600 dark:text-blue-400';
-  return Number(s.amount) < 0
-    ? 'text-red-600 dark:text-red-400'
-    : 'text-green-600 dark:text-green-400';
+  return SCHEDULED_KIND_AMOUNT_CLASSES[
+    occurrenceKind(nextOccurrenceEffectiveAmount(s), s)
+  ];
 }
 
 /** Signed prefix for a scheduled bill amount; transfers carry no +/-. */
 function scheduledAmountSign(s: ScheduledTransaction): string {
-  if (s.isTransfer) return '';
-  return Number(s.amount) < 0 ? '-' : '+';
+  const kind = occurrenceKind(nextOccurrenceEffectiveAmount(s), s);
+  // A transfer carries no direction by nature, a reminder states no amount, and
+  // `unknown` means the server could not derive which way this occurrence goes --
+  // printing either sign there would be a guess with a symbol in front of it.
+  if (kind === 'transfer' || kind === 'reminder' || kind === 'unknown') return '';
+  return kind === 'bill' ? '-' : '+';
 }
 
 /**
@@ -146,7 +167,11 @@ export function RecurringChargesPanel({ accountId, currencyCode }: RecurringChar
     () =>
       scheduled
         .filter((s) => s.accountId === accountId && s.isActive)
-        .sort((a, b) => a.nextDueDate.localeCompare(b.nextDueDate)),
+        // Ordered by the date each occurrence actually falls on: an override can
+        // move the next one off its recurrence slot (issue #1247).
+        .sort((a, b) =>
+          nextOccurrenceDueDate(a).localeCompare(nextOccurrenceDueDate(b)),
+        ),
     [scheduled, accountId],
   );
 
@@ -200,14 +225,36 @@ export function RecurringChargesPanel({ accountId, currencyCode }: RecurringChar
                         <div className="text-xs text-gray-500 dark:text-gray-400">
                           {tf(`frequency.${s.frequency}` as 'frequency.MONTHLY')}
                           {' · '}
-                          {t('recurring.nextDue', { date: formatDate(s.nextDueDate) })}
+                          {/* The date the occurrence actually falls on, which is
+                              what the list is already sorted by. `nextDueDate` is
+                              the recurrence slot, so printing it announced a
+                              payment on a day the user had moved -- beside the
+                              re-priced amount, on the same line (issue #1247). */}
+                          {t('recurring.nextDue', {
+                            date: formatDate(nextOccurrenceDueDate(s)),
+                          })}
                         </div>
                       </div>
                       <div
                         className={`text-sm font-medium tabular-nums ${scheduledAmountClass(s)}`}
                       >
-                        {scheduledAmountSign(s)}
-                        {formatCurrency(Math.abs(Number(s.amount)), s.currencyCode)}
+                        {/* The amount the next occurrence would post today, from
+                            the server's effective-amount contract -- not the
+                            persisted `amount`, which for an FX-sensitive schedule
+                            was calculated at an older rate (issue #1247). */}
+                        {(() => {
+                          const effective = nextOccurrenceEffectiveAmount(s);
+                          if (effective.amount === null) return <UnknownAmount />;
+                          return (
+                            <>
+                              {scheduledAmountSign(s)}
+                              {formatCurrency(
+                                Math.abs(effective.amount),
+                                effective.currencyCode,
+                              )}
+                            </>
+                          );
+                        })()}
                       </div>
                     </li>
                   ))}

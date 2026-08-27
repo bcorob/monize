@@ -182,7 +182,10 @@ describe('DateInput', () => {
       const { getByLabelText } = renderDateInput('2025-06-15');
       const event = new KeyboardEvent('keydown', { key: 't', bubbles: true });
       const preventSpy = vi.spyOn(event, 'preventDefault');
-      getByLabelText('Date').dispatchEvent(event);
+      // `fireEvent(element, event)`, not `element.dispatchEvent(event)`: the
+      // spy needs this exact event object, and a bare dispatch skips the act()
+      // wrapper, so the date the 't' shortcut sets commits outside it.
+      fireEvent(getByLabelText('Date'), event);
       expect(preventSpy).toHaveBeenCalled();
     });
 

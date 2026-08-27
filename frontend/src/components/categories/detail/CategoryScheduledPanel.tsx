@@ -4,6 +4,7 @@ import { useTranslations } from 'next-intl';
 import { useDateFormat } from '@/hooks/useDateFormat';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
 import type { NextScheduledItem } from '@/lib/scheduled-utils';
+import { UnknownAmount } from '@/components/ui/UnknownAmount';
 
 interface CategoryScheduledPanelProps {
   /** Upcoming scheduled bills/deposits in this category's subtree, soonest first. */
@@ -56,12 +57,19 @@ export function CategoryScheduledPanel({ items, isLoading }: CategoryScheduledPa
                 </div>
                 <p
                   className={`whitespace-nowrap text-sm font-semibold ${
-                    item.amount < 0
+                    item.amount !== null && item.amount < 0
                       ? 'text-red-600 dark:text-red-400'
                       : 'text-green-600 dark:text-green-400'
                   }`}
                 >
-                  {formatCurrency(Math.abs(item.amount), item.currencyCode)}
+                  {/* An occurrence whose current amount could not be resolved is
+                      shown as unavailable, never as its stale stored figure or a
+                      measured zero (issue #1247). */}
+                  {item.amount === null ? (
+                    <UnknownAmount />
+                  ) : (
+                    formatCurrency(Math.abs(item.amount), item.currencyCode)
+                  )}
                 </p>
               </li>
             ))}

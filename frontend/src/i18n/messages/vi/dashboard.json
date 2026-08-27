@@ -27,7 +27,6 @@
     "manualTitle": "Yêu cầu đăng thủ công",
     "negativeBalanceWarning": "Giao dịch này sẽ khiến số dư tài khoản xuống dưới không",
     "viewAll": "Xem tất cả hóa đơn & tiền gửi",
-    "totalDue": "Tổng đến hạn",
     "totalIncoming": "Tổng đến",
     "moreItems": "+{count} thêm",
     "overdue": "Quá hạn",
@@ -38,7 +37,8 @@
       "bill": "Hóa đơn",
       "deposit": "Tiền gửi",
       "transfer": "Chuyển khoản",
-      "reminder": "Nhắc nhở"
+      "reminder": "Nhắc nhở",
+      "unknown": "Không rõ"
     }
   },
   "gettingStarted": {

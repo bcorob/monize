@@ -237,6 +237,12 @@
     "explanation": "Kısmi toplam: {count, plural, other {# tutar}} dahil edilemedi, bu nedenle gösterilen rakam bunları hariç tutuyor. {currencies} için {displayCurrency} kuru mevcut değil.",
     "explanationExcluded": "Kısmi toplam: {count, plural, other {# tutar}} hesaplanamadı, bu nedenle gösterilen rakam bunları hariç tutuyor."
   },
+  "unknownAmount": {
+    "marker": "—",
+    "srLabel": "Tutar kullanılamıyor",
+    "scheduledFx": "Geçerli tutar hesaplanamıyor: bu planlanmış kaydın uzlaşma para birimi çifti için döviz kuru bulunamadı. Kaydedilen tutar daha eski bir kurla hesaplandığı için gösterilmiyor.",
+    "displayFx": "Bu tutar burada gösterilemiyor: miktar biliniyor, ancak bu toplamın para birimine çevirmek için kur bulunmuyor. Kurları Para Birimleri sayfasından yenileyin."
+  },
   "density": {
     "title": "Satır yoğunluğunu değiştir",
     "normal": "Normal",

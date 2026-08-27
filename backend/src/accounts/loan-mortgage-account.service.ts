@@ -11,20 +11,28 @@ import { Institution } from "../institutions/entities/institution.entity";
 import { CreateAccountDto } from "./dto/create-account.dto";
 import { CategoriesService } from "../categories/categories.service";
 import { ScheduledTransactionsService } from "../scheduled-transactions/scheduled-transactions.service";
+import { FrequencyType as FrequencyTypeDto } from "../scheduled-transactions/dto/create-scheduled-transaction.dto";
 import {
   calculateAmortization,
+  LOAN_FREQUENCY_TO_RECURRENCE,
+  MAX_DATEABLE_PAYMENTS,
   PaymentFrequency,
   AmortizationResult,
 } from "./loan-amortization.util";
 import {
   calculateMortgageAmortization,
-  getMortgagePeriodsPerYear,
   getPeriodicRate,
+  MORTGAGE_FREQUENCY_TO_RECURRENCE,
   MortgagePaymentFrequency,
   MortgageAmortizationInput,
   MortgageAmortizationResult,
 } from "./mortgage-amortization.util";
-import { formatDateYMD } from "../common/date-utils";
+import {
+  DEFAULT_PERIODS_PER_YEAR,
+  mortgageTermEndDate,
+  periodsPerYearForStoredFrequency,
+} from "./payment-frequency.util";
+import { formatDateYMD, localDateForColumn } from "../common/date-utils";
 import { roundMoney } from "../common/round.util";
 import { tr } from "../i18n/translate";
 import { LoanRateChangesService } from "../loan-rate-changes/loan-rate-changes.service";
@@ -153,7 +161,10 @@ export class LoanMortgageAccountService {
         institution,
         paymentAmount,
         paymentFrequency,
-        paymentStartDate: new Date(paymentStartDate),
+        // A TypeORM `date` column, serialized with local getters: a UTC-midnight
+        // value is stored a day early west of Greenwich, and this date anchors
+        // every amortization the account later computes.
+        paymentStartDate: localDateForColumn(paymentStartDate),
         sourceAccountId,
         interestCategoryId: interestCatId || null,
       });
@@ -161,7 +172,11 @@ export class LoanMortgageAccountService {
     });
 
     const endDateStr =
-      amortization.totalPayments > 0 && amortization.totalPayments < 10000
+      // The same ceiling the end-date helpers date up to. Two literals
+      // disagreed at the boundary: the util dated exactly 10000 while this
+      // refused it, so one schedule had a payoff date and no scheduled end.
+      amortization.totalPayments > 0 &&
+      amortization.totalPayments <= MAX_DATEABLE_PAYMENTS
         ? formatDateYMD(amortization.endDate)
         : undefined;
 
@@ -173,7 +188,15 @@ export class LoanMortgageAccountService {
         payeeName: institutionName,
         amount: -paymentAmount,
         currencyCode: accountData.currencyCode,
-        frequency: paymentFrequency as any,
+        // Through the loan-to-recurrence table rather than a cast. Every loan
+        // frequency happens to share its spelling with a recurrence frequency
+        // except SEMIMONTHLY, and a cast is exactly how that kind of mismatch
+        // reaches the database unvalidated (`as any` skips class-validator: the
+        // pipe only runs on controller input, and the column has no CHECK).
+        frequency:
+          FrequencyTypeDto[
+            LOAN_FREQUENCY_TO_RECURRENCE[paymentFrequency as PaymentFrequency]
+          ],
         nextDueDate: paymentStartDate,
         startDate: paymentStartDate,
         endDate: endDateStr,
@@ -271,18 +294,16 @@ export class LoanMortgageAccountService {
       principal: mortgageAmount,
       annualRate: interestRate,
       amortizationMonths,
-      paymentFrequency: mortgagePaymentFrequency as MortgagePaymentFrequency,
+      paymentFrequency: mortgagePaymentFrequency,
       isCanadian: isCanadianMortgage,
       isVariableRate,
       startDate: new Date(paymentStartDate),
     };
     const amortization = calculateMortgageAmortization(amortizationInput);
 
-    let termEndDate: Date | null = null;
-    if (termMonths) {
-      termEndDate = new Date(paymentStartDate);
-      termEndDate.setMonth(termEndDate.getMonth() + termMonths);
-    }
+    const termEndDate = termMonths
+      ? mortgageTermEndDate(new Date(paymentStartDate), termMonths)
+      : null;
 
     const savedAccount = await withScopedDb(this.dataSource, (m) => {
       const repo = m.getRepository(Account);
@@ -295,7 +316,10 @@ export class LoanMortgageAccountService {
         institution,
         paymentAmount: amortization.paymentAmount,
         paymentFrequency: mortgagePaymentFrequency,
-        paymentStartDate: new Date(paymentStartDate),
+        // A TypeORM `date` column, serialized with local getters: a UTC-midnight
+        // value is stored a day early west of Greenwich, and this date anchors
+        // every amortization the account later computes.
+        paymentStartDate: localDateForColumn(paymentStartDate),
         sourceAccountId,
         interestCategoryId: interestCatId || null,
         isCanadianMortgage,
@@ -308,19 +332,21 @@ export class LoanMortgageAccountService {
       return repo.save(account);
     });
 
-    const frequencyMap: Record<string, string> = {
-      MONTHLY: "MONTHLY",
-      SEMI_MONTHLY: "SEMI_MONTHLY",
-      BIWEEKLY: "BIWEEKLY",
-      ACCELERATED_BIWEEKLY: "BIWEEKLY",
-      WEEKLY: "WEEKLY",
-      ACCELERATED_WEEKLY: "WEEKLY",
-    };
+    // The one mortgage-to-recurrence table, shared with calculateMortgageEndDate
+    // so the payoff date and the schedule that reaches it cannot disagree. It
+    // used to be a local copy that mapped SEMI_MONTHLY to itself -- a value the
+    // recurrence engine does not recognize, whose `default` returns the same
+    // date, so the occurrence was due forever and the mortgage's payment
+    // schedule never advanced. Migration 165 heals the rows that copy wrote.
     const scheduledFrequency =
-      frequencyMap[mortgagePaymentFrequency] || "MONTHLY";
+      MORTGAGE_FREQUENCY_TO_RECURRENCE[mortgagePaymentFrequency];
 
     const endDateStr =
-      amortization.totalPayments > 0 && amortization.totalPayments < 10000
+      // The same ceiling the end-date helpers date up to. Two literals
+      // disagreed at the boundary: the util dated exactly 10000 while this
+      // refused it, so one schedule had a payoff date and no scheduled end.
+      amortization.totalPayments > 0 &&
+      amortization.totalPayments <= MAX_DATEABLE_PAYMENTS
         ? formatDateYMD(amortization.endDate)
         : undefined;
 
@@ -332,7 +358,7 @@ export class LoanMortgageAccountService {
         payeeName: institutionName,
         amount: -amortization.paymentAmount,
         currencyCode: accountData.currencyCode,
-        frequency: scheduledFrequency as any,
+        frequency: FrequencyTypeDto[scheduledFrequency],
         nextDueDate: paymentStartDate,
         startDate: paymentStartDate,
         endDate: endDateStr,
@@ -450,9 +476,12 @@ export class LoanMortgageAccountService {
       rateChange.newPaymentAmount ?? (Number(account.paymentAmount) || 0);
     const periodicRate = getPeriodicRate(
       newRate,
-      getMortgagePeriodsPerYear(
-        (account.paymentFrequency || "MONTHLY") as MortgagePaymentFrequency,
-      ),
+      // The STORED cadence, read through the lookup that knows both spellings.
+      // Casting it to MortgagePaymentFrequency and asking
+      // getMortgagePeriodsPerYear turned SEMIMONTHLY into its monthly default,
+      // so a semi-monthly mortgage's posted split carried twice the interest.
+      periodsPerYearForStoredFrequency(account.paymentFrequency) ??
+        DEFAULT_PERIODS_PER_YEAR,
       account.isCanadianMortgage || false,
       account.isVariableRate || false,
     );

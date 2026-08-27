@@ -1,4 +1,4 @@
-import { Module } from "@nestjs/common";
+import { Module, forwardRef } from "@nestjs/common";
 import { APP_GUARD } from "@nestjs/core";
 import { JwtModule } from "@nestjs/jwt";
 import { ConfigModule, ConfigService } from "@nestjs/config";
@@ -19,7 +19,10 @@ import { NotificationsModule } from "../notifications/notifications.module";
  */
 @Module({
   imports: [
-    NotificationsModule,
+    // forwardRef: NotificationsModule now reaches back here through
+    // ScheduledTransactionsModule (issue #1247), so this edge closes a
+    // module cycle -- see `src/module-graph.spec.ts`.
+    forwardRef(() => NotificationsModule),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

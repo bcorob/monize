@@ -2,7 +2,26 @@
 
 import { useTranslations } from 'next-intl';
 import { useRouter } from 'next/navigation';
+import { useNumberFormat } from '@/hooks/useNumberFormat';
 import type { BudgetAlert, AlertSeverity } from '@/types/budget';
+
+/**
+ * The structured payload a `BILL_DUE` alert carries, so the reader sees it in
+ * their own language.
+ *
+ * A stored sentence cannot be translated after the fact: the row is written by a
+ * cron under no request locale, and the missing-rate case is exactly the one a
+ * non-English reader hits (issue #1247). `title`/`message` stay on the row as
+ * the English fallback for a consumer with no catalog -- the email digest, an
+ * API client -- and the UI composes both from these fields instead.
+ */
+interface BillDueAlertData {
+  payeeName?: string;
+  amount?: number | null;
+  amountComplete?: boolean;
+  dueDate?: string;
+  currencyCode?: string;
+}
 
 interface BudgetAlertListProps {
   alerts: BudgetAlert[];
@@ -67,6 +86,32 @@ function severityLabel(severity: AlertSeverity, t: (key: string) => string): str
   }
 }
 
+/**
+ * Whether this alert carries enough structured data to be composed locally.
+ * An older row (written before the fields existed) falls back to its stored
+ * English -- absent is "no information", not a licence to render nothing.
+ */
+function billDueData(alert: BudgetAlert): BillDueAlertData | null {
+  if (alert.alertType !== 'BILL_DUE') return null;
+  const data = alert.data as BillDueAlertData | undefined;
+  if (!data || typeof data.dueDate !== 'string') return null;
+  return data;
+}
+
+/**
+ * Whole days from today to `dueDate`, on the reader's own clock.
+ *
+ * Counted at render time rather than read from the row: an alert lives until it
+ * is dismissed, so a stored "in 3 days" goes on saying three days for as long
+ * as the alert is on screen.
+ */
+function daysUntil(dueDate: string): number {
+  const due = new Date(`${dueDate}T00:00:00`);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Math.round((due.getTime() - today.getTime()) / 86_400_000);
+}
+
 function timeAgo(dateStr: string): string {
   const date = new Date(dateStr);
   const now = new Date();
@@ -102,6 +147,40 @@ export function BudgetAlertList({
 }: BudgetAlertListProps) {
   const t = useTranslations('budgets');
   const router = useRouter();
+  const { formatCurrency } = useNumberFormat();
+
+  /**
+   * A bill-due alert's headline, in the reader's language. `null` for anything
+   * else -- and for an older row whose data predates these fields -- so the
+   * caller falls back to the stored English.
+   */
+  const billDueTitle = (alert: BudgetAlert): string | null => {
+    const data = billDueData(alert);
+    if (!data) return null;
+    const payee = data.payeeName ?? '';
+    const days = daysUntil(data.dueDate!);
+    if (days < 0) return t('alerts.billDue.titleOverdue', { payee });
+    if (days === 0) return t('alerts.billDue.titleToday', { payee });
+    if (days === 1) return t('alerts.billDue.titleTomorrow', { payee });
+    return t('alerts.billDue.titleInDays', { payee, days });
+  };
+
+  /**
+   * What the bill will cost and when, or an explicit statement that the amount
+   * cannot be worked out. Never the persisted snapshot, and never a blank where
+   * a figure belongs (issue #1247).
+   */
+  const billDueMessage = (alert: BudgetAlert): string | null => {
+    const data = billDueData(alert);
+    if (!data) return null;
+    if (data.amount == null || data.amountComplete === false) {
+      return t('alerts.billDue.amountUnavailable', { date: data.dueDate! });
+    }
+    return t('alerts.billDue.amountDue', {
+      amount: formatCurrency(data.amount, data.currencyCode),
+      date: data.dueDate!,
+    });
+  };
 
   const unreadCount = alerts.filter((a) => !a.isRead && !dismissingIds.has(a.id)).length;
 
@@ -219,10 +298,10 @@ export function BudgetAlertList({
                               </span>
                             </div>
                             <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
-                              {alert.title}
+                              {billDueTitle(alert) ?? alert.title}
                             </p>
                             <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 mt-0.5">
-                              {alert.message}
+                              {billDueMessage(alert) ?? alert.message}
                             </p>
                           </div>
                         </div>

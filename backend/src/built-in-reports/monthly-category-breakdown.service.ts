@@ -9,6 +9,20 @@ import {
   MonthlyBreakdownCategoryRow,
   MonthlyBreakdownTransferRow,
 } from "./dto";
+import { investmentExclusionSql } from "../common/investment-filter.util";
+
+/**
+ * Investment scope is LINKAGE, never account type (INV-REPORT-001, issue #1257):
+ * the cash sleeve of an INVESTMENT account holds ordinary money, while the cash
+ * leg a trade generated is not spending or income. Both halves of the predicate,
+ * and why the account type cannot express either, live in
+ * `common/investment-filter.util.ts`.
+ */
+const INVESTMENT_EXCLUSION = investmentExclusionSql({
+  accountAlias: "a",
+  transactionAlias: "t",
+  splitAlias: "ts",
+});
 
 /**
  * Raw per-(category, month, currency) aggregate. Deposits and withdrawals are
@@ -68,8 +82,10 @@ export class MonthlyCategoryBreakdownService {
 
     // Aggregate deposits (amount > 0) and withdrawals (amount < 0) per
     // category, month and currency. Transfers, voided rows, child rows of a
-    // split, investment accounts and the synthetic asset-value-change category
-    // are excluded -- mirroring the other category reports.
+    // split, investment MOVEMENTS (the securities sleeve, a trade's generated
+    // cash leg, an embedded investment split line -- never an account's type)
+    // and the synthetic asset-value-change category are excluded -- mirroring
+    // the other category reports.
     let query = `
       SELECT
         TO_CHAR(t.transaction_date, 'YYYY-MM') as month,
@@ -106,7 +122,7 @@ export class MonthlyCategoryBreakdownService {
         )
         AND (t.status IS NULL OR t.status != 'VOID')
         AND t.parent_transaction_id IS NULL
-        AND a.account_type != 'INVESTMENT'
+        AND ${INVESTMENT_EXCLUSION}
         AND (ts.transfer_account_id IS NULL OR ts.id IS NULL)
         AND NOT EXISTS (
           SELECT 1 FROM accounts ax

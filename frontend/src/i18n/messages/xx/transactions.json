@@ -123,6 +123,10 @@
       "status": "[XX-Status-XX]",
       "actions": "[XX-Actions-XX]"
     },
+    "dateDisplay": {
+      "toggleLabel": "[XX-Hide the year-XX]",
+      "toggleTitle": "[XX-Drop the year from dates so more of the payee fits-XX]"
+    },
     "attachmentsCount": "[XX-{count, plural, one {# attachment} other {# attachments}}-XX]",
     "today": "[XX-Today-XX]",
     "export": {

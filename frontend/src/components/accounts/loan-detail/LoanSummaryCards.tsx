@@ -2,7 +2,12 @@
 
 import { useTranslations } from 'next-intl';
 import { Account } from '@/types/account';
-import { LoanScheduleResult } from '@/lib/loan-schedule';
+import {
+  LoanScheduleResult,
+  ScheduleFrequency,
+  effectiveAnnualRate,
+  getPeriodsPerYear,
+} from '@/lib/loan-schedule';
 import { deriveLoanFigures } from '@/lib/loan-figures';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
 import { useChartDateFormat } from '@/hooks/useChartDateFormat';
@@ -41,10 +46,29 @@ export function LoanSummaryCards({
   const formatChartDate = useChartDateFormat();
   const currency = account.currencyCode;
 
+  // The card is shown only for Canadian fixed-rate mortgages, where the
+  // semi-annual compounding the law requires makes the effective rate differ
+  // visibly from the quoted one -- and that branch is frequency-independent by
+  // law, so calling the shared `effectiveAnnualRate` changes no displayed
+  // number. It removes a third inline copy of the compounding convention
+  // (INV-LOAN-003) and nothing else: a DRY change, not a behaviour fix. The
+  // The frequency and both flags are passed rather than hardcoded, because they
+  // are the correct arguments if this card ever shows a non-Canadian mortgage.
+  // Hardcoding `true, false` beside a comment defending the frequency argument
+  // was the worst of both: widen the guard and the call takes the semi-annual
+  // branch for a US mortgage, on which the frequency is ignored anyway.
   const isCanadianFixed = account.isCanadianMortgage && !account.isVariableRate;
   const effectiveRate =
-    isCanadianFixed && account.interestRate
-      ? (Math.pow(1 + account.interestRate / 100 / 2, 2) - 1) * 100
+    // `!= null`, not truthiness: the card above prints `0%` from
+    // `account.interestRate != null`, so suppressing the effective-rate note for
+    // a 0% mortgage treated a known 0.000% as "could not be worked out".
+    isCanadianFixed && account.interestRate != null
+      ? effectiveAnnualRate(
+          account.interestRate,
+          getPeriodsPerYear((account.paymentFrequency ?? 'MONTHLY') as ScheduleFrequency),
+          account.isCanadianMortgage ?? false,
+          account.isVariableRate ?? false,
+        )
       : null;
 
   const frequencyLabel = account.paymentFrequency

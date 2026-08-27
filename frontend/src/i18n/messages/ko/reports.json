@@ -128,7 +128,8 @@
     "backToReports": "보고서로 돌아가기",
     "switchReport": "다른 보고서로 이동",
     "switchPlaceholder": "보고서 검색...",
-    "switchNoMatches": "일치하는 보고서가 없습니다"
+    "switchNoMatches": "일치하는 보고서가 없습니다",
+    "favourites": "즐겨찾기"
   },
   "reportPage": {
     "notFound": "보고서를 찾을 수 없음",
@@ -437,6 +438,7 @@
     "currentBalance": "현재 잔액",
     "principalPaid": "납부된 원금",
     "estTotalInterest": "예상 총 이자",
+    "interestOverProjection": "예측 기간 이자",
     "interestPaid": "납부된 이자",
     "progress": "진행률",
     "estPayoff": "예상 완납일",
@@ -807,6 +809,7 @@
     "originalAmount": "원래 금액",
     "interestRate": "이자율",
     "estTotalInterest": "예상 총 이자",
+    "interestOverProjection": "예측 기간 이자",
     "totalInterestPaid": "납부된 총 이자",
     "paymentsMade": "납부 횟수",
     "estPayoff": "예상 완납일",
@@ -839,7 +842,8 @@
     "typeLineOfCredit": "신용 한도",
     "typeLoan": "대출",
     "typeMortgage": "주택 담보 대출",
-    "pdfSubtitlePaymentsSummary": "{count}건의 납부 완료, 총 이자 {interest}"
+    "pdfSubtitlePaymentsSummary": "{count}건의 납부 완료, 총 이자 {interest}",
+    "pdfSubtitlePaymentsProjection": "{count}회 상환 완료, 예상 기간 이자 {interest}"
   },
   "monteCarlo": {
     "toasts": {
@@ -1548,12 +1552,16 @@
     "csvColBillName": "청구서 이름",
     "csvColDueDate": "만기일",
     "csvColAmount": "금액",
+    "csvColCurrency": "통화",
     "csvColFrequency": "빈도",
     "csvColAccount": "계정",
     "csvColStatus": "상태",
     "csvStatusOverdue": "연체",
     "csvStatusAuto": "자동",
     "csvStatusManual": "수동",
+    "amountUnavailable": "확인할 수 없음",
+    "occurrencesUnavailable": "예정된 발생 항목을 불러오지 못해 아래 캘린더와 금액을 사용할 수 없습니다. 등록된 청구 자체는 영향을 받지 않습니다.",
+    "csvAmountUnavailable": "확인할 수 없음 (현재 환율 없음)",
     "pdfTitle": "예정 청구서 보고서",
     "pdfSubtitle": "{month} | 활성 청구서 {count}건",
     "pdfActiveBills": "활성 청구서",

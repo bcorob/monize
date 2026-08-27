@@ -19,12 +19,12 @@
     "migration:lint:test": "node --test scripts/migration-lint.test.mjs",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "typecheck": "tsc --noEmit -p tsconfig.test.json",
-    "test": "jest",
-    "test:unit": "jest --testPathPatterns='src/.*\\.spec\\.ts$'",
+    "test": "node scripts/test-chain.mjs",
+    "test:unit": "jest",
     "pretest:integration": "node -e \"const{Client}=require('pg');const c=new Client({host:process.env.DATABASE_HOST||'localhost',port:+(process.env.DATABASE_PORT||5432),user:process.env.DATABASE_USER||'monize_user',password:process.env.DATABASE_PASSWORD||'monize_password',database:'postgres'});c.connect().then(()=>c.query(\\\"SELECT 1 FROM pg_database WHERE datname='monize_test'\\\").then(r=>r.rowCount?0:c.query('CREATE DATABASE monize_test')).then(()=>c.end())).catch(e=>{console.error(e.message);process.exit(1)})\"",
-    "test:integration": "jest --config ./test/jest-e2e.json --testPathPatterns='test/integration/.*\\.spec\\.ts$' --runInBand",
+    "test:integration": "jest --config ./test/jest-e2e.json --testPathPatterns=\"test/integration/.*\\.spec\\.ts$\" --runInBand",
     "test:watch": "jest --watch",
-    "test:cov": "jest --coverage --testPathPatterns='src/.*\\.spec\\.ts$'",
+    "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "typeorm": "typeorm-ts-node-commonjs",
@@ -32,7 +32,8 @@
     "migration:run": "npm run typeorm -- migration:run",
     "migration:revert": "npm run typeorm -- migration:revert",
     "seed": "ts-node -r tsconfig-paths/register src/database/seed.ts",
-    "mny:inspect": "ts-node -r tsconfig-paths/register src/import/mny/mny-inspect.ts"
+    "mny:inspect": "ts-node -r tsconfig-paths/register src/import/mny/mny-inspect.ts",
+    "backup:peak-rss": "ts-node -r tsconfig-paths/register src/backup/restore-peak-rss.harness.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.75.0",
@@ -139,6 +140,9 @@
       "ts"
     ],
     "rootDir": ".",
+    "roots": [
+      "<rootDir>/src"
+    ],
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
       "^.+\\.(t|j)s$": [
@@ -165,7 +169,8 @@
       "!src/database/add-*.ts",
       "!src/database/fix-*.ts",
       "!src/database/migrations/**",
-      "!src/**/__fixtures__/**"
+      "!src/**/__fixtures__/**",
+      "!src/**/*.harness.ts"
     ],
     "coverageDirectory": "./coverage",
     "transformIgnorePatterns": [

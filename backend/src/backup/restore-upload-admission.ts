@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "http";
 import { PEAK_MULTIPLE } from "./backup-limits";
+import { RESTORE_RETRY_AFTER_SECONDS } from "./restore-queue-config";
 
 /**
  * Aggregate admission for restore uploads, in front of the body parser.
@@ -24,12 +25,16 @@ import { PEAK_MULTIPLE } from "./backup-limits";
  * object graph -- several of them live at the same moment. Three such uploads
  * declared 180 MiB, fitted a 200 MiB budget, and could pass 540 MiB in flight.
  *
- * So a request claims `PEAK_MULTIPLE` times its wire bytes. That number is a
- * deliberate underestimate of the true worst case and an enormous improvement on
- * 1: it makes the budget refuse the several-smaller-uploads case, which is the one
- * the wire-byte version admitted. The honest fix is streaming the input through
- * decryption and gzip into a bounded temporary file or an incremental parser,
- * which is a change to the restore pipeline rather than to this gate.
+ * So a request claims `PEAK_MULTIPLE` times its wire bytes -- measured at about 8
+ * per byte of *expanded* payload (issue #1073), which against wire bytes is still
+ * an underestimate whenever the artifact compresses at all. It is an enormous
+ * improvement on 1: it makes the budget refuse the several-smaller-uploads case,
+ * which is the one the wire-byte version admitted. What actually bounds the
+ * decompressed cost is the processing gate, because expansion is capped by the
+ * expanded ceiling and not by the compressed length. The honest fix for both is
+ * streaming the input through decryption and gzip into a bounded temporary file or
+ * an incremental parser, which is a change to the restore pipeline rather than to
+ * this gate.
  *
  * ## A reservation is held until the work is done, not until the socket shuts
  *
@@ -52,15 +57,24 @@ import { PEAK_MULTIPLE } from "./backup-limits";
  * A request that never reaches the route -- rejected by a guard, a 404 -- still
  * gets a response, so `finish` covers it.
  *
- * ## What is still not fixed
+ * ## Authorization runs before the reservation (DR-F3RB-003)
  *
- * An unauthenticated client can occupy the budget, because the gate necessarily
- * runs before authentication. `receiveTimeoutMs` bounds how long: a body that has
- * not arrived by then is refused with 408 and its reservation released, so a
- * slow-loris holds the recovery path for a bounded interval rather than
- * indefinitely. The real answers -- a smaller body limit at the ingress, a
- * two-step restore session with a short-lived upload token, streaming to disk --
- * are in `docs/backup-restore-contract.md`.
+ * Authentication cannot move earlier -- Nest's guards run after parsing -- so
+ * authorization moved here instead. `authorize` is handed a request before a single
+ * byte is promised, and on refusal nothing is reserved: an unauthenticated client
+ * can no longer occupy the restore budget at all. The check it performs is one HMAC
+ * over a short-lived ticket minted by an ordinary authenticated route
+ * (`restore-upload-ticket.ts`), deliberately synchronous and allocation-free -- a
+ * database round trip in front of the body parser would be a new lever for the load
+ * this gate exists to refuse.
+ *
+ * `receiveTimeoutMs` still bounds how long an *authorized* caller may hold its
+ * claim without sending a body: a stalled upload from a real user is possible
+ * whether or not they meant it. What remains unaddressed is the memory shape
+ * itself -- streaming the input through decryption and gzip into a bounded
+ * temporary file or an incremental parser, which is what would replace
+ * `PEAK_MULTIPLE` with a real bound rather than a measured one. See
+ * `docs/backup-restore-contract.md`.
  */
 export interface RestoreUploadAdmission {
   /** Express middleware: admits, or answers 503/413/408 itself. */
@@ -129,11 +143,24 @@ function contentLengthOf(req: IncomingMessage): number | null {
   return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null;
 }
 
+/**
+ * Decides whether this request may be budgeted for at all, before it is.
+ *
+ * Synchronous by contract: it runs in front of the body parser, so anything it
+ * awaits is work an unauthenticated caller can make the process do. Omitted, the
+ * gate admits anyone -- which is what it did before DR-F3RB-003, and what unit
+ * tests of the budgeting itself still want.
+ */
+export type RestoreUploadAuthorizer = (
+  req: IncomingMessage,
+) => { ok: true } | { ok: false; status: number; message: string };
+
 export function createRestoreUploadAdmission(
   perRequestLimitBytes: number,
   budgetBytes: number = perRequestLimitBytes * PEAK_MULTIPLE,
   onRefusal?: (message: string) => void,
   receiveTimeoutMs: number = DEFAULT_RECEIVE_TIMEOUT_MS,
+  authorize?: RestoreUploadAuthorizer,
 ): RestoreUploadAdmission {
   let reserved = 0;
 
@@ -161,6 +188,32 @@ export function createRestoreUploadAdmission(
         return;
       }
 
+      // Before anything is promised. A refusal here reserves nothing, which is the
+      // whole point: an unauthenticated request must not be able to occupy the
+      // budget even for the receive deadline (DR-F3RB-003).
+      const permitted = authorize?.(req) ?? { ok: true as const };
+      if (!permitted.ok) {
+        refuse(res, permitted.status, permitted.message);
+        return;
+      }
+
+      // A ceiling of zero is the derivation saying this container has no room for
+      // any restore. Falling through would answer 413 "exceeds the restore size
+      // limit" for every upload, naming no lever and reading as "your file is too
+      // big" when the truth is that no file would fit -- and the startup log and
+      // the processing gate both promise a 503 that names what to change. No
+      // Retry-After: retrying an unchanged deployment cannot help.
+      if (perRequestLimitBytes <= 0) {
+        refuse(
+          res,
+          503,
+          "This deployment has no memory headroom for a restore: one restore's " +
+            "modeled peak does not fit the container. Raise the container memory " +
+            "limit or lower BACKUP_RESTORE_EXPANDED_LIMIT.",
+        );
+        return;
+      }
+
       const declared = contentLengthOf(req);
 
       if (declared !== null && declared > perRequestLimitBytes) {
@@ -184,7 +237,7 @@ export function createRestoreUploadAdmission(
           res,
           503,
           "Another restore is in progress. Retry in a moment.",
-          30,
+          RESTORE_RETRY_AFTER_SECONDS,
         );
         return;
       }
@@ -222,7 +275,7 @@ export function createRestoreUploadAdmission(
           res,
           408,
           "Backup upload timed out before the body arrived.",
-          30,
+          RESTORE_RETRY_AFTER_SECONDS,
         );
         release();
         req.destroy();

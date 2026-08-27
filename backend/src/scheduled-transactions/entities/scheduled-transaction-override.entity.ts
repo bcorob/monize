@@ -6,6 +6,7 @@ import {
   UpdateDateColumn,
   ManyToOne,
   JoinColumn,
+  Unique,
 } from "typeorm";
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { ScheduledTransaction } from "./scheduled-transaction.entity";
@@ -16,6 +17,23 @@ import { Category } from "../../categories/entities/category.entity";
  * Allows users to modify individual upcoming instances without changing the base template.
  */
 @Entity("scheduled_transaction_overrides")
+/**
+ * One override per recurrence slot, declared HERE as well as in `schema.sql` and
+ * migration 166.
+ *
+ * Not redundancy: the two build paths are different. Production runs
+ * `schema.sql` then the migrations, but `synchronize: true` -- which the
+ * integration suite uses (`backend/test/helpers/test-database.ts`, and
+ * `rls-setup.ts` applies only the migrations carrying RLS/trigger/function
+ * markers) -- builds tables from these decorators alone. Declared only in SQL,
+ * the constraint did not exist in any test database, so `createOverride`'s
+ * concurrent-create refusal was unreachable there and the property "the database
+ * is the mechanism" could not be tested at all, only asserted about a file.
+ */
+@Unique("uq_sched_txn_overrides_occurrence", [
+  "scheduledTransactionId",
+  "originalDate",
+])
 export class ScheduledTransactionOverride {
   @ApiProperty({ example: "uuid", description: "Unique identifier" })
   @PrimaryGeneratedColumn("uuid")

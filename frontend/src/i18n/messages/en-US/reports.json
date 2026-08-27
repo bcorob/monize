@@ -19,5 +19,8 @@
   },
   "investmentReportForm": {
     "labelFavourite": "Add to favorites"
+  },
+  "detailHeader": {
+    "favourites": "Favorites"
   }
 }

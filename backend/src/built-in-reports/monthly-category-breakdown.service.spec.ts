@@ -380,7 +380,14 @@ describe("MonthlyCategoryBreakdownService", () => {
 
     const sql = scopedManager.query.mock.calls[0][0];
     expect(sql).toContain("t.is_transfer = false");
-    expect(sql).toContain("a.account_type != 'INVESTMENT'");
+    // Investment scope is linkage, not account type (issue #1257): the cash
+    // sleeve of an INVESTMENT account holds ordinary money.
+    expect(sql).not.toContain("a.account_type != 'INVESTMENT'");
+    expect(sql).toContain(
+      "(a.account_sub_type IS NULL OR a.account_sub_type != 'INVESTMENT_BROKERAGE')",
+    );
+    expect(sql).toContain("it.transaction_id = t.id");
+    expect(sql).toContain("its.transaction_split_id = ts.id");
     expect(sql).toContain("asset_category_id");
     expect(sql).toContain("parent_transaction_id IS NULL");
   });

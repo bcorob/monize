@@ -546,7 +546,7 @@ describe("mapInvestments", () => {
         action: InvestmentAction.REDEEM,
         accruedInterest: 5.44,
         totalAmount: 1234.56,
-        cashAmount: 1240.00,
+        cashAmount: 1240.0,
       });
       expect(result.transactions[1]).toMatchObject({
         action: InvestmentAction.INTEREST,

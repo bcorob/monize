@@ -310,6 +310,85 @@ describe('LoanPaymentSetupDialog', () => {
     }));
   });
 
+  it('stops offering quarterly and yearly once the mortgage is Canadian', async () => {
+    // The mortgage helpers have no quarterly or yearly cadence, so the server
+    // answers 400 rather than split the payment at a monthly rate. Offering the
+    // choice made a working flow fail with nothing on the form to explain it.
+    mockDetectLoanPayments.mockResolvedValue(defaultDetected);
+    await renderDialog({
+      ...defaultProps,
+      loanAccount: { accountId: 'm-1', accountName: 'M', accountType: 'MORTGAGE', currencyCode: 'USD' },
+    });
+
+    const frequency = screen.getByLabelText(/Payment Frequency/i) as HTMLSelectElement;
+    const optionsOf = () => Array.from(frequency.options).map((o) => o.value);
+    expect(optionsOf()).toContain('QUARTERLY');
+    expect(optionsOf()).toContain('YEARLY');
+
+    await act(async () => fireEvent.click(screen.getByLabelText(/Canadian Mortgage/i)));
+    expect(optionsOf()).not.toContain('QUARTERLY');
+    expect(optionsOf()).not.toContain('YEARLY');
+    // The cadences a Canadian mortgage genuinely has stay.
+    expect(optionsOf()).toEqual(
+      expect.arrayContaining(['WEEKLY', 'BIWEEKLY', 'SEMIMONTHLY', 'MONTHLY']),
+    );
+  });
+
+  it('does not submit a cadence the Canadian restriction removed', async () => {
+    // Selecting quarterly first and ticking the box after is the order that
+    // matters: the value has to be corrected, not merely hidden from the list.
+    // And unticking restores the choice rather than silently keeping monthly.
+    mockDetectLoanPayments.mockResolvedValue(defaultDetected);
+    mockSetupLoanPayments.mockResolvedValue({} as any);
+    await renderDialog({
+      ...defaultProps,
+      loanAccount: { accountId: 'm-1', accountName: 'M', accountType: 'MORTGAGE', currencyCode: 'USD' },
+    });
+
+    const frequency = screen.getByLabelText(/Payment Frequency/i) as HTMLSelectElement;
+    await act(async () => fireEvent.change(frequency, { target: { value: 'QUARTERLY' } }));
+    expect(frequency.value).toBe('QUARTERLY');
+
+    const canadian = screen.getByLabelText(/Canadian Mortgage/i);
+    await act(async () => fireEvent.click(canadian));
+    expect(frequency.value).toBe('MONTHLY');
+
+    const submit = screen.getAllByRole('button', { name: /Set Up Payments/i });
+    await act(async () => fireEvent.click(submit[submit.length - 1]));
+    expect(mockSetupLoanPayments).toHaveBeenCalledWith(
+      'm-1',
+      expect.objectContaining({ paymentFrequency: 'MONTHLY' }),
+    );
+
+    await act(async () => fireEvent.click(canadian));
+    expect(frequency.value).toBe('QUARTERLY');
+  });
+
+  it('keeps every cadence for an ordinary loan and a non-Canadian mortgage', () => {
+    // The restriction is the Canadian branch's, not the mortgage type's: a
+    // non-Canadian mortgage is split by calculatePaymentSplit, which handles
+    // quarterly and yearly perfectly well.
+    return (async () => {
+      mockDetectLoanPayments.mockResolvedValue(defaultDetected);
+      for (const accountType of ['LOAN', 'MORTGAGE']) {
+        const { unmount } = await renderDialog({
+          ...defaultProps,
+          loanAccount: { accountId: 'x-1', accountName: 'X', accountType, currencyCode: 'USD' },
+        });
+        const frequency = screen.getByLabelText(/Payment Frequency/i) as HTMLSelectElement;
+        expect(Array.from(frequency.options).map((o) => o.value)).toEqual([
+          'WEEKLY',
+          'BIWEEKLY',
+          'SEMIMONTHLY',
+          'MONTHLY',
+          'QUARTERLY',
+          'YEARLY',
+        ]);
+        unmount();
+      }
+    })();
+  });
+
   it('toggles auto-post checkbox', async () => {
     mockDetectLoanPayments.mockResolvedValue(defaultDetected);
     await renderDialog();

@@ -27,6 +27,8 @@
     "loanRequiresInstitution": "Konta pożyczek wymagają nazwy instytucji",
     "mortgageRequiredFields": "Konta kredytów hipotecznych wymagają mortgagePaymentFrequency, paymentStartDate, sourceAccountId oraz amortizationMonths",
     "mortgageRequiresInterestRate": "Konta kredytów hipotecznych wymagają oprocentowania",
+    "mortgageFrequencyUnsupported": "Kanadyjskich kredytów hipotecznych nie można zaplanować z częstotliwością spłat {frequency}",
+    "paymentFrequencyUnsupported": "Nie można zaplanować częstotliwości spłat {frequency}",
     "mortgageRequiresInstitution": "Konta kredytów hipotecznych wymagają nazwy instytucji",
     "onlyMortgageAccounts": "Ta operacja jest dozwolona tylko dla kont kredytów hipotecznych",
     "updateRateClosed": "Nie można zaktualizować oprocentowania na zamkniętym koncie",
@@ -193,13 +195,16 @@
     "reauthUnavailable": "Zakończ ustawianie hasła do konta, zanim przywrócisz kopię zapasową.",
     "supportPasswordRequired": "Kopia zapasowa do wsparcia musi być zaszyfrowana: podaj hasło.",
     "passwordHeaderNotBase64": "Nagłówek {header} musi być zakodowany w base64.",
-    "decompressTooLarge": "Kopia zapasowa jest zbyt duża, aby ją przywrócić: po rozpakowaniu przekracza skonfigurowany limit {limit} bajtów. Zwiększ BACKUP_RESTORE_EXPANDED_LIMIT, jeśli to prawdziwa kopia.",
+    "decompressTooLarge": "Kopia zapasowa jest zbyt duża, aby ją przywrócić: po rozpakowaniu przekracza limit {limit} bajtów tego wdrożenia. Ten pułap wynika z pamięci kontenera i zmierzonego kosztu na bajt, więc podniesienie samego pułapu opisuje przywracanie, którego proces nie zdoła ukończyć -- zwiększ zamiast tego limit pamięci kontenera (Kubernetes: backend.resources.limits.memory).",
     "exportTooLarge": "Ta kopia zapasowa jest zbyt duża, aby utworzyć ją w całości (powyżej {limit} bajtów przy tabeli \"{table}\"). Kopie automatyczne i do wsparcia muszą być przechowywane w pamięci; pobierz kopię ręczną, która strumieniuje, albo zwiększ BACKUP_EXPORT_BUFFER_LIMIT.",
     "supportExportTooLarge": "Ta kopia do wsparcia miałaby {{ size }} MiB JSON-a, powyżej limitu {{ limit }} MiB. Zawęź ją wyborem kont lub zakresem dat albo zwiększ BACKUP_EXPORT_BUFFER_LIMIT.",
     "folderUnusable": "Folder \"{{ path }}\" nie może być użyty jako katalog ({{ reason }}).",
     "folderOutsideAllowedRoots": "Folder kopii zapasowych \"{path}\" jest poza dozwolonymi katalogami głównymi ({roots}). Ustaw BACKUP_ALLOWED_ROOTS, aby na niego pozwolić.",
     "noBackupStorage": "Ta instalacja nie ma zapisywalnego magazynu kopii zapasowych: {{ safePath }} nie istnieje i nie może zostać utworzony ({{ reason }}). Zamontuj tam wolumen (Docker: bind mount lub wolumen nazwany; Kubernetes: ustaw backend.persistence.backups w charcie Helm) i spróbuj ponownie.",
-    "restoreNoMemoryHeadroom": "Ta instalacja nie ma zapasu pamięci na przywracanie: modelowany szczyt jednego przywracania nie mieści się w kontenerze. Zwiększ limit pamięci kontenera albo obniż BACKUP_RESTORE_EXPANDED_LIMIT."
+    "restoreNoMemoryHeadroom": "Ta instalacja nie ma zapasu pamięci na przywracanie: modelowany szczyt jednego przywracania nie mieści się w kontenerze. Zwiększ limit pamięci kontenera albo obniż BACKUP_RESTORE_EXPANDED_LIMIT.",
+    "restoreQueueFull": "Zbyt wiele przywracań już czeka na moc przywracania tego wdrożenia. Spróbuj ponownie za chwilę.",
+    "restoreQueueWaitTimeout": "Upłynął limit czasu oczekiwania na moc przywracania: inne przywracanie nadal trwa. Spróbuj ponownie za chwilę.",
+    "restoreTicketUnavailable": "To wdrożenie nie może autoryzować przesyłania kopii do przywrócenia."
   },
   "budgets": {
     "notFound": "Nie znaleziono budżetu o ID {{ id }}",

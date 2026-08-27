@@ -49,7 +49,7 @@ absent one.
 ## 3. Shape
 
 ```typescript
-type FxGap = "missing_rate";
+type FxGap = "missing_rate" | "value_unknown";
 
 interface FxTotal {
   /** null unless every component converted. */
@@ -58,12 +58,25 @@ interface FxTotal {
   knownSubtotal: number;
   /** "USD->EUR" for each pair that had no rate. Empty when complete. */
   missingPairs: string[];
+  /** Components left out for a reason with no pair to name. */
+  unknownCount: number;
 }
 ```
 
 `FxAggregate` (`backend/src/common/fx-aggregate.ts`) accumulates this. Callers
-add signed amounts and read the triple at the end; they never branch on `null`
+add signed amounts and read the quadruple at the end; they never branch on `null`
 themselves, which is what kept the old code's `?? amount` out of sight.
+
+**A component can go missing for two reasons, and only one of them has a
+currency to blame.** A missing *rate* is a fact about a pair, and naming it
+(`missingPairs`) tells the reader what to fix. A component whose *value* is
+unknown -- a scheduled occurrence whose own settlement rate could not be
+resolved, an unpriced holding -- is unknown in every currency, so filing it under
+a pair would send the reader to refresh a rate that is already there. `addUnknown`
+records it by count instead (`unknownCount`), and `isComplete` is false for
+either cause: checking `missingPairs` alone reported a total containing an
+unpriceable component as complete. `frontend/src/lib/currency-total.ts` splits
+the same two causes as `missingCurrencies` and `excludedCount`.
 
 ## 4. Numerical examples
 

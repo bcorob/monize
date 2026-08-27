@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from "@nestjs/common";
 import { tr } from "../i18n/translate";
 import { DataSource } from "typeorm";
 import { withScopedDb } from "../common/db/scoped-db";
+import { preferredCurrency } from "../common/default-currency.util";
 import {
   InvestmentReport,
   InvestmentReportConfig,
@@ -177,7 +178,7 @@ export class InvestmentReportsService {
     const pref = await withScopedDb(this.dataSource, (m) =>
       m.getRepository(UserPreference).findOne({ where: { userId } }),
     );
-    const baseCurrency = pref?.defaultCurrency || "CAD";
+    const baseCurrency = preferredCurrency(pref);
 
     // Combining duplicate securities across accounts is available everywhere
     // except when rows are already keyed by account.

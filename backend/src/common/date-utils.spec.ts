@@ -1,4 +1,5 @@
 import {
+  addDaysYMD,
   formatDateYMD,
   formatDateYMDLocal,
   formatMonthKey,
@@ -140,5 +141,31 @@ describe("isTransactionInFuture", () => {
 
   it("returns false for today's date", () => {
     expect(isTransactionInFuture(todayYMD())).toBe(false);
+  });
+});
+
+describe("addDaysYMD", () => {
+  it("adds days across month and year boundaries", () => {
+    expect(addDaysYMD("2024-07-08", 90)).toBe("2024-10-06");
+    expect(addDaysYMD("2024-12-31", 1)).toBe("2025-01-01");
+  });
+
+  it("steps back for a negative count", () => {
+    expect(addDaysYMD("2025-01-01", -1)).toBe("2024-12-31");
+  });
+
+  it("crosses a leap day", () => {
+    expect(addDaysYMD("2024-02-28", 1)).toBe("2024-02-29");
+    expect(addDaysYMD("2023-02-28", 1)).toBe("2023-03-01");
+  });
+
+  /**
+   * The arithmetic is in UTC, so a spring-forward day is still one day. Reading
+   * the input as local time would return the same date for `+1` in the zones
+   * where the clock jumps.
+   */
+  it("adds a whole day across a DST transition", () => {
+    expect(addDaysYMD("2025-03-09", 1)).toBe("2025-03-10");
+    expect(addDaysYMD("2025-11-02", 1)).toBe("2025-11-03");
   });
 });

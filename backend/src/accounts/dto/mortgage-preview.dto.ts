@@ -97,8 +97,15 @@ export class MortgagePreviewResponseDto {
   totalPayments: number;
 
   @ApiProperty({
+    example: 307.76,
+    description:
+      "The last payment: the residual payoff (remaining balance plus that period's interest), not another full installment. Equal to paymentAmount only when the analytic payment count is a whole number; -1 when the payment never amortizes.",
+  })
+  residualPayoffAmount: number;
+
+  @ApiProperty({
     example: "2049-02-01",
-    description: "Estimated payoff date",
+    description: "Date of the final payment (paymentStartDate is payment 1)",
   })
   endDate: string;
 

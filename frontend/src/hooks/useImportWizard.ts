@@ -51,6 +51,7 @@ import {
   buildSecurityMappings,
   findMatchingSecurityBySymbol,
 } from '@/app/import/import-matching';
+import { preferredCurrency } from '@/lib/default-currency';
 
 const logger = createLogger('Import');
 
@@ -83,7 +84,9 @@ export function useImportWizard() {
   const tc = useTranslations('common');
   const searchParams = useSearchParams();
   const preselectedAccountId = searchParams.get('accountId');
-  const defaultCurrency = usePreferencesStore((s) => s.preferences?.defaultCurrency) || 'USD';
+  const defaultCurrency = preferredCurrency(
+    usePreferencesStore((s) => s.preferences?.defaultCurrency),
+  );
   const rawPreferredExchanges = usePreferencesStore((s) => s.preferences?.preferredExchanges);
   const preferredExchanges = useMemo(() => rawPreferredExchanges || [], [rawPreferredExchanges]);
 

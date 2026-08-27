@@ -34,5 +34,14 @@
       "yearly": "Anual",
       "irregular": "Irregular"
     }
+  },
+  "forecastUnavailable": {
+    "intro": "El saldo previsto no se muestra porque al menos un elemento programado próximo todavía no se puede valorar. Una previsión arrastra cada día al siguiente, así que un solo importe desconocido dejaría mal todos los días posteriores.",
+    "requestFailed": "No se pudo cargar el saldo previsto. Vuelve a cargar la página para intentarlo de nuevo.",
+    "reasonUnavailable": "No se informó el motivo. Comprueba los tipos de cambio de cualquier elemento programado en moneda extranjera.",
+    "missingRatePair": "{name}: no hay tipo de cambio disponible de {from} a {to}, así que se desconoce el importe que registrará esta ocurrencia.",
+    "missingRate": "{name}: el tipo de cambio con el que se liquida esta ocurrencia no está disponible, así que se desconoce el importe.",
+    "crossCurrencyTransfer": "{name}: una transferencia que llega desde una cuenta en {from} mientras esta cuenta está en {to}. El importe que entra aquí se fija al registrarse la transferencia, así que no se puede prever.",
+    "howToFix": "Para corregir un tipo de cambio ausente: abre Divisas y actualiza los tipos, o comprueba que el valor y su cuenta de liquidación tengan las divisas que esperas."
   }
 }

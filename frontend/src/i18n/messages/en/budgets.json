@@ -14,6 +14,14 @@
       "warning": "Warning",
       "success": "Good News",
       "info": "Info"
+    },
+    "billDue": {
+      "titleOverdue": "{payee} overdue",
+      "titleToday": "{payee} due today",
+      "titleTomorrow": "{payee} due tomorrow",
+      "titleInDays": "{payee} due in {days} days",
+      "amountDue": "{amount} due on {date}",
+      "amountUnavailable": "Amount unavailable (no current exchange rate), due on {date}"
     }
   },
   "summary503020": {

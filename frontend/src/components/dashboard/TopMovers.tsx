@@ -8,6 +8,7 @@ import { WidgetHeading } from './widget-meta';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
 import { usePreferencesStore } from '@/store/preferencesStore';
 import { CARD_CLASS } from '@/components/ui/Card';
+import { preferredCurrency } from '@/lib/default-currency';
 
 type MoverFilter = 'all' | 'gainers' | 'losers';
 
@@ -93,7 +94,9 @@ export function TopMovers({ movers, isLoading, hasInvestmentAccounts, onRefresh,
   const t = useTranslations('dashboard');
   const router = useRouter();
   const { formatCurrencyPrecise, formatPercent } = useNumberFormat();
-  const defaultCurrency = usePreferencesStore((s) => s.preferences?.defaultCurrency) || 'USD';
+  const defaultCurrency = preferredCurrency(
+    usePreferencesStore((s) => s.preferences?.defaultCurrency),
+  );
   const [filter, setFilter] = useState<MoverFilter>(getStoredFilter);
 
   useEffect(() => {

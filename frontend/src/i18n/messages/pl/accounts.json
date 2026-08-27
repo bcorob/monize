@@ -210,6 +210,7 @@
     "frequencyOptions": {
       "weekly": "Co tydzień",
       "biweekly": "Co 2 tygodnie",
+      "semiMonthly": "Dwa razy w miesiącu",
       "monthly": "Miesięczny",
       "quarterly": "Co kwartał",
       "yearly": "Co rok"
@@ -308,12 +309,13 @@
     "previewFirstInterest": "Odsetki pierwszej płatności:",
     "previewTotalPayments": "Łączna liczba płatności:",
     "previewTotalInterest": "Łączne odsetki:",
+    "previewFinalPayment": "Ostatnia rata:",
     "previewPayoffDate": "Szac. data spłaty:",
     "previewNA": "Brak",
     "calculatingPreview": "Obliczanie podglądu...",
     "frequencyOptions": {
       "monthly": "Miesięczny",
-      "semiMonthly": "Dwa razy w miesiącu (1. i 15.)",
+      "semiMonthly": "Dwa razy w miesiącu (15. i koniec miesiąca)",
       "biweekly": "Co 2 tygodnie",
       "acceleratedBiweekly": "Przyspieszone co 2 tygodnie",
       "weekly": "Co tydzień",
@@ -367,6 +369,7 @@
       "WEEKLY": "Co tydzień",
       "BIWEEKLY": "Co dwa tygodnie",
       "SEMI_MONTHLY": "Dwa razy w miesiącu",
+      "SEMIMONTHLY": "Dwa razy w miesiącu",
       "MONTHLY": "Co miesiąc",
       "QUARTERLY": "Co kwartał",
       "YEARLY": "Co rok",
@@ -436,7 +439,8 @@
         "effect": "→ oszczędza {interest}, spłata {date}",
         "alreadyMet": "Cel osiągnięty już bez nadpłat.",
         "unreachableInterest": "Poza zasięgiem — nawet bardzo duża nadpłata nie da tak dużej oszczędności na odsetkach.",
-        "unreachableDate": "Poza zasięgiem — ten miesiąc jest wcześniejszy niż najwcześniejsza możliwa spłata."
+        "unreachableDate": "Poza zasięgiem — ten miesiąc jest wcześniejszy niż najwcześniejsza możliwa spłata.",
+        "baselineIncomplete": "Ten kredyt nie zostaje spłacony w prognozowanym okresie, więc nie ma całkowitych odsetek, od których można liczyć wstecz."
       },
       "simulationTypeLabel": "Typ symulacji",
       "overpaymentAmount": "Kwota nadpłaty",
@@ -463,6 +467,7 @@
       "interestSaved": "Zaoszczędzone odsetki",
       "totalExtraContributed": "Łączna kwota nadpłat",
       "beyondProjection": "Poza prognozą",
+      "unknown": "Nieznane",
       "newInstallment": "Nowa rata",
       "installmentDrop": "{payment} (−{reduction})",
       "monthlyPayment": "Miesięczna płatność",
@@ -505,7 +510,9 @@
       "colOverpayment": "Nadpłata",
       "overpaymentWithFrequency": "{amount} ({frequency})",
       "loadAria": "Wczytaj scenariusz „{name}“",
-      "budgetSummary": "Budżet {amount}/mies."
+      "budgetSummary": "Budżet {amount}/mies.",
+      "chartExcludedUnknown": "{count, plural, one {# scenariusz nie jest pokazany: jego oszczędność odsetek jest nieznana.} few {# scenariusze nie są pokazane: ich oszczędność odsetek jest nieznana.} many {# scenariuszy nie jest pokazanych: ich oszczędność odsetek jest nieznana.} other {# scenariusza nie jest pokazane: ich oszczędność odsetek jest nieznana.}}",
+      "chartNeedsTwoKnown": "Wykres porównania wymaga co najmniej dwóch scenariuszy ze znaną oszczędnością odsetek."
     },
     "scenarioChart": {
       "title": "Porównanie scenariuszy",

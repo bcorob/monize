@@ -355,6 +355,10 @@ export class InvestmentTransactionsService {
     private accountsService: AccountsService,
     @Inject(forwardRef(() => TransactionsService))
     private transactionsService: TransactionsService,
+    // forwardRef: HoldingsService sits on a require cycle back to this file, so
+    // its reflected parameter type is `undefined` under some load orders --
+    // see `src/module-graph.spec.ts`.
+    @Inject(forwardRef(() => HoldingsService))
     private holdingsService: HoldingsService,
     private portfolioCalculationService: PortfolioCalculationService,
     private securitiesService: SecuritiesService,
@@ -440,6 +444,44 @@ export class InvestmentTransactionsService {
     }
   }
 
+  /**
+   * The account an investment's cash actually lands in: the explicit funding
+   * account when one is named, otherwise the brokerage's linked cash account
+   * (or the account itself when it is not a linked brokerage).
+   *
+   * This is the single definition of "which account settles", and both the
+   * currency pair below and {@link resolveSettlementAccountId} read it -- the
+   * account and its currency must never be able to disagree.
+   */
+  private async resolveSettlementAccount(
+    userId: string,
+    accountId: string,
+    fundingAccountId: string | null | undefined,
+  ): Promise<Account> {
+    return fundingAccountId
+      ? this.accountsService.findOne(userId, fundingAccountId)
+      : this.findCashAccount(userId, accountId);
+  }
+
+  /**
+   * The id of the account an investment's cash lands in.
+   *
+   * Exposed because a balance projection has to charge the occurrence to the
+   * account that actually pays for it: a scheduled investment's `accountId` is
+   * the brokerage, so an account-level forecast keyed on that column charged the
+   * wrong account and the funding account's own chart omitted the outflow
+   * entirely (issue #1247).
+   */
+  async resolveSettlementAccountId(
+    userId: string,
+    accountId: string,
+    fundingAccountId: string | null | undefined,
+  ): Promise<string> {
+    return (
+      await this.resolveSettlementAccount(userId, accountId, fundingAccountId)
+    ).id;
+  }
+
   private async findCashAccount(
     userId: string,
     accountId: string,
@@ -475,9 +517,11 @@ export class InvestmentTransactionsService {
     fundingAccountId: string | null | undefined,
     securityId: string | null | undefined,
   ): Promise<{ from: string; to: string }> {
-    const cashAccount = fundingAccountId
-      ? await this.accountsService.findOne(userId, fundingAccountId)
-      : await this.findCashAccount(userId, accountId);
+    const cashAccount = await this.resolveSettlementAccount(
+      userId,
+      accountId,
+      fundingAccountId,
+    );
 
     let from: string;
     if (securityId) {

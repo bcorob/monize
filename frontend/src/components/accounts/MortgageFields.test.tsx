@@ -167,7 +167,7 @@ describe('MortgageFields', () => {
     expect(screen.getByText('Monthly')).toBeInTheDocument();
     expect(screen.getByText('Bi-Weekly')).toBeInTheDocument();
     expect(screen.getByText('Weekly')).toBeInTheDocument();
-    expect(screen.getByText('Semi-Monthly (1st & 15th)')).toBeInTheDocument();
+    expect(screen.getByText('Semi-Monthly (15th & month end)')).toBeInTheDocument();
     expect(screen.getByText('Accelerated Bi-Weekly')).toBeInTheDocument();
     expect(screen.getByText('Accelerated Weekly')).toBeInTheDocument();
   });
@@ -481,6 +481,139 @@ describe('MortgageFields', () => {
     expect(screen.getByText('Total Interest:')).toBeInTheDocument();
     expect(screen.getByText('Est. Payoff Date:')).toBeInTheDocument();
     expect(screen.getByText('5.06%')).toBeInTheDocument();
+    // The residual payoff row is absent when the API does not send it (an older
+    // backend during a rolling deploy) -- read defensively, never as a zero.
+    expect(screen.queryByText('Final Payment:')).not.toBeInTheDocument();
+  });
+
+  it('shows the final payment only when it is below the installment', async () => {
+    // An accelerated schedule's analytic payoff count is fractional, so the last
+    // payment is a small residual rather than another full installment. That is
+    // the case the row exists for.
+    vi.mocked(accountsApi.previewMortgageAmortization).mockResolvedValue({
+      paymentAmount: 876.89, effectiveAnnualRate: 5.12,
+      principalPayment: 300, interestPayment: 576.89,
+      totalPayments: 559, residualPayoffAmount: 307.76,
+      totalInterest: 189609.59, endDate: '2049-01-15',
+    });
+
+    render(<MortgageFields {...defaultProps}
+      openingBalance={300000} interestRate={5} amortizationMonths={300}
+      mortgagePaymentFrequency="ACCELERATED_BIWEEKLY" paymentStartDate="2024-02-01"
+    />);
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(600); });
+    vi.useRealTimers();
+
+    await waitFor(() => {
+      expect(screen.getByText('Amortization Preview')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('Final Payment:')).toBeInTheDocument();
+    expect(screen.getByText('$307.76')).toBeInTheDocument();
+  });
+
+  it('hides the final payment row for a standard schedule', async () => {
+    // A standard schedule's residual is within a rounding step of the
+    // installment, so repeating it would be noise.
+    vi.mocked(accountsApi.previewMortgageAmortization).mockResolvedValue({
+      paymentAmount: 1753.77, effectiveAnnualRate: 5.12,
+      principalPayment: 503.77, interestPayment: 1250,
+      totalPayments: 300, residualPayoffAmount: 1753.78,
+      totalInterest: 226131.04, endDate: '2049-01-15',
+    });
+
+    render(<MortgageFields {...defaultProps}
+      openingBalance={300000} interestRate={5} amortizationMonths={300}
+      mortgagePaymentFrequency="MONTHLY" paymentStartDate="2024-02-01"
+    />);
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(600); });
+    vi.useRealTimers();
+
+    await waitFor(() => {
+      expect(screen.getByText('Amortization Preview')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText('Final Payment:')).not.toBeInTheDocument();
+  });
+
+  it('hides the final payment row when the payment never amortizes', async () => {
+    // -1 means "could not be worked out", not "the last payment is -1".
+    vi.mocked(accountsApi.previewMortgageAmortization).mockResolvedValue({
+      paymentAmount: 100, effectiveAnnualRate: 5.12,
+      principalPayment: 0, interestPayment: 100,
+      totalPayments: -1, residualPayoffAmount: -1,
+      totalInterest: -1, endDate: '2124-01-15',
+    });
+
+    render(<MortgageFields {...defaultProps}
+      openingBalance={300000} interestRate={5} amortizationMonths={300}
+      mortgagePaymentFrequency="MONTHLY" paymentStartDate="2024-02-01"
+    />);
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(600); });
+    vi.useRealTimers();
+
+    await waitFor(() => {
+      expect(screen.getByText('Amortization Preview')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText('Final Payment:')).not.toBeInTheDocument();
+    expect(screen.queryByText('$-1.00')).not.toBeInTheDocument();
+  });
+
+  it('shows a known zero total interest rather than N/A', async () => {
+    // A 0% mortgage costs no interest, and the residual math makes that exactly
+    // 0. `totalInterest > 0` collapsed the known zero into the -1 "could not be
+    // worked out" sentinel and printed N/A.
+    vi.mocked(accountsApi.previewMortgageAmortization).mockResolvedValue({
+      paymentAmount: 1000, effectiveAnnualRate: 0,
+      principalPayment: 1000, interestPayment: 0,
+      totalPayments: 120, residualPayoffAmount: 1000,
+      totalInterest: 0, endDate: '2036-01-15',
+    });
+
+    render(<MortgageFields {...defaultProps}
+      openingBalance={120000} interestRate={0} amortizationMonths={120}
+      mortgagePaymentFrequency="MONTHLY" paymentStartDate="2024-02-01"
+    />);
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(600); });
+    vi.useRealTimers();
+
+    await waitFor(() => {
+      expect(screen.getByText('Amortization Preview')).toBeInTheDocument();
+    });
+
+    // Scoped to the Total Interest row: "$0.00" also appears as the first
+    // payment's interest on a 0% mortgage, so a bare text match is ambiguous.
+    const totalInterestRow = screen.getByText('Total Interest:').parentElement;
+    expect(totalInterestRow).toHaveTextContent('$0.00');
+    expect(totalInterestRow).not.toHaveTextContent('N/A');
+  });
+
+  it('shows N/A for a total interest that could not be worked out', async () => {
+    vi.mocked(accountsApi.previewMortgageAmortization).mockResolvedValue({
+      paymentAmount: 100, effectiveAnnualRate: 5.12,
+      principalPayment: 0, interestPayment: 100,
+      totalPayments: -1, residualPayoffAmount: -1,
+      totalInterest: -1, endDate: '2124-01-15',
+    });
+
+    render(<MortgageFields {...defaultProps}
+      openingBalance={300000} interestRate={5} amortizationMonths={300}
+      mortgagePaymentFrequency="MONTHLY" paymentStartDate="2024-02-01"
+    />);
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(600); });
+    vi.useRealTimers();
+
+    await waitFor(() => {
+      expect(screen.getByText('Amortization Preview')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText('$-1.00')).not.toBeInTheDocument();
   });
 
   it('does not allow term years above 99', () => {

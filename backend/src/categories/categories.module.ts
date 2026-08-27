@@ -1,4 +1,4 @@
-import { Module } from "@nestjs/common";
+import { Module, forwardRef } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { Category } from "./entities/category.entity";
 import { Transaction } from "../transactions/entities/transaction.entity";
@@ -27,9 +27,12 @@ import { DelegationModule } from "../delegation/delegation.module";
     ]),
     ActionHistoryModule,
     // A joint grantee creates on the OWNER's ledger; JointAccountsService is
-    // the authoritative decision for that (one-directional -- DelegationModule
-    // does not import CategoriesModule).
-    DelegationModule,
+    // the authoritative decision for that. `forwardRef` because the edge is no
+    // longer one-directional: DelegationModule reaches back here through
+    // NotificationsModule -> ScheduledTransactionsModule (issue #1247), and a
+    // bare reference on a require cycle is `undefined` in this array under some
+    // load orders -- see `src/module-graph.spec.ts`.
+    forwardRef(() => DelegationModule),
   ],
   providers: [CategoriesService, CategoryDetailService, JointCategoriesService],
   controllers: [CategoriesController],

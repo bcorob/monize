@@ -14,6 +14,14 @@
       "warning": "Uyarı",
       "success": "İyi Haber",
       "info": "Bilgi"
+    },
+    "billDue": {
+      "titleOverdue": "{payee} gecikmiş",
+      "titleToday": "{payee} bugün ödenecek",
+      "titleTomorrow": "{payee} yarın ödenecek",
+      "titleInDays": "{payee} {days} gün içinde ödenecek",
+      "amountDue": "{date} tarihinde {amount} ödenecek",
+      "amountUnavailable": "Tutar kullanılamıyor (güncel döviz kuru yok), {date} tarihinde ödenecek"
     }
   },
   "summary503020": {

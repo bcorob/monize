@@ -23,6 +23,36 @@ class FakeCompressionStream {
   }
 }
 
+
+/**
+ * The restore upload takes two requests now: an authenticated ticket, then the
+ * upload carrying it (DR-F3RB-003 -- the backend's memory admission runs in front
+ * of its guards, so authorization has to arrive before the bytes). Keyed by URL
+ * rather than by call order, so a test asserting on the upload cannot silently
+ * start asserting on the ticket.
+ */
+const TICKET = {
+  ticket: 'ticket-value',
+  expiresInSeconds: 300,
+  header: 'x-restore-upload-ticket',
+};
+
+function mockRestore(data: unknown = { message: 'ok', restored: {} }) {
+  vi.mocked(apiClient.post).mockImplementation(((url: string) =>
+    url === '/backup/restore/ticket'
+      ? Promise.resolve({ data: TICKET })
+      : Promise.resolve({ data })) as never);
+}
+
+/** The upload call, whichever position it landed in. */
+function restoreCall() {
+  const call = vi
+    .mocked(apiClient.post)
+    .mock.calls.find((entry) => entry[0] === '/backup/restore');
+  if (!call) throw new Error('the restore upload was never sent');
+  return call;
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   (globalThis as any).CompressionStream = FakeCompressionStream;
@@ -163,9 +193,7 @@ describe('backupApi', () => {
   });
 
   it('restoreBackup uploads gzipped uncompressed file', async () => {
-    vi.mocked(apiClient.post).mockResolvedValue({
-      data: { message: 'ok', restored: { transactions: 5 } },
-    });
+    mockRestore({ message: 'ok', restored: { transactions: 5 } });
 
     const file = new File(['{"data":"test"}'], 'backup.json', { type: 'application/json' });
     const result = await backupApi.restoreBackup({ file });
@@ -176,6 +204,8 @@ describe('backupApi', () => {
       expect.objectContaining({
         headers: expect.objectContaining({
           'Content-Type': 'application/gzip',
+          // Without this the upload is refused 401 before a byte is buffered.
+          'x-restore-upload-ticket': 'ticket-value',
         }),
         timeout: 300000,
       }),
@@ -183,46 +213,86 @@ describe('backupApi', () => {
     expect(result.message).toBe('ok');
   });
 
-  it('restoreBackup uploads .gz file directly without re-compressing', async () => {
-    vi.mocked(apiClient.post).mockResolvedValue({
-      data: { message: 'ok', restored: {} },
+  it('restoreBackup asks for a ticket before uploading', async () => {
+    mockRestore();
+    await backupApi.restoreBackup({
+      file: new File(['data'], 'backup.json.gz'),
     });
+
+    const urls = vi.mocked(apiClient.post).mock.calls.map((entry) => entry[0]);
+    // Order matters: a ticket requested after the upload authorizes nothing.
+    expect(urls).toEqual(['/backup/restore/ticket', '/backup/restore']);
+  });
+
+  it('restoreBackup uses the header name the server named', async () => {
+    // The server sends the header name with the ticket so the two cannot drift.
+    // A client hardcoding it would keep "working" through a rename until every
+    // upload started coming back 401.
+    vi.mocked(apiClient.post).mockImplementation(((url: string) =>
+      url === '/backup/restore/ticket'
+        ? Promise.resolve({ data: { ...TICKET, header: 'x-renamed-ticket' } })
+        : Promise.resolve({ data: { message: 'ok', restored: {} } })) as never);
+
+    await backupApi.restoreBackup({
+      file: new File(['data'], 'backup.json.gz'),
+    });
+
+    const headers = (restoreCall()[2] as { headers: Record<string, string> })
+      .headers;
+    expect(headers['x-renamed-ticket']).toBe('ticket-value');
+    expect(headers['x-restore-upload-ticket']).toBeUndefined();
+  });
+
+  it('restoreBackup does not upload when the ticket is refused', async () => {
+    vi.mocked(apiClient.post).mockImplementation(((url: string) =>
+      url === '/backup/restore/ticket'
+        ? Promise.reject(new Error('401'))
+        : Promise.resolve({ data: { message: 'ok', restored: {} } })) as never);
+
+    await expect(
+      backupApi.restoreBackup({ file: new File(['data'], 'backup.json.gz') }),
+    ).rejects.toThrow('401');
+    const urls = vi.mocked(apiClient.post).mock.calls.map((entry) => entry[0]);
+    expect(urls).toEqual(['/backup/restore/ticket']);
+  });
+
+  it('restoreBackup uploads .gz file directly without re-compressing', async () => {
+    mockRestore();
 
     const file = new File(['compressed'], 'backup.json.gz', { type: 'application/gzip' });
     await backupApi.restoreBackup({ file });
 
-    const body = vi.mocked(apiClient.post).mock.calls[0][1];
-    expect(body).toBe(file);
+    expect(restoreCall()[1]).toBe(file);
   });
 
   it('restoreBackup adds a base64-encoded restore password header when provided', async () => {
-    vi.mocked(apiClient.post).mockResolvedValue({ data: { message: 'ok', restored: {} } });
+    mockRestore();
 
     const file = new File(['data'], 'backup.json.gz');
     await backupApi.restoreBackup({ file, password: 'secret' });
 
-    const config = vi.mocked(apiClient.post).mock.calls[0][2];
+    const config = restoreCall()[2];
     expect(config?.headers?.['X-Restore-Password']).toBe(btoa('secret'));
   });
 
   it('restoreBackup preserves a leading space in the restore password header', async () => {
-    vi.mocked(apiClient.post).mockResolvedValue({ data: { message: 'ok', restored: {} } });
+    mockRestore();
 
     const file = new File(['data'], 'backup.json.gz');
     await backupApi.restoreBackup({ file, password: ' spacey' });
 
-    const config = vi.mocked(apiClient.post).mock.calls[0][2];
+    const config = restoreCall()[2];
     const encoded = config?.headers?.['X-Restore-Password'];
     expect(atob(encoded as string)).toBe(' spacey');
   });
 
   it('restoreBackup adds OIDC token header when provided', async () => {
-    vi.mocked(apiClient.post).mockResolvedValue({ data: { message: 'ok', restored: {} } });
+    mockRestore();
 
     const file = new File(['data'], 'backup.json.gz');
     await backupApi.restoreBackup({ file, oidcIdToken: 'oidc-token' });
 
-    const config = vi.mocked(apiClient.post).mock.calls[0][2];
+    const config = restoreCall()[2];
     expect(config?.headers?.['X-Restore-OIDC-Token']).toBe('oidc-token');
   });
 
@@ -270,24 +340,20 @@ describe('backupApi', () => {
   });
 
   it('restoreBackup sends an .mzbe file untouched with the encrypted content-type', async () => {
-    vi.mocked(apiClient.post).mockResolvedValue({
-      data: { message: 'ok', restored: {} },
-    });
+    mockRestore();
     const file = new File([new Uint8Array([0x4d, 0x5a, 0x42, 0x45])], 'backup.mzbe');
     await backupApi.restoreBackup({ file, password: 'p', backupPassword: 'bk' });
-    const call = vi.mocked(apiClient.post).mock.calls[0];
+    const call = restoreCall();
     expect(call[1]).toBe(file);
     expect((call[2] as any).headers['Content-Type']).toBe('application/octet-stream');
     expect((call[2] as any).headers['X-Backup-Password']).toBe(btoa('bk'));
   });
 
   it('restoreBackup forwards the OIDC token header', async () => {
-    vi.mocked(apiClient.post).mockResolvedValue({
-      data: { message: 'ok', restored: {} },
-    });
+    mockRestore();
     const file = new File(['{}'], 'backup.json.gz');
     await backupApi.restoreBackup({ file, oidcIdToken: 'tok' });
-    const call = vi.mocked(apiClient.post).mock.calls[0];
+    const call = restoreCall();
     expect((call[2] as any).headers['X-Restore-OIDC-Token']).toBe('tok');
   });
 

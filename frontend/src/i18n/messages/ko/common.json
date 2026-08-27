@@ -237,6 +237,12 @@
     "explanation": "부분 합계: {count, plural, other {# 개의 금액}}을(를) 포함할 수 없어 표시된 수치에서 제외했습니다. {currencies}에 대한 {displayCurrency} 환율이 없습니다.",
     "explanationExcluded": "부분 합계: {count, plural, other {# 개의 금액}}을(를) 계산할 수 없어 표시된 수치에서 제외했습니다."
   },
+  "unknownAmount": {
+    "marker": "—",
+    "srLabel": "금액을 확인할 수 없음",
+    "scheduledFx": "현재 금액을 계산할 수 없습니다. 이 예약 항목의 결제 통화 쌍에 대한 환율을 확인할 수 없습니다. 저장된 금액은 이전 환율로 계산된 값이므로 표시하지 않습니다.",
+    "displayFx": "이 금액은 여기에 표시할 수 없습니다. 금액은 확인되었지만 이 합계의 통화로 환산할 환율이 없습니다. 통화 페이지에서 환율을 새로 고치세요."
+  },
   "density": {
     "title": "행 밀도 전환",
     "normal": "보통",

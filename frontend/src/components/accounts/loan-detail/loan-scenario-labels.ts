@@ -1,5 +1,11 @@
 import type { LoanScenario } from '@/types/loan-scenario';
-import type { OverpaymentFrequency, ScenarioComparison } from '@/lib/loan-schedule';
+import type {
+  OverpaymentFrequency,
+  OverpaymentMode,
+  ScenarioComparison,
+} from '@/lib/loan-schedule';
+import { effectiveOverpaymentMode } from '@/lib/loan-schedule';
+import { scenarioToPlan } from '@/lib/loan-scenarios';
 
 /** i18n key for each overpayment frequency's label, shared across the scenario
  *  summaries, table, chart and PDF so a saved cadence reads the same way. */
@@ -11,6 +17,29 @@ export const FREQUENCY_LABEL_KEY: Record<OverpaymentFrequency, string> = {
   QUARTERLY: 'loanDetail.simulator.frequencyQuarterly',
   ANNUALLY: 'loanDetail.simulator.frequencyAnnually',
 };
+
+/**
+ * The catalog key for a saved cadence, or `null` when the stored value is not a
+ * cadence this app knows.
+ *
+ * `loan_scenarios.recurring_extra_frequency` is an unconstrained VARCHAR whose
+ * only enforcement is `@IsIn` at write time, so a legacy row or a restored
+ * backup can carry anything -- which is why `recurringOccurrencesDue` contributes
+ * zero for an unrecognised value rather than guessing. Indexing
+ * `FREQUENCY_LABEL_KEY` directly gave `undefined`, and next-intl throws on a
+ * non-string key: the schedule engine survived the row and the label took the
+ * whole loan detail view down with it. A label is the cheapest thing on the
+ * page; it degrades.
+ */
+export function frequencyLabelKey(
+  frequency: string | null | undefined,
+): string | null {
+  if (!frequency) return null;
+  return (
+    (FREQUENCY_LABEL_KEY as Record<string, string | undefined>)[frequency] ??
+    null
+  );
+}
 
 /**
  * Formatting hooks the labels need, passed in by the caller so the same
@@ -40,12 +69,14 @@ export function createScenarioLabels({
     }
     const parts: string[] = [];
     if (scenario.recurringExtraAmount && scenario.recurringExtraAmount > 0) {
-      const freq = scenario.recurringExtraFrequency;
+      // Through `frequencyLabelKey`, not the table: the column is an
+      // unconstrained VARCHAR, and `t(undefined)` throws.
+      const freqKey = frequencyLabelKey(scenario.recurringExtraFrequency);
       parts.push(
-        freq && freq !== 'MONTHLY'
+        freqKey && scenario.recurringExtraFrequency !== 'MONTHLY'
           ? t('loanDetail.scenarios.overpaymentWithFrequency', {
               amount: formatCurrency(scenario.recurringExtraAmount, currencyCode),
-              frequency: t(FREQUENCY_LABEL_KEY[freq]),
+              frequency: t(freqKey),
             })
           : t('loanDetail.scenarios.recurringSummary', {
               amount: formatCurrency(scenario.recurringExtraAmount, currencyCode),
@@ -68,11 +99,11 @@ export function createScenarioLabels({
     }
     if (!scenario.recurringExtraAmount || scenario.recurringExtraAmount <= 0) return '—';
     const amount = formatCurrency(scenario.recurringExtraAmount, currencyCode);
-    const freq = scenario.recurringExtraFrequency;
-    return freq && freq !== 'MONTHLY'
+    const freqKey = frequencyLabelKey(scenario.recurringExtraFrequency);
+    return freqKey && scenario.recurringExtraFrequency !== 'MONTHLY'
       ? t('loanDetail.scenarios.overpaymentWithFrequency', {
           amount,
-          frequency: t(FREQUENCY_LABEL_KEY[freq]),
+          frequency: t(freqKey),
         })
       : amount;
   };
@@ -84,13 +115,33 @@ export function createScenarioLabels({
         : t('loanDetail.comparison.beyondProjection')
       : '—';
 
-  const timeSavedLabel = (comparison: ScenarioComparison | null): string => {
+  /**
+   * `mode` comes from the saved scenario when the caller has it: reading the mode
+   * off `installmentReduction` fails exactly when that value is null (a schedule
+   * truncated at the projection horizon), which would offer "time saved" for a
+   * plan that holds the end date fixed.
+   */
+  const timeSavedLabel = (
+    comparison: ScenarioComparison | null,
+    mode?: OverpaymentMode | null,
+  ): string => {
     if (!comparison) return '—';
-    if (comparison.installmentReduction > 0.005) {
+    const isLowerInstallment =
+      mode != null
+        ? mode === 'LOWER_INSTALLMENT'
+        : (comparison.installmentReduction ?? 0) > 0.005;
+    if (isLowerInstallment) {
+      if (comparison.installmentReduction == null) return '—';
       return t('loanDetail.comparison.installmentDrop', {
         payment: formatCurrency(comparison.scenario.finalPaymentAmount, currencyCode),
         reduction: formatCurrency(comparison.installmentReduction, currencyCode),
       });
+    }
+    // Unknown when either schedule stopped at the projection horizon; the em
+    // dash is the same rendering a missing comparison gets, since to a reader
+    // both mean "this cannot be shown".
+    if (comparison.monthsSaved == null || comparison.paymentsSaved == null) {
+      return '—';
     }
     return comparison.monthsSaved > 0
       ? t('loanDetail.comparison.monthsSaved', { count: comparison.monthsSaved })
@@ -99,8 +150,10 @@ export function createScenarioLabels({
         });
   };
 
+  // No comparison at all and an unknown saving read the same to a user: the
+  // number cannot be shown. Both render the em dash rather than a zero.
   const interestSavedLabel = (comparison: ScenarioComparison | null): string =>
-    comparison
+    comparison && comparison.interestSaved != null
       ? formatCurrency(Math.max(0, comparison.interestSaved), currencyCode)
       : '—';
 
@@ -124,7 +177,7 @@ export function createScenarioLabels({
         overpaymentLabel(scenario),
         describeScenario(scenario),
         payoffLabel(comparison),
-        timeSavedLabel(comparison),
+        timeSavedLabel(comparison, effectiveOverpaymentMode(scenarioToPlan(scenario))),
         interestSavedLabel(comparison),
       ];
     }),

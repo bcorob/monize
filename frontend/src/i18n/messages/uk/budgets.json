@@ -14,6 +14,14 @@
       "warning": "Попередження",
       "success": "Гарні новини",
       "info": "Інформація"
+    },
+    "billDue": {
+      "titleOverdue": "{payee}: термін минув",
+      "titleToday": "{payee}: сплатити сьогодні",
+      "titleTomorrow": "{payee}: сплатити завтра",
+      "titleInDays": "{payee}: сплатити через {days} дн.",
+      "amountDue": "{amount} до сплати {date}",
+      "amountUnavailable": "Суму не визначено (немає поточного курсу обміну), сплатити до {date}"
     }
   },
   "summary503020": {

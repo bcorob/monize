@@ -210,6 +210,7 @@
     "frequencyOptions": {
       "weekly": "每週",
       "biweekly": "每兩週",
+      "semiMonthly": "每月兩次",
       "monthly": "每月",
       "quarterly": "每季",
       "yearly": "每年"
@@ -308,12 +309,13 @@
     "previewFirstInterest": "首次還款利息：",
     "previewTotalPayments": "總付款次數：",
     "previewTotalInterest": "總利息：",
+    "previewFinalPayment": "最後一期還款：",
     "previewPayoffDate": "預計還清日：",
     "previewNA": "不適用",
     "calculatingPreview": "計算預覽中...",
     "frequencyOptions": {
       "monthly": "每月",
-      "semiMonthly": "每月兩次（1日及15日）",
+      "semiMonthly": "每月兩次（15 日與月底）",
       "biweekly": "每兩週",
       "acceleratedBiweekly": "加速雙週還款",
       "weekly": "每週",
@@ -367,6 +369,7 @@
       "WEEKLY": "每週",
       "BIWEEKLY": "每兩週",
       "SEMI_MONTHLY": "每月兩次",
+      "SEMIMONTHLY": "每月兩次",
       "MONTHLY": "每月",
       "QUARTERLY": "每季",
       "YEARLY": "每年",
@@ -436,7 +439,8 @@
         "effect": "→ 節省 {interest},還清 {date}",
         "alreadyMet": "無需任何額外還款即已達成。",
         "unreachableInterest": "無法達成——即使非常大的額外還款也無法節省這麼多利息。",
-        "unreachableDate": "無法達成——該月份早於最早可能的還清時間。"
+        "unreachableDate": "無法達成——該月份早於最早可能的還清時間。",
+        "baselineIncomplete": "該貸款在預測期內無法還清，因此沒有可用於反推的利息總額。"
       },
       "simulationTypeLabel": "模擬類型",
       "overpaymentAmount": "額外還款金額",
@@ -463,6 +467,7 @@
       "interestSaved": "節省的利息",
       "totalExtraContributed": "額外還款總額",
       "beyondProjection": "超出預測範圍",
+      "unknown": "未知",
       "newInstallment": "新還款額",
       "installmentDrop": "{payment} (−{reduction})",
       "monthlyPayment": "每月還款",
@@ -505,7 +510,9 @@
       "colOverpayment": "額外還款",
       "overpaymentWithFrequency": "{amount} ({frequency})",
       "loadAria": "載入方案「{name}」",
-      "budgetSummary": "預算 {amount}/月"
+      "budgetSummary": "預算 {amount}/月",
+      "chartExcludedUnknown": "{count, plural, other {有 # 個方案未顯示：其節省的利息未知。}}",
+      "chartNeedsTwoKnown": "對比圖表需要至少兩個已知節省利息的方案。"
     },
     "scenarioChart": {
       "title": "方案比較",

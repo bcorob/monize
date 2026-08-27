@@ -33,7 +33,12 @@ interface BudgetDashboardProps {
   dailySpending: DailySpending[];
   trendData: TrendDataPoint[];
   healthScore: number;
-  formatCurrency: (amount: number) => string;
+  /**
+   * The budget's own currency: what `formatCurrency` labels a bare amount with,
+   * and what the upcoming-bills panel converts each occurrence into.
+   */
+  displayCurrency: string;
+  formatCurrency: (amount: number, currencyCode?: string) => string;
   onCategoryClick?: (budgetCategoryId: string) => void;
 }
 
@@ -44,6 +49,7 @@ export function BudgetDashboard({
   dailySpending,
   trendData,
   healthScore,
+  displayCurrency,
   formatCurrency,
   onCategoryClick,
 }: BudgetDashboardProps) {
@@ -138,6 +144,7 @@ export function BudgetDashboard({
           currentSpent={summary.totalSpent}
           totalBudgeted={summary.totalBudgeted}
           periodEnd={periodEnd}
+          displayCurrency={displayCurrency}
           formatCurrency={formatCurrency}
         />
         <BudgetHeatmap

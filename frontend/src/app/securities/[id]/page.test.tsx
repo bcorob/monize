@@ -289,10 +289,17 @@ describe('SecurityDetailPage', () => {
   });
 
   it('names the currency on the header quote when it is not the reader\'s', async () => {
+    // Deliberately a currency the reader is NOT on. The fixture used to be a USD
+    // security relying on the reader's fallback being CAD, so when that fallback
+    // moved to USD the case started asserting the opposite of its own name --
+    // the component was right to omit the code, and the test failed for it.
+    mockGetSecurityDetail.mockResolvedValue(
+      detailFixture({ security: { ...security, currencyCode: 'EUR' } }),
+    );
     await renderPage();
     // The quote is the largest figure on the page and the one a reader anchors
-    // on; the fixture is a USD security and the test default is CAD.
-    expect(screen.getByText(/150\.00 USD/)).toBeInTheDocument();
+    // on, so a figure in another currency has to say which.
+    expect(screen.getByText(/150\.00 EUR/)).toBeInTheDocument();
   });
 
   it('refreshes only this security from the header, then re-reads the quote', async () => {

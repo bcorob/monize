@@ -124,7 +124,14 @@ export interface LlmBudgetStatusResult {
   categoryCount: number;
   velocity?: {
     dailyBurnRate: number;
-    safeDailySpend: number;
+    /**
+     * `null` when an upcoming bill's current amount could not be determined, so
+     * "what is truly available" -- and therefore what is safe to spend per day
+     * -- is unknown rather than larger (issue #1247). `upcomingBillsComplete`
+     * says why; never read a null here as zero.
+     */
+    safeDailySpend: number | null;
+    upcomingBillsComplete: boolean;
     projectedTotal: number;
     projectedVariance: number;
     daysRemaining: number;
@@ -320,6 +327,7 @@ export class BudgetReportsService {
       result.velocity = {
         dailyBurnRate: velocity.dailyBurnRate,
         safeDailySpend: velocity.safeDailySpend,
+        upcomingBillsComplete: velocity.upcomingBillsComplete,
         projectedTotal: velocity.projectedTotal,
         projectedVariance: velocity.projectedVariance,
         daysRemaining: velocity.daysRemaining,

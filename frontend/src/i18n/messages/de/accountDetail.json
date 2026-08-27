@@ -34,5 +34,14 @@
       "yearly": "Jährlich",
       "irregular": "Unregelmäßig"
     }
+  },
+  "forecastUnavailable": {
+    "intro": "Der prognostizierte Saldo wird nicht angezeigt, weil mindestens ein anstehender geplanter Eintrag noch nicht bewertet werden kann. Eine Prognose überträgt jeden Tag auf den nächsten, deshalb würde ein einziger unbekannter Betrag jeden folgenden Tag verfälschen.",
+    "requestFailed": "Der prognostizierte Saldo konnte nicht geladen werden. Laden Sie die Seite neu, um es erneut zu versuchen.",
+    "reasonUnavailable": "Der Grund wurde nicht gemeldet. Prüfen Sie die Wechselkurse für geplante Posten in einer Fremdwährung.",
+    "missingRatePair": "{name}: Für {from} zu {to} ist kein Wechselkurs verfügbar, daher ist der Betrag dieser Fälligkeit unbekannt.",
+    "missingRate": "{name}: Der Wechselkurs für die Abrechnung dieser Fälligkeit ist nicht verfügbar, daher ist der Betrag unbekannt.",
+    "crossCurrencyTransfer": "{name}: eine Umbuchung von einem Konto in {from}, während dieses Konto in {to} geführt wird. Der hier eingehende Betrag wird erst beim Buchen festgelegt und lässt sich daher nicht im Voraus prognostizieren.",
+    "howToFix": "So beheben Sie einen fehlenden Kurs: Öffnen Sie Währungen und aktualisieren Sie die Kurse, oder prüfen Sie, ob das Wertpapier und sein Abrechnungskonto die erwarteten Währungen führen."
   }
 }

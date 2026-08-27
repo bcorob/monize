@@ -3181,6 +3181,18 @@ describe("TransactionBulkUpdateService", () => {
       expect(mockWhereBuilder.where).toHaveBeenCalledWith(
         expect.stringContaining("transaction.categoryId IS NULL"),
       );
+      // This is a WRITE path: "select all uncategorized" must not reach the cash
+      // legs a trade owns, and the securities sleeve is not ordinary cash
+      // either. Membership is provenance, never the account's type (issue
+      // #1257) -- so neither predicate may drift back to accountType here.
+      const [uncategorizedClause] = mockWhereBuilder.where.mock.calls[0];
+      expect(uncategorizedClause).toContain(
+        "filterAccount.accountSubType != 'INVESTMENT_BROKERAGE'",
+      );
+      expect(uncategorizedClause).toContain(
+        "NOT EXISTS (SELECT 1 FROM investment_transactions it WHERE it.transaction_id = transaction.id)",
+      );
+      expect(uncategorizedClause).not.toContain("accountType");
     });
 
     it("applies transfer category filter", async () => {

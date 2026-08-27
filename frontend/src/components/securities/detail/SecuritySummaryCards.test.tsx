@@ -1,20 +1,38 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, fireEvent } from '@testing-library/react';
 import { render } from '@/test/render';
+import { FALLBACK_DEFAULT_CURRENCY } from '@/lib/default-currency';
 
 /** Rates the mocked hook reports, keyed `FROM->TO`; a test sets what it needs. */
 const mockRates = new Map<string, number>();
 
+/**
+ * The reader's own currency, as the COMPONENT resolves it.
+ *
+ * It reads `defaultCurrency` off `useNumberFormat`, which is not mocked here --
+ * so with no preference set that is the shared fallback. This mock used to
+ * hardcode `'CAD'` as the conversion target, which agreed with the component
+ * only for as long as the fallback happened to be CAD: when the fallback moved
+ * to USD, every rate the fixtures registered was keyed on a pair the component
+ * no longer asked for, and three cases failed with the component correct.
+ *
+ * Derived from the same constant the component ends up on, so the two cannot
+ * disagree again.
+ */
+const READER_CURRENCY = FALLBACK_DEFAULT_CURRENCY;
+
 vi.mock('@/hooks/useExchangeRates', () => ({
   useExchangeRates: () => ({
     convertToDefault: (amount: number, from: string) => {
-      const rate = mockRates.get(`${from}->CAD`);
+      const rate = mockRates.get(`${from}->${READER_CURRENCY}`);
       // Mirrors the real hook, which returns the amount untouched without a
       // rate -- the behaviour the guard exists to defend against.
       return rate === undefined ? amount : amount * rate;
     },
     getRate: (from: string, to?: string) =>
-      from === (to ?? 'CAD') ? 1 : (mockRates.get(`${from}->${to ?? 'CAD'}`) ?? null),
+      from === (to ?? READER_CURRENCY)
+        ? 1
+        : (mockRates.get(`${from}->${to ?? READER_CURRENCY}`) ?? null),
   }),
 }));
 import { SecuritySummaryCards } from './SecuritySummaryCards';
@@ -129,17 +147,23 @@ describe('SecuritySummaryCards', () => {
     });
 
     it('leaves the code off when it is the reader s own currency', () => {
-      // CAD is the fallback default in `useNumberFormat`, and the test
-      // preferences set none.
+      // The test preferences set none, so the reader is on the shared fallback.
+      // Named through the constant rather than spelled out: a fixture that
+      // hardcodes the currency it means by "the reader's own" stops meaning that
+      // the moment the fallback changes.
       render(
         <SecuritySummaryCards
-          detail={detail({ security: security({ currencyCode: 'CAD' }) })}
+          detail={{
+            ...detail({
+              security: security({ currencyCode: READER_CURRENCY }),
+            }),
+          }}
         />,
       );
-      // Repeating "CAD" beside every dollar figure on a CAD user's screen is
+      // Repeating the code beside every figure on the reader's own screen is
       // noise, not information.
       expect(screen.getByText('$15,000.00')).toBeInTheDocument();
-      expect(screen.queryByText(/CAD/)).not.toBeInTheDocument();
+      expect(screen.queryByText(READER_CURRENCY)).not.toBeInTheDocument();
     });
   });
 
@@ -281,7 +305,7 @@ describe('SecuritySummaryCards in the reader s own currency', () => {
   // itself. What a reader on PLN still wants is roughly what it is worth to
   // them, so the cards carry a second line -- but only when a rate exists.
   it('adds the converted figure when a rate for the pair is known', () => {
-    mockRates.set('EUR->CAD', 1.5);
+    mockRates.set(`EUR->${READER_CURRENCY}`, 1.5);
     render(<SecuritySummaryCards detail={detail()} />);
 
     // 15,000 EUR at 1.5 = 22,500 in the reader's currency.
@@ -291,7 +315,7 @@ describe('SecuritySummaryCards in the reader s own currency', () => {
   });
 
   it('converts the cost basis and the gain at the same rate', () => {
-    mockRates.set('EUR->CAD', 1.5);
+    mockRates.set(`EUR->${READER_CURRENCY}`, 1.5);
     render(<SecuritySummaryCards detail={detail()} />);
     // 12,000 -> 18,000 and 3,000 -> 4,500: one rate throughout, so the three
     // converted figures still add up the way the originals do.
@@ -308,10 +332,10 @@ describe('SecuritySummaryCards in the reader s own currency', () => {
   });
 
   it('adds no second line when the security is already in the reader s currency', () => {
-    mockRates.set('EUR->CAD', 1.5);
+    mockRates.set(`EUR->${READER_CURRENCY}`, 1.5);
     render(
       <SecuritySummaryCards
-        detail={detail({ security: security({ currencyCode: 'CAD' }) })}
+        detail={detail({ security: security({ currencyCode: READER_CURRENCY }) })}
       />,
     );
     expect(screen.queryByText(/~/)).not.toBeInTheDocument();

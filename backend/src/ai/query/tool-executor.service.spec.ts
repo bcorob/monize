@@ -354,6 +354,8 @@ describe("ToolExecutorService", () => {
         overdueCount: 1,
         totalUpcomingBills: 1200,
         totalUpcomingDeposits: 3000,
+        totalsCurrency: "USD",
+        amountsComplete: true,
         items: [],
       }),
     };
@@ -1145,9 +1147,40 @@ describe("ToolExecutorService", () => {
       });
       expect(result.sources[0].type).toBe("scheduled_transactions");
       expect(result.summary).toContain("upcoming");
-      expect(result.summary).toContain("Bills: 1200.00");
-      expect(result.summary).toContain("Deposits: 3000.00");
+      // The currency travels with the figure. A total is expressed in the
+      // reader's default while each item keeps its own settlement currency, so
+      // two bare numbers in the line a model quotes is how a CAD figure came to
+      // be read as USD (issue #1247 re-audit).
+      expect(result.summary).toContain("Bills: 1200.00 USD");
+      expect(result.summary).toContain("Deposits: 3000.00 USD");
       expect(result.summary).toContain("1 overdue");
+    });
+
+    it("list_upcoming_bills says which cause withheld a total", async () => {
+      // Two different repairs: an unresolvable occurrence amount is a schedule
+      // to look at, a missing rate is a rate to add. One sentence for both sent
+      // the reader to the wrong one.
+      scheduledTransactions.getLlmUpcomingBillsAndDeposits.mockResolvedValue({
+        daysWindow: 30,
+        itemCount: 2,
+        overdueCount: 0,
+        totalUpcomingBills: null,
+        totalUpcomingDeposits: 0,
+        totalsCurrency: "USD",
+        knownUpcomingBillsSubtotal: 500,
+        amountsComplete: false,
+        unknownAmountItems: ["Monthly ETF buy"],
+        missingRatePairs: ["CAD->USD"],
+        items: [],
+      });
+
+      const result = await service.execute(userId, "list_upcoming_bills", {});
+
+      expect(result.summary).toContain(
+        "unknown (subtotal of the items that resolved: 500.00)",
+      );
+      expect(result.summary).toContain("Monthly ETF buy");
+      expect(result.summary).toContain("No exchange rate for CAD->USD");
     });
 
     it("list_upcoming_bills passes through days, kind, and resolves account names", async () => {

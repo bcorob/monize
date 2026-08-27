@@ -18,6 +18,8 @@
     "colAmount": "[XX-Amount-XX]",
     "typeIncome": "[XX-Income-XX]",
     "typeExpense": "[XX-Expense-XX]",
+    "typeUnknown": "[XX-Direction unknown-XX]",
+    "amountUnavailable": "[XX-Amount unavailable-XX]",
     "button": "[XX-View Bills &amp; Deposits-XX]"
   },
   "mortgageReminder": {

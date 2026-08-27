@@ -14,6 +14,14 @@
       "warning": "Attenzione",
       "success": "Buone notizie",
       "info": "Info"
+    },
+    "billDue": {
+      "titleOverdue": "{payee} scaduto",
+      "titleToday": "{payee} in scadenza oggi",
+      "titleTomorrow": "{payee} in scadenza domani",
+      "titleInDays": "{payee} in scadenza tra {days} giorni",
+      "amountDue": "{amount} da pagare il {date}",
+      "amountUnavailable": "Importo non disponibile (nessun tasso di cambio attuale), in scadenza il {date}"
     }
   },
   "summary503020": {

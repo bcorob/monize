@@ -85,6 +85,7 @@ describe("AiForecastService", () => {
         {
           name: "Rent",
           amount: 1500,
+          amountComplete: true,
           frequency: "MONTHLY",
           nextDueDate: "2026-03-01",
           categoryName: "Housing",

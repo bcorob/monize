@@ -128,7 +128,8 @@
     "backToReports": "返回报告",
     "switchReport": "切换到其他报告",
     "switchPlaceholder": "筛选报告...",
-    "switchNoMatches": "没有匹配的报告"
+    "switchNoMatches": "没有匹配的报告",
+    "favourites": "收藏"
   },
   "reportPage": {
     "notFound": "未找到报告",
@@ -437,6 +438,7 @@
     "currentBalance": "当前余额",
     "principalPaid": "已还本金",
     "estTotalInterest": "预计总利息",
+    "interestOverProjection": "预测期利息",
     "interestPaid": "已还利息",
     "progress": "进度",
     "estPayoff": "预计还清",
@@ -807,6 +809,7 @@
     "originalAmount": "原始金额",
     "interestRate": "利率",
     "estTotalInterest": "预计总利息",
+    "interestOverProjection": "预测期利息",
     "totalInterestPaid": "已还总利息",
     "paymentsMade": "已还款次数",
     "estPayoff": "预计还清",
@@ -839,7 +842,8 @@
     "typeLineOfCredit": "信用额度",
     "typeLoan": "贷款",
     "typeMortgage": "抵押贷款",
-    "pdfSubtitlePaymentsSummary": "已还款 {count} 次，总利息 {interest}"
+    "pdfSubtitlePaymentsSummary": "已还款 {count} 次，总利息 {interest}",
+    "pdfSubtitlePaymentsProjection": "已还款 {count} 期，预测期内利息 {interest}"
   },
   "monteCarlo": {
     "toasts": {
@@ -1548,12 +1552,16 @@
     "csvColBillName": "账单名称",
     "csvColDueDate": "到期日",
     "csvColAmount": "金额",
+    "csvColCurrency": "货币",
     "csvColFrequency": "频率",
     "csvColAccount": "账户",
     "csvColStatus": "状态",
     "csvStatusOverdue": "逾期",
     "csvStatusAuto": "自动",
     "csvStatusManual": "手动",
+    "amountUnavailable": "不可用",
+    "occurrencesUnavailable": "无法加载预计的发生记录，因此下方的日历和金额不可用。您的账单本身未受影响。",
+    "csvAmountUnavailable": "不可用（无当前汇率）",
     "pdfTitle": "即将到期账单报告",
     "pdfSubtitle": "{month} | {count} 个活跃账单",
     "pdfActiveBills": "活跃账单",

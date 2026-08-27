@@ -24,6 +24,11 @@ import { PayeesService } from "../payees/payees.service";
 import { NetWorthService } from "../net-worth/net-worth.service";
 import { TransactionSplitService } from "./transaction-split.service";
 import { applyRegisterOrder } from "./register-order";
+import {
+  brokerageExclusionForEntity,
+  investmentLinkedSplitExclusion,
+  investmentLinkedTransactionExclusion,
+} from "../common/investment-filter.util";
 import { transferPayeeLabel } from "./transfer-payee-label.util";
 import {
   assertVoidTransitionAllowedOnRow,
@@ -942,9 +947,7 @@ export class TransactionsService {
       );
 
       if (!includeInvestmentBrokerage) {
-        queryBuilder.andWhere(
-          "(account.accountSubType IS NULL OR account.accountSubType != 'INVESTMENT_BROKERAGE')",
-        );
+        queryBuilder.andWhere(brokerageExclusionForEntity("account"));
       }
 
       if (accountIds && accountIds.length > 0) {
@@ -1202,7 +1205,9 @@ export class TransactionsService {
               new Brackets((unc) => {
                 unc
                   .where(
-                    "transaction.categoryId IS NULL AND transaction.isSplit = false AND transaction.isTransfer = false AND account.accountType != 'INVESTMENT'",
+                    `transaction.categoryId IS NULL AND transaction.isSplit = false AND transaction.isTransfer = false AND ${investmentLinkedTransactionExclusion(
+                      "transaction",
+                    )}`,
                   )
                   // A split transaction is uncategorised when any of its
                   // non-transfer split lines has no category. Match those too so
@@ -1211,7 +1216,9 @@ export class TransactionsService {
                   // the matching (null-category) splits hydrate, giving the
                   // frontend a filtered partial total.
                   .orWhere(
-                    "transaction.isSplit = true AND transaction.isTransfer = false AND account.accountType != 'INVESTMENT' AND splits.categoryId IS NULL AND splits.transferAccountId IS NULL",
+                    `transaction.isSplit = true AND transaction.isTransfer = false AND splits.categoryId IS NULL AND splits.transferAccountId IS NULL AND ${investmentLinkedSplitExclusion(
+                      "splits",
+                    )}`,
                   );
               }),
             );
@@ -1284,9 +1291,7 @@ export class TransactionsService {
         .where(this.registerScope("t", userId, jointAccountIds));
 
       if (!includeInvestmentBrokerage) {
-        countQuery.andWhere(
-          "(a.accountSubType IS NULL OR a.accountSubType != 'INVESTMENT_BROKERAGE')",
-        );
+        countQuery.andWhere(brokerageExclusionForEntity("a"));
       }
       if (accountIds && accountIds.length > 0) {
         countQuery.andWhere("t.accountId IN (:...accountIds)", { accountIds });
@@ -1894,8 +1899,19 @@ export class TransactionsService {
         new Brackets((outer) => {
           let hasCondition = false;
           if (hasUncategorized) {
+            // A trade's cash leg is not a row the user forgot to file, so the
+            // running balance must not sum a row the list above it does not
+            // show. This arm is NOT otherwise identical to the list's: the list
+            // also matches a split parent with an uncategorized child, and this
+            // one does not, so such a parent is missing from the prior-page sum
+            // (pre-existing, and not fixable by copying the branch --
+            // `computeSplitAwareSum` adds the WHOLE parent amount for a
+            // pure-uncategorized filter, which would be wrong in the other
+            // direction).
             outer.where(
-              "bf.categoryId IS NULL AND bf.isSplit = false AND bf.isTransfer = false",
+              `bf.categoryId IS NULL AND bf.isSplit = false AND bf.isTransfer = false AND ${investmentLinkedTransactionExclusion(
+                "bf",
+              )}`,
             );
             hasCondition = true;
           }

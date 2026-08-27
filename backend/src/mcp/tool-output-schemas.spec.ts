@@ -15,6 +15,7 @@ const scheduledItemSample = {
   payeeName: null,
   categoryName: null,
   amount: -50,
+  amountComplete: true,
   currency: "USD",
   frequency: "MONTHLY",
   nextDueDate: "2026-02-01",
@@ -23,6 +24,17 @@ const scheduledItemSample = {
   autoPost: false,
   kind: "bill",
   description: null,
+};
+
+// An item whose current settlement rate could not be resolved (issue #1247):
+// amount null, and the bucket total null with the partial sum beside it.
+const scheduledItemUnknownAmountSample = {
+  ...scheduledItemSample,
+  id: "sc2",
+  name: "Monthly ETF buy",
+  amount: null,
+  amountComplete: false,
+  kind: "investment",
 };
 
 // Each case pairs an output schema with a representative payload, in the raw
@@ -624,7 +636,26 @@ const cases: Array<{ name: string; schema: RawShape; raw: unknown }> = [
       overdueCount: 0,
       totalUpcomingBills: 50,
       totalUpcomingDeposits: 0,
+      totalsCurrency: "USD",
+      amountsComplete: true,
       items: [scheduledItemSample],
+    },
+  },
+  {
+    name: "getUpcomingBillsOutput (incomplete-amount branch)",
+    schema: schemas.getUpcomingBillsOutput,
+    raw: {
+      daysWindow: 30,
+      itemCount: 2,
+      overdueCount: 0,
+      totalUpcomingBills: null,
+      totalUpcomingDeposits: 0,
+      totalsCurrency: "USD",
+      knownUpcomingBillsSubtotal: 50,
+      amountsComplete: false,
+      unknownAmountItems: ["Monthly ETF buy"],
+      missingRatePairs: ["CAD->USD"],
+      items: [scheduledItemSample, scheduledItemUnknownAmountSample],
     },
   },
   {
@@ -655,6 +686,7 @@ const cases: Array<{ name: string; schema: RawShape; raw: unknown }> = [
       velocity: {
         dailyBurnRate: 1,
         safeDailySpend: 2,
+        upcomingBillsComplete: true,
         projectedTotal: 80,
         projectedVariance: -20,
         daysRemaining: 10,

@@ -36,6 +36,8 @@
     "loanRequiresInstitution": "Loan accounts require an institution name",
     "mortgageRequiredFields": "Mortgage accounts require mortgagePaymentFrequency, paymentStartDate, sourceAccountId, and amortizationMonths",
     "mortgageRequiresInterestRate": "Mortgage accounts require an interest rate",
+    "mortgageFrequencyUnsupported": "Canadian mortgages cannot be scheduled at a {frequency} payment frequency",
+    "paymentFrequencyUnsupported": "A {frequency} payment frequency cannot be scheduled",
     "mortgageRequiresInstitution": "Mortgage accounts require an institution name",
     "onlyMortgageAccounts": "This operation is only valid for mortgage accounts",
     "updateRateClosed": "Cannot update rate on a closed account",
@@ -202,13 +204,16 @@
     "reauthUnavailable": "Finish setting up your account password before restoring a backup.",
     "passwordHeaderNotBase64": "The {header} header must be base64-encoded.",
     "folderOutsideAllowedRoots": "Backup folder \"{path}\" is outside the permitted roots ({roots}). Set BACKUP_ALLOWED_ROOTS to permit it.",
-    "decompressTooLarge": "Backup is too large to restore: it expands past the configured limit of {limit} bytes. Raise BACKUP_RESTORE_EXPANDED_LIMIT if this is a genuine backup.",
+    "decompressTooLarge": "Backup is too large to restore: it expands past this deployment's limit of {limit} bytes. That ceiling is derived from the container's memory and a measured cost per byte, so raising it alone models a restore the process cannot finish -- raise the container memory limit instead (Kubernetes: backend.resources.limits.memory).",
     "exportTooLarge": "This backup is too large to produce in one piece (past {limit} bytes at table \"{table}\"). Automatic and support backups have to be held in memory; download a manual backup, which streams, or raise BACKUP_EXPORT_BUFFER_LIMIT.",
     "supportPasswordRequired": "A support backup must be encrypted: supply a password.",
     "supportExportTooLarge": "This support backup would be {{ size }} MiB of JSON, above the {{ limit }} MiB limit. Narrow it with an account selection or a date range, or raise BACKUP_EXPORT_BUFFER_LIMIT.",
     "noBackupStorage": "This deployment has no writable backup storage: {{ safePath }} does not exist and cannot be created ({{ reason }}). Mount a volume there (Docker: a bind mount or named volume; Kubernetes: set backend.persistence.backups in the Helm chart) and try again.",
     "folderUnusable": "Folder \"{{ path }}\" cannot be used as a directory ({{ reason }}).",
-    "restoreNoMemoryHeadroom": "This deployment has no memory headroom for a restore: one restore's modeled peak does not fit the container. Raise the container memory limit or lower BACKUP_RESTORE_EXPANDED_LIMIT."
+    "restoreNoMemoryHeadroom": "This deployment has no memory headroom for a restore: one restore's modeled peak does not fit the container. Raise the container memory limit or lower BACKUP_RESTORE_EXPANDED_LIMIT.",
+    "restoreQueueFull": "Too many restores are already waiting for this deployment's restore capacity. Retry in a moment.",
+    "restoreQueueWaitTimeout": "Timed out waiting for restore capacity: another restore is still running. Retry in a moment.",
+    "restoreTicketUnavailable": "This deployment cannot authorize restore uploads."
   },
   "budgets": {
     "notFound": "Budget with ID {{ id }} not found",

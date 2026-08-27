@@ -22,6 +22,17 @@ export class FxAggregate {
    */
   private subtotalMinorUnits = 0;
   private readonly missing = new Set<string>();
+  /**
+   * Components left out for a reason that is not a missing rate -- an amount the
+   * server could not work out at all, which has no pair to name.
+   *
+   * Kept apart from `missing` because naming a currency for it would report a
+   * rate gap that may not exist: a scheduled occurrence whose own settlement rate
+   * is unknown is unknown in *every* currency, and saying "no rate for CAD->USD"
+   * sends the reader to fix the wrong thing. `frontend/src/lib/currency-total.ts`
+   * splits the same two causes as `missingCurrencies` and `excludedCount`.
+   */
+  private unknownComponents = 0;
 
   /**
    * Add one component. `converted` is what the conversion returned: `null`
@@ -41,10 +52,19 @@ export class FxAggregate {
     this.subtotalMinorUnits += Math.round(amount * 10000);
   }
 
+  /**
+   * Record a component whose value is unknown for a reason other than a missing
+   * rate, so the total is withheld without blaming a currency pair.
+   */
+  addUnknown(): void {
+    this.unknownComponents += 1;
+  }
+
   /** Fold in another aggregate, carrying its gaps with its subtotal. */
   merge(other: FxAggregate): void {
     this.subtotalMinorUnits += other.subtotalMinorUnits;
     for (const pair of other.missing) this.missing.add(pair);
+    this.unknownComponents += other.unknownComponents;
   }
 
   /**
@@ -55,7 +75,7 @@ export class FxAggregate {
    * the user a settled question could not be worked out.
    */
   get total(): number | null {
-    return this.missing.size > 0 ? null : this.subtotalMinorUnits / 10000;
+    return this.isComplete ? this.subtotalMinorUnits / 10000 : null;
   }
 
   /**
@@ -71,7 +91,16 @@ export class FxAggregate {
     return [...this.missing].sort();
   }
 
+  /**
+   * True when nothing was left out, by either cause. Checking `missingPairs`
+   * alone would report a total containing an unpriceable component as complete.
+   */
   get isComplete(): boolean {
-    return this.missing.size === 0;
+    return this.missing.size === 0 && this.unknownComponents === 0;
+  }
+
+  /** How many components were left out for a reason with no pair to name. */
+  get unknownCount(): number {
+    return this.unknownComponents;
   }
 }

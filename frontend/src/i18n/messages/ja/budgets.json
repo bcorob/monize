@@ -14,6 +14,14 @@
       "warning": "警告",
       "success": "お知らせ",
       "info": "情報"
+    },
+    "billDue": {
+      "titleOverdue": "{payee} は支払期日超過",
+      "titleToday": "{payee} は今日が支払期日",
+      "titleTomorrow": "{payee} は明日が支払期日",
+      "titleInDays": "{payee} は{days}日後が支払期日",
+      "amountDue": "{date} に {amount} の支払い",
+      "amountUnavailable": "金額が不明です (現在の為替レートがありません)。支払期日は {date}"
     }
   },
   "summary503020": {

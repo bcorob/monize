@@ -65,7 +65,7 @@ vi.mock('@/store/authStore', () => ({
 vi.mock('@/store/preferencesStore', () => ({
   usePreferencesStore: (selector?: any) => {
     const state = {
-      preferences: { twoFactorEnabled: true, theme: 'system' },
+      preferences: { twoFactorEnabled: true, theme: 'system', defaultCurrency: 'USD' },
       isLoaded: true,
       _hasHydrated: true,
     };
@@ -131,8 +131,53 @@ vi.mock('@/lib/transactions', () => ({
 
 vi.mock('@/hooks/useNumberFormat', () => ({
   useNumberFormat: () => ({
-    formatCurrency: (val: number) => `$${Math.abs(val).toFixed(2)}`,
+    // The code is part of what a money value IS, so the mock prints it: a
+    // formatter that swallows it cannot tell a CAD figure labelled USD from a
+    // correct one, which is the defect these tests exist for (issue #1247).
+    formatCurrency: (val: number, code?: string) =>
+      code ? `${code} $${Math.abs(val).toFixed(2)}` : `$${Math.abs(val).toFixed(2)}`,
     formatNumber: (val: number) => val.toString(),
+  }),
+}));
+
+/**
+ * Rates the page's converter can see, as `FROM->TO`. Tests set it to make a
+ * pair convertible or deliberately absent; empty means only same-currency
+ * conversions resolve, which is what a cold rate table really does.
+ */
+const mockRates = new Map<string, number>();
+
+/**
+ * Whether the rate table can be consulted at all.
+ *
+ * The real hook is `true` while the request is in flight and stays `true` if it
+ * failed, and with no rates loaded every cross-currency conversion returns
+ * `null` -- so a surface that reads only the missing-pair list reports "add a
+ * rate on Currencies" for a rate that is very likely already there.
+ */
+let mockRatesUnavailable = false;
+
+vi.mock('@/hooks/useExchangeRates', () => ({
+  useExchangeRates: () => ({
+    defaultCurrency: 'USD',
+    get ratesUnavailable() {
+      return mockRatesUnavailable;
+    },
+    get ratesFailed() {
+      return mockRatesUnavailable;
+    },
+    // Mirrors the real hook's contract: same currency is 1:1 BY DEFINITION, an
+    // unknown pair is `null` -- never the amount passed through.
+    convertToDefault: (amount: number, from: string) => {
+      if (from === 'USD') return amount;
+      const rate = mockRates.get(`${from}->USD`);
+      return rate === undefined ? null : amount * rate;
+    },
+    convert: () => null,
+    convertWithRateMap: () => null,
+    rates: [],
+    isLoading: false,
+    refresh: vi.fn(),
   }),
 }));
 
@@ -188,7 +233,12 @@ vi.mock('@/components/ui/LoadingSpinner', () => ({
 }));
 
 vi.mock('@/components/ui/SummaryCard', () => ({
-  SummaryCard: ({ label, value }: any) => <div data-testid={`summary-${label}`}>{value}</div>,
+  SummaryCard: ({ label, value, hint }: any) => (
+    <div data-testid={`summary-${label}`}>
+      {value}
+      {hint ? <span data-testid={`summary-hint-${label}`}>{hint}</span> : null}
+    </div>
+  ),
   SummaryIcons: { clipboard: null, plus: null, money: null, clock: null },
 }));
 
@@ -259,19 +309,23 @@ vi.mock('@/components/scheduled-transactions/PostTransactionDialog', () => ({
 const now = new Date('2026-02-14T12:00:00');
 
 const mockScheduledTransactions = [
-  { id: 'st-1', name: 'Rent', amount: -1200, frequency: 'MONTHLY', nextDueDate: '2026-02-15', isActive: true, isTransfer: false, startDate: '2026-01-01', endDate: null },
-  { id: 'st-2', name: 'Salary', amount: 5000, frequency: 'BIWEEKLY', nextDueDate: '2026-02-20', isActive: true, isTransfer: false, startDate: '2026-01-01', endDate: null },
-  { id: 'st-3', name: 'Savings Transfer', amount: -500, frequency: 'MONTHLY', nextDueDate: '2026-03-01', isActive: true, isTransfer: true, startDate: '2026-01-01', endDate: null },
-  { id: 'st-4', name: 'Netflix', amount: -15.99, frequency: 'MONTHLY', nextDueDate: '2026-02-10', isActive: true, isTransfer: false, startDate: '2026-01-01', endDate: null },
-  { id: 'st-5', name: 'Old Bill', amount: -50, frequency: 'MONTHLY', nextDueDate: '2026-02-20', isActive: false, isTransfer: false, startDate: '2026-01-01', endDate: null },
+  { id: 'st-1', currencyCode: 'USD', name: 'Rent', amount: -1200, frequency: 'MONTHLY', nextDueDate: '2026-02-15', isActive: true, isTransfer: false, startDate: '2026-01-01', endDate: null },
+  { id: 'st-2', currencyCode: 'USD', name: 'Salary', amount: 5000, frequency: 'BIWEEKLY', nextDueDate: '2026-02-20', isActive: true, isTransfer: false, startDate: '2026-01-01', endDate: null },
+  { id: 'st-3', currencyCode: 'USD', name: 'Savings Transfer', amount: -500, frequency: 'MONTHLY', nextDueDate: '2026-03-01', isActive: true, isTransfer: true, startDate: '2026-01-01', endDate: null },
+  { id: 'st-4', currencyCode: 'USD', name: 'Netflix', amount: -15.99, frequency: 'MONTHLY', nextDueDate: '2026-02-10', isActive: true, isTransfer: false, startDate: '2026-01-01', endDate: null },
+  { id: 'st-5', currencyCode: 'USD', name: 'Old Bill', amount: -50, frequency: 'MONTHLY', nextDueDate: '2026-02-20', isActive: false, isTransfer: false, startDate: '2026-01-01', endDate: null },
   // A zero-amount transfer used purely as a reminder: the amount varies month to
   // month, so the user leaves it at 0 (issue #1124).
-  { id: 'st-6', name: 'Card Payment Reminder', amount: 0, frequency: 'MONTHLY', nextDueDate: '2026-02-18', isActive: true, isTransfer: true, startDate: '2026-01-01', endDate: null },
+  { id: 'st-6', currencyCode: 'USD', name: 'Card Payment Reminder', amount: 0, frequency: 'MONTHLY', nextDueDate: '2026-02-18', isActive: true, isTransfer: true, startDate: '2026-01-01', endDate: null },
 ];
 
 describe('BillsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // A cold rate table by default: every fixture above is USD, so nothing needs
+    // one, and a test that adds a foreign schedule has to say what its rate is.
+    mockRates.clear();
+    mockRatesUnavailable = false;
     // Filters (type tab + panel selections) now persist to localStorage;
     // reset it so each case starts from the default unfiltered view.
     localStorage.clear();
@@ -936,11 +990,178 @@ describe('BillsPage', () => {
     });
   });
 
+  describe('Monthly Net spans one currency or none', () => {
+    // A CAD-settling schedule beside a USD one. Added as raw numbers these
+    // produce a confident figure in whichever currency the reader prefers --
+    // the same defect the Upcoming Bills report and the budget panel were fixed
+    // for, still live on this page (issue #1247 re-audit).
+    const twoCurrencySchedules = () => [
+      {
+        id: 'st-usd',
+        currencyCode: 'USD',
+        name: 'Rent',
+        amount: -500,
+        frequency: 'MONTHLY',
+        nextDueDate: '2026-03-01',
+        isActive: true,
+        isTransfer: false,
+      },
+      {
+        id: 'st-cad',
+        currencyCode: 'CAD',
+        name: 'Hydro',
+        amount: -1350,
+        frequency: 'MONTHLY',
+        nextDueDate: '2026-03-01',
+        isActive: true,
+        isTransfer: false,
+      },
+    ];
+
+    it('converts each schedule before summing', async () => {
+      mockRates.set('CAD->USD', 0.74);
+      mockGetAll.mockResolvedValue(twoCurrencySchedules());
+      render(<BillsPage />);
+      await waitFor(() => {
+        // 500 + 1350 x 0.74 = 1499, in the reader's own currency. Never 1850.
+        expect(screen.getByTestId('summary-Monthly Net')).toHaveTextContent(
+          'USD $1499.00',
+        );
+      });
+      expect(
+        screen.queryByTestId('summary-hint-Monthly Net'),
+      ).not.toBeInTheDocument();
+    });
+
+    it('withholds the net and names the currency when a rate is missing', async () => {
+      // No CAD->USD rate: the honest answer is that the net is not known, with
+      // the reason on screen. A blank where a number belongs is indistinguishable
+      // from "nothing scheduled".
+      mockGetAll.mockResolvedValue(twoCurrencySchedules());
+      render(<BillsPage />);
+      await waitFor(() => {
+        expect(screen.getByTestId('summary-Monthly Net')).toHaveTextContent(
+          'Not available',
+        );
+      });
+      // Not the 500 subtotal under a total's caption, and not the 1850 sum.
+      const net = screen.getByTestId('summary-Monthly Net').textContent || '';
+      expect(net).not.toContain('500');
+      expect(net).not.toContain('1850');
+      expect(screen.getByTestId('summary-hint-Monthly Net')).toHaveTextContent(
+        'CAD',
+      );
+      // The counts are unaffected: how many bills there are is still known.
+      expect(screen.getByTestId('summary-Active Bills')).toHaveTextContent('2');
+    });
+
+    it('blames the schedule, not a rate, when the amount itself is unknown', async () => {
+      // Two causes, two repairs. This one is an occurrence the server could not
+      // price at all -- pointing the reader at the Currencies page would send
+      // them to fix a rate that is already there.
+      mockGetAll.mockResolvedValue([
+        {
+          id: 'st-inv',
+          currencyCode: 'USD',
+          name: 'Monthly ETF buy',
+          amount: -1000,
+          frequency: 'MONTHLY',
+          nextDueDate: '2026-03-01',
+          isActive: true,
+          isTransfer: false,
+          isInvestment: true,
+          effectiveAmount: null,
+          effectiveAmountComplete: false,
+        },
+      ]);
+      render(<BillsPage />);
+      await waitFor(() => {
+        expect(screen.getByTestId('summary-Monthly Net')).toHaveTextContent(
+          'Not available',
+        );
+      });
+      const hint = screen.getByTestId('summary-hint-Monthly Net');
+      expect(hint).toHaveTextContent('could not be priced');
+      expect(hint).not.toHaveTextContent('exchange rate');
+    });
+
+    it('says the rates are unavailable rather than blaming a currency', async () => {
+      // While the rate table is loading -- or after its fetch failed -- every
+      // cross-currency conversion returns null. Reporting that as "no exchange
+      // rate for CAD" is a statement about this request, not about the user's
+      // rates, and sends them to fix something that is not broken.
+      mockRatesUnavailable = true;
+      mockGetAll.mockResolvedValue(twoCurrencySchedules());
+      render(<BillsPage />);
+      await waitFor(() => {
+        expect(screen.getByTestId('summary-Monthly Net')).toHaveTextContent(
+          'Not available',
+        );
+      });
+      const hint = screen.getByTestId('summary-hint-Monthly Net');
+      expect(hint).toHaveTextContent('not available right now');
+      expect(hint).not.toHaveTextContent('add one on Currencies');
+    });
+
+    it('names both causes when both apply', async () => {
+      // One CAD bill with no rate, and one schedule the server could not price.
+      // Naming only the rate makes the reader add it and watch nothing change.
+      mockGetAll.mockResolvedValue([
+        ...twoCurrencySchedules(),
+        {
+          id: 'st-inv',
+          currencyCode: 'USD',
+          name: 'Monthly ETF buy',
+          amount: -1000,
+          frequency: 'MONTHLY',
+          nextDueDate: '2026-03-01',
+          isActive: true,
+          isTransfer: false,
+          isInvestment: true,
+          effectiveAmount: null,
+          effectiveAmountComplete: false,
+        },
+      ]);
+      render(<BillsPage />);
+      await waitFor(() => {
+        expect(screen.getByTestId('summary-Monthly Net')).toHaveTextContent(
+          'Not available',
+        );
+      });
+      const hint = screen.getByTestId('summary-hint-Monthly Net');
+      expect(hint).toHaveTextContent('CAD');
+      expect(hint).toHaveTextContent('could not be priced');
+    });
+
+    it("needs no rate for a net that is entirely in the reader's currency", async () => {
+      // Same currency is 1:1 by definition. Asking for a rate the table does not
+      // hold would make an ordinary single-currency ledger read as unknowable.
+      mockGetAll.mockResolvedValue([
+        {
+          id: 'st-usd',
+          currencyCode: 'USD',
+          name: 'Rent',
+          amount: -500,
+          frequency: 'MONTHLY',
+          nextDueDate: '2026-03-01',
+          isActive: true,
+          isTransfer: false,
+        },
+      ]);
+      render(<BillsPage />);
+      await waitFor(() => {
+        expect(screen.getByTestId('summary-Monthly Net')).toHaveTextContent(
+          'USD $500.00',
+        );
+      });
+    });
+  });
+
   describe('Monthly Net Calculation', () => {
     it('calculates monthly net for MONTHLY frequency', async () => {
       mockGetAll.mockResolvedValue([
-        { id: 'st-a', name: 'Bill', amount: -100, frequency: 'MONTHLY', nextDueDate: '2026-03-01', isActive: true, isTransfer: false },
-        { id: 'st-b', name: 'Income', amount: 3000, frequency: 'MONTHLY', nextDueDate: '2026-03-01', isActive: true, isTransfer: false },
+        { id: 'st-a', currencyCode: 'USD', name: 'Bill', amount: -100, frequency: 'MONTHLY', nextDueDate: '2026-03-01', isActive: true, isTransfer: false },
+        { id: 'st-b', currencyCode: 'USD', name: 'Income', amount: 3000, frequency: 'MONTHLY', nextDueDate: '2026-03-01', isActive: true, isTransfer: false },
       ]);
       render(<BillsPage />);
       await waitFor(() => {
@@ -949,9 +1170,41 @@ describe('BillsPage', () => {
       });
     });
 
+    it('buckets a re-priced occurrence by its own sign, not the stored one', async () => {
+      // A mixed-sign split parent stored at -10 (an ordinary -100 line beside a
+      // SELL line worth +90) whose investment line re-priced to +120: the
+      // occurrence is a +20 inflow. Classified from the stored sign it went into
+      // monthly BILLS as 20, so the net was out by 40 in the wrong direction.
+      mockGetAll.mockResolvedValue([
+        {
+          id: 'st-split', currencyCode: 'USD',
+          name: 'Share sale, net of fee',
+          amount: -10,
+          frequency: 'MONTHLY',
+          nextDueDate: '2026-03-01',
+          isActive: true,
+          isTransfer: false,
+          isSplit: true,
+          splits: [
+            { id: 'sp-1', kind: 'category', amount: -100 },
+            { id: 'sp-2', kind: 'investment', amount: 90, investmentAction: 'SELL' },
+          ],
+          effectiveAmount: 20,
+          effectiveAmountComplete: true,
+        },
+      ]);
+      render(<BillsPage />);
+      await waitFor(() => {
+        expect(screen.getByTestId('summary-Monthly Net')).toHaveTextContent('$20.00');
+      });
+      // And it is counted as a deposit, not a bill.
+      expect(screen.getByTestId('summary-Active Deposits')).toHaveTextContent('1');
+      expect(screen.getByTestId('summary-Active Bills')).toHaveTextContent('0');
+    });
+
     it('normalizes WEEKLY frequency to monthly', async () => {
       mockGetAll.mockResolvedValue([
-        { id: 'st-a', name: 'Weekly Bill', amount: -100, frequency: 'WEEKLY', nextDueDate: '2026-03-01', isActive: true, isTransfer: false },
+        { id: 'st-a', currencyCode: 'USD', name: 'Weekly Bill', amount: -100, frequency: 'WEEKLY', nextDueDate: '2026-03-01', isActive: true, isTransfer: false },
       ]);
       render(<BillsPage />);
       await waitFor(() => {
@@ -959,14 +1212,14 @@ describe('BillsPage', () => {
         // moved to monthlyEquivalent() in @/lib/frequency, which uses the real
         // year length everywhere instead of the old hand-rounded 4.33.
         const text = screen.getByTestId('summary-Monthly Net').textContent || '';
-        expect(parseFloat(text.replace('$', ''))).toBeCloseTo((365.25 / 7 / 12) * 100, 0);
+        expect(parseFloat(text.replace(/[^\d.]/g, ''))).toBeCloseTo((365.25 / 7 / 12) * 100, 0);
       });
     });
 
     it('excludes transfers from monthly calculations', async () => {
       mockGetAll.mockResolvedValue([
-        { id: 'st-a', name: 'Transfer', amount: -500, frequency: 'MONTHLY', nextDueDate: '2026-03-01', isActive: true, isTransfer: true },
-        { id: 'st-b', name: 'Bill', amount: -100, frequency: 'MONTHLY', nextDueDate: '2026-03-01', isActive: true, isTransfer: false },
+        { id: 'st-a', currencyCode: 'USD', name: 'Transfer', amount: -500, frequency: 'MONTHLY', nextDueDate: '2026-03-01', isActive: true, isTransfer: true },
+        { id: 'st-b', currencyCode: 'USD', name: 'Bill', amount: -100, frequency: 'MONTHLY', nextDueDate: '2026-03-01', isActive: true, isTransfer: false },
       ]);
       render(<BillsPage />);
       await waitFor(() => {
@@ -977,8 +1230,8 @@ describe('BillsPage', () => {
 
     it('excludes inactive from monthly calculations', async () => {
       mockGetAll.mockResolvedValue([
-        { id: 'st-a', name: 'Inactive Bill', amount: -500, frequency: 'MONTHLY', nextDueDate: '2026-03-01', isActive: false, isTransfer: false },
-        { id: 'st-b', name: 'Active Bill', amount: -100, frequency: 'MONTHLY', nextDueDate: '2026-03-01', isActive: true, isTransfer: false },
+        { id: 'st-a', currencyCode: 'USD', name: 'Inactive Bill', amount: -500, frequency: 'MONTHLY', nextDueDate: '2026-03-01', isActive: false, isTransfer: false },
+        { id: 'st-b', currencyCode: 'USD', name: 'Active Bill', amount: -100, frequency: 'MONTHLY', nextDueDate: '2026-03-01', isActive: true, isTransfer: false },
       ]);
       render(<BillsPage />);
       await waitFor(() => {
@@ -991,9 +1244,9 @@ describe('BillsPage', () => {
   describe('Due Count', () => {
     it('counts multiple due items', async () => {
       mockGetAll.mockResolvedValue([
-        { id: 'st-a', name: 'Due Bill 1', amount: -100, frequency: 'MONTHLY', nextDueDate: '2026-02-10', isActive: true, isTransfer: false },
-        { id: 'st-b', name: 'Due Bill 2', amount: -200, frequency: 'MONTHLY', nextDueDate: '2026-02-14', isActive: true, isTransfer: false },
-        { id: 'st-c', name: 'Future Bill', amount: -300, frequency: 'MONTHLY', nextDueDate: '2026-02-20', isActive: true, isTransfer: false },
+        { id: 'st-a', currencyCode: 'USD', name: 'Due Bill 1', amount: -100, frequency: 'MONTHLY', nextDueDate: '2026-02-10', isActive: true, isTransfer: false },
+        { id: 'st-b', currencyCode: 'USD', name: 'Due Bill 2', amount: -200, frequency: 'MONTHLY', nextDueDate: '2026-02-14', isActive: true, isTransfer: false },
+        { id: 'st-c', currencyCode: 'USD', name: 'Future Bill', amount: -300, frequency: 'MONTHLY', nextDueDate: '2026-02-20', isActive: true, isTransfer: false },
       ]);
       render(<BillsPage />);
       await waitFor(() => {
@@ -1004,7 +1257,7 @@ describe('BillsPage', () => {
 
     it('shows zero when no items are due', async () => {
       mockGetAll.mockResolvedValue([
-        { id: 'st-a', name: 'Future', amount: -100, frequency: 'MONTHLY', nextDueDate: '2026-02-20', isActive: true, isTransfer: false },
+        { id: 'st-a', currencyCode: 'USD', name: 'Future', amount: -100, frequency: 'MONTHLY', nextDueDate: '2026-02-20', isActive: true, isTransfer: false },
       ]);
       render(<BillsPage />);
       await waitFor(() => {
@@ -1014,7 +1267,7 @@ describe('BillsPage', () => {
 
     it('skips due count for items with no nextDueDate', async () => {
       mockGetAll.mockResolvedValue([
-        { id: 'st-a', name: 'No Date Bill', amount: -100, frequency: 'MONTHLY', nextDueDate: null, isActive: true, isTransfer: false },
+        { id: 'st-a', currencyCode: 'USD', name: 'No Date Bill', amount: -100, frequency: 'MONTHLY', nextDueDate: null, isActive: true, isTransfer: false },
       ]);
       render(<BillsPage />);
       await waitFor(() => {
@@ -1026,43 +1279,43 @@ describe('BillsPage', () => {
   describe('Monthly Net Calculation - All Frequencies', () => {
     it('normalizes DAILY frequency to monthly', async () => {
       mockGetAll.mockResolvedValue([
-        { id: 'st-a', name: 'Daily Income', amount: 10, frequency: 'DAILY', nextDueDate: '2026-03-01', isActive: true, isTransfer: false },
+        { id: 'st-a', currencyCode: 'USD', name: 'Daily Income', amount: 10, frequency: 'DAILY', nextDueDate: '2026-03-01', isActive: true, isTransfer: false },
       ]);
       render(<BillsPage />);
       await waitFor(() => {
         // 10 * (365.25 / 12) ~= 304.38 (was a flat 30 days per month)
         const text = screen.getByTestId('summary-Monthly Net').textContent || '';
-        expect(parseFloat(text.replace('$', ''))).toBeCloseTo((365.25 / 12) * 10, 0);
+        expect(parseFloat(text.replace(/[^\d.]/g, ''))).toBeCloseTo((365.25 / 12) * 10, 0);
       });
     });
 
     it('normalizes BIWEEKLY frequency to monthly', async () => {
       mockGetAll.mockResolvedValue([
-        { id: 'st-a', name: 'Biweekly', amount: 1000, frequency: 'BIWEEKLY', nextDueDate: '2026-03-01', isActive: true, isTransfer: false },
+        { id: 'st-a', currencyCode: 'USD', name: 'Biweekly', amount: 1000, frequency: 'BIWEEKLY', nextDueDate: '2026-03-01', isActive: true, isTransfer: false },
       ]);
       render(<BillsPage />);
       await waitFor(() => {
         // 1000 * (365.25 / 14 / 12) ~= 2173.66 (was a hand-rounded 2.17)
         const text = screen.getByTestId('summary-Monthly Net').textContent || '';
-        expect(parseFloat(text.replace('$', ''))).toBeCloseTo((365.25 / 14 / 12) * 1000, 0);
+        expect(parseFloat(text.replace(/[^\d.]/g, ''))).toBeCloseTo((365.25 / 14 / 12) * 1000, 0);
       });
     });
 
     it('normalizes EVERY4WEEKS frequency to monthly', async () => {
       mockGetAll.mockResolvedValue([
-        { id: 'st-a', name: 'Every4Weeks', amount: 1000, frequency: 'EVERY4WEEKS', nextDueDate: '2026-03-01', isActive: true, isTransfer: false },
+        { id: 'st-a', currencyCode: 'USD', name: 'Every4Weeks', amount: 1000, frequency: 'EVERY4WEEKS', nextDueDate: '2026-03-01', isActive: true, isTransfer: false },
       ]);
       render(<BillsPage />);
       await waitFor(() => {
         // 1000 * (365.25 / 28 / 12) ≈ 1087.05
         const text = screen.getByTestId('summary-Monthly Net').textContent || '';
-        expect(parseFloat(text.replace('$', ''))).toBeCloseTo(365.25 / 28 / 12 * 1000, 0);
+        expect(parseFloat(text.replace(/[^\d.]/g, ''))).toBeCloseTo(365.25 / 28 / 12 * 1000, 0);
       });
     });
 
     it('normalizes QUARTERLY frequency to monthly', async () => {
       mockGetAll.mockResolvedValue([
-        { id: 'st-a', name: 'Quarterly', amount: 300, frequency: 'QUARTERLY', nextDueDate: '2026-03-01', isActive: true, isTransfer: false },
+        { id: 'st-a', currencyCode: 'USD', name: 'Quarterly', amount: 300, frequency: 'QUARTERLY', nextDueDate: '2026-03-01', isActive: true, isTransfer: false },
       ]);
       render(<BillsPage />);
       await waitFor(() => {
@@ -1073,7 +1326,7 @@ describe('BillsPage', () => {
 
     it('normalizes YEARLY frequency to monthly', async () => {
       mockGetAll.mockResolvedValue([
-        { id: 'st-a', name: 'Yearly', amount: 1200, frequency: 'YEARLY', nextDueDate: '2026-03-01', isActive: true, isTransfer: false },
+        { id: 'st-a', currencyCode: 'USD', name: 'Yearly', amount: 1200, frequency: 'YEARLY', nextDueDate: '2026-03-01', isActive: true, isTransfer: false },
       ]);
       render(<BillsPage />);
       await waitFor(() => {
@@ -1084,7 +1337,7 @@ describe('BillsPage', () => {
 
     it('normalizes ONCE frequency to 0 (no monthly contribution)', async () => {
       mockGetAll.mockResolvedValue([
-        { id: 'st-a', name: 'OneBill', amount: -500, frequency: 'ONCE', nextDueDate: '2026-03-01', isActive: true, isTransfer: false },
+        { id: 'st-a', currencyCode: 'USD', name: 'OneBill', amount: -500, frequency: 'ONCE', nextDueDate: '2026-03-01', isActive: true, isTransfer: false },
       ]);
       render(<BillsPage />);
       await waitFor(() => {
@@ -1111,7 +1364,7 @@ describe('BillsPage', () => {
 
   describe('Edit Occurrence - Override Matching Branches', () => {
     const _overrideSt = {
-      id: 'st-1',
+      id: 'st-1', currencyCode: 'USD',
       name: 'Rent',
       amount: -1200,
       frequency: 'MONTHLY',
@@ -1332,7 +1585,7 @@ describe('BillsPage', () => {
 
   describe('Calendar Frequency Branches', () => {
     const makeCalendarSt = (frequency: string) => ({
-      id: 'st-cal',
+      id: 'st-cal', currencyCode: 'USD',
       name: 'CalendarBill',
       amount: -100,
       frequency,
@@ -1362,7 +1615,7 @@ describe('BillsPage', () => {
 
     it('applies override date from futureOverrides in calendar', async () => {
       mockGetAll.mockResolvedValue([{
-        id: 'st-ov',
+        id: 'st-ov', currencyCode: 'USD',
         name: 'Override Bill',
         amount: -100,
         frequency: 'ONCE',
@@ -1384,7 +1637,7 @@ describe('BillsPage', () => {
 
     it('applies nextOverride fallback in calendar when futureOverrides is empty', async () => {
       mockGetAll.mockResolvedValue([{
-        id: 'st-nxt',
+        id: 'st-nxt', currencyCode: 'USD',
         name: 'NextOverride Bill',
         amount: -100,
         frequency: 'ONCE',
@@ -1404,7 +1657,7 @@ describe('BillsPage', () => {
 
     it('renders income (positive) bill with green colour class in calendar', async () => {
       mockGetAll.mockResolvedValue([{
-        id: 'st-inc',
+        id: 'st-inc', currencyCode: 'USD',
         name: 'Salary',
         amount: 5000,
         frequency: 'ONCE',
@@ -1498,7 +1751,7 @@ describe('BillsPage', () => {
   describe('superseded load ordering', () => {
     it('does not let a pre-AI load overwrite a newer post-AI reload', async () => {
       const oldRow = {
-        id: 'st-1',
+        id: 'st-1', currencyCode: 'USD',
         name: 'Old EUR forecast',
         amount: -1500,
         frequency: 'MONTHLY',

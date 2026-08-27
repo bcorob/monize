@@ -158,7 +158,9 @@ function ReconcileContent() {
   // sign-handling pattern in TransactionForm.
   const handleStatementBalanceChange = (value: number | undefined) => {
     if (value === undefined || value === 0 || !isLiability) {
-      setStatementBalance(value);
+      // A typed "-0" parses to negative zero, and Intl formats -0 with a
+      // leading minus -- an entered zero is stored as plain 0 either way.
+      setStatementBalance(value === 0 ? 0 : value);
       return;
     }
 
@@ -439,10 +441,12 @@ function ReconcileContent() {
             onChange={() => {}}
           />
 
+          {/* No liability-specific "-0.00" placeholder: the handler above
+              already negates a positive entry for a liability account, and a
+              minus-signed placeholder read as a broken value, not a hint. */}
           <CurrencyInput
             label={t('setup.statementBalanceLabel')}
             prefix={getCurrencySymbol(selectedAccount?.currencyCode || defaultCurrency)}
-            placeholder={isLiability ? '-0.00' : '0.00'}
             value={statementBalance}
             onChange={handleStatementBalanceChange}
           />
@@ -471,7 +475,10 @@ function ReconcileContent() {
     const totalCount = reconciliationData.transactions.length;
 
     return (
-      <div className="px-4 sm:px-6 lg:px-12">
+      // No horizontal inset of its own below `sm`: the <main> wrapper already
+      // carries px-4 there, and stacking the two halved the table's width on a
+      // phone. From `sm` up the doubled inset is the intended, roomier look.
+      <div className="sm:px-6 lg:px-12">
         {/* Summary Bar */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 mb-6">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -508,8 +515,11 @@ function ReconcileContent() {
           </div>
         </div>
 
-        {/* Transaction List */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+        {/* Transaction List. On phones the card bleeds to the screen edge
+            (cancelling <main>'s px-4) so the table gets the full device width;
+            the corners square off there because a rounded card flush with the
+            viewport reads as a clipping fault. */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg max-sm:-mx-4 max-sm:rounded-none shadow overflow-hidden">
           <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex flex-wrap justify-between items-center gap-3">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
               {t('list.heading', { count: totalCount })}
@@ -529,12 +539,18 @@ function ReconcileContent() {
                   {t('list.groupByFlow')}
                 </span>
               </div>
-              <Button variant="outline" size="sm" onClick={handleSelectAll}>
-                {t('list.selectAll')}
-              </Button>
-              <Button variant="outline" size="sm" onClick={handleSelectNone}>
-                {t('list.selectNone')}
-              </Button>
+              {/* One non-wrapping group: the toolbar wraps on phones, and the
+                  two selection buttons are halves of one control -- letting the
+                  wrap split them put Select All and Select None on different
+                  rows. */}
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={handleSelectAll}>
+                  {t('list.selectAll')}
+                </Button>
+                <Button variant="outline" size="sm" onClick={handleSelectNone}>
+                  {t('list.selectNone')}
+                </Button>
+              </div>
               <Button size="sm" onClick={transactionModal.openCreate}>
                 {t('list.addTransaction')}
               </Button>

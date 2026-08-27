@@ -128,7 +128,8 @@
     "backToReports": "रिपोर्ट पर वापस जाएँ",
     "switchReport": "किसी दूसरी रिपोर्ट पर जाएँ",
     "switchPlaceholder": "रिपोर्ट छाँटें...",
-    "switchNoMatches": "कोई रिपोर्ट मेल नहीं खाती"
+    "switchNoMatches": "कोई रिपोर्ट मेल नहीं खाती",
+    "favourites": "पसंदीदा"
   },
   "reportPage": {
     "notFound": "रिपोर्ट नहीं मिली",
@@ -437,6 +438,7 @@
     "currentBalance": "वर्तमान शेष",
     "principalPaid": "मूलधन भुगतान",
     "estTotalInterest": "अनुमानित कुल ब्याज",
+    "interestOverProjection": "अनुमानित अवधि का ब्याज",
     "interestPaid": "ब्याज भुगतान",
     "progress": "प्रगति",
     "estPayoff": "अनुमानित भुगतान",
@@ -807,6 +809,7 @@
     "originalAmount": "मूल राशि",
     "interestRate": "ब्याज दर",
     "estTotalInterest": "अनुमानित कुल ब्याज",
+    "interestOverProjection": "अनुमानित अवधि का ब्याज",
     "totalInterestPaid": "कुल ब्याज भुगतान",
     "paymentsMade": "किए गए भुगतान",
     "estPayoff": "अनुमानित भुगतान",
@@ -839,7 +842,8 @@
     "typeLineOfCredit": "ऋण-सीमा",
     "typeLoan": "ऋण",
     "typeMortgage": "बंधक",
-    "pdfSubtitlePaymentsSummary": "{count} भुगतान किए गए, {interest} कुल ब्याज"
+    "pdfSubtitlePaymentsSummary": "{count} भुगतान किए गए, {interest} कुल ब्याज",
+    "pdfSubtitlePaymentsProjection": "{count} भुगतान किए गए, प्रक्षेपण अवधि में {interest} ब्याज"
   },
   "monteCarlo": {
     "toasts": {
@@ -1548,12 +1552,16 @@
     "csvColBillName": "बिल नाम",
     "csvColDueDate": "देय तिथि",
     "csvColAmount": "राशि",
+    "csvColCurrency": "मुद्रा",
     "csvColFrequency": "आवृत्ति",
     "csvColAccount": "खाता",
     "csvColStatus": "स्थिति",
     "csvStatusOverdue": "अतिदेय",
     "csvStatusAuto": "स्वतः",
     "csvStatusManual": "मैन्युअल",
+    "amountUnavailable": "उपलब्ध नहीं",
+    "occurrencesUnavailable": "अनुमानित घटनाएं लोड नहीं हो सकीं, इसलिए नीचे कैलेंडर और राशियां उपलब्ध नहीं हैं। आपके बिल स्वयं प्रभावित नहीं हुए हैं।",
+    "csvAmountUnavailable": "उपलब्ध नहीं (कोई वर्तमान विनिमय दर नहीं)",
     "pdfTitle": "आगामी बिल रिपोर्ट",
     "pdfSubtitle": "{month} | {count} सक्रिय बिल",
     "pdfActiveBills": "सक्रिय बिल",

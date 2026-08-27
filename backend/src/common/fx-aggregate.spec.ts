@@ -112,6 +112,42 @@ describe("FxAggregate", () => {
     expect(agg.isComplete).toBe(true);
   });
 
+  describe("a component whose value is unknown for no nameable pair", () => {
+    it("withholds the total without blaming a currency", () => {
+      const agg = new FxAggregate();
+      agg.add(500, "EUR", "EUR");
+      agg.addUnknown();
+
+      expect(agg.total).toBeNull();
+      expect(agg.knownSubtotal).toBe(500);
+      // Naming a pair here would send the reader to refresh a rate that exists:
+      // the component is unknown in every currency.
+      expect(agg.missingPairs).toEqual([]);
+      expect(agg.unknownCount).toBe(1);
+      expect(agg.isComplete).toBe(false);
+    });
+
+    it("carries through merge", () => {
+      const a = new FxAggregate();
+      const b = new FxAggregate();
+      a.addConverted(100);
+      b.addUnknown();
+      a.merge(b);
+
+      expect(a.total).toBeNull();
+      expect(a.knownSubtotal).toBe(100);
+      expect(a.unknownCount).toBe(1);
+    });
+
+    it("leaves a total with nothing missing complete", () => {
+      const agg = new FxAggregate();
+      agg.addConverted(100);
+      expect(agg.unknownCount).toBe(0);
+      expect(agg.isComplete).toBe(true);
+      expect(agg.total).toBe(100);
+    });
+  });
+
   it("accumulates money without floating-point drift (CLAUDE.md Financial Math)", () => {
     // 0.1 + 0.1 + 0.1 === 0.30000000000000004 in bare float addition; the
     // accumulator must fold through integer ten-thousandths instead.

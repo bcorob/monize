@@ -210,6 +210,7 @@
     "frequencyOptions": {
       "weekly": "每周",
       "biweekly": "每两周",
+      "semiMonthly": "每月两次",
       "monthly": "每月",
       "quarterly": "每季度",
       "yearly": "每年"
@@ -308,12 +309,13 @@
     "previewFirstInterest": "首期利息：",
     "previewTotalPayments": "还款总次数：",
     "previewTotalInterest": "利息总额：",
+    "previewFinalPayment": "最后一期还款：",
     "previewPayoffDate": "预计还清日期：",
     "previewNA": "不适用",
     "calculatingPreview": "正在计算预览...",
     "frequencyOptions": {
       "monthly": "每月",
-      "semiMonthly": "每半月（1日和15日）",
+      "semiMonthly": "每月两次（15 日与月末）",
       "biweekly": "每两周",
       "acceleratedBiweekly": "加速双周还款",
       "weekly": "每周",
@@ -367,6 +369,7 @@
       "WEEKLY": "每周",
       "BIWEEKLY": "每两周",
       "SEMI_MONTHLY": "每月两次",
+      "SEMIMONTHLY": "每月两次",
       "MONTHLY": "每月",
       "QUARTERLY": "每季度",
       "YEARLY": "每年",
@@ -436,7 +439,8 @@
         "effect": "→ 节省 {interest},还清 {date}",
         "alreadyMet": "无需任何额外还款即已达成。",
         "unreachableInterest": "无法达成——即使非常大的额外还款也无法节省这么多利息。",
-        "unreachableDate": "无法达成——该月份早于最早可能的还清时间。"
+        "unreachableDate": "无法达成——该月份早于最早可能的还清时间。",
+        "baselineIncomplete": "该贷款在预测期内无法还清，因此没有可用于反推的利息总额。"
       },
       "simulationTypeLabel": "模拟类型",
       "overpaymentAmount": "额外还款金额",
@@ -463,6 +467,7 @@
       "interestSaved": "节省的利息",
       "totalExtraContributed": "额外还款总额",
       "beyondProjection": "超出预测范围",
+      "unknown": "未知",
       "newInstallment": "新还款额",
       "installmentDrop": "{payment} (−{reduction})",
       "monthlyPayment": "每月还款",
@@ -505,7 +510,9 @@
       "colOverpayment": "额外还款",
       "overpaymentWithFrequency": "{amount} ({frequency})",
       "loadAria": "加载方案“{name}”",
-      "budgetSummary": "预算 {amount}/月"
+      "budgetSummary": "预算 {amount}/月",
+      "chartExcludedUnknown": "{count, plural, other {有 # 个方案未显示：其节省的利息未知。}}",
+      "chartNeedsTwoKnown": "对比图表需要至少两个已知节省利息的方案。"
     },
     "scenarioChart": {
       "title": "方案对比",

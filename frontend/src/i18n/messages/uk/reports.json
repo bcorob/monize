@@ -128,7 +128,8 @@
     "backToReports": "Назад до звітів",
     "switchReport": "Перейти до іншого звіту",
     "switchPlaceholder": "Фільтр звітів...",
-    "switchNoMatches": "Немає відповідних звітів"
+    "switchNoMatches": "Немає відповідних звітів",
+    "favourites": "Обране"
   },
   "reportPage": {
     "notFound": "Звіт не знайдено",
@@ -437,6 +438,7 @@
     "currentBalance": "Поточний баланс",
     "principalPaid": "Сплачено основного боргу",
     "estTotalInterest": "Орієнт. загальні відсотки",
+    "interestOverProjection": "Відсотки за прогнозний період",
     "interestPaid": "Сплачено відсотків",
     "progress": "Прогрес",
     "estPayoff": "Орієнт. погашення",
@@ -807,6 +809,7 @@
     "originalAmount": "Початкова сума",
     "interestRate": "Відсоткова ставка",
     "estTotalInterest": "Орієнт. загальні відсотки",
+    "interestOverProjection": "Відсотки за прогнозний період",
     "totalInterestPaid": "Усього сплачено відсотків",
     "paymentsMade": "Здійснено платежів",
     "estPayoff": "Орієнт. погашення",
@@ -839,7 +842,8 @@
     "typeLineOfCredit": "Кредитна лінія",
     "typeLoan": "Позика",
     "typeMortgage": "Іпотека",
-    "pdfSubtitlePaymentsSummary": "{count} платежів здійснено, {interest} загальних відсотків"
+    "pdfSubtitlePaymentsSummary": "{count} платежів здійснено, {interest} загальних відсотків",
+    "pdfSubtitlePaymentsProjection": "Внесено платежів: {count}, відсотки за період прогнозу: {interest}"
   },
   "monteCarlo": {
     "toasts": {
@@ -1548,12 +1552,16 @@
     "csvColBillName": "Назва рахунку",
     "csvColDueDate": "Термін оплати",
     "csvColAmount": "Сума",
+    "csvColCurrency": "Валюта",
     "csvColFrequency": "Частота",
     "csvColAccount": "Рахунок",
     "csvColStatus": "Статус",
     "csvStatusOverdue": "Прострочений",
     "csvStatusAuto": "Авто",
     "csvStatusManual": "Вручну",
+    "amountUnavailable": "Недоступно",
+    "occurrencesUnavailable": "Не вдалося завантажити прогнозовані події, тому календар і суми нижче недоступні. Самі рахунки при цьому не змінилися.",
+    "csvAmountUnavailable": "Недоступно (немає поточного курсу обміну)",
     "pdfTitle": "Звіт про майбутні рахунки",
     "pdfSubtitle": "{month} | {count} активних рахунків",
     "pdfActiveBills": "Активні рахунки",

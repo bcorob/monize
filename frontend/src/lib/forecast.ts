@@ -311,6 +311,22 @@ function isTransfer(transaction: ScheduledTransaction): boolean {
  * so the server sends one recomputed effective total (`investmentForecastAmount`)
  * rather than a rate.
  */
+/**
+ * Why this file still combines rate x amount itself, when the server sends one
+ * effective amount (issue #1247).
+ *
+ * `effectiveAmount` is *defined* as what this projection computes: the backend's
+ * `baseEffectiveAmount` applies the same `investmentForecastExchangeRate` to the
+ * same stored scalar, and the split case reads the same
+ * `investmentForecastAmount`. What the server cannot express in that one field is
+ * the rest of what a cash-flow projection needs -- remapping the schedule onto
+ * the settlement cash account, converting each future override, and withholding a
+ * cumulative series whole when any occurrence is unknown -- so the projection
+ * keeps its own pass over those fields and every *other* consumer reads
+ * `effectiveAmount` instead of re-deriving them (see
+ * `lib/scheduled-effective-amount.ts`). If you change how either side folds a
+ * rate into an amount, change both: the two answering differently is the defect.
+ */
 function hasEmbeddedInvestmentSplits(transaction: ScheduledTransaction): boolean {
   return (
     transaction.isSplit === true &&

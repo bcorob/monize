@@ -210,6 +210,7 @@
     "frequencyOptions": {
       "weekly": "Semanal",
       "biweekly": "Cada 2 Semanas",
+      "semiMonthly": "Quincenal (2 al mes)",
       "monthly": "Mensual",
       "quarterly": "Trimestral",
       "yearly": "Anual"
@@ -308,12 +309,13 @@
     "previewFirstInterest": "Interés del Primer Pago:",
     "previewTotalPayments": "Total de Pagos:",
     "previewTotalInterest": "Total de Interés:",
+    "previewFinalPayment": "Pago final:",
     "previewPayoffDate": "Fecha Est. de Liquidación:",
     "previewNA": "N/A",
     "calculatingPreview": "Calculando vista previa...",
     "frequencyOptions": {
       "monthly": "Mensual",
-      "semiMonthly": "Quincenal (1 y 15)",
+      "semiMonthly": "Quincenal (día 15 y fin de mes)",
       "biweekly": "Quincenal (cada 2 semanas)",
       "acceleratedBiweekly": "Quincenal Acelerado",
       "weekly": "Semanal",
@@ -367,6 +369,7 @@
       "WEEKLY": "Semanal",
       "BIWEEKLY": "Quincenal",
       "SEMI_MONTHLY": "Bimensual",
+      "SEMIMONTHLY": "Bimensual",
       "MONTHLY": "Mensual",
       "QUARTERLY": "Trimestral",
       "YEARLY": "Anual",
@@ -436,7 +439,8 @@
         "effect": "→ ahorra {interest}, liquidación {date}",
         "alreadyMet": "Ya se cumple sin ningún pago extra.",
         "unreachableInterest": "Inalcanzable: ni siquiera un pago extra muy grande puede ahorrar tantos intereses.",
-        "unreachableDate": "Inalcanzable: ese mes es anterior a la liquidación más temprana posible."
+        "unreachableDate": "Inalcanzable: ese mes es anterior a la liquidación más temprana posible.",
+        "baselineIncomplete": "Este préstamo no se liquida dentro del periodo proyectado, por lo que no hay un total de intereses del que partir."
       },
       "simulationTypeLabel": "Tipo de simulación",
       "overpaymentAmount": "Importe de amortización",
@@ -463,6 +467,7 @@
       "interestSaved": "Intereses ahorrados",
       "totalExtraContributed": "Total adicional aportado",
       "beyondProjection": "Más allá de la proyección",
+      "unknown": "Desconocido",
       "newInstallment": "Nueva cuota",
       "installmentDrop": "{payment} (−{reduction})",
       "monthlyPayment": "Cuota mensual",
@@ -505,7 +510,9 @@
       "colOverpayment": "Amortización",
       "overpaymentWithFrequency": "{amount} ({frequency})",
       "loadAria": "Cargar escenario «{name}»",
-      "budgetSummary": "Presupuesto {amount}/mes"
+      "budgetSummary": "Presupuesto {amount}/mes",
+      "chartExcludedUnknown": "{count, plural, one {# escenario no se muestra: su ahorro de intereses es desconocido.} other {# escenarios no se muestran: su ahorro de intereses es desconocido.}}",
+      "chartNeedsTwoKnown": "El gráfico de comparación necesita al menos dos escenarios con un ahorro de intereses conocido."
     },
     "scenarioChart": {
       "title": "Comparación de escenarios",

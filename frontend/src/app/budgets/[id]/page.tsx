@@ -266,7 +266,13 @@ function BudgetDetailContent() {
             dailySpending={dailySpending}
             trendData={trendData}
             healthScore={healthScore}
-            formatCurrency={(amount) => formatCurrency(amount, currencyCode)}
+            displayCurrency={currencyCode}
+            // A bare amount is the budget's currency; a row that knows its own
+            // currency says so, because an occurrence's amount is in the
+            // occurrence's currency (issue #1247).
+            formatCurrency={(amount, code) =>
+              formatCurrency(amount, code ?? currencyCode)
+            }
             onCategoryClick={handleCategoryClick}
           />
         )}

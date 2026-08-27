@@ -7,6 +7,7 @@ import { UserPreference } from "../../users/entities/user-preference.entity";
 import { QUERY_SYSTEM_PROMPT } from "./prompt-templates";
 import { aiLanguageInstruction } from "./language-directive";
 import { sanitizePromptValue } from "../../common/sanitization.util";
+import { preferredCurrency } from "../../common/default-currency.util";
 
 interface CategoryNode {
   id: string;
@@ -34,7 +35,7 @@ export class FinancialContextBuilder {
       ),
     ]);
 
-    const currency = preferences?.defaultCurrency || "USD";
+    const currency = preferredCurrency(preferences);
     const today = new Date().toISOString().substring(0, 10);
 
     // LLM06-F1: Only include account names and types, not balances.

@@ -237,6 +237,12 @@
     "explanation": "Tổng một phần: không thể bao gồm {count, plural, other {# khoản}}, vì vậy số liệu hiển thị đã loại trừ chúng. Không có tỷ giá sang {displayCurrency} cho {currencies}.",
     "explanationExcluded": "Tổng một phần: không thể tính được {count, plural, other {# khoản}}, vì vậy số liệu hiển thị đã loại trừ chúng."
   },
+  "unknownAmount": {
+    "marker": "—",
+    "srLabel": "Không có số tiền",
+    "scheduledFx": "Không thể xác định số tiền hiện tại: không có tỷ giá cho cặp tiền tệ thanh toán của mục đã lên lịch này. Số tiền đã lưu được tính theo tỷ giá cũ nên không được hiển thị.",
+    "displayFx": "Không thể hiển thị số tiền này ở đây: giá trị đã biết, nhưng không có tỷ giá để chuyển đổi sang đơn vị tiền tệ của tổng này. Hãy làm mới tỷ giá trên trang Tiền tệ."
+  },
   "density": {
     "title": "Chuyển đổi mật độ hàng",
     "normal": "Bình thường",

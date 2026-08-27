@@ -123,6 +123,10 @@
       "status": "Status",
       "actions": "Acties"
     },
+    "dateDisplay": {
+      "toggleLabel": "Jaar verbergen",
+      "toggleTitle": "Het jaar uit de datums weglaten zodat er meer van de begunstigde past"
+    },
     "attachmentsCount": "{count, plural, one {# bijlage} other {# bijlagen}}",
     "today": "Vandaag",
     "export": {

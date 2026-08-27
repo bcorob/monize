@@ -37,6 +37,7 @@ function createTransaction(id: string): Transaction {
 }
 
 const emptyFilters: BulkUpdateFilters = {};
+const EMPTY_KEY = JSON.stringify(emptyFilters);
 
 describe('useTransactionSelection', () => {
   const transactions = [
@@ -47,7 +48,7 @@ describe('useTransactionSelection', () => {
 
   it('starts with no selection', () => {
     const { result } = renderHook(() =>
-      useTransactionSelection(transactions, 100, emptyFilters)
+      useTransactionSelection(transactions, 100, emptyFilters, EMPTY_KEY)
     );
 
     expect(result.current.selectedIds.size).toBe(0);
@@ -59,7 +60,7 @@ describe('useTransactionSelection', () => {
 
   it('toggleTransaction selects and deselects individual transactions', () => {
     const { result } = renderHook(() =>
-      useTransactionSelection(transactions, 100, emptyFilters)
+      useTransactionSelection(transactions, 100, emptyFilters, EMPTY_KEY)
     );
 
     act(() => result.current.toggleTransaction('tx-1'));
@@ -74,7 +75,7 @@ describe('useTransactionSelection', () => {
 
   it('toggleAllOnPage selects all transactions on the current page', () => {
     const { result } = renderHook(() =>
-      useTransactionSelection(transactions, 100, emptyFilters)
+      useTransactionSelection(transactions, 100, emptyFilters, EMPTY_KEY)
     );
 
     act(() => result.current.toggleAllOnPage());
@@ -84,7 +85,7 @@ describe('useTransactionSelection', () => {
 
   it('toggleAllOnPage deselects all when all are selected', () => {
     const { result } = renderHook(() =>
-      useTransactionSelection(transactions, 100, emptyFilters)
+      useTransactionSelection(transactions, 100, emptyFilters, EMPTY_KEY)
     );
 
     act(() => result.current.toggleAllOnPage());
@@ -97,7 +98,7 @@ describe('useTransactionSelection', () => {
 
   it('selectAllMatchingTransactions enables filter-based selection', () => {
     const { result } = renderHook(() =>
-      useTransactionSelection(transactions, 100, emptyFilters)
+      useTransactionSelection(transactions, 100, emptyFilters, EMPTY_KEY)
     );
 
     act(() => result.current.selectAllMatchingTransactions());
@@ -109,7 +110,7 @@ describe('useTransactionSelection', () => {
 
   it('clearSelection resets everything', () => {
     const { result } = renderHook(() =>
-      useTransactionSelection(transactions, 100, emptyFilters)
+      useTransactionSelection(transactions, 100, emptyFilters, EMPTY_KEY)
     );
 
     act(() => result.current.selectAllMatchingTransactions());
@@ -123,7 +124,7 @@ describe('useTransactionSelection', () => {
 
   it('toggleTransaction excludes a single id while keeping selectAllMatching active', () => {
     const { result } = renderHook(() =>
-      useTransactionSelection(transactions, 100, emptyFilters)
+      useTransactionSelection(transactions, 100, emptyFilters, EMPTY_KEY)
     );
 
     act(() => result.current.selectAllMatchingTransactions());
@@ -149,7 +150,7 @@ describe('useTransactionSelection', () => {
     const page2 = [createTransaction('tx-3'), createTransaction('tx-4')];
 
     const { result, rerender } = renderHook(
-      ({ txs }) => useTransactionSelection(txs, 100, emptyFilters),
+      ({ txs }) => useTransactionSelection(txs, 100, emptyFilters, EMPTY_KEY),
       { initialProps: { txs: page1 } }
     );
 
@@ -168,7 +169,7 @@ describe('useTransactionSelection', () => {
     const page2 = [createTransaction('tx-3'), createTransaction('tx-4')];
 
     const { result, rerender } = renderHook(
-      ({ txs }) => useTransactionSelection(txs, 100, emptyFilters),
+      ({ txs }) => useTransactionSelection(txs, 100, emptyFilters, EMPTY_KEY),
       { initialProps: { txs: page1 } }
     );
 
@@ -190,7 +191,7 @@ describe('useTransactionSelection', () => {
 
   it('toggleAllOnPage excludes all current page ids in selectAllMatching mode', () => {
     const { result } = renderHook(() =>
-      useTransactionSelection(transactions, 100, emptyFilters)
+      useTransactionSelection(transactions, 100, emptyFilters, EMPTY_KEY)
     );
 
     act(() => result.current.selectAllMatchingTransactions());
@@ -211,7 +212,7 @@ describe('useTransactionSelection', () => {
 
   it('clearSelection clears excludedIds too', () => {
     const { result } = renderHook(() =>
-      useTransactionSelection(transactions, 100, emptyFilters)
+      useTransactionSelection(transactions, 100, emptyFilters, EMPTY_KEY)
     );
 
     act(() => result.current.selectAllMatchingTransactions());
@@ -228,7 +229,7 @@ describe('useTransactionSelection', () => {
     const filters2: BulkUpdateFilters = { search: 'bar' };
 
     const { result, rerender } = renderHook(
-      ({ filters }) => useTransactionSelection(transactions, 100, filters),
+      ({ filters }) => useTransactionSelection(transactions, 100, filters, JSON.stringify(filters)),
       { initialProps: { filters: filters1 } }
     );
 
@@ -240,10 +241,69 @@ describe('useTransactionSelection', () => {
     expect(result.current.selectAllMatching).toBe(false);
   });
 
+  // Regression: CI run #2873. Both of these cleared the selection because the
+  // page finished loading something, not because the user did anything: the
+  // click landed while a request was still in flight and the response wiped it
+  // on arrival. `page.test.tsx` holds the same race end to end.
+  describe('a background load does not drop the selection', () => {
+    it('keeps a selection made before the first page of rows arrives', () => {
+      const { result, rerender } = renderHook(
+        ({ txs }) => useTransactionSelection(txs, 100, emptyFilters, EMPTY_KEY),
+        { initialProps: { txs: [] as Transaction[] } }
+      );
+
+      act(() => result.current.toggleTransaction('tx-1'));
+      expect(result.current.selectionCount).toBe(1);
+
+      // The initial transactions request resolves after the click.
+      rerender({ txs: transactions });
+
+      expect(result.current.selectionCount).toBe(1);
+      expect(result.current.isTransactionSelected('tx-1')).toBe(true);
+    });
+
+    it('keeps a selection when the resolved account scope arrives', () => {
+      // `currentFilters` gains the visible-account fallback once the accounts
+      // request lands; the user's own criteria (the key) never changed.
+      const { result, rerender } = renderHook(
+        ({ filters }) => useTransactionSelection(transactions, 100, filters, EMPTY_KEY),
+        { initialProps: { filters: emptyFilters } }
+      );
+
+      act(() => result.current.toggleTransaction('tx-1'));
+      expect(result.current.selectionCount).toBe(1);
+
+      rerender({ filters: { accountIds: ['acc-1', 'acc-2'] } });
+
+      expect(result.current.selectionCount).toBe(1);
+      expect(result.current.isTransactionSelected('tx-1')).toBe(true);
+      // The payload still carries the resolved scope it must send.
+      act(() => result.current.selectAllMatchingTransactions());
+      expect(result.current.buildSelectionPayload().filters).toEqual({
+        accountIds: ['acc-1', 'acc-2'],
+      });
+    });
+
+    it('still clears when a real page change follows the first load', () => {
+      const page2 = [createTransaction('tx-4'), createTransaction('tx-5')];
+      const { result, rerender } = renderHook(
+        ({ txs }) => useTransactionSelection(txs, 100, emptyFilters, EMPTY_KEY),
+        { initialProps: { txs: [] as Transaction[] } }
+      );
+
+      rerender({ txs: transactions });
+      act(() => result.current.toggleTransaction('tx-1'));
+      expect(result.current.selectionCount).toBe(1);
+
+      rerender({ txs: page2 });
+      expect(result.current.selectionCount).toBe(0);
+    });
+  });
+
   describe('buildSelectionPayload', () => {
     it('returns ids mode when using individual selection', () => {
       const { result } = renderHook(() =>
-        useTransactionSelection(transactions, 100, emptyFilters)
+        useTransactionSelection(transactions, 100, emptyFilters, EMPTY_KEY)
       );
 
       act(() => result.current.toggleTransaction('tx-1'));
@@ -259,7 +319,7 @@ describe('useTransactionSelection', () => {
     it('returns filter mode when selectAllMatching is active', () => {
       const filters: BulkUpdateFilters = { accountIds: ['acc-1'], search: 'test' };
       const { result } = renderHook(() =>
-        useTransactionSelection(transactions, 100, filters)
+        useTransactionSelection(transactions, 100, filters, EMPTY_KEY)
       );
 
       act(() => result.current.selectAllMatchingTransactions());
@@ -274,7 +334,7 @@ describe('useTransactionSelection', () => {
     it('includes excludedIds in filter-mode payload', () => {
       const filters: BulkUpdateFilters = { accountIds: ['acc-1'] };
       const { result } = renderHook(() =>
-        useTransactionSelection(transactions, 100, filters)
+        useTransactionSelection(transactions, 100, filters, EMPTY_KEY)
       );
 
       act(() => result.current.selectAllMatchingTransactions());

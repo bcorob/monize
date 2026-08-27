@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import type { ReactNode } from 'react';
 import { render, screen, fireEvent, act, waitFor } from '@/test/render';
 import { captureSvgAsImage } from '@/lib/pdf-export-charts';
-import { ScenarioComparisonChart, ScenarioOutcome } from './ScenarioComparisonChart';
+import { ScenarioComparisonChart, ScenarioChartOutcome } from './ScenarioComparisonChart';
 
 vi.mock('@/lib/pdf-export-charts', () => ({
   captureSvgAsImage: vi.fn(),
@@ -77,7 +77,7 @@ vi.mock('recharts', () => ({
   ),
 }));
 
-const outcomes: ScenarioOutcome[] = [
+const outcomes: ScenarioChartOutcome[] = [
   {
     id: 's1',
     name: 'Aggressive',

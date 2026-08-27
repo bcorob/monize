@@ -27,7 +27,6 @@
     "manualTitle": "मैन्युअल पोस्टिंग आवश्यक है",
     "negativeBalanceWarning": "इस लेनदेन से खाते का शेष शून्य से नीचे चला जाएगा",
     "viewAll": "सभी बिल और जमा देखें",
-    "totalDue": "कुल देय",
     "totalIncoming": "कुल आने वाला",
     "moreItems": "+{count} और",
     "overdue": "अतिदेय",
@@ -38,7 +37,8 @@
       "bill": "बिल",
       "deposit": "जमा",
       "transfer": "स्थानांतरण",
-      "reminder": "अनुस्मारक"
+      "reminder": "अनुस्मारक",
+      "unknown": "अज्ञात"
     }
   },
   "gettingStarted": {

@@ -1,10 +1,12 @@
 import { Account } from '@/types/account';
+import { parseLocalDate } from '@/lib/utils';
 import { LoanHistoryResult } from '@/lib/loan-history';
 import {
   LoanScheduleInput,
   LoanScheduleResult,
   RateTimelineRow,
   ScheduleFrequency,
+  HARD_MAX_PAYMENTS,
   buildRateTimeline,
   calculateMortgagePaymentAmount,
   firstPeriodInterest,
@@ -32,8 +34,20 @@ export interface PastImpactResult {
   originalPayoffDate: string | null;
   /** Projected payoff, or the final actual payment when already paid off */
   currentPayoffDate: string | null;
-  monthsAlreadySaved: number;
-  interestAlreadySaved: number;
+  /**
+   * Months the overpayments have already saved, or `null` when either payoff
+   * date is unknown -- `monthsBetween` returns 0 for a missing date, which reads
+   * as "the overpayments bought no time" rather than "not known".
+   */
+  monthsAlreadySaved: number | null;
+  /**
+   * Interest the overpayments have already saved against the original
+   * contractual schedule, or `null` when either schedule stopped at its
+   * projection horizon instead of paying off. Both sides are lifetime figures,
+   * so a horizon subtotal on either side makes the difference unknown rather
+   * than small.
+   */
+  interestAlreadySaved: number | null;
   /**
    * Total extra principal already paid: the principal from payments recognized
    * as overpayments (by the loan's overpayment category or memo). Matches the
@@ -43,9 +57,12 @@ export interface PastImpactResult {
   extraPrincipalPaid: number;
 }
 
-/** Original schedules can be longer than the reports' 600-payment cap
- * (e.g. a 25-year weekly mortgage), so give them room to complete. */
-const ORIGINAL_SCHEDULE_MAX_PAYMENTS = 10000;
+/** An original schedule runs from origination rather than from today's balance,
+ * so it needs room beyond even the engine's default horizon (a 30-year weekly
+ * mortgage already carries 1560 payments before any historical rate step
+ * stretches it). Referencing the engine's own ceiling rather than repeating the
+ * number, so the two cannot disagree. */
+const ORIGINAL_SCHEDULE_MAX_PAYMENTS = HARD_MAX_PAYMENTS;
 
 /**
  * Compute the past impact of overpayments, or null when the account lacks the
@@ -169,7 +186,7 @@ export function computePastImpact(
     frequency,
     isCanadian,
     isVariableRate,
-    firstPaymentDate: parseIsoDate(startDate),
+    firstPaymentDate: parseLocalDate(startDate),
   };
   // Accelerated payments (monthly / 2 or / 4) are larger than the amortizing
   // installment, so the contractual loan pays off before its nominal term.
@@ -224,14 +241,32 @@ export function computePastImpact(
     ? lastActualPaymentDate
     : (currentProjection?.payoffDate ?? null);
 
-  const projectedRemainingInterest = currentProjection?.totalInterest ?? 0;
-  const interestAlreadySaved = Math.max(
-    0,
-    round2(
-      originalSchedule.totalInterest -
-        (history.cumulativeInterest + projectedRemainingInterest),
-    ),
-  );
+  // Both sides of the comparison are lifetime interest, so both have to be
+  // known: `totalInterest` on a schedule that stopped at its projection horizon
+  // is the interest over that horizon, and subtracting it would report a saving
+  // the loan has not made. A loan already paid off contributes a known zero of
+  // remaining interest rather than an unknown (there is nothing left to
+  // project), which is why the settled case is not gated on a projection.
+  //
+  // The remaining interest is resolved to `null` rather than to a `?? 0`
+  // fallback, so the subtraction below cannot compile without the gate. An
+  // unreachable "unknown means zero" branch is still the defect waiting for the
+  // next edit of the condition.
+  const projectedRemainingInterest: number | null = isPaidOff
+    ? 0
+    : currentProjection?.paidOff
+      ? currentProjection.totalInterest
+      : null;
+  const interestAlreadySaved =
+    originalSchedule.paidOff && projectedRemainingInterest !== null
+      ? Math.max(
+          0,
+          round2(
+            originalSchedule.totalInterest -
+              (history.cumulativeInterest + projectedRemainingInterest),
+          ),
+        )
+      : null;
 
   // Extra principal already paid = the principal from payments recognized as
   // overpayments (by the loan's overpayment category or memo). This is the sum
@@ -247,16 +282,18 @@ export function computePastImpact(
     currentProjection,
     originalPayoffDate: originalSchedule.payoffDate,
     currentPayoffDate,
-    monthsAlreadySaved: Math.max(
-      0,
-      monthsBetween(currentPayoffDate, originalSchedule.payoffDate),
-    ),
+    // The sibling of interestAlreadySaved: both compare the original schedule
+    // against where the loan now ends, so both need both ends known. A schedule
+    // that stopped at its projection horizon has no payoff date at all.
+    monthsAlreadySaved:
+      currentPayoffDate != null && originalSchedule.payoffDate != null
+        ? Math.max(
+            0,
+            monthsBetween(currentPayoffDate, originalSchedule.payoffDate),
+          )
+        : null,
     interestAlreadySaved,
     extraPrincipalPaid,
   };
 }
 
-function parseIsoDate(isoDate: string): Date {
-  const [year, month, day] = isoDate.split('-').map(Number);
-  return new Date(year, month - 1, day);
-}

@@ -6,14 +6,22 @@ import {
 } from "@nestjs/common";
 import { DataSource } from "typeorm";
 import { ScheduledTransactionsService } from "./scheduled-transactions.service";
+import { ScheduledEffectiveAmountService } from "./scheduled-effective-amount.service";
+import { ScheduledOccurrenceService } from "./scheduled-occurrence.service";
 import { ScheduledTransaction } from "./entities/scheduled-transaction.entity";
 import { ScheduledTransactionSplit } from "./entities/scheduled-transaction-split.entity";
 import { ScheduledTransactionOverride } from "./entities/scheduled-transaction-override.entity";
 import { Account } from "../accounts/entities/account.entity";
 import { Tag } from "../tags/entities/tag.entity";
+import { UserPreference } from "../users/entities/user-preference.entity";
+import { FALLBACK_DEFAULT_CURRENCY } from "../common/default-currency.util";
 import { AccountsService } from "../accounts/accounts.service";
 import { TransactionsService } from "../transactions/transactions.service";
 import { InvestmentTransactionsService } from "../securities/investment-transactions.service";
+import {
+  createInvestmentFxMock,
+  InvestmentFxMock,
+} from "../test-helpers/investment-fx-testing";
 import { ScheduledTransactionOverrideService } from "./scheduled-transaction-override.service";
 import { ScheduledTransactionLoanService } from "./scheduled-transaction-loan.service";
 import { ActionHistoryService } from "../action-history/action-history.service";
@@ -35,9 +43,15 @@ describe("ScheduledTransactionsService", () => {
   let overridesRepo: Record<string, jest.Mock>;
   let accountsRepo: Record<string, jest.Mock>;
   let tagRepo: Record<string, jest.Mock>;
+  let preferencesRepo: Record<string, jest.Mock>;
   let accountsService: Record<string, jest.Mock>;
   let transactionsService: Record<string, jest.Mock>;
-  let investmentTransactionsService: Record<string, jest.Mock>;
+  // The FX trio the effective-amount resolver reads, plus the `create` the
+  // posting path calls. Typed, so a return shape the real service cannot
+  // produce is a compile error rather than fiction a test asserts on.
+  let investmentTransactionsService: InvestmentFxMock & {
+    create: jest.Mock;
+  };
   // The withScopedDb manager, exposed under the legacy name so the pre-RLS
   // queryRunner.manager assertions keep reading naturally.
   let mockQueryRunner: Record<string, any>;
@@ -181,16 +195,8 @@ describe("ScheduledTransactionsService", () => {
     };
 
     investmentTransactionsService = {
+      ...createInvestmentFxMock(),
       create: jest.fn().mockResolvedValue({ id: "inv-tx-1" }),
-      // Issue #1167: the settlement currency pair a stored rate is validated
-      // against. Defaults to a same-currency pair (no cross-currency FX); the
-      // provenance tests below override it per case.
-      resolveSettlementCurrencyPair: jest
-        .fn()
-        .mockResolvedValue({ from: "USD", to: "USD" }),
-      // Issue #1167: the forecast rate the read model attaches. Defaults to 1
-      // (same currency); forecast tests override it per case.
-      resolveCashExchangeRateOrNull: jest.fn().mockResolvedValue(1),
     };
 
     mockActionHistoryService = {
@@ -202,12 +208,20 @@ describe("ScheduledTransactionsService", () => {
       getRateForDate: jest.fn().mockResolvedValue(null),
     };
 
+    // The reader's reporting currency, which the AI/MCP rollups convert into.
+    // USD by default so the fixtures' own USD schedules need no rate at all;
+    // a cross-currency test overrides the row or the rate deliberately.
+    preferencesRepo = {
+      findOne: jest.fn().mockResolvedValue({ defaultCurrency: "USD" }),
+    };
+
     const tenantMocks = createScopedDbMocks([
       [ScheduledTransaction, scheduledRepo],
       [ScheduledTransactionSplit, splitsRepo],
       [ScheduledTransactionOverride, overridesRepo],
       [Account, accountsRepo],
       [Tag, tagRepo],
+      [UserPreference, preferencesRepo],
     ]);
     mockDataSource = tenantMocks.dataSource;
     // The timezone fan-out now runs through withScopedDb too, so its raw SQL
@@ -264,6 +278,13 @@ describe("ScheduledTransactionsService", () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ScheduledTransactionsService,
+        // The real resolver, wired to the same mocked InvestmentTransactionsService:
+        // the #1167 FX decisions moved here (issue #1247) and the assertions below
+        // are about those decisions, so a double would test nothing.
+        ScheduledEffectiveAmountService,
+        // Likewise real: occurrence selection (which override governs the
+        // occurrence that is due) is what these assertions are about.
+        ScheduledOccurrenceService,
         { provide: AccountsService, useValue: accountsService },
         { provide: TransactionsService, useValue: transactionsService },
         {
@@ -1045,6 +1066,112 @@ describe("ScheduledTransactionsService", () => {
         investmentTransactionsService.resolveCashExchangeRateOrNull,
       ).not.toHaveBeenCalled();
     });
+
+    // ---- The effective-amount read model (issue #1247) ----
+
+    it("attaches the effective amount an investment schedule would post today", async () => {
+      const st = makeScheduled({
+        amount: -1000,
+        currencyCode: "CAD",
+        isInvestment: true,
+        investmentAction: "BUY" as any,
+        investmentSecurityId: "SEC-1",
+        investmentFundingAccountId: "cash-1",
+        investmentQuantity: 10,
+        investmentPrice: 100,
+        // Pinned at 1.50 while the security was priced in EUR.
+        investmentExchangeRate: 1.5,
+        investmentExchangeRateFromCurrency: "EUR",
+        investmentExchangeRateToCurrency: "CAD",
+      });
+      scheduledRepo.createQueryBuilder.mockReturnValue(mockQueryBuilder([st]));
+      overridesRepo.createQueryBuilder
+        .mockReturnValueOnce(mockQueryBuilder([]))
+        .mockReturnValueOnce(mockQueryBuilder([]));
+      // The security is USD now, and USD -> CAD is 1.35.
+      investmentTransactionsService.resolveSettlementCurrencyPair.mockResolvedValue(
+        { from: "USD", to: "CAD" },
+      );
+      investmentTransactionsService.resolveCashExchangeRateOrNull.mockResolvedValue(
+        1.35,
+      );
+
+      const result = await service.findAll(userId);
+
+      expect(result[0].effectiveAmount).toBe(-1350);
+      // The figure the persisted rate would have given: 11.11% out.
+      expect(result[0].effectiveAmount).not.toBe(-1500);
+      expect(result[0].effectiveAmountComplete).toBe(true);
+      // The settlement currency, not the brokerage account's.
+      expect(result[0].effectiveCurrencyCode).toBe("CAD");
+    });
+
+    it("reports the effective amount as unknown when the current rate is unavailable", async () => {
+      const st = makeScheduled({
+        amount: -1000,
+        isInvestment: true,
+        investmentAction: "BUY" as any,
+        investmentSecurityId: "SEC-1",
+        investmentQuantity: 10,
+        investmentPrice: 100,
+        investmentExchangeRate: 1.5,
+        investmentExchangeRateFromCurrency: "EUR",
+        investmentExchangeRateToCurrency: "CAD",
+      });
+      scheduledRepo.createQueryBuilder.mockReturnValue(mockQueryBuilder([st]));
+      overridesRepo.createQueryBuilder
+        .mockReturnValueOnce(mockQueryBuilder([]))
+        .mockReturnValueOnce(mockQueryBuilder([]));
+      investmentTransactionsService.resolveSettlementCurrencyPair.mockResolvedValue(
+        { from: "USD", to: "CAD" },
+      );
+      investmentTransactionsService.resolveCashExchangeRateOrNull.mockResolvedValue(
+        null,
+      );
+
+      const result = await service.findAll(userId);
+
+      expect(result[0].effectiveAmount).toBeNull();
+      expect(result[0].effectiveAmountComplete).toBe(false);
+      expect(result[0].effectiveAmount).not.toBe(-1500);
+    });
+
+    it("attaches an effective amount to each override it returns", async () => {
+      const st = makeScheduled({ nextDueDate: "2025-02-15", amount: -1200 });
+      scheduledRepo.createQueryBuilder.mockReturnValue(mockQueryBuilder([st]));
+      const nextOverride = {
+        id: "ovr-next",
+        scheduledTransactionId: stId,
+        originalDate: "2025-02-15",
+        overrideDate: "2025-02-18",
+        amount: -1350,
+      };
+      overridesRepo.createQueryBuilder
+        .mockReturnValueOnce(mockQueryBuilder([nextOverride]))
+        .mockReturnValueOnce(mockQueryBuilder([nextOverride]));
+
+      const result = await service.findAll(userId);
+
+      expect(result[0].nextOverride!.effectiveAmount).toBe(-1350);
+      expect(result[0].nextOverride!.effectiveAmountComplete).toBe(true);
+      expect(result[0].futureOverrides![0].effectiveAmount).toBe(-1350);
+      // The base occurrence keeps its own amount, unaffected by the override.
+      expect(result[0].effectiveAmount).toBe(-1200);
+    });
+
+    it("reports a plain schedule's stored amount as the known effective amount", async () => {
+      const st = makeScheduled({ amount: -1200, currencyCode: "USD" });
+      scheduledRepo.createQueryBuilder.mockReturnValue(mockQueryBuilder([st]));
+      overridesRepo.createQueryBuilder
+        .mockReturnValueOnce(mockQueryBuilder([]))
+        .mockReturnValueOnce(mockQueryBuilder([]));
+
+      const result = await service.findAll(userId);
+
+      expect(result[0].effectiveAmount).toBe(-1200);
+      expect(result[0].effectiveAmountComplete).toBe(true);
+      expect(result[0].effectiveCurrencyCode).toBe("USD");
+    });
   });
 
   // ==================== findDue ====================
@@ -1156,6 +1283,349 @@ describe("ScheduledTransactionsService", () => {
       expect(result.totalUpcomingDeposits).toBe(3000);
     });
 
+    it("classifies an item from its occurrence, not the stored parent sign", async () => {
+      // A mixed-sign split parent: an ordinary -1200 line beside an embedded
+      // SELL of 10 x 100 whose stored pair is stale. The line re-prices at 1.35
+      // to +1350, so the occurrence is a 150 deposit while the parent still
+      // reads -200 -- and only one of those two answers is what will post.
+      investmentTransactionsService.resolveSettlementCurrencyPair.mockResolvedValue(
+        { from: "EUR", to: "USD" },
+      );
+      investmentTransactionsService.resolveCashExchangeRateOrNull.mockResolvedValue(
+        1.35,
+      );
+      const rows = [
+        makeScheduled({
+          id: "s-split",
+          name: "Sell 10 shares, pay the fee",
+          amount: -200,
+          isSplit: true,
+          splits: [
+            { id: "sp-1", kind: "category", amount: -1200 },
+            {
+              id: "sp-2",
+              kind: "investment",
+              amount: 1000,
+              investmentAction: "SELL",
+              investmentSecurityId: "SEC-1",
+              investmentQuantity: 10,
+              investmentPrice: 100,
+              investmentCommission: 0,
+              investmentExchangeRate: 1,
+              investmentExchangeRateFromCurrency: "CAD",
+              investmentExchangeRateToCurrency: "USD",
+            },
+          ] as never,
+        }),
+      ];
+      scheduledRepo.createQueryBuilder.mockReturnValue(mockQueryBuilder(rows));
+
+      const result = await service.getLlmUpcomingBillsAndDeposits(userId);
+
+      expect(result.items[0].amount).toBe(150);
+      expect(result.items[0].kind).toBe("deposit");
+      expect(result.totalUpcomingDeposits).toBe(150);
+      expect(result.totalUpcomingBills).toBe(0);
+    });
+
+    it("keeps an unknown-direction occurrence in the rollups even under a kind filter", async () => {
+      // A mixed-sign split whose investment line cannot be priced. Asked for
+      // bills, the caller must not be handed a complete-looking bills total: the
+      // item could be one, and the tool description promises exactly this.
+      investmentTransactionsService.resolveSettlementCurrencyPair.mockResolvedValue(
+        { from: "EUR", to: "USD" },
+      );
+      investmentTransactionsService.resolveCashExchangeRateOrNull.mockResolvedValue(
+        null,
+      );
+      const rows = [
+        makeScheduled({ id: "s-bill", name: "Rent", amount: -1200 }),
+        makeScheduled({
+          id: "s-split",
+          name: "Sell shares, pay the fee",
+          amount: 10,
+          isSplit: true,
+          splits: [
+            { id: "sp-1", kind: "category", amount: -1200 },
+            {
+              id: "sp-2",
+              kind: "investment",
+              amount: 1210,
+              investmentAction: "SELL",
+              investmentSecurityId: "SEC-1",
+              investmentQuantity: 10,
+              investmentPrice: 121,
+              investmentCommission: 0,
+              investmentExchangeRate: 1,
+              investmentExchangeRateFromCurrency: "CAD",
+              investmentExchangeRateToCurrency: "USD",
+            },
+          ] as never,
+        }),
+      ];
+      scheduledRepo.createQueryBuilder.mockReturnValue(mockQueryBuilder(rows));
+
+      const result = await service.getLlmUpcomingBillsAndDeposits(userId, {
+        kind: "bill",
+      });
+
+      // The list honours the filter...
+      expect(result.items.map((i) => i.name)).toEqual(["Rent"]);
+      // ...and the rollups still know about the item it removed.
+      expect(result.totalUpcomingBills).toBeNull();
+      expect(result.knownUpcomingBillsSubtotal).toBe(1200);
+      expect(result.amountsComplete).toBe(false);
+      expect(result.unknownAmountItems).toEqual(["Sell shares, pay the fee"]);
+    });
+
+    describe("the rollups span one currency or none", () => {
+      // A CAD bill beside a USD one. Added as their raw numbers these are the
+      // 1,850 the tool descriptions promise the caller will never be handed:
+      // both totals are published in ONE currency (the reader's default), so a
+      // component in another either converts or takes the total with it.
+      const twoCurrencyBills = () => [
+        makeScheduled({
+          id: "s-usd",
+          name: "Rent",
+          amount: -500,
+          currencyCode: "USD",
+        }),
+        makeScheduled({
+          id: "s-cad",
+          name: "Hydro",
+          amount: -1350,
+          currencyCode: "CAD",
+        }),
+      ];
+
+      it("converts each component into the reporting currency", async () => {
+        mockExchangeRateService.getRateForDate.mockResolvedValue(0.74);
+        scheduledRepo.createQueryBuilder.mockReturnValue(
+          mockQueryBuilder(twoCurrencyBills()),
+        );
+
+        const result = await service.getLlmUpcomingBillsAndDeposits(userId);
+
+        expect(result.totalsCurrency).toBe("USD");
+        // 500 USD + 1350 CAD x 0.74 = 1499 USD. Never 1850.
+        expect(result.totalUpcomingBills).toBe(1499);
+        expect(result.amountsComplete).toBe(true);
+        expect(result.missingRatePairs).toBeUndefined();
+        // Each item keeps its OWN currency -- the totals' currency is not a
+        // relabelling of the rows.
+        expect(
+          result.items.map((i) => `${i.name}|${i.amount}|${i.currency}`).sort(),
+        ).toEqual(["Hydro|-1350|CAD", "Rent|-500|USD"]);
+      });
+
+      it("withholds the total and names the pair when a rate is missing", async () => {
+        mockExchangeRateService.getRateForDate.mockResolvedValue(null);
+        mockExchangeRateService.getLatestRate.mockResolvedValue(null);
+        scheduledRepo.createQueryBuilder.mockReturnValue(
+          mockQueryBuilder(twoCurrencyBills()),
+        );
+
+        const result = await service.getLlmUpcomingBillsAndDeposits(userId);
+
+        expect(result.totalUpcomingBills).toBeNull();
+        expect(result.knownUpcomingBillsSubtotal).toBe(500);
+        expect(result.amountsComplete).toBe(false);
+        expect(result.missingRatePairs).toEqual(["CAD->USD"]);
+        // A missing RATE is not an unresolvable amount: both figures are known,
+        // and naming the schedule would send the reader to fix the wrong thing.
+        expect(result.unknownAmountItems).toBeUndefined();
+      });
+
+      it("treats a non-positive stored rate as absent, not as a conversion", async () => {
+        // Multiplying by 0 would convert the 1,350 bill to nothing and report
+        // the total complete -- a plausible 500 in place of an honest refusal.
+        mockExchangeRateService.getRateForDate.mockResolvedValue(0);
+        mockExchangeRateService.getLatestRate.mockResolvedValue(0);
+        scheduledRepo.createQueryBuilder.mockReturnValue(
+          mockQueryBuilder(twoCurrencyBills()),
+        );
+
+        const result = await service.getLlmUpcomingBillsAndDeposits(userId);
+
+        expect(result.totalUpcomingBills).toBeNull();
+        expect(result.missingRatePairs).toEqual(["CAD->USD"]);
+      });
+
+      it("asks for a rate once per pair, not once per bill", async () => {
+        mockExchangeRateService.getRateForDate.mockResolvedValue(0.74);
+        const rows = [
+          ...twoCurrencyBills(),
+          makeScheduled({
+            id: "s-cad-2",
+            name: "Internet",
+            amount: -100,
+            currencyCode: "CAD",
+          }),
+          makeScheduled({
+            id: "s-cad-3",
+            name: "Phone",
+            amount: -60,
+            currencyCode: "CAD",
+          }),
+        ];
+        scheduledRepo.createQueryBuilder.mockReturnValue(
+          mockQueryBuilder(rows),
+        );
+
+        const result = await service.getLlmUpcomingBillsAndDeposits(userId);
+
+        // 500 + (1350 + 100 + 60) x 0.74 = 500 + 1117.40
+        expect(result.totalUpcomingBills).toBe(1617.4);
+        // Three CAD bills, one lookup. The same-currency ones ask for none.
+        const cadCalls =
+          mockExchangeRateService.getRateForDate.mock.calls.filter(
+            ([from, to]) => from === "CAD" && to === "USD",
+          );
+        expect(cadCalls).toHaveLength(1);
+      });
+
+      it("converts deposits too, and each bucket answers for itself", async () => {
+        mockExchangeRateService.getRateForDate.mockImplementation(
+          async (from: string) => (from === "CAD" ? 0.74 : null),
+        );
+        mockExchangeRateService.getLatestRate.mockResolvedValue(null);
+        const rows = [
+          makeScheduled({
+            id: "s-dep",
+            name: "Salary",
+            amount: 2000,
+            currencyCode: "CAD",
+          }),
+          makeScheduled({
+            id: "s-bill-eur",
+            name: "Server",
+            amount: -80,
+            currencyCode: "EUR",
+          }),
+        ];
+        scheduledRepo.createQueryBuilder.mockReturnValue(
+          mockQueryBuilder(rows),
+        );
+
+        const result = await service.getLlmUpcomingBillsAndDeposits(userId);
+
+        // The deposit converted; only the bills bucket holds the EUR gap.
+        expect(result.totalUpcomingDeposits).toBe(1480);
+        expect(result.totalUpcomingBills).toBeNull();
+        expect(result.knownUpcomingBillsSubtotal).toBe(0);
+        expect(result.missingRatePairs).toEqual(["EUR->USD"]);
+      });
+
+      it("reports in the reader's own currency, not the schedules'", async () => {
+        preferencesRepo.findOne.mockResolvedValue({ defaultCurrency: "CAD" });
+        mockExchangeRateService.getRateForDate.mockResolvedValue(1.35);
+        scheduledRepo.createQueryBuilder.mockReturnValue(
+          mockQueryBuilder(twoCurrencyBills()),
+        );
+
+        const result = await service.getLlmUpcomingBillsAndDeposits(userId);
+
+        expect(result.totalsCurrency).toBe("CAD");
+        // 500 USD x 1.35 + 1350 CAD = 2025 CAD.
+        expect(result.totalUpcomingBills).toBe(2025);
+        expect(result.amountsComplete).toBe(true);
+      });
+
+      it("falls back to the shared reporting currency when the reader has no preference", async () => {
+        // A missing preference row is not a missing currency: every surface
+        // falls back to the same one, so the total is still denominated and
+        // still printable. Asserted against the constant rather than a literal,
+        // because the point is that this surface uses the shared answer.
+        preferencesRepo.findOne.mockResolvedValue(null);
+        scheduledRepo.createQueryBuilder.mockReturnValue(
+          mockQueryBuilder([
+            makeScheduled({
+              id: "s-home",
+              name: "Hydro",
+              amount: -1350,
+              currencyCode: FALLBACK_DEFAULT_CURRENCY,
+            }),
+          ]),
+        );
+
+        const result = await service.getLlmUpcomingBillsAndDeposits(userId);
+
+        expect(result.totalsCurrency).toBe(FALLBACK_DEFAULT_CURRENCY);
+        // Same currency as the one bill, so it converts with no rate at all.
+        expect(result.totalUpcomingBills).toBe(1350);
+        expect(mockExchangeRateService.getRateForDate).not.toHaveBeenCalled();
+      });
+    });
+
+    describe("a kind filter narrows the list, never the rollups", () => {
+      /**
+       * A rollup total is a statement about the WINDOW. A caller narrowing the
+       * list to deposits has not said the bills stopped existing, and a bucket
+       * built from the filtered list published `totalUpcomingBills: 0` with
+       * `amountsComplete: true` over a window holding a 1,200 bill -- a
+       * confident "nothing is due", which is worse than no answer.
+       *
+       * The previous pass fixed exactly half of this: it moved the unknown
+       * bucket off the filtered list and left these two on it.
+       */
+      it("still reports the other bucket's total", async () => {
+        scheduledRepo.createQueryBuilder.mockReturnValue(
+          mockQueryBuilder([
+            makeScheduled({ id: "s-bill", name: "Rent", amount: -1200 }),
+            makeScheduled({ id: "s-dep", name: "Salary", amount: 3000 }),
+          ]),
+        );
+
+        const result = await service.getLlmUpcomingBillsAndDeposits(userId, {
+          kind: "deposit",
+        });
+
+        // The list honours the filter...
+        expect(result.items.map((i) => i.name)).toEqual(["Salary"]);
+        // ...and neither total pretends the filtered-out half is empty.
+        expect(result.totalUpcomingBills).toBe(1200);
+        expect(result.totalUpcomingDeposits).toBe(3000);
+        expect(result.amountsComplete).toBe(true);
+      });
+
+      it("names an unpriceable item the filter removed from the list", async () => {
+        // The bill cannot be priced and the caller asked for deposits, so it
+        // appears in neither `items` nor `unclassified` -- and read off the
+        // filtered list it was named nowhere while making the bills total
+        // unknown, leaving a bare `null` with no reason.
+        investmentTransactionsService.resolveSettlementCurrencyPair.mockResolvedValue(
+          { from: "EUR", to: "USD" },
+        );
+        investmentTransactionsService.resolveCashExchangeRateOrNull.mockResolvedValue(
+          null,
+        );
+        scheduledRepo.createQueryBuilder.mockReturnValue(
+          mockQueryBuilder([
+            makeScheduled({
+              id: "s-inv",
+              name: "Monthly ETF buy",
+              amount: -1000,
+              isInvestment: true,
+              investmentAction: "BUY" as never,
+              investmentSecurityId: "SEC-1",
+              investmentQuantity: 10,
+              investmentPrice: 100,
+            }),
+            makeScheduled({ id: "s-bill", name: "Rent", amount: -1200 }),
+            makeScheduled({ id: "s-dep", name: "Salary", amount: 3000 }),
+          ]),
+        );
+
+        const result = await service.getLlmUpcomingBillsAndDeposits(userId, {
+          kind: "deposit",
+        });
+
+        expect(result.items.map((i) => i.name)).toEqual(["Salary"]);
+        expect(result.amountsComplete).toBe(false);
+        expect(result.unknownAmountItems).toContain("Monthly ETF buy");
+      });
+    });
+
     it("filters by kind", async () => {
       const rows = [
         makeScheduled({ id: "s1", amount: -100 }),
@@ -1170,7 +1640,11 @@ describe("ScheduledTransactionsService", () => {
 
       expect(result.itemCount).toBe(1);
       expect(result.items[0].kind).toBe("bill");
-      expect(result.totalUpcomingDeposits).toBe(0);
+      // The LIST is narrowed; the rollup is not. This line asserted `0` and was
+      // pinning the defect: the window holds a 200 deposit, and answering "0
+      // deposits are coming" because the caller asked about bills is a confident
+      // wrong number, not a narrower answer (issue #1247, round 4).
+      expect(result.totalUpcomingDeposits).toBe(200);
     });
 
     it("filters by accountIds", async () => {
@@ -1215,6 +1689,254 @@ describe("ScheduledTransactionsService", () => {
       });
 
       expect(result.daysWindow).toBe(14);
+    });
+
+    // ---- Effective amounts and completeness (issue #1247) ----
+
+    it("reports each item's effective amount, not its persisted snapshot", async () => {
+      const rows = [
+        makeScheduled({
+          id: "s-inv",
+          name: "Monthly ETF buy",
+          amount: -1000,
+          currencyCode: "CAD",
+          isInvestment: true,
+          investmentAction: "BUY" as any,
+          investmentSecurityId: "SEC-1",
+          investmentQuantity: 10,
+          investmentPrice: 100,
+          investmentExchangeRate: 1.5,
+          investmentExchangeRateFromCurrency: "EUR",
+          investmentExchangeRateToCurrency: "CAD",
+          account: { name: "Brokerage" } as any,
+        }),
+      ];
+      scheduledRepo.createQueryBuilder.mockReturnValue(mockQueryBuilder(rows));
+      investmentTransactionsService.resolveSettlementCurrencyPair.mockResolvedValue(
+        { from: "USD", to: "CAD" },
+      );
+      investmentTransactionsService.resolveCashExchangeRateOrNull.mockResolvedValue(
+        1.35,
+      );
+
+      const result = await service.getLlmUpcomingBillsAndDeposits(userId);
+
+      expect(result.items[0].amount).toBe(-1350);
+      expect(result.items[0].amount).not.toBe(-1000);
+      expect(result.items[0].amountComplete).toBe(true);
+      expect(result.items[0].currency).toBe("CAD");
+      expect(result.amountsComplete).toBe(true);
+    });
+
+    it("marks an item unavailable rather than quoting a stale amount", async () => {
+      const rows = [
+        makeScheduled({
+          id: "s-inv",
+          name: "Monthly ETF buy",
+          amount: -1000,
+          isInvestment: true,
+          investmentAction: "BUY" as any,
+          investmentSecurityId: "SEC-1",
+          investmentQuantity: 10,
+          investmentPrice: 100,
+          investmentExchangeRate: 1.5,
+          investmentExchangeRateFromCurrency: "EUR",
+          investmentExchangeRateToCurrency: "CAD",
+          account: { name: "Brokerage" } as any,
+        }),
+      ];
+      scheduledRepo.createQueryBuilder.mockReturnValue(mockQueryBuilder(rows));
+      investmentTransactionsService.resolveSettlementCurrencyPair.mockResolvedValue(
+        { from: "USD", to: "CAD" },
+      );
+      investmentTransactionsService.resolveCashExchangeRateOrNull.mockResolvedValue(
+        null,
+      );
+
+      const result = await service.getLlmUpcomingBillsAndDeposits(userId);
+
+      expect(result.items[0].amount).toBeNull();
+      expect(result.items[0].amountComplete).toBe(false);
+      expect(result.amountsComplete).toBe(false);
+      expect(result.unknownAmountItems).toEqual(["Monthly ETF buy"]);
+    });
+
+    it("withholds a bucket total when one of its items is unknown", async () => {
+      // A split parent carrying an investment line classifies as a bill (its
+      // stored amount is negative), so it DOES join totalUpcomingBills -- which
+      // is exactly why an unresolvable rate must make that total unknown.
+      const rows = [
+        makeScheduled({
+          id: "s-known",
+          name: "Rent",
+          amount: -1200,
+          account: { name: "Checking" } as any,
+        }),
+        makeScheduled({
+          id: "s-unknown",
+          name: "Buy plus fee",
+          amount: -1525,
+          isSplit: true,
+          splits: [
+            {
+              id: "sp-1",
+              kind: "investment",
+              amount: -1500,
+              investmentAction: "BUY",
+              investmentSecurityId: "SEC-1",
+              investmentQuantity: 10,
+              investmentPrice: 100,
+              investmentCommission: 0,
+              investmentExchangeRate: 1.5,
+              investmentExchangeRateFromCurrency: "EUR",
+              investmentExchangeRateToCurrency: "CAD",
+            },
+          ] as any,
+          account: { name: "Brokerage" } as any,
+        }),
+      ];
+      scheduledRepo.createQueryBuilder.mockReturnValue(mockQueryBuilder(rows));
+      investmentTransactionsService.resolveSettlementCurrencyPair.mockResolvedValue(
+        { from: "USD", to: "CAD" },
+      );
+      investmentTransactionsService.resolveCashExchangeRateOrNull.mockResolvedValue(
+        null,
+      );
+
+      const result = await service.getLlmUpcomingBillsAndDeposits(userId);
+
+      expect(result.totalUpcomingBills).toBeNull();
+      // The part that did resolve, under its own name -- never in the total's.
+      expect(result.knownUpcomingBillsSubtotal).toBe(1200);
+      expect(result.amountsComplete).toBe(false);
+      expect(result.unknownAmountItems).toEqual(["Buy plus fee"]);
+      // The deposits bucket answers for itself: nothing in it is unknown.
+      expect(result.totalUpcomingDeposits).toBe(0);
+      expect(result.knownUpcomingDepositsSubtotal).toBeUndefined();
+    });
+
+    // ---- Occurrence selection (issue #1247) ----
+    //
+    // The payload is about the occurrence that is next due, not the schedule's
+    // template. Reporting the base amount for an occurrence the user had
+    // re-priced or moved is the same class of defect as reporting a stale FX
+    // snapshot: the assistant answers with a figure and a date the register
+    // disagrees with.
+
+    /** The template's occurrences: due on the 15th, -1,200. */
+    const rentOnThe15th = () =>
+      makeScheduled({
+        id: "s-rent",
+        name: "Rent",
+        amount: -1200,
+        currencyCode: "USD",
+        nextDueDate: "2026-03-15",
+        account: { name: "Checking" } as any,
+      });
+
+    it("quotes the next occurrence's override amount, not the schedule's", async () => {
+      scheduledRepo.createQueryBuilder.mockReturnValue(
+        mockQueryBuilder([rentOnThe15th()]),
+      );
+      overridesRepo.find.mockResolvedValue([
+        {
+          id: "ovr-1",
+          scheduledTransactionId: "s-rent",
+          originalDate: "2026-03-15",
+          overrideDate: "2026-03-15",
+          amount: -675,
+        },
+      ]);
+
+      const result = await service.getLlmUpcomingBillsAndDeposits(userId);
+
+      expect(result.items[0].amount).toBe(-675);
+      expect(result.items[0].amount).not.toBe(-1200);
+      expect(result.totalUpcomingBills).toBe(675);
+    });
+
+    it("announces the date an override moved the occurrence to", async () => {
+      scheduledRepo.createQueryBuilder.mockReturnValue(
+        mockQueryBuilder([rentOnThe15th()]),
+      );
+      overridesRepo.find.mockResolvedValue([
+        {
+          id: "ovr-1",
+          scheduledTransactionId: "s-rent",
+          // The identity is the slot it replaces; the occurrence itself moved.
+          originalDate: "2026-03-15",
+          overrideDate: "2026-03-28",
+          amount: -675,
+        },
+      ]);
+
+      const result = await service.getLlmUpcomingBillsAndDeposits(userId);
+
+      expect(result.items[0].nextDueDate).toBe("2026-03-28");
+      expect(result.items[0].amount).toBe(-675);
+    });
+
+    it("withholds the bills total when the due occurrence's override cannot be priced", async () => {
+      // A plain bill whose next occurrence the user turned into a split that buys
+      // a security. The template is still -1,200 and perfectly knowable; the
+      // OCCURRENCE is not, because that line's settlement rate is unresolvable --
+      // so a consumer reading the base here would report a complete total for an
+      // occurrence nobody can price.
+      scheduledRepo.createQueryBuilder.mockReturnValue(
+        mockQueryBuilder([
+          rentOnThe15th(),
+          makeScheduled({
+            id: "s-phone",
+            name: "Phone bill",
+            amount: -80,
+            currencyCode: "USD",
+            nextDueDate: "2026-03-20",
+            account: { name: "Checking" } as any,
+          }),
+        ]),
+      );
+      overridesRepo.find.mockResolvedValue([
+        {
+          id: "ovr-phone",
+          scheduledTransactionId: "s-phone",
+          originalDate: "2026-03-20",
+          overrideDate: "2026-03-20",
+          amount: null,
+          isSplit: true,
+          splits: [
+            {
+              amount: -1500,
+              splitKind: "investment",
+              investment: {
+                action: "BUY",
+                securityId: "SEC-1",
+                quantity: 10,
+                price: 100,
+                commission: 0,
+                exchangeRate: 1.5,
+                exchangeRateFromCurrency: "EUR",
+                exchangeRateToCurrency: "CAD",
+              },
+            },
+          ],
+        },
+      ]);
+      investmentTransactionsService.resolveSettlementCurrencyPair.mockResolvedValue(
+        { from: "USD", to: "CAD" },
+      );
+      investmentTransactionsService.resolveCashExchangeRateOrNull.mockResolvedValue(
+        null,
+      );
+
+      const result = await service.getLlmUpcomingBillsAndDeposits(userId);
+
+      const phone = result.items.find((i) => i.id === "s-phone")!;
+      expect(phone.amount).toBeNull();
+      expect(phone.amountComplete).toBe(false);
+      expect(result.totalUpcomingBills).toBeNull();
+      // The occurrence that did resolve, under its own name -- never the total's.
+      expect(result.knownUpcomingBillsSubtotal).toBe(1200);
+      expect(result.unknownAmountItems).toEqual(["Phone bill"]);
     });
   });
 

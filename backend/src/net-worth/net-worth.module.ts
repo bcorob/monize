@@ -1,4 +1,4 @@
-import { Module } from "@nestjs/common";
+import { Module, forwardRef } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { MonthlyAccountBalance } from "./entities/monthly-account-balance.entity";
 import { Account } from "../accounts/entities/account.entity";
@@ -22,7 +22,9 @@ import { DelegationModule } from "../delegation/delegation.module";
       ExchangeRate,
       UserPreference,
     ]),
-    DelegationModule,
+    // forwardRef: this edge lies on a require cycle, so a bare reference is
+    // `undefined` here under some load orders -- see `src/module-graph.spec.ts`.
+    forwardRef(() => DelegationModule),
   ],
   providers: [NetWorthService],
   controllers: [NetWorthController],

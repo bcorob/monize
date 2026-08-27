@@ -12,6 +12,7 @@ import { AI_PROVIDER_LABELS } from '@/types/ai';
 import { useExchangeRates } from '@/hooks/useExchangeRates';
 import { usePreferencesStore } from '@/store/preferencesStore';
 import { useDateFormat } from '@/hooks/useDateFormat';
+import { preferredCurrency } from '@/lib/default-currency';
 
 interface UsageDashboardProps {
   usage: AiUsageSummary;
@@ -90,7 +91,9 @@ export function UsageDashboard({ usage, configs, onPeriodChange }: UsageDashboar
   const [showInHomeCurrency, setShowInHomeCurrency] = useState(true);
   const { convert } = useExchangeRates();
   const homeCurrency =
-    usePreferencesStore((state) => state.preferences?.defaultCurrency) || 'USD';
+    preferredCurrency(
+      usePreferencesStore((state) => state.preferences?.defaultCurrency),
+    );
   const { formatDate } = useDateFormat();
 
   const handlePeriodChange = (days: number | undefined) => {

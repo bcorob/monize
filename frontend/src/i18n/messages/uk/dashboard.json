@@ -27,7 +27,6 @@
     "manualTitle": "Потребує ручного проведення",
     "negativeBalanceWarning": "Ця транзакція призведе до від'ємного балансу рахунку",
     "viewAll": "Переглянути всі рахунки та надходження",
-    "totalDue": "Всього до сплати",
     "totalIncoming": "Всього надходить",
     "moreItems": "+{count} ще",
     "overdue": "Прострочено",
@@ -38,7 +37,8 @@
       "bill": "Рахунок",
       "deposit": "Надходження",
       "transfer": "Переказ",
-      "reminder": "Нагадування"
+      "reminder": "Нагадування",
+      "unknown": "Невідомо"
     }
   },
   "gettingStarted": {

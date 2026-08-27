@@ -74,6 +74,7 @@ import {
   isoDatePart,
   priorCloseChange,
 } from '@/components/investments/portfolio-change-baseline';
+import { preferredCurrency } from '@/lib/default-currency';
 
 const logger = createLogger('PortfolioValueReport');
 
@@ -237,7 +238,7 @@ export function PortfolioValueReport() {
   const foreignCurrency = selectedAccount?.currencyCode && selectedAccount.currencyCode !== defaultCurrency
     ? selectedAccount.currencyCode
     : null;
-  const effectiveCurrency = foreignCurrency || defaultCurrency || 'USD';
+  const effectiveCurrency = foreignCurrency || preferredCurrency(defaultCurrency);
 
   const fmtVal = useCallback((value: number) => {
     if (foreignCurrency) return `${formatCurrencyCompact(value, foreignCurrency)} ${foreignCurrency}`;

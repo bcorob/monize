@@ -17,8 +17,9 @@ npm run start:dev          # Dev server with HMR
 npm run build              # Production build
 npm run lint               # ESLint --fix
 npm run typecheck          # tsc over src AND test (CI gate; plain `tsc --noEmit` skips test/)
-npm run test               # jest with no filter -- see the note below, this is NOT green
-npm run test:unit          # Unit tests only (src/**/*.spec.ts)
+npm run test               # test:unit then test:integration -- needs PostgreSQL; takes no args
+npm run test:unit          # Unit tests only (src/**/*.spec.ts); no database needed
+npm run test:integration   # test/integration/*.spec.ts against real PG, one worker
 npm run test:cov           # Coverage report (95% lines, 94% stmts, 95% funcs, 85% branches)
 npm run test:e2e           # E2E tests (test/**/*.spec.ts, 30s timeout, sequential)
 npm run i18n:pseudo        # Regenerate the xx pseudo-locale from en
@@ -27,13 +28,50 @@ npm run migration:lint     # Idempotency lint over database/migrations (CI gate)
 npm run migration:lint:test # Self-test for the migration lint
 ```
 
-### `test/*.e2e-spec.ts` is not a gate, and three of the four suites are broken
+### The parallel config cannot see `test/`, and `npm test` serializes the two suites
+
+`test/integration/*` rebuilds the schema of the one shared `monize_test`
+database (`synchronize` + `dropSchema`), so two Jest workers running any two of
+those suites race each other -- `pg_type_typname_nsp_index` conflicts, or a
+"connection terminated" reported by whichever spec was innocent. The root Jest
+config in `package.json` therefore pins `roots: ["<rootDir>/src"]`: a bare
+`jest` (and `test:watch`, `test:debug`) discovers unit specs only. Integration
+specs are owned by `test/jest-e2e.json`, which pins `maxWorkers: 1`, and
+`npm test` runs `test:unit` then `test:integration` (through
+`backend/scripts/test-chain.mjs`) so the default command runs everything without ever
+running the two in parallel. That makes `npm test` require a reachable
+PostgreSQL (`pretest:integration` creates `monize_test` if it is missing);
+`npm run test:unit` is the offline path.
+`src/common/jest-config.guard.spec.ts` fails if any of those facts stops being
+true.
+
+**`npm test` takes no Jest arguments, and says so rather than ignoring them.**
+npm appends `npm test -- <args>` to the *end* of the script, so in a chained
+command they become the next `npm run`'s flags: npm swallows them, Jest never
+sees them, and the filtered run silently becomes a full one. Filtered runs go
+through `npm run test:unit -- <args>` or `npm run test:integration -- <args>`.
+
+**Discovery lives in a config, not in a script.** `--testPathPatterns` and `-t`
+may narrow what a config found; `--roots`, `--rootDir`, `--testRegex`,
+`--testMatch`, `--testPathIgnorePatterns`, `--projects` and `--preset` redefine
+it, and the guard rejects any script that passes one -- `jest --roots ./src
+./test` would sweep the database-backed suites back into the parallel run with
+every config in the repository still correct.
+
+**The serialization is not a preference, and it stays until the suites stop
+sharing a database.** A `dropSchema: true` suite is safe to run beside another
+only when each worker owns its own database or schema; until that exists, one
+worker is the mechanism, and `--runInBand` at a call site is not a substitute
+for the config pinning it.
+
+### `test/*.e2e-spec.ts` is not a gate, and three of the five suites are broken
 
 CI runs `test:unit` and `test:integration` (filtered to `test/integration/*.spec.ts`). Nothing runs `test:e2e`, and separate rot accumulated behind a since-fixed compile error (`npm run typecheck` now closes the compile half in CI):
 
 | Suite | State | Why |
 |---|---|---|
 | `test/payee-detail.e2e-spec.ts` | passes (9 tests) | fine; this is the spec that caught the raw-select transformer class of bug |
+| `test/category-detail.e2e-spec.ts` | passes (9 tests) | fine; same shape as the payee one |
 | `test/payees.e2e-spec.ts` | fails | calls services directly, so no request scope; never converted for RLS (`withScopedDb` throws without ambient context) |
 | `test/auth.e2e-spec.ts` | fails | `AuthController` gained a `TokenService` dependency its test module does not provide |
 | `test/transactions.e2e-spec.ts` | fails | `DelegateTransferMaskInterceptor` gained a `CrossOwnerAccessService` dependency its test module does not provide |
@@ -57,6 +95,41 @@ Each feature module under `src/` follows the standard layout. Use `ls src/` or L
 ```
 
 Controllers are thin and delegate to services. Services always take `userId` as the first parameter and filter by it for multi-tenancy.
+
+### An edge on a require cycle is deferred, or it is `undefined`
+
+Module and service files are CommonJS, so a circular `import` hands the second
+file a half-filled `exports`: the `@Module({ imports: [...] })` array holds an
+`undefined`, or a constructor's reflected parameter type does, and Nest refuses
+to build the application -- "Nest cannot create the NetWorthModule instance...
+index [1] ... is undefined", or "can't resolve dependencies of the
+ScheduledTransactionsService (AccountsService, TransactionsService, ?, ...)".
+
+**Whether it bites depends on which file `require` reached first**, so the same
+code boots from one entry point and dies from another: `AppModule` from the
+compiled server entry point, `TransactionsModule` from an integration
+`RootTestModule`,
+whichever module a spec happens to import. Issue #1247 shipped green through
+`npm run test:unit` and took out the integration suite, all four E2E shards and
+Lighthouse.
+
+The rule is exact and it is checked: an `imports` entry, or a constructor
+parameter, whose class can reach the declaring file back through `import`
+statements must be `forwardRef(() => X)` / `@Inject(forwardRef(() => X))`.
+`src/module-graph.spec.ts` proves it two ways -- statically over every load order
+at once (naming the offending edge), then at runtime from every module file in
+turn, walking `imports` and every provider's `design:paramtypes` as Nest reads
+them. Reordering imports is not a fix; defer the edge.
+
+### A stub standing in for a real module inherits its export list
+
+`test/helpers/integration-setup.ts` replaces `ScheduledTransactionsModule` with
+a stub, so that stub's `exports` are a claim about the real module. It derives
+them from `Reflect.getMetadata("exports", ScheduledTransactionsModule)` rather
+than restating them: a hand-written copy keeps compiling until a consumer of the
+newly added export appears, and then eighteen suites fail somewhere else
+entirely ("argument ScheduledOccurrenceService at index [5] is available in the
+NotificationsModule module").
 
 ## Configuration
 

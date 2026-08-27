@@ -10,6 +10,31 @@ import {
   DuplicateGroup,
   DuplicateTransactionItem,
 } from "./dto";
+import {
+  investmentExclusionSql,
+  reportableTransactionAmountSql,
+} from "../common/investment-filter.util";
+
+/**
+ * Investment scope is LINKAGE, never account type (INV-REPORT-001, issue #1257):
+ * the cash sleeve of an INVESTMENT account holds ordinary money, while the cash
+ * leg a trade generated is not spending or income. Both halves of the predicate,
+ * and why the account type cannot express either, live in
+ * `common/investment-filter.util.ts`.
+ */
+const INVESTMENT_EXCLUSION_NO_SPLITS = investmentExclusionSql({
+  accountAlias: "a",
+  transactionAlias: "t",
+});
+
+/**
+ * "Uncategorized" means ordinary cash the user has not filed, so the figure is
+ * the ordinary part of the row and a parent whose only lines are an embedded
+ * investment or a transfer represents none: NULL, and the `IS NOT NULL`
+ * predicate drops it (branch audit F-RPT-001). Without this a `-500` embedded
+ * BUY passthrough was listed as money the user forgot to categorize.
+ */
+const REPORTABLE_TX_AMOUNT = reportableTransactionAmountSql("t");
 
 @Injectable()
 export class DataQualityReportsService {
@@ -33,7 +58,7 @@ export class DataQualityReportsService {
         t.id,
         t.transaction_date,
         t.currency_code,
-        t.amount,
+        ${REPORTABLE_TX_AMOUNT} as amount,
         COALESCE(p.name, t.payee_name) as payee_name,
         t.description,
         a.name as account_name,
@@ -46,7 +71,8 @@ export class DataQualityReportsService {
         AND t.is_transfer = false
         AND (t.status IS NULL OR t.status != 'VOID')
         AND t.parent_transaction_id IS NULL
-        AND a.account_type != 'INVESTMENT'
+        AND ${INVESTMENT_EXCLUSION_NO_SPLITS}
+        AND ${REPORTABLE_TX_AMOUNT} IS NOT NULL
         AND t.category_id IS NULL
         AND NOT EXISTS (
           SELECT 1 FROM transaction_splits ts
@@ -100,14 +126,13 @@ export class DataQualityReportsService {
       accountId: row.account_id,
     }));
 
-    let summaryQuery = `
+    // The reportable amount is derived ONCE, in a CTE: six of these in one
+    // aggregate is six correlated sub-queries per split parent, and the six
+    // answers have to be the same number anyway.
+    let summarySource = `
       SELECT
         t.currency_code,
-        COUNT(*) as total_count,
-        COUNT(*) FILTER (WHERE t.amount < 0) as expense_count,
-        COALESCE(SUM(ABS(t.amount)) FILTER (WHERE t.amount < 0), 0) as expense_total,
-        COUNT(*) FILTER (WHERE t.amount > 0) as income_count,
-        COALESCE(SUM(t.amount) FILTER (WHERE t.amount > 0), 0) as income_total
+        ${REPORTABLE_TX_AMOUNT} as amount
       FROM transactions t
       LEFT JOIN accounts a ON a.id = t.account_id
       WHERE t.user_id = $1
@@ -115,7 +140,7 @@ export class DataQualityReportsService {
         AND t.is_transfer = false
         AND (t.status IS NULL OR t.status != 'VOID')
         AND t.parent_transaction_id IS NULL
-        AND a.account_type != 'INVESTMENT'
+        AND ${INVESTMENT_EXCLUSION_NO_SPLITS}
         AND t.category_id IS NULL
         AND NOT EXISTS (
           SELECT 1 FROM transaction_splits ts
@@ -126,11 +151,26 @@ export class DataQualityReportsService {
 
     const summaryParams: string[] = [userId, endDate];
     if (startDate) {
-      summaryQuery += ` AND t.transaction_date >= $3`;
+      summarySource += ` AND t.transaction_date >= $3`;
       summaryParams.push(startDate);
     }
 
-    summaryQuery += ` GROUP BY t.currency_code`;
+    // `amount IS NOT NULL` is the same predicate the list applies: a row whose
+    // only lines are an embedded investment or a transfer represents no ordinary
+    // cash, so it is not something the user forgot to categorize.
+    const summaryQuery = `
+      WITH reportable AS (${summarySource})
+      SELECT
+        currency_code,
+        COUNT(*) as total_count,
+        COUNT(*) FILTER (WHERE amount < 0) as expense_count,
+        COALESCE(SUM(ABS(amount)) FILTER (WHERE amount < 0), 0) as expense_total,
+        COUNT(*) FILTER (WHERE amount > 0) as income_count,
+        COALESCE(SUM(amount) FILTER (WHERE amount > 0), 0) as income_total
+      FROM reportable
+      WHERE amount IS NOT NULL
+      GROUP BY currency_code
+    `;
 
     interface RawSummary {
       currency_code: string;
@@ -216,6 +256,19 @@ export class DataQualityReportsService {
         AND t.is_transfer = false
         AND (t.status IS NULL OR t.status != 'VOID')
         AND t.parent_transaction_id IS NULL
+        -- The cash leg of a trade is owned by its investment transaction and
+        -- cannot be edited or deleted from the cash register, so offering two
+        -- identical legs (two partial fills at one price) as duplicates points
+        -- the user at a row they cannot act on here. Same exclusion as the rest
+        -- of this service.
+        AND ${INVESTMENT_EXCLUSION_NO_SPLITS}
+        -- PARENT-IDENTITY REPORT: this detector's subject is the stored row, not
+        -- its cash meaning, so it deliberately compares t.amount rather than the
+        -- reportable ordinary amount every other query here derives (branch
+        -- audit DR-001). A split parent the user entered twice IS a duplicate,
+        -- and the remedy is deleting one whole transaction -- a per-child figure
+        -- would name a row nobody can delete. Which is also why it needs no
+        -- split-provenance clause: a row it admits is one the user owns.
       ORDER BY t.transaction_date ASC, t.amount ASC
     `;
 

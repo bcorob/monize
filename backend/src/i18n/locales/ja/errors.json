@@ -27,6 +27,8 @@
     "loanRequiresInstitution": "ローン口座には金融機関名が必要です",
     "mortgageRequiredFields": "住宅ローン口座には mortgagePaymentFrequency、paymentStartDate、sourceAccountId、および amortizationMonths が必要です",
     "mortgageRequiresInterestRate": "住宅ローン口座には利率が必要です",
+    "mortgageFrequencyUnsupported": "カナダの住宅ローンは支払頻度 {frequency} では設定できません",
+    "paymentFrequencyUnsupported": "支払頻度 {frequency} は設定できません",
     "mortgageRequiresInstitution": "住宅ローン口座には金融機関名が必要です",
     "onlyMortgageAccounts": "この操作は住宅ローン口座にのみ有効です",
     "updateRateClosed": "閉鎖された口座の利率は更新できません",
@@ -193,13 +195,16 @@
     "reauthUnavailable": "バックアップを復元する前に、アカウントのパスワード設定を完了してください。",
     "supportPasswordRequired": "サポート用バックアップは暗号化が必須です。パスワードを入力してください。",
     "passwordHeaderNotBase64": "{header} ヘッダーは base64 でエンコードされている必要があります。",
-    "decompressTooLarge": "バックアップが大きすぎて復元できません: 展開すると設定された上限 {limit} バイトを超えます。正規のバックアップであれば BACKUP_RESTORE_EXPANDED_LIMIT を引き上げてください。",
+    "decompressTooLarge": "バックアップが大きすぎて復元できません: 展開するとこのデプロイの上限 {limit} バイトを超えます。この上限はコンテナのメモリと実測した 1 バイトあたりのコストから導かれているため、上限だけを引き上げるとプロセスが完了できない復元を想定することになります。代わりにコンテナのメモリ上限を引き上げてください (Kubernetes: backend.resources.limits.memory)。",
     "exportTooLarge": "このバックアップは一度に生成するには大きすぎます（テーブル \"{table}\" で {limit} バイトを超過）。自動バックアップとサポート用バックアップはメモリ上に保持する必要があります。ストリーミングされる手動バックアップをダウンロードするか、BACKUP_EXPORT_BUFFER_LIMIT を引き上げてください。",
     "supportExportTooLarge": "このサポート用バックアップは JSON で {{ size }} MiB となり、上限 {{ limit }} MiB を超えます。口座の選択または期間で範囲を絞るか、BACKUP_EXPORT_BUFFER_LIMIT を引き上げてください。",
     "folderUnusable": "フォルダー \"{{ path }}\" はディレクトリとして使用できません（{{ reason }}）。",
     "folderOutsideAllowedRoots": "バックアップ フォルダー \"{path}\" は許可されたルート（{roots}）の外にあります。許可するには BACKUP_ALLOWED_ROOTS を設定してください。",
     "noBackupStorage": "このデプロイには書き込み可能なバックアップ用ストレージがありません: {{ safePath }} は存在せず、作成もできません（{{ reason }}）。そこにボリュームをマウントし（Docker: バインドマウントまたは名前付きボリューム、Kubernetes: Helm チャートの backend.persistence.backups を設定）、もう一度お試しください。",
-    "restoreNoMemoryHeadroom": "このデプロイには復元のためのメモリ余裕がありません: 1 回の復元の推定ピークがコンテナーに収まりません。コンテナーのメモリ上限を引き上げるか、BACKUP_RESTORE_EXPANDED_LIMIT を下げてください。"
+    "restoreNoMemoryHeadroom": "このデプロイには復元のためのメモリ余裕がありません: 1 回の復元の推定ピークがコンテナーに収まりません。コンテナーのメモリ上限を引き上げるか、BACKUP_RESTORE_EXPANDED_LIMIT を下げてください。",
+    "restoreQueueFull": "このデプロイの復元処理の空きを待っている復元が多すぎます。しばらくしてからもう一度お試しください。",
+    "restoreQueueWaitTimeout": "復元処理の空き待ちがタイムアウトしました。別の復元がまだ実行中です。しばらくしてからもう一度お試しください。",
+    "restoreTicketUnavailable": "このデプロイでは復元のアップロードを承認できません。"
   },
   "budgets": {
     "notFound": "ID {{ id }} の予算が見つかりません",

@@ -6,6 +6,11 @@
     "summaryActiveBills": "Factures actives",
     "summaryActiveDeposits": "Dépôts actifs",
     "summaryMonthlyNet": "Net mensuel",
+    "summaryAmountUnavailable": "Non disponible",
+    "summaryNetRatesUnavailable": "Les taux de change ne sont pas disponibles pour le moment, le net ne peut donc pas être calculé.",
+    "summaryNetMissingRates": "Aucun taux de change pour {currencies} — ajoutez-en un dans Devises",
+    "summaryNetMissingRatesAndUnpriceable": "Aucun taux de change pour {currencies}, et une ou plusieurs planifications n'ont pas pu être évaluées.",
+    "summaryNetUnpriceable": "Une ou plusieurs planifications n'ont pas pu être évaluées",
     "summaryDueNow": "À payer maintenant",
     "loadingText": "Chargement des transactions récurrentes...",
     "chartUnavailable": "Graphique temporairement indisponible"

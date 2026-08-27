@@ -13,6 +13,36 @@ import {
 } from "./dto";
 import { formatDateYMD } from "../common/date-utils";
 import { roundMoney, sumMoney, toMoneyNumber } from "../common/round.util";
+import {
+  investmentExclusionSql,
+  reportableTransactionAmountSql,
+} from "../common/investment-filter.util";
+
+/**
+ * Investment scope is LINKAGE, never account type (INV-REPORT-001, issue #1257):
+ * the cash sleeve of an INVESTMENT account holds ordinary money, while the cash
+ * leg a trade generated is not spending or income. Both halves of the predicate,
+ * and why the account type cannot express either, live in
+ * `common/investment-filter.util.ts`.
+ */
+const INVESTMENT_EXCLUSION = investmentExclusionSql({
+  accountAlias: "a",
+  transactionAlias: "t",
+  splitAlias: "ts",
+});
+const INVESTMENT_EXCLUSION_NO_SPLITS = investmentExclusionSql({
+  accountAlias: "a",
+  transactionAlias: "t",
+});
+
+/**
+ * Recurrence and bill matching read one row per payment and never join splits,
+ * so the embedded investment or transfer part of a split parent comes out of the
+ * amount rather than out of the row -- and the amount is derived once, not per
+ * joined split line, so one payment stays one occurrence (branch audit
+ * F-RPT-001).
+ */
+const REPORTABLE_TX_AMOUNT = reportableTransactionAmountSql("t");
 
 @Injectable()
 export class TaxRecurringReportsService {
@@ -46,7 +76,7 @@ export class TaxRecurringReportsService {
         AND t.is_transfer = false
         AND (t.status IS NULL OR t.status != 'VOID')
         AND t.parent_transaction_id IS NULL
-        AND a.account_type != 'INVESTMENT'
+        AND ${INVESTMENT_EXCLUSION}
         AND (ts.transfer_account_id IS NULL OR ts.id IS NULL)
     `;
 
@@ -193,7 +223,7 @@ export class TaxRecurringReportsService {
         c.name as category_name,
         t.currency_code,
         COUNT(*)::int as occurrences,
-        SUM(ABS(t.amount)) as total_amount,
+        SUM(ABS(${REPORTABLE_TX_AMOUNT})) as total_amount,
         MAX(t.transaction_date) as last_transaction_date
       FROM transactions t
       LEFT JOIN payees p ON p.id = t.payee_id
@@ -202,15 +232,15 @@ export class TaxRecurringReportsService {
       WHERE t.user_id = $1
         AND t.transaction_date >= $2
         AND t.transaction_date <= $3
-        AND t.amount < 0
+        AND ${REPORTABLE_TX_AMOUNT} < 0
         AND t.is_transfer = false
         AND (t.status IS NULL OR t.status != 'VOID')
         AND t.parent_transaction_id IS NULL
-        AND a.account_type != 'INVESTMENT'
+        AND ${INVESTMENT_EXCLUSION_NO_SPLITS}
         AND (COALESCE(p.name, t.payee_name) IS NOT NULL AND TRIM(COALESCE(p.name, t.payee_name)) != '')
       GROUP BY t.payee_id, LOWER(TRIM(COALESCE(p.name, t.payee_name))), COALESCE(p.name, t.payee_name), c.name, t.currency_code
       HAVING COUNT(*) >= $4
-      ORDER BY SUM(ABS(t.amount)) DESC
+      ORDER BY total_amount DESC
     `;
 
     interface RawRecurring {
@@ -371,7 +401,7 @@ export class TaxRecurringReportsService {
         t.id,
         t.transaction_date,
         t.currency_code,
-        ABS(t.amount) as amount,
+        ABS(${REPORTABLE_TX_AMOUNT}) as amount,
         LOWER(TRIM(COALESCE(p.name, t.payee_name))) as payee_name_normalized
       FROM transactions t
       LEFT JOIN payees p ON p.id = t.payee_id
@@ -381,7 +411,8 @@ export class TaxRecurringReportsService {
         AND t.is_transfer = false
         AND (t.status IS NULL OR t.status != 'VOID')
         AND t.parent_transaction_id IS NULL
-        AND a.account_type != 'INVESTMENT'
+        AND ${INVESTMENT_EXCLUSION_NO_SPLITS}
+        AND ${REPORTABLE_TX_AMOUNT} IS NOT NULL
     `;
 
     const params: (string | undefined)[] = [userId, endDate];

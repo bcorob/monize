@@ -1,16 +1,20 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Transaction, TransactionStatus } from '@/types/transaction';
 import { SortableHeader } from '@/components/ui/SortableHeader';
 import { StatusCellButton } from '@/components/transactions/StatusCellButton';
 import { RowActions } from '@/components/ui/row-actions/RowActions';
+import { RowActionSheet } from '@/components/ui/row-actions/RowActionSheet';
 import type { RowAction } from '@/components/ui/row-actions/rowAction';
+import { registerDateColumnPadding } from '@/components/transactions/register-date-columns';
 import { useDateFormat } from '@/hooks/useDateFormat';
+import { useLongPress } from '@/hooks/useLongPress';
 import type { SortDirection } from '@/hooks/useSortableTable';
 import { classifyStaleRow, type StaleUnreconciledReason } from '@/lib/stale-reconciliation';
 import { usePayeeDisplay } from '@/hooks/usePayeeDisplay';
+import { useCompactMobileDates } from '@/store/dateDisplayStore';
 import {
   groupReconcileRows,
   sortReconcileRows,
@@ -33,7 +37,7 @@ interface ReconcileTableProps {
   onEdit: (transaction: Transaction) => void;
   onDelete: (transaction: Transaction) => void;
   onCycleStatus: (transaction: Transaction) => void;
-  /** True while the strict reconciled lock is on, which hides the row actions. */
+  /** True while the strict reconciled lock is on, which disables the row actions. */
   reconciledLocked: boolean;
 }
 
@@ -46,11 +50,24 @@ const STALE_ROW_CLASS =
  * Every column sorts, the rows optionally group by which side of the ledger
  * they are on, and each row carries the same edit/delete actions the register
  * does -- reconciling is where a missing or wrong transaction is discovered, so
- * making the user leave the screen to fix one is the thing this replaces.
+ * making the user leave the screen to fix one is the thing this replaces. The
+ * actions column is drawn from `sm` up; on any width a long-press or a
+ * right-click on the row (`useLongPress`) opens the same actions in the shared
+ * `RowActionSheet` -- the only path on phones, where the column collapses. A
+ * plain click keeps toggling the row's selection.
  *
  * Rows the account should already have reconciled are highlighted through the
  * shared `classifyStaleRow`, against the dates the server supplied, so the
  * highlight here and the count in the header badge always mean the same thing.
+ *
+ * Below `sm` the table must FIT the phone, not merely scroll: mobile Chrome
+ * sizes the viewport that `position: fixed` elements attach to from the page's
+ * widest content, and `overflow-x-auto` does not stop a wide table counting --
+ * so an overflowing table here made every modal on the page (the edit form)
+ * render hundreds of pixels past the screen. Category and Status therefore
+ * collapse on phones, and the Date header carries the register's shared
+ * year-hiding toggle (`useCompactMobileDates`), the same trades the register
+ * makes (`TransactionRow`), rather than relying on horizontal scroll.
  */
 export function ReconcileTable({
   transactions,
@@ -70,11 +87,22 @@ export function ReconcileTable({
 }: ReconcileTableProps) {
   const t = useTranslations('reconcile');
   const tc = useTranslations('common');
-  const { formatDate } = useDateFormat();
+  // The date-shortening toggle is the register's; its copy lives there too.
+  const tt = useTranslations('transactions');
+  const { formatDate, formatDateWithoutYear } = useDateFormat();
+  const { compactMobileDates, toggleCompactMobileDates } = useCompactMobileDates();
+  const compactPadding = registerDateColumnPadding(compactMobileDates);
   // Blank-payee transfer legs resolve "Transfer to/from <account>" at render
   // time (issue #1214); the sort below is handed the same resolver so the
   // Payee column orders by exactly the text it shows.
   const payeeDisplay = usePayeeDisplay();
+
+  const [sheetTransaction, setSheetTransaction] = useState<Transaction | null>(null);
+
+  const { getRowHandlers } = useLongPress<Transaction>({
+    onLongPress: setSheetTransaction,
+    onClick: (transaction) => onToggle(transaction.id),
+  });
 
   const groups = useMemo(
     () =>
@@ -117,12 +145,21 @@ export function ReconcileTable({
     },
   ];
 
+  // The strict reconciled lock used to withhold the actions column's buttons on
+  // RECONCILED rows. The sheet keeps the same promise by disabling them, with
+  // the lock named in the subtitle so the greyed rows read as a state, not a
+  // fault.
+  const sheetLocked =
+    sheetTransaction !== null &&
+    sheetTransaction.status === TransactionStatus.RECONCILED &&
+    reconciledLocked;
+
   return (
     <div className="overflow-x-auto">
       <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
         <thead className="bg-gray-50 dark:bg-gray-700/50">
           <tr>
-            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase w-10">
+            <th className="px-2 sm:px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase w-10">
               <span className="sr-only">{t('list.colSelect')}</span>
             </th>
             <SortableHeader
@@ -130,16 +167,39 @@ export function ReconcileTable({
               sortField={sortField}
               sortDirection={sortDirection}
               onSort={onSort}
-              className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase"
+              className={`px-2 sm:px-4 ${compactPadding.date} py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase`}
             >
-              {t('list.colDate')}
+              <span className="inline-flex items-center gap-1">
+                {t('list.colDate')}
+                {/* The register's year-hiding toggle, shared store and all.
+                    Only drawn below `sm`, where the full date is what crowds
+                    the payee; the click must not also sort the column. */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleCompactMobileDates();
+                  }}
+                  aria-pressed={compactMobileDates}
+                  aria-label={tt('list.dateDisplay.toggleLabel')}
+                  title={tt('list.dateDisplay.toggleTitle')}
+                  className={`sm:hidden rounded p-0.5 focus-visible:outline-2 focus-visible:outline-blue-500 ${
+                    compactMobileDates
+                      ? 'text-blue-600 dark:text-blue-400'
+                      : 'text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300'
+                  }`}
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V6a2 2 0 012-2h2M4 16v2a2 2 0 002 2h2m8-16h2a2 2 0 012 2v2m-4 12h2a2 2 0 002-2v-2M9 12h6" />
+                  </svg>
+                </button>
+              </span>
             </SortableHeader>
             <SortableHeader
               field="payee"
               sortField={sortField}
               sortDirection={sortDirection}
               onSort={onSort}
-              className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase"
+              className={`px-2 sm:px-4 ${compactPadding.payee} py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase`}
             >
               {t('list.colPayee')}
             </SortableHeader>
@@ -148,7 +208,7 @@ export function ReconcileTable({
               sortField={sortField}
               sortDirection={sortDirection}
               onSort={onSort}
-              className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase"
+              className="hidden sm:table-cell px-2 sm:px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase"
             >
               {t('list.colCategory')}
             </SortableHeader>
@@ -158,7 +218,7 @@ export function ReconcileTable({
               sortDirection={sortDirection}
               onSort={onSort}
               align="right"
-              className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase"
+              className="px-2 sm:px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase"
             >
               {t('list.colAmount')}
             </SortableHeader>
@@ -168,11 +228,11 @@ export function ReconcileTable({
               sortDirection={sortDirection}
               onSort={onSort}
               align="center"
-              className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase"
+              className="hidden sm:table-cell px-2 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase"
             >
               {t('list.colStatus')}
             </SortableHeader>
-            <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+            <th className="hidden sm:table-cell px-2 sm:px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
               <span className="sr-only">{t('list.colActions')}</span>
             </th>
           </tr>
@@ -183,22 +243,27 @@ export function ReconcileTable({
             className="divide-y divide-gray-200 dark:divide-gray-700"
           >
             {group.flow && (
+              /* One cell per column rather than a colSpan over several: the
+                 Category and Status columns collapse below `sm`, and a span
+                 counted for six columns misaligns the subtotal on four. */
               <tr className="bg-gray-100 dark:bg-gray-700/60">
                 <th
-                  colSpan={4}
+                  colSpan={3}
                   scope="colgroup"
-                  className="px-4 py-2 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase"
+                  className="px-2 sm:px-4 py-2 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase"
                 >
                   {group.flow === 'credit'
                     ? t('list.groupCredits', { count: group.rows.length })
                     : t('list.groupDebits', { count: group.rows.length })}
                 </th>
-                <td className="px-4 py-2 text-right text-xs font-semibold text-gray-600 dark:text-gray-300">
+                <td className="hidden sm:table-cell" />
+                <td className="px-2 sm:px-4 py-2 text-right text-xs font-semibold text-gray-600 dark:text-gray-300">
                   {t('list.groupSubtotal', {
                     amount: formatCurrency(group.subtotal),
                   })}
                 </td>
-                <td colSpan={2} />
+                <td className="hidden sm:table-cell" />
+                <td className="hidden sm:table-cell" />
               </tr>
             )}
             {group.rows.map((transaction) => {
@@ -216,9 +281,9 @@ export function ReconcileTable({
                         ? STALE_ROW_CLASS
                         : 'hover:bg-gray-50 dark:hover:bg-gray-700/30'
                   }`}
-                  onClick={() => onToggle(transaction.id)}
+                  {...getRowHandlers(transaction)}
                 >
-                  <td className="px-4 py-3">
+                  <td className="px-2 sm:px-4 py-3">
                     <input
                       type="checkbox"
                       checked={isSelected}
@@ -230,9 +295,24 @@ export function ReconcileTable({
                       className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800"
                     />
                   </td>
-                  <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100 whitespace-nowrap">
-                    <span className="flex items-center gap-2">
-                      {formatDate(transaction.transactionDate)}
+                  <td className={`px-2 sm:px-4 ${compactPadding.date} py-3 text-sm text-gray-900 dark:text-gray-100`}>
+                    {/* flex-wrap so the stale chip drops under the date on a
+                        phone instead of widening the column past it. */}
+                    <span className="flex flex-wrap items-center gap-2">
+                      {compactMobileDates ? (
+                        <>
+                          <span className="sm:hidden whitespace-nowrap">
+                            {formatDateWithoutYear(transaction.transactionDate)}
+                          </span>
+                          <span className="hidden sm:inline whitespace-nowrap">
+                            {formatDate(transaction.transactionDate)}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="whitespace-nowrap">
+                          {formatDate(transaction.transactionDate)}
+                        </span>
+                      )}
                       {staleReason && (
                         <span
                           className="inline-flex items-center rounded-full bg-amber-200 dark:bg-amber-800 px-2 py-0.5 text-xs font-medium text-amber-900 dark:text-amber-100"
@@ -249,14 +329,18 @@ export function ReconcileTable({
                       )}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
+                  <td
+                    className={`px-2 sm:px-4 ${compactPadding.payee} py-3 text-sm text-gray-900 dark:text-gray-100 ${
+                      compactMobileDates ? 'max-w-[160px]' : 'max-w-[110px]'
+                    } sm:max-w-none overflow-hidden`}
+                  >
                     {payeeDisplay(transaction) || '-'}
                   </td>
-                  <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+                  <td className="hidden sm:table-cell px-2 sm:px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
                     {transaction.category?.name || '-'}
                   </td>
                   <td
-                    className={`px-4 py-3 text-sm text-right whitespace-nowrap font-medium ${
+                    className={`px-2 sm:px-4 py-3 text-sm text-right whitespace-nowrap font-medium ${
                       Number(transaction.amount) >= 0
                         ? 'text-green-600 dark:text-green-400'
                         : 'text-red-600 dark:text-red-400'
@@ -264,14 +348,17 @@ export function ReconcileTable({
                   >
                     {formatCurrency(Number(transaction.amount))}
                   </td>
-                  <td className="px-4 py-3 text-center">
+                  <td className="hidden sm:table-cell px-2 sm:px-4 py-3 text-center">
                     <StatusCellButton
                       status={transaction.status}
                       dense
                       onCycle={() => onCycleStatus(transaction)}
                     />
                   </td>
-                  <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                  <td
+                    className="hidden sm:table-cell px-2 sm:px-4 py-3"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     {transaction.status === TransactionStatus.RECONCILED &&
                     reconciledLocked ? (
                       <span className="block text-right text-xs text-gray-400 dark:text-gray-500">
@@ -290,6 +377,27 @@ export function ReconcileTable({
           </tbody>
         ))}
       </table>
+
+      {/* Long-press / right-click action sheet */}
+      <RowActionSheet
+        isOpen={sheetTransaction !== null}
+        title={sheetTransaction ? payeeDisplay(sheetTransaction) || '-' : ''}
+        subtitle={
+          sheetTransaction
+            ? sheetLocked
+              ? t('list.lockedRow')
+              : formatDate(sheetTransaction.transactionDate)
+            : undefined
+        }
+        actions={
+          sheetTransaction
+            ? sheetLocked
+              ? buildActions(sheetTransaction).map((action) => ({ ...action, disabled: true }))
+              : buildActions(sheetTransaction)
+            : []
+        }
+        onClose={() => setSheetTransaction(null)}
+      />
     </div>
   );
 }

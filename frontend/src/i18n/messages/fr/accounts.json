@@ -210,6 +210,7 @@
     "frequencyOptions": {
       "weekly": "Hebdomadaire",
       "biweekly": "Toutes les 2 semaines",
+      "semiMonthly": "Bimensuel",
       "monthly": "Mensuel",
       "quarterly": "Trimestriel",
       "yearly": "Annuel"
@@ -308,12 +309,13 @@
     "previewFirstInterest": "Intérêts du premier paiement :",
     "previewTotalPayments": "Total des paiements :",
     "previewTotalInterest": "Total des intérêts :",
+    "previewFinalPayment": "Dernier versement :",
     "previewPayoffDate": "Date de remboursement estimée :",
     "previewNA": "N/D",
     "calculatingPreview": "Calcul de l'aperçu…",
     "frequencyOptions": {
       "monthly": "Mensuel",
-      "semiMonthly": "Bimensuel (1er & 15)",
+      "semiMonthly": "Bimensuel (le 15 et fin de mois)",
       "biweekly": "Toutes les 2 semaines",
       "acceleratedBiweekly": "Toutes les 2 semaines (accéléré)",
       "weekly": "Hebdomadaire",
@@ -367,6 +369,7 @@
       "WEEKLY": "Hebdomadaire",
       "BIWEEKLY": "Aux deux semaines",
       "SEMI_MONTHLY": "Bimensuel",
+      "SEMIMONTHLY": "Bimensuel",
       "MONTHLY": "Mensuel",
       "QUARTERLY": "Trimestriel",
       "YEARLY": "Annuel",
@@ -436,7 +439,8 @@
         "effect": "→ économise {interest}, remboursement {date}",
         "alreadyMet": "Objectif déjà atteint sans aucun remboursement anticipé.",
         "unreachableInterest": "Hors de portée — même un très gros remboursement anticipé ne peut pas économiser autant d'intérêts.",
-        "unreachableDate": "Hors de portée — ce mois est antérieur au remboursement le plus tôt possible."
+        "unreachableDate": "Hors de portée — ce mois est antérieur au remboursement le plus tôt possible.",
+        "baselineIncomplete": "Ce prêt n'est pas remboursé dans la période projetée, il n'y a donc aucun total d'intérêts servant de point de départ."
       },
       "simulationTypeLabel": "Type de simulation",
       "overpaymentAmount": "Montant du remboursement anticipé",
@@ -463,6 +467,7 @@
       "interestSaved": "Intérêts économisés",
       "totalExtraContributed": "Total des versements supplémentaires",
       "beyondProjection": "Au-delà de la projection",
+      "unknown": "Inconnu",
       "newInstallment": "Nouvelle mensualité",
       "installmentDrop": "{payment} (−{reduction})",
       "monthlyPayment": "Paiement mensuel",
@@ -505,7 +510,9 @@
       "colOverpayment": "Remboursement",
       "overpaymentWithFrequency": "{amount} ({frequency})",
       "loadAria": "Charger le scénario « {name} »",
-      "budgetSummary": "Budget {amount}/mois"
+      "budgetSummary": "Budget {amount}/mois",
+      "chartExcludedUnknown": "{count, plural, one {# scénario n'est pas affiché : son économie d'intérêts est inconnue.} other {# scénarios ne sont pas affichés : leur économie d'intérêts est inconnue.}}",
+      "chartNeedsTwoKnown": "Le graphique de comparaison nécessite au moins deux scénarios dont l'économie d'intérêts est connue."
     },
     "scenarioChart": {
       "title": "Comparaison des scénarios",

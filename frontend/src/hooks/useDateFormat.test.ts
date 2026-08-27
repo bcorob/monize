@@ -13,6 +13,9 @@ vi.mock('@/store/preferencesStore', () => ({
 vi.mock('@/lib/utils', () => ({
   formatDate: vi.fn((date: Date | string, fmt: string) => `formatted:${fmt}`),
   formatMonth: vi.fn((month: string, fmt: string) => `month:${fmt}`),
+  formatDateWithoutYear: vi.fn(
+    (date: Date | string, pattern: string) => `noYear:${pattern}`,
+  ),
 }));
 
 describe('useDateFormat with a "browser" UI language', () => {
@@ -54,5 +57,21 @@ describe('useDateFormat', () => {
     const { result } = renderHook(() => useDateFormat());
     const formatted = result.current.formatMonth('2025-01');
     expect(formatted).toBe('month:YYYY-MM-DD');
+  });
+
+  it('formatDateWithoutYear delegates with the resolved pattern, not the raw preference', () => {
+    // The distinction matters at `browser`: a sentinel does not say whether
+    // the day or the month comes first, which is the one thing dropping the
+    // year has to preserve.
+    const { result } = renderHook(() => useDateFormat());
+    expect(result.current.formatDateWithoutYear('2025-01-15')).toBe('noYear:YYYY-MM-DD');
+  });
+
+  it('resolves the sentinel before shortening, so browser never reaches the formatter', () => {
+    vi.mocked(usePreferencesStore).mockImplementation((selector: any) =>
+      selector({ preferences: { dateFormat: 'browser', language: 'en-US' } }),
+    );
+    const { result } = renderHook(() => useDateFormat());
+    expect(result.current.formatDateWithoutYear('2025-01-15')).not.toContain('browser');
   });
 });

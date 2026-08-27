@@ -123,6 +123,10 @@
       "status": "狀態",
       "actions": "動作"
     },
+    "dateDisplay": {
+      "toggleLabel": "隱藏年份",
+      "toggleTitle": "日期中不顯示年份，為收款人留出更多空間"
+    },
     "attachmentsCount": "{count, plural, other {# 個附件}}",
     "today": "今天",
     "export": {

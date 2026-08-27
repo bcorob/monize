@@ -108,7 +108,9 @@ ingress:
 | `backend.mnyImport.MNY_IMPORT_LIMIT_MB` | Largest Microsoft Money (.mny) file the import wizard accepts | `300` |
 | `backend.backupLimits.exportBuffer` | JSON a buffered export may accumulate | derived from the memory limit |
 | `backend.backupLimits.restoreExpanded` | Decompressed size a restore payload may reach | derived from the memory limit |
-| `backend.backupLimits.restoreUpload` | Compressed upload the restore endpoint accepts | `500mb` |
+| `backend.backupLimits.restoreUpload` | Compressed upload the restore endpoint accepts | derived from the memory limit |
+| `backend.restoreQueue.limit` | Restores that may wait for a processing slot before a 503 | `4` |
+| `backend.restoreQueue.waitMs` | Milliseconds a restore may wait for a processing slot | `120000` |
 
 > **`latest` with `IfNotPresent` does not pick up new builds.** The two defaults
 > combine into a deployment that keeps whatever image the node already cached: a
@@ -158,22 +160,85 @@ read, only a restart.
 That is not hypothetical. These defaulted to `1024mb` and `512mb` against this
 chart's `400Mi` backend, so neither could ever fire.
 
-Leave `backend.backupLimits` empty and the backend derives roughly a quarter of
-the container's cgroup memory limit, which tracks whatever you set above. Set them
-when you have measured your own deployment — the backend logs a warning at startup
-when a configured value is too large to protect the process it is running in.
+Leave `backend.backupLimits` empty and the backend derives each ceiling from the
+container's cgroup memory limit, which tracks whatever you set above. Set them when
+you have measured your own deployment — the backend logs a warning at startup when
+a configured value is too large to protect the process it is running in.
 
-| `backend.resources.limits.memory` | Derived ceiling per backup |
+`exportBuffer` is roughly a quarter of the limit:
+
+| `backend.resources.limits.memory` | Derived ceiling per buffered export |
 |---|---|
 | `256Mi` | `64Mi` (the floor) |
 | `400Mi` (default) | `100Mi` |
 | `1Gi` | `256Mi` |
 | `4Gi` | `1Gi` (the cap) |
 
+**The restore ceilings are smaller, and they are measured rather than assumed.**
+Measured (issue #1073), a restore's peak memory is about **6.1× its expanded payload
+plus a fixed 78Mi** — the fixed part being zlib's windows and the heap V8 grows to
+parse and rewrite a document at all. The model previously assumed three times the
+payload and no fixed part, which admitted restores the process could not finish. So
+`restoreExpanded` is solved out of what the container has left rather than taken as a
+share of it: the limit, minus the ordinary process baseline (`max(140Mi, a fifth)`),
+less a 15% margin, minus the fixed cost, divided by 6.1. `restoreUpload` follows it,
+because gzip output is never smaller than what it expands to.
+
+| `backend.resources.limits.memory` | Largest restorable artifact | Concurrent restores |
+|---|---|---|
+| `200Mi` and below | none — restores refused with a 503 | 0 |
+| `256Mi` | ~3Mi | 1 |
+| `400Mi` (default) | ~23Mi | 1 |
+| `1Gi` | ~101Mi | 1 |
+| `8Gi` | ~903Mi | 1 |
+
+**A pod that leaves less than about 78Mi free after the baseline cannot restore at
+all**, however small the backup, because the fixed cost is spent before the first
+byte of payload. That is a refusal with a message naming the lever, not an OOM kill
+mid-restore.
+
+A bigger pod otherwise buys a bigger artifact rather than a second concurrent
+restore. If you would rather have concurrency, set `restoreExpanded` lower yourself —
+though each concurrent restore pays the fixed 78Mi again, so the slot count grows
+more slowly than the ceiling shrinks. And if a real backup is being refused, raise
+`resources.limits.memory`: raising `restoreUpload` alone gets you an OOM-killed pod
+instead of a refusal, which is the failure the ceiling exists to prevent.
+
 A user whose dataset exceeds the ceiling gets a readable refusal naming the size
 and the limit. For the support export they can also narrow it with an account
 selection or a date range. If real exports are being refused, raise the memory
 limit **and** the ceiling: raising either alone achieves nothing.
+
+**A restore upload needs a ticket, and the ingress should have a body limit.**
+The backend's upload admission has to run in front of its body parser, which is in
+front of every guard — so it cannot authenticate the request whose memory it is
+budgeting for. Since Monize 1.16 it does not have to: the client first asks
+`POST /api/v1/backup/restore/ticket` (ordinary authenticated JSON) for a short-lived
+signed ticket, and an upload without one is refused `403` before a byte is buffered.
+Nothing to configure — it is on whenever `JWT_SECRET` is set, which is always.
+
+What the chart cannot do for you is stop that traffic before it reaches the pod. If
+you terminate with an Ingress, set a body-size limit on it to match your
+`backupLimits.restoreUpload` (nginx: `nginx.ingress.kubernetes.io/proxy-body-size`;
+Traefik: a `buffering` middleware with `maxRequestBodyBytes`) through
+`ingress.annotations`. The default path in this chart is an HTTPRoute, and the Gateway
+API has no portable request-body limit — so on that path the process's own admission
+gate is the only limit, which is why it exists. Rate-limiting the restore path at the
+edge is worth doing for the same reason.
+
+**Restores queue, and the queue is bounded.** The compressed upload budget cannot
+bound decompressed memory — a small gzip expands to the expanded ceiling whatever
+its wire size — so restore *processing* is capped separately, at one concurrent
+restore on the default pod. A second restore waits rather than decompressing
+beside the first, because the caller has already uploaded the artifact and a 503
+would make them upload it again. `backend.restoreQueue` bounds that wait in both
+directions: past `limit` waiters a request is refused with 503 and `Retry-After`
+instead of joining the queue, and past `waitMs` a waiting request is refused the
+same way. A caller who disconnects while queued is dropped, and its restore never
+runs — the operation is destructive, so running it for somebody who left is worse
+than refusing it. A disconnect *after* the slot is granted changes nothing: that
+restore is part-way through replacing the user's data and runs to completion. The
+startup log prints the slot count with both bounds beside it.
 
 **The frontend needs headroom too.** Every `/api/*` call is forwarded by the
 Next.js proxy, which buffers the request body before sending it on, so a `.mny`

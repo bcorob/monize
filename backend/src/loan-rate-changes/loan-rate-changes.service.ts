@@ -16,15 +16,17 @@ import { CreateLoanRateChangeDto } from "./dto/create-loan-rate-change.dto";
 import { UpdateLoanRateChangeDto } from "./dto/update-loan-rate-change.dto";
 import { ScheduledTransactionsService } from "../scheduled-transactions/scheduled-transactions.service";
 import {
+  calculatePaymentAmount,
   getPeriodicRate,
-  getMortgagePeriodsPerYear,
   recalculateMortgageAfterRateChange,
-  MortgagePaymentFrequency,
 } from "../accounts/mortgage-amortization.util";
-import { getPeriodsPerYear } from "../accounts/loan-amortization.util";
-import { PaymentFrequency } from "../accounts/loan-amortization.util";
 import { roundMoney } from "../common/round.util";
 import { todayYMD, formatDateYMDLocal } from "../common/date-utils";
+import {
+  DEFAULT_PERIODS_PER_YEAR,
+  periodsPerYearForStoredFrequency,
+  toMortgagePaymentFrequency,
+} from "../accounts/payment-frequency.util";
 
 const RATE_CHANGE_ACCOUNT_TYPES = [AccountType.LOAN, AccountType.MORTGAGE];
 
@@ -383,18 +385,21 @@ export class LoanRateChangesService {
     }
 
     const isMortgage = account.accountType === AccountType.MORTGAGE;
+    // One lookup for both spellings of the stored cadence; only the COMPOUNDING
+    // is mortgage-specific. Two casts into two domain functions meant a
+    // semi-monthly mortgage was split at a monthly rate and a quarterly one at
+    // three times its rate.
+    const periodsPerYear =
+      periodsPerYearForStoredFrequency(account.paymentFrequency) ??
+      DEFAULT_PERIODS_PER_YEAR;
     const periodicRate = isMortgage
       ? getPeriodicRate(
           annualRate,
-          getMortgagePeriodsPerYear(
-            account.paymentFrequency as MortgagePaymentFrequency,
-          ),
+          periodsPerYear,
           account.isCanadianMortgage || false,
           account.isVariableRate || false,
         )
-      : annualRate /
-        100 /
-        getPeriodsPerYear(account.paymentFrequency as PaymentFrequency);
+      : annualRate / 100 / periodsPerYear;
 
     const paymentAmount = Number(effectivePayment);
     let interest = roundMoney(balance * periodicRate);
@@ -592,11 +597,46 @@ export class LoanRateChangesService {
       (account.amortizationMonths || 300) - monthsElapsed,
     );
 
+    // Converted, not cast. `recalculateMortgageAfterRateChange` derives its
+    // periodic rate from a MORTGAGE-domain cadence, and the column can hold the
+    // recurrence spelling: casting handed it SEMIMONTHLY, which its lookup read
+    // as monthly, so the recalculated installment was a whole month's payment on
+    // a half-monthly schedule -- persisted on the rate change and pushed into
+    // the scheduled transaction. Quarterly and yearly have no mortgage cadence
+    // at all, so those amortize on the standard convention instead of being
+    // forced into a mortgage shape the helpers cannot express.
+    const mortgageFrequency = toMortgagePaymentFrequency(
+      account.paymentFrequency || "MONTHLY",
+    );
+    if (!mortgageFrequency) {
+      const periodsPerYear =
+        periodsPerYearForStoredFrequency(account.paymentFrequency) ??
+        DEFAULT_PERIODS_PER_YEAR;
+      // The COMPOUNDING is still the account's own, even where the cadence is
+      // not one the mortgage helpers can express. Amortizing on the nominal
+      // convention here would have derived the persisted installment one way
+      // and the split this file computes 200 lines above it the other, for the
+      // same Canadian account -- two conventions for one mortgage.
+      return calculatePaymentAmount(
+        currentBalance,
+        getPeriodicRate(
+          annualRate,
+          periodsPerYear,
+          account.isCanadianMortgage || false,
+          account.isVariableRate || false,
+        ),
+        Math.max(
+          1,
+          Math.round((remainingAmortizationMonths * periodsPerYear) / 12),
+        ),
+      );
+    }
+
     const result = recalculateMortgageAfterRateChange(
       currentBalance,
       annualRate,
       remainingAmortizationMonths,
-      (account.paymentFrequency || "MONTHLY") as MortgagePaymentFrequency,
+      mortgageFrequency,
       account.isCanadianMortgage || false,
       account.isVariableRate || false,
     );

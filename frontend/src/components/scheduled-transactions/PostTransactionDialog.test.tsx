@@ -1223,19 +1223,33 @@ describe('PostTransactionDialog', () => {
       mockGetSecurityPrices.mockResolvedValue([]);
     });
 
-    it('seeds Total Price from saved quantity * price', () => {
+    /**
+     * The dialog looks the security's price up on mount. A test that asserts
+     * synchronously returns before that answer lands, so the state it sets
+     * commits outside act() -- against whatever tree happens to be mounted by
+     * then. The tests that wait for "Use latest close" settle the lookup
+     * themselves; the ones mocking an empty price list settle it here.
+     */
+    async function settlePriceLookup() {
+      await act(async () => {
+        await Promise.resolve();
+      });
+    }
+
+    it('seeds Total Price from saved quantity * price', async () => {
       render(
         <PostTransactionDialog
           {...defaultProps}
           scheduledTransaction={investmentTransaction}
         />,
       );
+      await settlePriceLookup();
       const totalInput = screen.getByLabelText('Total Price') as HTMLInputElement;
       // 10 * 100 + 0 commission = 1000
       expect(totalInput.value).toBe('1,000');
     });
 
-    it('seeds Total Price from the scheduled total amount when set', () => {
+    it('seeds Total Price from the scheduled total amount when set', async () => {
       render(
         <PostTransactionDialog
           {...defaultProps}
@@ -1247,17 +1261,19 @@ describe('PostTransactionDialog', () => {
           } as any}
         />,
       );
+      await settlePriceLookup();
       const totalInput = screen.getByLabelText('Total Price') as HTMLInputElement;
       expect(totalInput.value).toBe('750');
     });
 
-    it('updates Total Price when Quantity is changed', () => {
+    it('updates Total Price when Quantity is changed', async () => {
       render(
         <PostTransactionDialog
           {...defaultProps}
           scheduledTransaction={investmentTransaction}
         />,
       );
+      await settlePriceLookup();
       const qtyInput = screen.getByLabelText('Quantity (shares)') as HTMLInputElement;
       fireEvent.change(qtyInput, { target: { value: '5' } });
       const totalInput = screen.getByLabelText('Total Price') as HTMLInputElement;
@@ -1265,13 +1281,14 @@ describe('PostTransactionDialog', () => {
       expect(totalInput.value).toBe('500');
     });
 
-    it('updates Quantity when Total Price is changed', () => {
+    it('updates Quantity when Total Price is changed', async () => {
       render(
         <PostTransactionDialog
           {...defaultProps}
           scheduledTransaction={investmentTransaction}
         />,
       );
+      await settlePriceLookup();
       const totalInput = screen.getByLabelText('Total Price') as HTMLInputElement;
       fireEvent.change(totalInput, { target: { value: '250' } });
       // Trigger blur to commit the value
@@ -1496,7 +1513,7 @@ describe('PostTransactionDialog', () => {
       expect('investmentTotalValue' in payload).toBe(false);
     });
 
-    it('accounts for commission in total computation (BUY)', () => {
+    it('accounts for commission in total computation (BUY)', async () => {
       const buyWithCommission = {
         ...investmentTransaction,
         investmentCommission: 9.99,
@@ -1507,12 +1524,13 @@ describe('PostTransactionDialog', () => {
           scheduledTransaction={buyWithCommission}
         />,
       );
+      await settlePriceLookup();
       const totalInput = screen.getByLabelText('Total Price') as HTMLInputElement;
       // BUY: 10 * 100 + 9.99 = 1009.99
       expect(totalInput.value).toBe('1,009.99');
     });
 
-    it('accounts for commission in total computation (SELL subtracts)', () => {
+    it('accounts for commission in total computation (SELL subtracts)', async () => {
       const sellWithCommission = {
         ...investmentTransaction,
         investmentAction: 'SELL',
@@ -1524,12 +1542,13 @@ describe('PostTransactionDialog', () => {
           scheduledTransaction={sellWithCommission}
         />,
       );
+      await settlePriceLookup();
       const totalInput = screen.getByLabelText('Total Price') as HTMLInputElement;
       // SELL: 10 * 100 - 9.99 = 990.01
       expect(totalInput.value).toBe('990.01');
     });
 
-    it('prefills Quantity / Price / Total Price from nextOverride when one exists', () => {
+    it('prefills Quantity / Price / Total Price from nextOverride when one exists', async () => {
       const txWithOverride = {
         ...investmentTransaction,
         nextOverride: {
@@ -1555,6 +1574,7 @@ describe('PostTransactionDialog', () => {
           scheduledTransaction={txWithOverride}
         />,
       );
+      await settlePriceLookup();
       const qtyInput = screen.getByLabelText('Quantity (shares)') as HTMLInputElement;
       const priceInput = screen.getByLabelText('Price per share') as HTMLInputElement;
       const totalInput = screen.getByLabelText('Total Price') as HTMLInputElement;
@@ -1632,7 +1652,7 @@ describe('PostTransactionDialog', () => {
       expect(totalInput.value).toBe('125');
     });
 
-    it('falls back to base values when override has null investment fields', () => {
+    it('falls back to base values when override has null investment fields', async () => {
       const txWithSparseOverride = {
         ...investmentTransaction,
         nextOverride: {
@@ -1658,13 +1678,14 @@ describe('PostTransactionDialog', () => {
           scheduledTransaction={txWithSparseOverride}
         />,
       );
+      await settlePriceLookup();
       const qtyInput = screen.getByLabelText('Quantity (shares)') as HTMLInputElement;
       const priceInput = screen.getByLabelText('Price per share') as HTMLInputElement;
       expect(Number(qtyInput.value)).toBe(10); // base
       expect(Number(priceInput.value)).toBe(100); // base
     });
 
-    it('updates projected balance header from the current quantity / price (BUY)', () => {
+    it('updates projected balance header from the current quantity / price (BUY)', async () => {
       // Brokerage currentBalance 5000; BUY 10 * 100 = -1000 → 4000.
       render(
         <PostTransactionDialog
@@ -1672,6 +1693,7 @@ describe('PostTransactionDialog', () => {
           scheduledTransaction={investmentTransaction}
         />,
       );
+      await settlePriceLookup();
       expect(screen.getByText('$4000.00')).toBeInTheDocument();
 
       // User edits quantity to 5 → cash impact -500 → 4500.
@@ -1705,7 +1727,7 @@ describe('PostTransactionDialog', () => {
       expect(screen.getByText('$5125.00')).toBeInTheDocument();
     });
 
-    it('reflects override values in the projected balance on open', () => {
+    it('reflects override values in the projected balance on open', async () => {
       const txWithOverride = {
         ...investmentTransaction,
         nextOverride: {
@@ -1731,6 +1753,7 @@ describe('PostTransactionDialog', () => {
           scheduledTransaction={txWithOverride}
         />,
       );
+      await settlePriceLookup();
       // Override qty 3 * price 100 = -300 → 5000 - 300 = 4700
       expect(screen.getByText('$4700.00')).toBeInTheDocument();
     });

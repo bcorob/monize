@@ -237,6 +237,12 @@
     "explanation": "Deeltotaal: {count, plural, one {# bedrag} other {# bedragen}} konden niet worden meegeteld, dus het weergegeven bedrag sluit ze uit. Er is geen koers naar {displayCurrency} beschikbaar voor {currencies}.",
     "explanationExcluded": "Deeltotaal: {count, plural, one {# bedrag} other {# bedragen}} konden niet worden berekend, dus het weergegeven bedrag sluit ze uit."
   },
+  "unknownAmount": {
+    "marker": "—",
+    "srLabel": "Bedrag niet beschikbaar",
+    "scheduledFx": "Het huidige bedrag kan niet worden bepaald: er is geen wisselkoers beschikbaar voor het afwikkelingsvalutapaar van dit geplande item. Het opgeslagen bedrag is met een oudere koers berekend en wordt daarom niet weergegeven.",
+    "displayFx": "Dit bedrag kan hier niet worden weergegeven: het bedrag is bekend, maar er is geen wisselkoers beschikbaar om het om te rekenen naar de valuta van dit totaal. Vernieuw de koersen op de pagina Valuta's."
+  },
   "density": {
     "title": "Rijdichtheid wisselen",
     "normal": "Normaal",

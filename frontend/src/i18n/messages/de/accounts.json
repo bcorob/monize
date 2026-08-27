@@ -210,6 +210,7 @@
     "frequencyOptions": {
       "weekly": "Wöchentlich",
       "biweekly": "Alle 2 Wochen",
+      "semiMonthly": "Halbmonatlich",
       "monthly": "Monatlich",
       "quarterly": "Vierteljährlich",
       "yearly": "Jährlich"
@@ -308,12 +309,13 @@
     "previewFirstInterest": "Zinsanteil erste Zahlung:",
     "previewTotalPayments": "Gesamtzahlungen:",
     "previewTotalInterest": "Gesamtzinsen:",
+    "previewFinalPayment": "Letzte Zahlung:",
     "previewPayoffDate": "Voraus. Rückzahlungsdatum:",
     "previewNA": "N/A",
     "calculatingPreview": "Vorschau wird berechnet...",
     "frequencyOptions": {
       "monthly": "Monatlich",
-      "semiMonthly": "Zweimal monatlich (1. & 15.)",
+      "semiMonthly": "Halbmonatlich (15. & Monatsende)",
       "biweekly": "Zweiwöchentlich",
       "acceleratedBiweekly": "Beschleunigt zweiwöchentlich",
       "weekly": "Wöchentlich",
@@ -367,6 +369,7 @@
       "WEEKLY": "Wöchentlich",
       "BIWEEKLY": "Alle zwei Wochen",
       "SEMI_MONTHLY": "Halbmonatlich",
+      "SEMIMONTHLY": "Halbmonatlich",
       "MONTHLY": "Monatlich",
       "QUARTERLY": "Vierteljährlich",
       "YEARLY": "Jährlich",
@@ -436,7 +439,8 @@
         "effect": "→ spart {interest}, Tilgung {date}",
         "alreadyMet": "Bereits ohne Sondertilgung erreicht.",
         "unreachableInterest": "Unerreichbar — selbst eine sehr hohe Sondertilgung kann nicht so viel Zinsen sparen.",
-        "unreachableDate": "Unerreichbar — dieser Monat liegt vor dem frühestmöglichen Tilgungstermin."
+        "unreachableDate": "Unerreichbar — dieser Monat liegt vor dem frühestmöglichen Tilgungstermin.",
+        "baselineIncomplete": "Dieses Darlehen wird innerhalb des Prognosezeitraums nicht abbezahlt, daher gibt es keine Gesamtzinsen, von denen aus gerechnet werden könnte."
       },
       "simulationTypeLabel": "Simulationstyp",
       "overpaymentAmount": "Sondertilgungsbetrag",
@@ -463,6 +467,7 @@
       "interestSaved": "Gesparte Zinsen",
       "totalExtraContributed": "Gesamte Sondertilgung",
       "beyondProjection": "Außerhalb der Prognose",
+      "unknown": "Unbekannt",
       "newInstallment": "Neue Rate",
       "installmentDrop": "{payment} (−{reduction})",
       "monthlyPayment": "Monatliche Rate",
@@ -505,7 +510,9 @@
       "colOverpayment": "Sondertilgung",
       "overpaymentWithFrequency": "{amount} ({frequency})",
       "loadAria": "Szenario „{name}“ laden",
-      "budgetSummary": "Budget {amount}/Monat"
+      "budgetSummary": "Budget {amount}/Monat",
+      "chartExcludedUnknown": "{count, plural, one {# Szenario wird nicht angezeigt: seine Zinsersparnis ist unbekannt.} other {# Szenarien werden nicht angezeigt: ihre Zinsersparnis ist unbekannt.}}",
+      "chartNeedsTwoKnown": "Das Vergleichsdiagramm benötigt mindestens zwei Szenarien mit bekannter Zinsersparnis."
     },
     "scenarioChart": {
       "title": "Szenariovergleich",

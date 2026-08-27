@@ -14,6 +14,14 @@
       "warning": "Предупреждение",
       "success": "Хорошие новости",
       "info": "Информация"
+    },
+    "billDue": {
+      "titleOverdue": "{payee}: срок оплаты прошёл",
+      "titleToday": "{payee}: срок оплаты сегодня",
+      "titleTomorrow": "{payee}: срок оплаты завтра",
+      "titleInDays": "{payee}: срок оплаты через {days} дн.",
+      "amountDue": "{amount} к оплате {date}",
+      "amountUnavailable": "Сумма недоступна (нет текущего курса обмена), срок оплаты {date}"
     }
   },
   "summary503020": {

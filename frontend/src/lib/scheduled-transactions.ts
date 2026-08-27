@@ -1,6 +1,7 @@
 import apiClient from './api';
 import {
   ScheduledTransaction,
+  ScheduledOccurrence,
   CreateScheduledTransactionData,
   UpdateScheduledTransactionData,
   ScheduledTransactionOverride,
@@ -42,6 +43,27 @@ export const scheduledTransactionsApi = {
     const response = await apiClient.get<ScheduledTransaction[]>('/scheduled-transactions/upcoming', {
       params: days ? { days } : undefined,
     });
+    return response.data;
+  },
+
+  /**
+   * The occurrences due through `through`, each priced at what it would post
+   * today (issue #1247).
+   *
+   * A client cannot work this out for itself: expanding the recurrence in the
+   * browser gives dates but no per-occurrence amount, which is how the Upcoming
+   * Bills report came to apply one schedule-level figure to every projected
+   * occurrence and export it. `maxPerSchedule` bounds the payload and is applied
+   * after ordering by due date, so what comes back is always the next ones.
+   */
+  getOccurrences: async (params: {
+    through: string;
+    maxPerSchedule?: number;
+  }): Promise<ScheduledOccurrence[]> => {
+    const response = await apiClient.get<ScheduledOccurrence[]>(
+      '/scheduled-transactions/occurrences',
+      { params },
+    );
     return response.data;
   },
 

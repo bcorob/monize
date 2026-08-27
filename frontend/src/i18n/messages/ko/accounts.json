@@ -210,6 +210,7 @@
     "frequencyOptions": {
       "weekly": "매주",
       "biweekly": "격주",
+      "semiMonthly": "월 2회",
       "monthly": "매월",
       "quarterly": "분기별",
       "yearly": "매년"
@@ -308,12 +309,13 @@
     "previewFirstInterest": "첫 납부 이자:",
     "previewTotalPayments": "총 납부 횟수:",
     "previewTotalInterest": "총 이자:",
+    "previewFinalPayment": "마지막 상환액:",
     "previewPayoffDate": "예상 완납일:",
     "previewNA": "해당 없음",
     "calculatingPreview": "미리보기 계산 중...",
     "frequencyOptions": {
       "monthly": "매월",
-      "semiMonthly": "월 2회 (1일 및 15일)",
+      "semiMonthly": "월 2회(15일 및 월말)",
       "biweekly": "격주",
       "acceleratedBiweekly": "가속 격주",
       "weekly": "매주",
@@ -367,6 +369,7 @@
       "WEEKLY": "매주",
       "BIWEEKLY": "격주",
       "SEMI_MONTHLY": "월 2회",
+      "SEMIMONTHLY": "월 2회",
       "MONTHLY": "매월",
       "QUARTERLY": "분기별",
       "YEARLY": "매년",
@@ -436,7 +439,8 @@
         "effect": "→ {interest} 절약, 상환 완료 {date}",
         "alreadyMet": "추가 상환 없이도 이미 달성되었습니다.",
         "unreachableInterest": "달성 불가 — 아무리 큰 추가 상환으로도 그만큼 이자를 절약할 수 없습니다.",
-        "unreachableDate": "달성 불가 — 해당 월은 가장 빠른 상환 완료 시점보다 이릅니다."
+        "unreachableDate": "달성 불가 — 해당 월은 가장 빠른 상환 완료 시점보다 이릅니다.",
+        "baselineIncomplete": "이 대출은 예측 기간 내에 상환이 완료되지 않으므로 역산할 총 이자가 없습니다."
       },
       "simulationTypeLabel": "시뮬레이션 유형",
       "overpaymentAmount": "추가 상환 금액",
@@ -463,6 +467,7 @@
       "interestSaved": "절약되는 이자",
       "totalExtraContributed": "총 추가 상환액",
       "beyondProjection": "예측 범위 초과",
+      "unknown": "알 수 없음",
       "newInstallment": "새 상환액",
       "installmentDrop": "{payment} (−{reduction})",
       "monthlyPayment": "월 상환액",
@@ -505,7 +510,9 @@
       "colOverpayment": "추가 상환",
       "overpaymentWithFrequency": "{amount} ({frequency})",
       "loadAria": "시나리오 \"{name}\" 불러오기",
-      "budgetSummary": "예산 {amount}/월"
+      "budgetSummary": "예산 {amount}/월",
+      "chartExcludedUnknown": "{count, plural, other {# 개 시나리오는 표시되지 않습니다: 이자 절감액을 알 수 없습니다.}}",
+      "chartNeedsTwoKnown": "비교 차트에는 이자 절감액을 알 수 있는 시나리오가 2개 이상 필요합니다."
     },
     "scenarioChart": {
       "title": "시나리오 비교",

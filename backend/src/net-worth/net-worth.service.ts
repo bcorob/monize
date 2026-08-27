@@ -26,6 +26,7 @@ import { FxAggregate } from "../common/fx-aggregate";
 import { applyActionToQuantity } from "../securities/investment-replay.util";
 import { formatDateYMDLocal } from "../common/date-utils";
 import { positionCloseAsOf, PricePoint } from "./position-price.util";
+import { preferredCurrency } from "../common/default-currency.util";
 
 const LIABILITY_TYPES: AccountType[] = [
   AccountType.CREDIT_CARD,
@@ -543,7 +544,7 @@ export class NetWorthService {
     const pref = await withScopedDb(this.dataSource, (m) =>
       m.getRepository(UserPreference).findOne({ where: { userId } }),
     );
-    const defaultCurrency = pref?.defaultCurrency || "USD";
+    const defaultCurrency = preferredCurrency(pref);
 
     const start = startDate || "1990-01-01";
     const end = endDate || new Date().toISOString().slice(0, 10);
@@ -733,7 +734,7 @@ export class NetWorthService {
     const pref = await withScopedDb(this.dataSource, (m) =>
       m.getRepository(UserPreference).findOne({ where: { userId } }),
     );
-    const defaultCurrency = displayCurrency || pref?.defaultCurrency || "USD";
+    const defaultCurrency = displayCurrency || preferredCurrency(pref);
 
     const start = startDate || "1990-01-01";
     const end = endDate || new Date().toISOString().slice(0, 10);
@@ -1083,7 +1084,7 @@ export class NetWorthService {
     const pref = await withScopedDb(this.dataSource, (m) =>
       m.getRepository(UserPreference).findOne({ where: { userId } }),
     );
-    const defaultCurrency = displayCurrency || pref?.defaultCurrency || "USD";
+    const defaultCurrency = displayCurrency || preferredCurrency(pref);
 
     const end = endDate || new Date().toISOString().slice(0, 10);
 
@@ -1411,8 +1412,7 @@ export class NetWorthService {
     const pref = await withScopedDb(this.dataSource, (m) =>
       m.getRepository(UserPreference).findOne({ where: { userId } }),
     );
-    const defaultCurrency =
-      opts.displayCurrency || pref?.defaultCurrency || "USD";
+    const defaultCurrency = opts.displayCurrency || preferredCurrency(pref);
 
     const end = opts.endDate || new Date().toISOString().slice(0, 10);
 
@@ -2159,9 +2159,7 @@ export class NetWorthService {
     // history.
     const windowStart = months[0] ?? startDate;
     const windowEnd =
-      months.length > 0
-        ? this.monthEndDate(months[months.length - 1])
-        : today;
+      months.length > 0 ? this.monthEndDate(months[months.length - 1]) : today;
     const { stored: storedPrices, txFallback: txPrices } =
       await this.loadValuationSeries(securityIds, windowStart, windowEnd);
 

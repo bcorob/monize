@@ -16,6 +16,7 @@ import { getOrdinal } from '@/lib/ordinal';
 import { useDragReorder, DropIndicatorLine } from '@/hooks/useDragReorder';
 import { WidgetHeading } from './widget-meta';
 import { CARD_CLASS } from '@/components/ui/Card';
+import { preferredCurrency } from '@/lib/default-currency';
 
 interface FavouriteAccountsProps {
   accounts: Account[];
@@ -33,7 +34,7 @@ export function FavouriteAccounts({ accounts, brokerageMarketValues, unpricedHol
   const router = useRouter();
   const preferences = usePreferencesStore((s) => s.preferences);
   const { formatCurrency: formatCurrencyBase } = useNumberFormat();
-  const defaultCurrency = preferences?.defaultCurrency || 'CAD';
+  const defaultCurrency = preferredCurrency(preferences?.defaultCurrency);
   const [reordering, setReordering] = useState(false);
   const [localOrder, setLocalOrder] = useState<{ accounts: Account[]; order: Account[] } | null>(null);
 

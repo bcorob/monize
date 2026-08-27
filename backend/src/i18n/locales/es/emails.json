@@ -18,6 +18,8 @@
     "colAmount": "Cantidad",
     "typeIncome": "Ingreso",
     "typeExpense": "Gasto",
+    "typeUnknown": "Dirección desconocida",
+    "amountUnavailable": "Importe no disponible",
     "button": "Ver Facturas &amp; Depósitos"
   },
   "mortgageReminder": {

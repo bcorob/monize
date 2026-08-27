@@ -27,7 +27,6 @@
     "manualTitle": "Erfordert manuelle Buchung",
     "negativeBalanceWarning": "Diese Buchung bringt den Kontosaldo unter null",
     "viewAll": "Alle Rechnungen und Einzahlungen anzeigen",
-    "totalDue": "Gesamt fällig",
     "totalIncoming": "Gesamt eingehend",
     "moreItems": "+{count} weitere",
     "overdue": "Überfällig",
@@ -38,7 +37,8 @@
       "bill": "Rechnung",
       "deposit": "Einzahlung",
       "transfer": "Überweisung",
-      "reminder": "Erinnerung"
+      "reminder": "Erinnerung",
+      "unknown": "Unbekannt"
     }
   },
   "gettingStarted": {

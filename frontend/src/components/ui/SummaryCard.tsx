@@ -28,6 +28,13 @@ interface SummaryCardProps {
   icon: ReactNode;
   /** Color variant for the value text */
   valueColor?: 'default' | 'green' | 'red' | 'blue' | 'yellow';
+  /**
+   * One line under the value, for a figure that is withheld rather than
+   * measured: what is missing and where to fix it. A blank where a number
+   * should be is indistinguishable from "nothing to report", so a card showing
+   * an unavailable value says why (`docs/financial-semantics.md`).
+   */
+  hint?: ReactNode;
   /** Optional click handler */
   onClick?: () => void;
 }
@@ -44,7 +51,14 @@ const valueColorClasses = {
  * Summary card component used across pages for displaying key metrics.
  * Provides consistent styling for summary statistics at the top of pages.
  */
-export function SummaryCard({ label, value, icon, valueColor = 'default', onClick }: SummaryCardProps) {
+export function SummaryCard({
+  label,
+  value,
+  icon,
+  valueColor = 'default',
+  hint,
+  onClick,
+}: SummaryCardProps) {
   const content = (
     <div className="p-3 sm:p-5">
       <div className="flex items-center">
@@ -59,6 +73,11 @@ export function SummaryCard({ label, value, icon, valueColor = 'default', onClic
             <dd className={`text-base sm:text-lg font-semibold ${valueColorClasses[valueColor]}`}>
               {value}
             </dd>
+            {hint && (
+              <dd className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                {hint}
+              </dd>
+            )}
           </dl>
         </div>
       </div>

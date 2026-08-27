@@ -27,7 +27,6 @@
     "manualTitle": "Nécessite un enregistrement manuel",
     "negativeBalanceWarning": "Cette transaction fera passer le solde du compte en dessous de zéro",
     "viewAll": "Voir toutes les factures et dépôts",
-    "totalDue": "Total dû",
     "totalIncoming": "Total entrant",
     "moreItems": "+{count} de plus",
     "overdue": "En retard",
@@ -38,7 +37,8 @@
       "bill": "Facture",
       "deposit": "Dépôt",
       "transfer": "Virement",
-      "reminder": "Rappel"
+      "reminder": "Rappel",
+      "unknown": "Inconnu"
     }
   },
   "gettingStarted": {

@@ -25,6 +25,15 @@ vi.mock('@/lib/logger', () => ({
   }),
 }));
 
+/** A `YYYY-MM-DD` date `offset` days from today, on the local clock. */
+const daysFromToday = (offset: number): string => {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + offset);
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+};
+
 const makeAlert = (overrides: Partial<BudgetAlert> = {}): BudgetAlert => ({
   id: 'alert-1',
   userId: 'user-1',
@@ -259,6 +268,130 @@ describe('BudgetAlertList', () => {
     expect(onMarkRead).toHaveBeenCalledWith('bill-alert-1');
     expect(onClose).toHaveBeenCalled();
     expect(mockPush).toHaveBeenCalledWith('/bills');
+  });
+
+  // ---- BILL_DUE copy comes from the alert's data, in the reader's language ----
+  //
+  // The row is written by a cron under no request locale, so a stored sentence
+  // cannot be translated after the fact (issue #1247). `title`/`message` stay on
+  // the row as the fallback for a consumer with no catalog.
+
+  const billDueAlert = (data: Record<string, unknown>): BudgetAlert =>
+    makeAlert({
+      id: 'alert-bill',
+      alertType: 'BILL_DUE',
+      severity: 'info',
+      title: 'STORED ENGLISH TITLE',
+      message: 'STORED ENGLISH MESSAGE',
+      data,
+    });
+
+  it('composes a bill-due alert from its structured data', () => {
+    render(
+      <BudgetAlertList
+        {...defaultProps}
+        alerts={[
+          billDueAlert({
+            billId: 'st-1',
+            payeeName: 'Power Co',
+            amount: 312.65,
+            amountComplete: true,
+            dueDate: daysFromToday(3),
+            currencyCode: 'USD',
+          }),
+        ]}
+      />,
+    );
+
+    expect(screen.getByText('Power Co due in 3 days')).toBeInTheDocument();
+    expect(
+      screen.getByText(new RegExp(`312\\.65 due on ${daysFromToday(3)}`)),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('STORED ENGLISH TITLE')).not.toBeInTheDocument();
+    expect(screen.queryByText('STORED ENGLISH MESSAGE')).not.toBeInTheDocument();
+  });
+
+  it('says the amount is unavailable rather than leaving a blank or a stale figure', () => {
+    render(
+      <BudgetAlertList
+        {...defaultProps}
+        alerts={[
+          billDueAlert({
+            billId: 'st-1',
+            payeeName: 'Monthly ETF buy',
+            amount: null,
+            amountComplete: false,
+            dueDate: daysFromToday(0),
+            currencyCode: 'CAD',
+          }),
+        ]}
+      />,
+    );
+
+    expect(screen.getByText('Monthly ETF buy due today')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        `Amount unavailable (no current exchange rate), due on ${daysFromToday(0)}`,
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('STORED ENGLISH MESSAGE')).not.toBeInTheDocument();
+  });
+
+  it('says tomorrow rather than "in 1 days"', () => {
+    render(
+      <BudgetAlertList
+        {...defaultProps}
+        alerts={[
+          billDueAlert({
+            payeeName: 'Netflix',
+            amount: 15.99,
+            amountComplete: true,
+            dueDate: daysFromToday(1),
+            currencyCode: 'USD',
+          }),
+        ]}
+      />,
+    );
+
+    expect(screen.getByText('Netflix due tomorrow')).toBeInTheDocument();
+  });
+
+  /**
+   * The row lives until it is dismissed, so the copy is counted from `dueDate`
+   * against the reader's clock -- a stored "in 3 days" would still say three days
+   * a week later.
+   */
+  it('says overdue once the due date has passed', () => {
+    render(
+      <BudgetAlertList
+        {...defaultProps}
+        alerts={[
+          billDueAlert({
+            payeeName: 'Power Co',
+            amount: 312.65,
+            amountComplete: true,
+            dueDate: daysFromToday(-2),
+            currencyCode: 'USD',
+          }),
+        ]}
+      />,
+    );
+
+    expect(screen.getByText('Power Co overdue')).toBeInTheDocument();
+  });
+
+  it('falls back to the stored copy for a row written before the data existed', () => {
+    // Absent is "no information", not a licence to render nothing: a row from an
+    // older release carries only its English sentence.
+    render(
+      <BudgetAlertList
+        {...defaultProps}
+        alerts={[billDueAlert({ billId: 'st-1', payeeName: 'Power Co' })]}
+      />,
+    );
+
+    expect(screen.getByText('STORED ENGLISH TITLE')).toBeInTheDocument();
+    expect(screen.getByText('STORED ENGLISH MESSAGE')).toBeInTheDocument();
   });
 
   it('displays alert message text', () => {

@@ -29,6 +29,7 @@ import { aiLanguageInstruction } from "../context/language-directive";
 import { sanitizePromptValue } from "../../common/sanitization.util";
 import { UserPreference } from "../../users/entities/user-preference.entity";
 import { AiInsightResponse, InsightsListResponse } from "./dto/ai-insights.dto";
+import { preferredCurrency } from "../../common/default-currency.util";
 
 const INSIGHT_EXPIRY_DAYS = 7;
 const MAX_INSIGHTS_PER_USER = 50;
@@ -216,7 +217,7 @@ export class AiInsightsService {
           where: { userId },
         }),
       );
-      const currency = preferences?.defaultCurrency || "USD";
+      const currency = preferredCurrency(preferences);
 
       let aggregates: SpendingAggregates;
       const aggregateStart = Date.now();

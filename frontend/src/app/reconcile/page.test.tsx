@@ -279,6 +279,25 @@ describe('ReconcilePage', () => {
       const button = startButtons.find(el => el.tagName === 'BUTTON');
       expect(button).toBeDisabled();
     });
+
+    it('stores a typed "-0" as plain zero, never negative zero', async () => {
+      // Number("-0") is negative zero, and Intl formats -0 with a leading
+      // minus -- so an unnormalized entry would print "-$0.00" across the
+      // reconcile step and go into the request as -0.
+      render(<ReconcilePage />);
+      await waitFor(() => expect(screen.getByText(/Visa/)).toBeInTheDocument());
+      fireEvent.change(screen.getByLabelText('Account'), { target: { value: 'acc-2' } });
+      fireEvent.change(screen.getByLabelText('Statement Ending Balance'), {
+        target: { value: '-0' },
+      });
+      fireEvent.click(
+        screen.getAllByText('Start Reconciliation').find((el) => el.tagName === 'BUTTON')!,
+      );
+      await waitFor(() => expect(mockGetReconciliationData).toHaveBeenCalled());
+      const balanceArg = mockGetReconciliationData.mock.calls[0][2];
+      expect(balanceArg).toBe(0);
+      expect(Object.is(balanceArg, -0)).toBe(false);
+    });
   });
 
   describe('Reconcile Step', () => {
@@ -294,6 +313,19 @@ describe('ReconcilePage', () => {
       fireEvent.click(screen.getAllByText('Start Reconciliation').find(el => el.tagName === 'BUTTON')!);
       await waitFor(() => expect(screen.getByText('Statement Balance')).toBeInTheDocument(), { timeout: 3000 });
     }
+
+    it('keeps Select All and Select None in one non-wrapping group', async () => {
+      // The header toolbar wraps on phones; the two selection buttons are
+      // halves of one control, so they share a flex group the wrap cannot
+      // split -- and Add Transaction is deliberately outside it, free to wrap.
+      await advanceToReconcileStep();
+      const selectAll = screen.getByText('Select All');
+      const selectNone = screen.getByText('Select None');
+      expect(selectAll.parentElement).toBe(selectNone.parentElement);
+      expect(selectAll.parentElement).not.toContainElement(
+        screen.getByText('Add Transaction'),
+      );
+    });
 
     it('loads reconciliation data and shows summary bar', async () => {
       await advanceToReconcileStep();
@@ -413,6 +445,14 @@ describe('ReconcilePage', () => {
       return screen.getByTestId(`reconcile-row-${id}`);
     }
 
+    // The inline actions column carries Edit and Delete from `sm` up; the
+    // long-press / right-click sheet offers the same handlers and is covered
+    // by ReconcileTable's own tests, so the page wiring is exercised once,
+    // through the inline path.
+    function openRowAction(id: string, label: 'Edit' | 'Delete') {
+      fireEvent.click(within(rowFor(id)).getByLabelText(label));
+    }
+
     it('opens a blank form filed against the account being reconciled', async () => {
       await advanceToReconcileStep();
       fireEvent.click(screen.getByText('Add Transaction'));
@@ -422,7 +462,7 @@ describe('ReconcilePage', () => {
 
     it('opens the clicked row for editing', async () => {
       await advanceToReconcileStep();
-      fireEvent.click(within(rowFor('tx-2')).getByLabelText('Edit'));
+      openRowAction('tx-2', 'Edit');
       expect(screen.getByTestId('form-mode')).toHaveTextContent('tx-2');
     });
 
@@ -461,7 +501,7 @@ describe('ReconcilePage', () => {
         ...mockReconciliationData,
         transactions: mockTransactions.filter((t) => t.id !== 'tx-1'),
       });
-      fireEvent.click(within(rowFor('tx-1')).getByLabelText('Delete'));
+      openRowAction('tx-1', 'Delete');
       await act(async () => {
         fireEvent.click(screen.getByText('Delete'));
       });
@@ -470,7 +510,7 @@ describe('ReconcilePage', () => {
 
     it('deletes a plain transaction through the plain delete', async () => {
       await advanceToReconcileStep();
-      fireEvent.click(within(rowFor('tx-1')).getByLabelText('Delete'));
+      openRowAction('tx-1', 'Delete');
       await act(async () => {
         fireEvent.click(screen.getByText('Delete'));
       });
@@ -486,7 +526,7 @@ describe('ReconcilePage', () => {
         transactions: [{ ...mockTransactions[0], isTransfer: true }],
       });
       await advanceToReconcileStep();
-      fireEvent.click(within(rowFor('tx-1')).getByLabelText('Delete'));
+      openRowAction('tx-1', 'Delete');
       await act(async () => {
         fireEvent.click(screen.getByText('Delete'));
       });
@@ -496,7 +536,7 @@ describe('ReconcilePage', () => {
 
     it('asks before deleting', async () => {
       await advanceToReconcileStep();
-      fireEvent.click(within(rowFor('tx-1')).getByLabelText('Delete'));
+      openRowAction('tx-1', 'Delete');
       expect(screen.getByText('Delete Transaction')).toBeInTheDocument();
       expect(mockDelete).not.toHaveBeenCalled();
     });
@@ -619,20 +659,18 @@ describe('ReconcilePage', () => {
       expect(Number(input.value)).toBe(-750);
     });
 
-    it('uses a negative placeholder for liability accounts', async () => {
-      render(<ReconcilePage />);
-      await waitFor(() => expect(screen.getByText(/Visa/)).toBeInTheDocument());
-      fireEvent.change(screen.getByLabelText('Account'), { target: { value: 'acc-2' } });
-      const input = screen.getByLabelText('Statement Ending Balance') as HTMLInputElement;
-      expect(input.placeholder).toBe('-0.00');
-    });
-
-    it('uses a standard placeholder for non-liability accounts', async () => {
+    it('passes no account-specific placeholder -- the field keeps its neutral default', async () => {
+      // The liability "-0.00" placeholder read as a broken value, and the
+      // auto-negation above already owns the sign, so no account type gets a
+      // placeholder of its own (CurrencyInput's built-in "0.00" applies).
       render(<ReconcilePage />);
       await waitFor(() => expect(screen.getByText(/Checking/)).toBeInTheDocument());
-      fireEvent.change(screen.getByLabelText('Account'), { target: { value: 'acc-1' } });
-      const input = screen.getByLabelText('Statement Ending Balance') as HTMLInputElement;
-      expect(input.placeholder).toBe('0.00');
+      for (const accountId of ['acc-1', 'acc-2']) {
+        fireEvent.change(screen.getByLabelText('Account'), { target: { value: accountId } });
+        expect(screen.getByLabelText('Statement Ending Balance')).not.toHaveAttribute(
+          'placeholder',
+        );
+      }
     });
   });
 

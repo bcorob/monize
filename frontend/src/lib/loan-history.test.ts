@@ -535,6 +535,34 @@ describe('fetchLoanInterestTransactions', () => {
     expect(await fetchLoanInterestTransactions(makeAccount())).toEqual([]);
     expect(transactionsApi.getAllPages).not.toHaveBeenCalled();
   });
+
+  it('returns [] when the query runs and this loan has no interest expenses', async () => {
+    // The positive control for the rejection below: a genuinely empty result
+    // must stay an empty result, or the fix would just trade one wrong answer
+    // for another.
+    vi.mocked(transactionsApi.getAllPages).mockResolvedValue([]);
+    expect(await fetchLoanInterestTransactions(account)).toEqual([]);
+  });
+
+  it('rejects a failed lookup instead of reporting no interest', async () => {
+    // `catch { return [] }` made a transient 500 or timeout indistinguishable
+    // from the case above. Every caller already has the error state it should
+    // have reached -- `useLoanProjection` reports the projection unknown, the
+    // account page has an outer boundary, both loan reports run on
+    // `useReportData` -- and the helper was starving all of them.
+    //
+    // The consequence was not a visible blank: with the interest list empty,
+    // `hasSeparateInterest` reads false and every row falls to the ANALYTIC
+    // estimate, so a loan that books interest separately renders a full history
+    // of invented interest that looks exactly like a real one.
+    vi.mocked(transactionsApi.getAllPages).mockRejectedValueOnce(
+      new Error('interest lookup failed'),
+    );
+
+    await expect(fetchLoanInterestTransactions(account)).rejects.toThrow(
+      'interest lookup failed',
+    );
+  });
 });
 
 describe('deriveLoanPaymentHistory interest from the rate timeline', () => {

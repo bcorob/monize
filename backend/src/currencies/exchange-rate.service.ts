@@ -26,6 +26,7 @@ import {
   EmptyWindowMemory,
   monthFetchWindow,
 } from "../common/time-series/history-fill";
+import { preferredCurrency } from "../common/default-currency.util";
 
 // Cap concurrent Yahoo FX fetches so the daily refresh does not burst every
 // currency pair at once (this cron also runs alongside the security price
@@ -494,7 +495,7 @@ export class ExchangeRateService implements OnModuleInit {
         where: { userId },
       }),
     );
-    const defaultCurrency = pref?.defaultCurrency || "USD";
+    const defaultCurrency = preferredCurrency(pref);
 
     // 2. Find non-default currencies and their earliest transaction dates
     //    Includes both account currencies AND security currencies held in those accounts

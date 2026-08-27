@@ -20,6 +20,7 @@ import {
   getCurrencyCatalog,
   type CurrencyMetadata,
 } from "./currency-metadata";
+import { FALLBACK_DEFAULT_CURRENCY } from "../common/default-currency.util";
 
 export interface CurrencyLookupResult {
   code: string;
@@ -43,9 +44,12 @@ export interface UserCurrencyView {
 }
 
 // The currency every new user's preferences default to (see
-// buildDefaultPreferences). It must exist because user_preferences.default_currency
-// has a foreign key to currencies(code).
-const DEFAULT_CURRENCY_CODE = "USD";
+// buildDefaultPreferences), and the one every reporting surface falls back to
+// when a preference row is missing -- so it is the SAME constant, derived rather
+// than restated. It must exist because user_preferences.default_currency has a
+// foreign key to currencies(code), and because a fallback to a currency with no
+// row resolves no rate at all: every converted total would be withheld.
+const DEFAULT_CURRENCY_CODE = FALLBACK_DEFAULT_CURRENCY;
 
 @Injectable()
 export class CurrenciesService implements OnApplicationBootstrap {

@@ -128,7 +128,8 @@
     "backToReports": "レポートに戻る",
     "switchReport": "別のレポートに切り替える",
     "switchPlaceholder": "レポートを絞り込む...",
-    "switchNoMatches": "一致するレポートはありません"
+    "switchNoMatches": "一致するレポートはありません",
+    "favourites": "お気に入り"
   },
   "reportPage": {
     "notFound": "レポートが見つかりません",
@@ -437,6 +438,7 @@
     "currentBalance": "現在の残高",
     "principalPaid": "支払い済み元金",
     "estTotalInterest": "推定総利息",
+    "interestOverProjection": "予測期間の利息",
     "interestPaid": "支払い済み利息",
     "progress": "進捗",
     "estPayoff": "推定完済",
@@ -807,6 +809,7 @@
     "originalAmount": "元の金額",
     "interestRate": "利率",
     "estTotalInterest": "推定総利息",
+    "interestOverProjection": "予測期間の利息",
     "totalInterestPaid": "支払い済み総利息",
     "paymentsMade": "支払い回数",
     "estPayoff": "推定完済",
@@ -839,7 +842,8 @@
     "typeLineOfCredit": "当座貸越",
     "typeLoan": "ローン",
     "typeMortgage": "住宅ローン",
-    "pdfSubtitlePaymentsSummary": "{count} 件の支払い済み、{interest} 総利息"
+    "pdfSubtitlePaymentsSummary": "{count} 件の支払い済み、{interest} 総利息",
+    "pdfSubtitlePaymentsProjection": "{count} 回支払済み、予測期間の利息 {interest}"
   },
   "monteCarlo": {
     "toasts": {
@@ -1548,12 +1552,16 @@
     "csvColBillName": "請求書名",
     "csvColDueDate": "支払期日",
     "csvColAmount": "金額",
+    "csvColCurrency": "通貨",
     "csvColFrequency": "頻度",
     "csvColAccount": "口座",
     "csvColStatus": "ステータス",
     "csvStatusOverdue": "期限超過",
     "csvStatusAuto": "自動",
     "csvStatusManual": "手動",
+    "amountUnavailable": "取得できません",
+    "occurrencesUnavailable": "予定されている発生分を読み込めなかったため、以下のカレンダーと金額は利用できません。登録済みの請求そのものには影響ありません。",
+    "csvAmountUnavailable": "取得できません（現在の為替レートなし）",
     "pdfTitle": "支払い予定レポート",
     "pdfSubtitle": "{month} | {count} 件の有効な請求書",
     "pdfActiveBills": "有効な請求書",

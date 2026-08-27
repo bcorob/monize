@@ -14,6 +14,14 @@
       "warning": "Avertissement",
       "success": "Bonne nouvelle",
       "info": "Info"
+    },
+    "billDue": {
+      "titleOverdue": "{payee} en retard",
+      "titleToday": "{payee} à payer aujourd'hui",
+      "titleTomorrow": "{payee} à payer demain",
+      "titleInDays": "{payee} à payer dans {days} jours",
+      "amountDue": "{amount} à payer le {date}",
+      "amountUnavailable": "Montant indisponible (aucun taux de change actuel), à payer le {date}"
     }
   },
   "summary503020": {

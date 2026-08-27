@@ -2174,8 +2174,13 @@ export class ToolExecutorService {
     ];
 
     if (data.velocity) {
+      // A safe daily spend the server could not work out (an upcoming bill whose
+      // current exchange rate is unknown) is stated as unknown, not omitted and
+      // not defaulted -- the summary is the line a model quotes (issue #1247).
       summaryParts.push(
-        `Safe daily spend: $${data.velocity.safeDailySpend.toFixed(2)}, ${data.velocity.daysRemaining} days remaining`,
+        data.velocity.safeDailySpend === null
+          ? `Safe daily spend: unknown (an upcoming bill's current amount could not be determined), ${data.velocity.daysRemaining} days remaining`
+          : `Safe daily spend: $${data.velocity.safeDailySpend.toFixed(2)}, ${data.velocity.daysRemaining} days remaining`,
       );
     }
 
@@ -2228,9 +2233,34 @@ export class ToolExecutorService {
       !kind || kind === "all" ? "bills and deposits" : `${kind}s`;
     const overduePart =
       data.overdueCount > 0 ? `, ${data.overdueCount} overdue` : "";
+    // A total the server could not complete must not read as a settled figure in
+    // the one line the model is most likely to quote (issue #1247). Name the
+    // partial sum as a partial sum, and say which items are unresolved -- the
+    // structured payload carries the same distinction, but a model that only
+    // reads the summary would otherwise answer with a confident wrong number.
+    const describeTotal = (
+      total: number | null,
+      knownSubtotal: number | undefined,
+    ): string =>
+      total !== null
+        ? total.toFixed(2)
+        : `unknown (subtotal of the items that resolved: ${(knownSubtotal ?? 0).toFixed(2)})`;
+    // Two distinct causes, and the reader has to be able to tell them apart: an
+    // occurrence whose own amount is unknown is a schedule to look at, while a
+    // missing rate is a rate to go and fix. Folding both into one sentence sent
+    // the model (and the user) to the wrong place.
+    const unresolvedPart = (data.unknownAmountItems ?? []).length
+      ? ` Current amounts could not be determined for: ${(data.unknownAmountItems ?? []).join(", ")}; totals including them are incomplete.`
+      : "";
+    const missingRatePart = (data.missingRatePairs ?? []).length
+      ? ` No exchange rate for ${(data.missingRatePairs ?? []).join(", ")}, so totals covering those items are incomplete.`
+      : "";
     return {
       data,
-      summary: `${data.itemCount} upcoming ${kindDesc} in the next ${days} day${days === 1 ? "" : "s"}${overduePart}. Bills: ${data.totalUpcomingBills.toFixed(2)}, Deposits: ${data.totalUpcomingDeposits.toFixed(2)}.`,
+      // The totals' currency is named in the same breath as the totals: each
+      // item keeps its own settlement currency, so two figures with no code
+      // between them is exactly how a 1,350 CAD occurrence got read as USD.
+      summary: `${data.itemCount} upcoming ${kindDesc} in the next ${days} day${days === 1 ? "" : "s"}${overduePart}. Bills: ${describeTotal(data.totalUpcomingBills, data.knownUpcomingBillsSubtotal)} ${data.totalsCurrency}, Deposits: ${describeTotal(data.totalUpcomingDeposits, data.knownUpcomingDepositsSubtotal)} ${data.totalsCurrency}.${unresolvedPart}${missingRatePart}`,
       sources: [
         {
           type: "scheduled_transactions",

@@ -279,7 +279,7 @@ describe("TransactionAnalyticsService", () => {
       // the account-detail category breakdown.
       expect(mockQueryBuilder.orWhere).toHaveBeenCalledWith(
         expect.stringContaining(
-          "transaction.isSplit = true AND transaction.isTransfer = false AND summaryAccount.accountType != 'INVESTMENT' AND splits.categoryId IS NULL",
+          "transaction.isSplit = true AND transaction.isTransfer = false AND splits.categoryId IS NULL",
         ),
       );
     });

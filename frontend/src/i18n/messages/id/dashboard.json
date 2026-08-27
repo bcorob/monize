@@ -27,7 +27,6 @@
     "manualTitle": "Membutuhkan posting manual",
     "negativeBalanceWarning": "Transaksi ini akan menyebabkan saldo akun menjadi di bawah nol",
     "viewAll": "Lihat semua tagihan & setoran",
-    "totalDue": "Total jatuh tempo",
     "totalIncoming": "Total masuk",
     "moreItems": "+{count} lagi",
     "overdue": "Lewat jatuh tempo",
@@ -38,7 +37,8 @@
       "bill": "Tagihan",
       "deposit": "Setoran",
       "transfer": "Transfer",
-      "reminder": "Pengingat"
+      "reminder": "Pengingat",
+      "unknown": "Tidak diketahui"
     }
   },
   "gettingStarted": {

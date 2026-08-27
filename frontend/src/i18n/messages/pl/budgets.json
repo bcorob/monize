@@ -14,6 +14,14 @@
       "warning": "Ostrzeżenie",
       "success": "Dobre wieści",
       "info": "Informacja"
+    },
+    "billDue": {
+      "titleOverdue": "{payee} – termin minął",
+      "titleToday": "{payee} – termin dzisiaj",
+      "titleTomorrow": "{payee} – termin jutro",
+      "titleInDays": "{payee} – termin za {days} dni",
+      "amountDue": "{amount} do zapłaty {date}",
+      "amountUnavailable": "Kwota niedostępna (brak aktualnego kursu wymiany), termin {date}"
     }
   },
   "summary503020": {

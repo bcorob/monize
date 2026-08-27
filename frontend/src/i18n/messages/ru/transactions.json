@@ -123,6 +123,10 @@
       "status": "Статус",
       "actions": "Действия"
     },
+    "dateDisplay": {
+      "toggleLabel": "Скрыть год",
+      "toggleTitle": "Убрать год из дат, чтобы поместилось больше имени получателя"
+    },
     "attachmentsCount": "{count, plural, one {# вложение} few {# вложения} many {# вложений} other {# вложения}}",
     "today": "Сегодня",
     "export": {

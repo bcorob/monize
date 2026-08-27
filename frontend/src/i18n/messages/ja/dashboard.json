@@ -27,7 +27,6 @@
     "manualTitle": "手動での計上が必要です",
     "negativeBalanceWarning": "この取引により勘定科目の残高がマイナスになります",
     "viewAll": "すべての請求書・入金を見る",
-    "totalDue": "支払合計",
     "totalIncoming": "入金合計",
     "moreItems": "+{count} 件",
     "overdue": "期限超過",
@@ -38,7 +37,8 @@
       "bill": "請求書",
       "deposit": "入金",
       "transfer": "振替",
-      "reminder": "リマインダー"
+      "reminder": "リマインダー",
+      "unknown": "不明"
     }
   },
   "gettingStarted": {

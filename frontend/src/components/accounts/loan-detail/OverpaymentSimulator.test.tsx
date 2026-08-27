@@ -315,6 +315,41 @@ describe('OverpaymentSimulator', () => {
     });
   });
 
+  it('explains that a loan which never pays off has no interest to work back from', async () => {
+    // A baseline that stops at the projection horizon has no lifetime interest,
+    // so an interest-savings target cannot be honoured -- and the reason is not
+    // "even a very large overpayment cannot save that much", which is what the
+    // unreachable message says. 500k at 6% paying 2510 a month never clears.
+    await renderSimulator({
+      projectionInput: {
+        startingBalance: 500000,
+        annualRate: 6,
+        paymentAmount: 2510,
+        frequency: 'MONTHLY' as const,
+        firstPaymentDate: new Date('2026-01-15'),
+      },
+    });
+
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Simulation type'), {
+        target: { value: 'INTEREST' },
+      });
+    });
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Target interest savings'), {
+        target: { value: '10000' },
+      });
+    });
+
+    expect(
+      screen.getByText(
+        'This loan does not pay off within the projected period, so there is no total interest to work back from.',
+      ),
+    ).toBeInTheDocument();
+    // Not the out-of-reach message, which claims a different thing.
+    expect(screen.queryByText(/even a very large overpayment/)).not.toBeInTheDocument();
+  });
+
   it('warns when the window is inverted (start after end)', async () => {
     await renderSimulator({ projectionInput });
 

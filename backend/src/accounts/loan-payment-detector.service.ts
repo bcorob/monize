@@ -6,6 +6,8 @@ import { TransactionSplit } from "../transactions/entities/transaction-split.ent
 import { withScopedDb } from "../common/db/scoped-db";
 import { roundMoney, sumMoney } from "../common/round.util";
 import { tr } from "../i18n/translate";
+import { calculateNextDueDate, ensureYMD } from "../common/recurrence";
+import { SCHEDULED_FREQUENCY_BY_PAYMENT_FREQUENCY } from "./payment-frequency.util";
 
 export interface DetectedLoanPayment {
   /** Detected regular payment amount (positive) */
@@ -1172,42 +1174,23 @@ export class LoanPaymentDetectorService {
   }
 
   /**
-   * Calculate the next due date by advancing one period from the last payment date.
+   * The next due date, one period after the last payment.
+   *
+   * Through the recurrence engine, because a detected next-payment date is a
+   * prediction about what the scheduler will post: this was a fourth hand-rolled
+   * copy of that calendar, and it drifted in the usual place -- the month
+   * cadences stepped with `Date.setMonth(+1)`, which OVERFLOWS (31 January to 3
+   * March, skipping February) where the engine clamps to 28 February. It also
+   * read local components off a `Date` built from a date-only string, so the
+   * answer moved with the container's timezone.
+   *
+   * An unrecognised frequency returns the date unchanged, as the switch's
+   * missing `default` did -- the caller treats that as "no prediction".
    */
   private calculateNextDueDate(lastDate: string, frequency: string): string {
-    const date = new Date(lastDate);
-
-    switch (frequency) {
-      case "WEEKLY":
-        date.setDate(date.getDate() + 7);
-        break;
-      case "BIWEEKLY":
-        date.setDate(date.getDate() + 14);
-        break;
-      case "SEMIMONTHLY":
-        if (date.getDate() <= 15) {
-          // Move to end of month
-          date.setMonth(date.getMonth() + 1, 0);
-        } else {
-          // Move to 15th of next month
-          date.setMonth(date.getMonth() + 1, 15);
-        }
-        break;
-      case "MONTHLY":
-        date.setMonth(date.getMonth() + 1);
-        break;
-      case "QUARTERLY":
-        date.setMonth(date.getMonth() + 3);
-        break;
-      case "YEARLY":
-        date.setFullYear(date.getFullYear() + 1);
-        break;
-    }
-
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, "0");
-    const d = String(date.getDate()).padStart(2, "0");
-    return `${y}-${m}-${d}`;
+    const recurrence = SCHEDULED_FREQUENCY_BY_PAYMENT_FREQUENCY[frequency];
+    if (!recurrence) return ensureYMD(lastDate);
+    return calculateNextDueDate(ensureYMD(lastDate), recurrence);
   }
 
   /**

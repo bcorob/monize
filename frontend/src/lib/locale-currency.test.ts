@@ -4,6 +4,7 @@ import {
   detectBrowserCurrency,
   FALLBACK_CURRENCY,
 } from './locale-currency';
+import { FALLBACK_DEFAULT_CURRENCY } from './default-currency';
 
 /** Swap navigator.languages for one assertion; restored in afterEach. */
 function setBrowserLanguages(languages: string[] | undefined) {
@@ -117,6 +118,8 @@ describe('detectBrowserCurrency', () => {
 
 describe('FALLBACK_CURRENCY', () => {
   it('matches the backend default so skipping onboarding is consistent', () => {
-    expect(FALLBACK_CURRENCY).toBe('USD');
+    // Against the shared constant, not a literal: this value's whole job is to
+    // agree with the currency every total falls back to.
+    expect(FALLBACK_CURRENCY).toBe(FALLBACK_DEFAULT_CURRENCY);
   });
 });

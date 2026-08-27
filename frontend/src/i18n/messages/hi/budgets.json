@@ -14,6 +14,14 @@
       "warning": "चेतावनी",
       "success": "अच्छी खबर",
       "info": "जानकारी"
+    },
+    "billDue": {
+      "titleOverdue": "{payee} अतिदेय",
+      "titleToday": "{payee} आज देय",
+      "titleTomorrow": "{payee} कल देय",
+      "titleInDays": "{payee} {days} दिनों में देय",
+      "amountDue": "{date} को {amount} देय",
+      "amountUnavailable": "राशि अनुपलब्ध (कोई वर्तमान विनिमय दर नहीं), {date} को देय"
     }
   },
   "summary503020": {

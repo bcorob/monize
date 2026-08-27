@@ -14,6 +14,14 @@
       "warning": "Warnung",
       "success": "Gute Nachricht",
       "info": "Info"
+    },
+    "billDue": {
+      "titleOverdue": "{payee} überfällig",
+      "titleToday": "{payee} heute fällig",
+      "titleTomorrow": "{payee} morgen fällig",
+      "titleInDays": "{payee} fällig in {days} Tagen",
+      "amountDue": "{amount} fällig am {date}",
+      "amountUnavailable": "Betrag nicht verfügbar (kein aktueller Wechselkurs), fällig am {date}"
     }
   },
   "summary503020": {

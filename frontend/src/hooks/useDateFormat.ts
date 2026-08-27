@@ -3,6 +3,7 @@ import { usePreferencesStore } from '@/store/preferencesStore';
 import { resolveDateFormatPattern } from '@/lib/date-parse';
 import {
   formatDate as formatDateUtil,
+  formatDateWithoutYear as formatDateWithoutYearUtil,
   formatMonth as formatMonthUtil,
   formatDatetimeLocal,
   isoToDatetimeLocal,
@@ -12,7 +13,8 @@ import {
 /**
  * Hook to format dates according to user preferences.
  * Returns a formatDate function that uses the user's preferred date format,
- * plus a formatMonth function for year-month (YYYY-MM) values.
+ * a formatMonth function for year-month (YYYY-MM) values, and a
+ * formatDateWithoutYear function for columns too narrow for all three parts.
  * When dateFormat is 'browser', the user's UI language is used as the locale
  * (so freshly defaulted users see dates in the same locale as their UI).
  */
@@ -43,6 +45,16 @@ export function useDateFormat() {
       return formatDateUtil(date, dateFormat, locale);
     },
     [dateFormat, language]
+  );
+
+  /**
+   * The date with its year dropped, for a column too narrow for all three
+   * parts. Built on `datePattern`, so day and month keep the user's own
+   * ordering and separators.
+   */
+  const formatDateWithoutYear = useCallback(
+    (date: Date | string): string => formatDateWithoutYearUtil(date, datePattern),
+    [datePattern]
   );
 
   const formatMonth = useCallback(
@@ -97,6 +109,7 @@ export function useDateFormat() {
 
   return {
     formatDate,
+    formatDateWithoutYear,
     formatMonth,
     formatDateTime,
     formatTimeZoneAbbrev,

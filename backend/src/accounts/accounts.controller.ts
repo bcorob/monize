@@ -61,7 +61,6 @@ import {
   SetupLoanPaymentsResponseDto,
 } from "./dto/setup-loan-payments.dto";
 import { PaymentFrequency } from "./loan-amortization.util";
-import { MortgagePaymentFrequency } from "./mortgage-amortization.util";
 import { formatDateYMD, todayYMD } from "../common/date-utils";
 import { assertStringParam } from "../common/query-param-utils";
 import { tr } from "../i18n/translate";
@@ -497,7 +496,7 @@ export class AccountsController {
       mortgagePreviewDto.mortgageAmount,
       mortgagePreviewDto.interestRate,
       mortgagePreviewDto.amortizationMonths,
-      mortgagePreviewDto.paymentFrequency as MortgagePaymentFrequency,
+      mortgagePreviewDto.paymentFrequency,
       new Date(mortgagePreviewDto.paymentStartDate),
       mortgagePreviewDto.isCanadian,
       mortgagePreviewDto.isVariableRate,

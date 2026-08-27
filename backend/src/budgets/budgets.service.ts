@@ -16,8 +16,7 @@ import {
 import { Transaction } from "../transactions/entities/transaction.entity";
 import { TransactionSplit } from "../transactions/entities/transaction-split.entity";
 import { Category } from "../categories/entities/category.entity";
-import { ScheduledTransaction } from "../scheduled-transactions/entities/scheduled-transaction.entity";
-import { ScheduledTransactionOverride } from "../scheduled-transactions/entities/scheduled-transaction-override.entity";
+import { ScheduledOccurrenceService } from "../scheduled-transactions/scheduled-occurrence.service";
 import { CreateBudgetDto } from "./dto/create-budget.dto";
 import { UpdateBudgetDto } from "./dto/update-budget.dto";
 import { CreateBudgetCategoryDto } from "./dto/create-budget-category.dto";
@@ -35,12 +34,37 @@ import {
 import { formatDateYMD, todayYMD } from "../common/date-utils";
 import { formatCurrency } from "../common/format-currency.util";
 import { roundMoney, sumMoney } from "../common/round.util";
+import {
+  convertingTotal,
+  memoizedRateResolver,
+} from "../common/converting-total";
+import { ExchangeRateService } from "../currencies/exchange-rate.service";
 import { ActionHistoryService } from "../action-history/action-history.service";
 
 export interface UpcomingBill {
   id: string;
   name: string;
-  amount: number;
+  /**
+   * The positive magnitude this occurrence would actually cost today -- the
+   * server-resolved effective amount, not the persisted snapshot (issue #1247).
+   * `null` when a component of it (a current cross-currency settlement rate) is
+   * unknown; the persisted `amount` is never substituted, because a budget that
+   * quietly counts a stale figure understates or overstates what is available.
+   */
+  amount: number | null;
+  /**
+   * The currency `amount` is expressed in -- the occurrence's own, which for an
+   * investment schedule is the settlement currency rather than the brokerage
+   * account's, and which need not be the budget's.
+   *
+   * It travels with the amount because it is half of what the amount means: the
+   * two were separated here and `getVelocity` subtracted a 1,350 CAD bill from a
+   * USD budget as though it were 1,350 USD -- a 35% overstatement of that bill,
+   * presented as a real figure in the reader's own currency.
+   */
+  currencyCode: string;
+  /** `amount !== null`. */
+  amountComplete: boolean;
   dueDate: string;
   categoryId: string | null;
 }
@@ -72,6 +96,15 @@ export class BudgetsService {
   constructor(
     private dataSource: DataSource,
     private actionHistoryService: ActionHistoryService,
+    // "Which occurrence is due, and what does it cost today" has one
+    // server-side answer (issue #1247); the budget asks it rather than reading
+    // the persisted snapshot or re-deciding which override applies, so its
+    // figures cannot disagree with the cash-flow forecast or the register.
+    private occurrences: ScheduledOccurrenceService,
+    // An occurrence's amount is meaningful only in its own currency, and a
+    // budget's figures are in the budget's: the two are reconciled here rather
+    // than by dropping the currency and hoping they match (issue #1247).
+    private exchangeRates: ExchangeRateService,
   ) {}
 
   async create(
@@ -416,34 +449,40 @@ export class BudgetsService {
     };
   }
 
+  /**
+   * The next occurrence of every outflow schedule due between today and
+   * `periodEnd`, priced at what it would actually cost today.
+   *
+   * Both halves come from the one occurrence contract (issue #1247). The
+   * occurrence matters as much as the amount: reading the schedule template meant
+   * an occurrence the user had re-priced or moved was reported at the template's
+   * figure on the template's date, and `getVelocity` subtracts this from what is
+   * available to spend.
+   */
   async getUpcomingBills(
     userId: string,
     periodEnd: string,
   ): Promise<UpcomingBill[]> {
     const todayStr = todayYMD();
-
-    const scheduledTransactions = await withScopedDb(this.dataSource, (m) =>
-      m
-        .getRepository(ScheduledTransaction)
-        .createQueryBuilder("st")
-        .where("st.user_id = :userId", { userId })
-        .andWhere("st.is_active = true")
-        .andWhere("st.amount < 0")
-        .andWhere("st.next_due_date >= :todayStr", { todayStr })
-        .andWhere("st.next_due_date <= :periodEnd", { periodEnd })
-        .orderBy("st.next_due_date", "ASC")
-        .getMany(),
+    const occurrences = await this.occurrences.findOccurrences(
+      userId,
+      {
+        from: todayStr,
+        through: periodEnd,
+        // One row per schedule, which is the shape this list has always had.
+        maxOccurrences: 1,
+      },
+      { outflowsOnly: true },
     );
 
-    return scheduledTransactions.map((st) => ({
-      id: st.id,
-      name: st.name,
-      amount: Math.abs(Number(st.amount)),
-      dueDate:
-        typeof st.nextDueDate === "string"
-          ? st.nextDueDate
-          : formatDateYMD(st.nextDueDate as Date),
-      categoryId: st.categoryId,
+    return occurrences.map((occurrence) => ({
+      id: occurrence.scheduledTransactionId,
+      name: occurrence.schedule.name,
+      amount: occurrence.amount === null ? null : Math.abs(occurrence.amount),
+      currencyCode: occurrence.currencyCode,
+      amountComplete: occurrence.complete,
+      dueDate: occurrence.dueDate,
+      categoryId: occurrence.schedule.categoryId,
     }));
   }
 
@@ -455,15 +494,31 @@ export class BudgetsService {
     projectedTotal: number;
     budgetTotal: number;
     projectedVariance: number;
-    safeDailySpend: number;
+    /** `null` when `trulyAvailable` is unknown -- it is derived from it. */
+    safeDailySpend: number | null;
     daysElapsed: number;
     daysRemaining: number;
     totalDays: number;
     currentSpent: number;
     paceStatus: "under" | "on_track" | "over";
     upcomingBills: UpcomingBill[];
-    totalUpcomingBills: number;
-    trulyAvailable: number;
+    /**
+     * `null` when any upcoming bill's current amount is unknown (issue #1247):
+     * the partial sum then travels in `knownUpcomingBillsSubtotal`, and
+     * `upcomingBillsComplete` is false.
+     */
+    totalUpcomingBills: number | null;
+    knownUpcomingBillsSubtotal: number;
+    upcomingBillsComplete: boolean;
+    /**
+     * The currency pairs a bill could not be converted through, so a withheld
+     * total says why. Empty when every component converted -- including when the
+     * shortfall was an occurrence with no resolvable amount at all, which has no
+     * pair to name.
+     */
+    upcomingBillsMissingRates: string[];
+    /** `null` when the upcoming-bills total is unknown. */
+    trulyAvailable: number | null;
   }> {
     const budget = await this.findOne(userId, budgetId);
     const { periodStart, periodEnd } = this.getCurrentPeriodDates(budget);
@@ -495,15 +550,50 @@ export class BudgetsService {
     const budgetTotal = sumMoney(expenseCategories.map((c) => c.budgeted));
 
     const upcomingBills = await this.getUpcomingBills(userId, periodEnd);
-    const totalUpcomingBills = sumMoney(upcomingBills.map((b) => b.amount));
+    // Today on the caller's own clock, so the rate is the one the bills list is
+    // showing rather than one from the container's timezone.
+    const todayStr = todayYMD();
+    // Every bill converted into the budget's own currency before it joins the
+    // total, because that is the currency `remaining` is in.
+    //
+    // Two separate ways a component goes missing, and both make the total
+    // unknowable rather than smaller (issue #1247, `docs/financial-semantics.md`):
+    // an occurrence whose current amount could not be resolved at all, and one
+    // whose amount is known in a currency with no rate to the budget's. The
+    // partial sum travels beside the total under its own name and never stands in
+    // for it, and `upcomingBillsMissingRates` names the pairs so a withheld
+    // figure comes with the reason (an unexplained blank is a dead end).
+    // Through the one shared accumulator (`common/converting-total.ts`), which
+    // owns the memoized per-pair lookup, the rejecting rate resolver, and both
+    // ways a component goes missing. This block used to be written out here and
+    // again in the AI/MCP rollup, comments included.
+    const billsTotal = await convertingTotal(
+      upcomingBills.map((bill) => ({
+        amount: bill.amount,
+        currency: bill.currencyCode,
+      })),
+      budget.currencyCode,
+      memoizedRateResolver(this.exchangeRates, budget.currencyCode, todayStr),
+    );
+    const upcomingBillsComplete = billsTotal.total !== null;
+    const knownUpcomingBillsSubtotal = billsTotal.knownSubtotal;
+    const totalUpcomingBills = billsTotal.total;
+    const upcomingBillsMissingRates = billsTotal.missingPairs;
 
     const dailyBurnRate = currentSpent / daysElapsed;
     const projectedTotal = dailyBurnRate * totalDays;
     const projectedVariance = projectedTotal - budgetTotal;
     const remaining = roundMoney(budgetTotal - currentSpent);
-    const trulyAvailable = remaining - totalUpcomingBills;
+    const trulyAvailable =
+      totalUpcomingBills === null
+        ? null
+        : roundMoney(remaining - totalUpcomingBills);
     const safeDailySpend =
-      daysRemaining > 0 ? Math.max(0, trulyAvailable / daysRemaining) : 0;
+      trulyAvailable === null
+        ? null
+        : daysRemaining > 0
+          ? Math.max(0, trulyAvailable / daysRemaining)
+          : 0;
 
     let paceStatus: "under" | "on_track" | "over";
     const paceRatio = budgetTotal > 0 ? projectedTotal / budgetTotal : 0;
@@ -520,15 +610,19 @@ export class BudgetsService {
       projectedTotal: roundMoney(projectedTotal),
       budgetTotal,
       projectedVariance: roundMoney(projectedVariance),
-      safeDailySpend: roundMoney(safeDailySpend),
+      safeDailySpend:
+        safeDailySpend === null ? null : roundMoney(safeDailySpend),
       daysElapsed,
       daysRemaining,
       totalDays,
       currentSpent,
       paceStatus,
       upcomingBills,
-      totalUpcomingBills: roundMoney(totalUpcomingBills),
-      trulyAvailable: roundMoney(trulyAvailable),
+      totalUpcomingBills,
+      knownUpcomingBillsSubtotal,
+      upcomingBillsComplete,
+      upcomingBillsMissingRates,
+      trulyAvailable,
     };
   }
 
@@ -559,36 +653,30 @@ export class BudgetsService {
     today.setHours(0, 0, 0, 0);
     const todayStr = todayYMD();
 
-    // Use a 30-day DB-level cap, then filter per-bill by reminderDaysBefore
+    // Use a 30-day cap, then filter per-bill by reminderDaysBefore
     const horizon = new Date(today);
     horizon.setDate(horizon.getDate() + 30);
     const horizonStr = formatDateYMD(horizon);
 
-    const manualBills = await withScopedDb(this.dataSource, (m) =>
-      m
-        .getRepository(ScheduledTransaction)
-        .createQueryBuilder("st")
-        .leftJoinAndSelect("st.payee", "payee")
-        .where("st.user_id = :userId", { userId })
-        .andWhere("st.is_active = true")
-        .andWhere("st.auto_post = false")
-        .andWhere("st.next_due_date >= :todayStr", { todayStr })
-        .andWhere("st.next_due_date <= :horizonStr", { horizonStr })
-        .orderBy("st.next_due_date", "ASC")
-        .getMany(),
+    // Occurrences, not schedules (issue #1247). The alert is about one occurrence
+    // -- what it will cost and when it falls -- and both answers come from the one
+    // occurrence contract. Keying the override lookup on `overrideDate` here (the
+    // identity is `originalDate`) meant a bill the user had MOVED silently fell
+    // back to the template's amount, on the template's date.
+    const manualOccurrences = await this.occurrences.findOccurrences(
+      userId,
+      { from: todayStr, through: horizonStr, maxOccurrences: 1 },
+      { manualOnly: true },
     );
+    if (manualOccurrences.length === 0) return;
 
-    if (manualBills.length === 0) return;
-
-    // Filter bills to only those within their own reminder window
-    // and not already paid ahead of time
-    const eligibleBills = manualBills.filter((bill) => {
-      const dueDate =
-        typeof bill.nextDueDate === "string"
-          ? bill.nextDueDate
-          : formatDateYMD(bill.nextDueDate as Date);
+    // Only those within their own reminder window, and not already paid ahead of
+    // time. Measured from the date the occurrence actually falls on.
+    const eligible = manualOccurrences.filter((occurrence) => {
+      const bill = occurrence.schedule;
       const daysUntilDue = Math.ceil(
-        (new Date(dueDate).getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
+        (new Date(occurrence.dueDate).getTime() - today.getTime()) /
+          (1000 * 60 * 60 * 24),
       );
       if (daysUntilDue > bill.reminderDaysBefore) return false;
 
@@ -610,7 +698,7 @@ export class BudgetsService {
       return true;
     });
 
-    if (eligibleBills.length === 0) return;
+    if (eligible.length === 0) return;
 
     // Fetch ALL existing BILL_DUE alerts (including dismissed) to prevent re-creation
     const existingAlerts = await withScopedDb(this.dataSource, (m) =>
@@ -624,45 +712,40 @@ export class BudgetsService {
         .getMany(),
     );
 
+    // An occurrence's identity is `(billId, originalDate)`, so that is what
+    // decides "already alerted". `periodStart` is the date the alert announces,
+    // which an override can move -- deduping on it alone would raise a second
+    // alert for the same occurrence every time the user re-dated it. Rows written
+    // before `originalDate` was recorded are still matched on their announced
+    // date, so an upgrade does not re-alert everything once.
     const existingBillKeys = new Set(
-      existingAlerts.map(
-        (a) => `${(a.data as Record<string, unknown>).billId}:${a.periodStart}`,
-      ),
+      existingAlerts.flatMap((a) => {
+        const data = (a.data ?? {}) as Record<string, unknown>;
+        const keys = [`${data.billId}:${a.periodStart}`];
+        if (typeof data.originalDate === "string") {
+          keys.push(`${data.billId}:${data.originalDate}`);
+        }
+        return keys;
+      }),
     );
 
-    // Batch-fetch instance overrides for eligible bills
-    const billIds = eligibleBills.map((b) => b.id);
-    const overrides = await withScopedDb(this.dataSource, (m) =>
-      m
-        .getRepository(ScheduledTransactionOverride)
-        .createQueryBuilder("o")
-        .where("o.scheduled_transaction_id IN (:...billIds)", { billIds })
-        .getMany(),
-    );
+    for (const occurrence of eligible) {
+      const bill = occurrence.schedule;
+      const dueDate = occurrence.dueDate;
 
-    const overrideMap = new Map<string, ScheduledTransactionOverride>();
-    for (const o of overrides) {
-      // Key by billId:overrideDate to match against nextDueDate
-      const overrideDate =
-        typeof o.overrideDate === "string"
-          ? o.overrideDate
-          : formatDateYMD(o.overrideDate as unknown as Date);
-      overrideMap.set(`${o.scheduledTransactionId}:${overrideDate}`, o);
-    }
-
-    for (const bill of eligibleBills) {
-      const dueDate =
-        typeof bill.nextDueDate === "string"
-          ? bill.nextDueDate
-          : formatDateYMD(bill.nextDueDate as Date);
-
-      if (existingBillKeys.has(`${bill.id}:${dueDate}`)) continue;
+      if (
+        existingBillKeys.has(`${bill.id}:${occurrence.originalDate}`) ||
+        existingBillKeys.has(`${bill.id}:${dueDate}`)
+      ) {
+        continue;
+      }
 
       const payeeName = bill.payee?.name || bill.payeeName || bill.name;
-      const override = overrideMap.get(`${bill.id}:${dueDate}`);
-      const amount = Math.abs(
-        Number(override?.amount != null ? override.amount : bill.amount),
-      );
+      // An amount we cannot work out is stated as unavailable. Naming a stale
+      // figure in an alert the user acts on is the defect; withholding the
+      // alert entirely would hide a payment that is genuinely due.
+      const amount =
+        occurrence.amount === null ? null : Math.abs(occurrence.amount);
       const daysUntilDue = Math.ceil(
         (new Date(dueDate).getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
       );
@@ -675,14 +758,29 @@ export class BudgetsService {
       alert.budgetCategoryId = null;
       alert.alertType = AlertType.BILL_DUE;
       alert.severity = severity;
+      // `title`/`message` are the English fallbacks for a reader with no client
+      // to render them (the email digest, an API consumer). The UI composes both
+      // from `alertType` and `data` in the reader's own language -- a stored
+      // sentence cannot be translated after the fact, and the missing-rate case
+      // is exactly the one a non-English reader hits.
       alert.title = `${payeeName} due${daysUntilDue === 0 ? " today" : daysUntilDue === 1 ? " tomorrow" : ` in ${daysUntilDue} days`}`;
-      alert.message = `${formatCurrency(amount, bill.currencyCode)} due on ${dueDate}`;
+      alert.message =
+        amount === null
+          ? `Amount unavailable (no current exchange rate), due on ${dueDate}`
+          : `${formatCurrency(amount, occurrence.currencyCode)} due on ${dueDate}`;
+      // Structured, so the UI can compose the copy in the reader's language --
+      // and deliberately without `daysUntilDue`: "due in 3 days" was true when
+      // this row was written and stops being true the next morning, while the
+      // row lives until it is dismissed. The client counts from `dueDate`
+      // against its own clock.
       alert.data = {
         billId: bill.id,
         payeeName,
         amount,
+        amountComplete: amount !== null,
         dueDate,
-        currencyCode: bill.currencyCode,
+        originalDate: occurrence.originalDate,
+        currencyCode: occurrence.currencyCode,
       };
       alert.isRead = false;
       alert.isEmailSent = false;

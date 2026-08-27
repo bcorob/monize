@@ -17,6 +17,7 @@ import { budgetsApi } from '@/lib/budgets';
 import { countElapsedPeriods } from '@/lib/chart-buckets';
 import { sumMoney } from '@/lib/format';
 import { getNextScheduled } from '@/lib/scheduled-utils';
+import { UnknownAmount } from '@/components/ui/UnknownAmount';
 import { buildDescendantIdSet, rollupToDirectChildren } from '@/lib/categoryUtils';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
 import { useDateFormat } from '@/hooks/useDateFormat';
@@ -464,12 +465,19 @@ export function CategoryInfoWidget({
           <div className="flex items-baseline justify-between gap-3">
             <p
               className={`text-base font-semibold ${
-                nextScheduled.amount < 0
+                nextScheduled.amount !== null && nextScheduled.amount < 0
                   ? 'text-red-600 dark:text-red-400'
                   : 'text-green-600 dark:text-green-400'
               }`}
             >
-              {formatCurrency(Math.abs(nextScheduled.amount), nextScheduled.currencyCode)}
+              {/* An occurrence whose current amount could not be resolved is shown
+                  as unavailable, never as its stale stored figure (issue
+                  #1247). */}
+              {nextScheduled.amount === null ? (
+                <UnknownAmount />
+              ) : (
+                formatCurrency(Math.abs(nextScheduled.amount), nextScheduled.currencyCode)
+              )}
             </p>
             <div className="text-right min-w-0">
               {nextScheduled.payeeName && (

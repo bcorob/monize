@@ -123,6 +123,10 @@
       "status": "Status",
       "actions": "Akcje"
     },
+    "dateDisplay": {
+      "toggleLabel": "Ukryj rok",
+      "toggleTitle": "Usuń rok z dat, aby zmieściło się więcej nazwy odbiorcy"
+    },
     "attachmentsCount": "{count, plural, one {# załącznik} few {# załączniki} many {# załączników} other {# załącznika}}",
     "today": "Dzisiaj",
     "export": {

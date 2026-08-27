@@ -206,7 +206,14 @@ beforeEach(() => {
   });
   mockGetAllPages.mockResolvedValue([]);
   mockGetSummary.mockResolvedValue({ totalIncome: 100, totalExpenses: 40, netCashFlow: 60, transactionCount: 3 });
-  mockGetBalanceForecast.mockResolvedValue({ accountId: 'loan-1', currencyCode: 'CAD', points: [] });
+  mockGetBalanceForecast.mockResolvedValue({
+    accountId: 'loan-1',
+    currencyCode: 'CAD',
+    points: [],
+    // The endpoint always reports completeness (issue #1247).
+    complete: true,
+    gaps: [],
+  });
   mockGetMonthlyTotals.mockResolvedValue([]);
   mockGetGroupedTotals.mockResolvedValue([]);
   mockGetRecurringCharges.mockResolvedValue([]);

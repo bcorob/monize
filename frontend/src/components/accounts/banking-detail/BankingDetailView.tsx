@@ -14,6 +14,13 @@ import { BankingSummaryCards } from './BankingSummaryCards';
 import { CashFlowMiniReport } from './CashFlowMiniReport';
 import { TopGroupsPanel } from '../shared/TopGroupsPanel';
 import type { Account } from '@/types/account';
+import {
+  EMPTY_BALANCE_FORECAST_STATE,
+  projectedBalanceFrom,
+  readBalanceForecast,
+  type BalanceForecastState,
+} from '../shared/balance-forecast-state';
+import { BalanceForecastUnavailable } from '@/components/accounts/shared/BalanceForecastUnavailable';
 import type { GroupedTotal, MonthlyTotal } from '@/types/transaction';
 
 const logger = createLogger('BankingDetailView');
@@ -63,7 +70,13 @@ export function BankingDetailView({ account }: BankingDetailViewProps) {
   const monthRangeQuery = `startDate=${monthStart}&endDate=${today}`;
 
   const [historicalBalances, setHistoricalBalances] = useState<DailyBalancePoint[]>([]);
-  const [forecastPoints, setForecastPoints] = useState<DailyBalancePoint[]>([]);
+  // ONE piece of state, because "is the projection withheld" is one decision.
+  // Held as two -- points here, gaps there -- each render site re-derived the
+  // answer from whichever half it could see, and the two disagreed whenever the
+  // server withheld without naming a cause (see `readBalanceForecast`).
+  const [forecast, setForecast] = useState<BalanceForecastState>(
+    EMPTY_BALANCE_FORECAST_STATE,
+  );
   const [moneyIn, setMoneyIn] = useState(0);
   const [moneyOut, setMoneyOut] = useState(0);
   const [monthly, setMonthly] = useState<MonthlyTotal[]>([]);
@@ -83,7 +96,7 @@ export function BankingDetailView({ account }: BankingDetailViewProps) {
       const yearStart = `${now.getFullYear()}-01-01`;
       const twelveMonthsAgo = format(subMonths(now, 11), 'yyyy-MM-dd');
 
-      const [balances, forecast, summary, monthlyTotals, categories, payees, ytdCategories] =
+      const [balances, forecastResponse, summary, monthlyTotals, categories, payees, ytdCategories] =
         await Promise.all([
           // Cap history at today so the forecast owns everything after it (the
           // forecast already includes any future-dated real transactions).
@@ -131,9 +144,10 @@ export function BankingDetailView({ account }: BankingDetailViewProps) {
 
       if (cancelled) return;
       setHistoricalBalances(balances.map((r) => ({ date: r.date, balance: r.balance })));
-      setForecastPoints(
-        forecast ? forecast.points.map((p) => ({ date: p.date, balance: p.balance })) : [],
-      );
+      // Read once, by the shared reader that owns the whole withholding rule
+      // (issue #1247, and its re-audit: the rule was being applied twice from
+      // two different fields).
+      setForecast(readBalanceForecast(forecastResponse));
       setMoneyIn(summary?.totalIncome ?? 0);
       setMoneyOut(summary?.totalExpenses ?? 0);
       setMonthly(monthlyTotals);
@@ -152,15 +166,15 @@ export function BankingDetailView({ account }: BankingDetailViewProps) {
   // One chart series: history up to today, then the projected forecast. The
   // forecast's first point is today (== the last history point), so drop it.
   const chartData = useMemo(
-    () => [...historicalBalances, ...forecastPoints.slice(1)],
-    [historicalBalances, forecastPoints],
+    () => [...historicalBalances, ...forecast.points.slice(1)],
+    [historicalBalances, forecast.points],
   );
 
-  // Projected balance is the end of the forecast (falls back to current).
-  const projectedBalance =
-    forecastPoints.length && forecastPoints[forecastPoints.length - 1].balance !== null
-      ? (forecastPoints[forecastPoints.length - 1].balance as number)
-      : Number(account.currentBalance) || 0;
+  // Both from the same `withheld`, so the panel and the figure cannot disagree.
+  const projectedBalance = projectedBalanceFrom(
+    forecast,
+    Number(account.currentBalance) || 0,
+  );
 
   // An average over a series with a gap is not the average: it is the mean of
   // the days that happen to be known, presented as the mean of all of them. Fall
@@ -209,7 +223,16 @@ export function BankingDetailView({ account }: BankingDetailViewProps) {
         <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
           {t('chart.title')}
         </h2>
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 px-2 py-4 sm:p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 px-2 py-4 sm:p-6 space-y-4">
+          {/* The history still draws; only the forward line is withheld, so the
+              panel sits above it and says which schedule stopped the projection
+              and how to fix it (issue #1247). */}
+          {!isLoading && (forecast.withheld || forecast.unavailable) && (
+            <BalanceForecastUnavailable
+              gaps={forecast.gaps}
+              reason={forecast.unavailable ? 'requestFailed' : 'withheld'}
+            />
+          )}
           {!isLoading && chartData.length === 0 ? (
             <p className="text-gray-500 dark:text-gray-400 text-center py-8">{t('chart.empty')}</p>
           ) : (

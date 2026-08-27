@@ -57,11 +57,10 @@ import {
   GemStrategyReportView,
   GemWarning,
 } from "./gem-report.types";
+import { preferredCurrency } from "../common/default-currency.util";
 
 /** Prices older than this make the signal provisional. */
 const STALE_PRICE_DAYS = 5;
-
-const DEFAULT_CURRENCY = "CAD";
 
 /** Lookback the unconfigured report reports, matching the column default. */
 const DEFAULT_LOOKBACK_MONTHS = 12;
@@ -164,7 +163,7 @@ export class GemStrategyService {
     const preference = await withScopedDb(this.dataSource, (manager) =>
       manager.getRepository(UserPreference).findOne({ where: { userId } }),
     );
-    return preference?.defaultCurrency || DEFAULT_CURRENCY;
+    return preferredCurrency(preference);
   }
 
   /** Every role, mapped or not, so the client can name what is missing. */

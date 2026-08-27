@@ -6,6 +6,11 @@
     "summaryActiveBills": "活跃账单",
     "summaryActiveDeposits": "活跃存款",
     "summaryMonthlyNet": "月净额",
+    "summaryAmountUnavailable": "不可用",
+    "summaryNetRatesUnavailable": "当前无法获取汇率，因此无法计算净额。",
+    "summaryNetMissingRates": "没有 {currencies} 的汇率 — 请在“货币”中添加",
+    "summaryNetMissingRatesAndUnpriceable": "没有 {currencies} 的汇率，且有一个或多个计划无法计算金额。",
+    "summaryNetUnpriceable": "一个或多个计划无法计算金额",
     "summaryDueNow": "当前到期",
     "loadingText": "正在加载定期交易...",
     "chartUnavailable": "图表暂时不可用"

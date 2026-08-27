@@ -6,6 +6,11 @@
     "summaryActiveBills": "Active Bills",
     "summaryActiveDeposits": "Active Deposits",
     "summaryMonthlyNet": "Monthly Net",
+    "summaryAmountUnavailable": "Not available",
+    "summaryNetRatesUnavailable": "Exchange rates are not available right now, so the net cannot be worked out.",
+    "summaryNetMissingRates": "No exchange rate for {currencies} — add one on Currencies",
+    "summaryNetMissingRatesAndUnpriceable": "No exchange rate for {currencies}, and one or more schedules could not be priced.",
+    "summaryNetUnpriceable": "One or more schedules could not be priced",
     "summaryDueNow": "Due Now",
     "loadingText": "Loading scheduled transactions...",
     "chartUnavailable": "Chart temporarily unavailable"

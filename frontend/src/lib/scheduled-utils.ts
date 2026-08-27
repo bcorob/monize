@@ -1,8 +1,15 @@
 import { ScheduledTransaction } from '@/types/scheduled-transaction';
+import { nextOccurrenceEffectiveAmount } from '@/lib/scheduled-effective-amount';
 
 export interface NextScheduledItem {
   date: string;
-  amount: number;
+  /**
+   * What this occurrence would post today, from the server's effective-amount
+   * contract -- `null` when the current amount cannot be determined (issue
+   * #1247). Never the persisted snapshot: render unknown as unknown.
+   */
+  amount: number | null;
+  /** The currency `amount` is in (the settlement currency for an investment). */
   currencyCode: string;
   payeeName: string | null;
 }
@@ -20,12 +27,15 @@ export function getUpcomingScheduled(
 ): NextScheduledItem[] {
   return scheduled
     .filter((st) => st.isActive && predicate(st))
-    .map((st) => ({
-      date: (st.nextOverride?.overrideDate ?? st.nextDueDate).split('T')[0],
-      amount: st.nextOverride?.amount ?? st.amount,
-      currencyCode: st.currencyCode,
-      payeeName: st.payee?.name ?? st.payeeName ?? null,
-    }))
+    .map((st) => {
+      const effective = nextOccurrenceEffectiveAmount(st);
+      return {
+        date: (st.nextOverride?.overrideDate ?? st.nextDueDate).split('T')[0],
+        amount: effective.amount,
+        currencyCode: effective.currencyCode,
+        payeeName: st.payee?.name ?? st.payeeName ?? null,
+      };
+    })
     .sort((a, b) => a.date.localeCompare(b.date))
     .slice(0, limit);
 }

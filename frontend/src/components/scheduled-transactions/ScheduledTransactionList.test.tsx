@@ -213,18 +213,49 @@ describe('ScheduledTransactionList', () => {
     expect(screen.getByText('-$19.99')).toBeInTheDocument();
   });
 
-  it('derives investment amount from qty * price + commission (base, no override)', () => {
+  // Issue #1247: an investment schedule's amount column is the server's
+  // effective amount -- what the occurrence would post today, in the settlement
+  // currency -- not the persisted `amount` (the security-currency cash impact)
+  // and not a locally recomputed pre-FX figure.
+  it("shows the server's effective amount for an investment schedule", () => {
     const transactions = [createTransaction({
       isInvestment: true,
       investmentAction: 'BUY',
       investmentQuantity: 10,
       investmentPrice: 100,
-      investmentCommission: 9.99,
-      amount: 0, // base amount column ignored for investments
+      investmentCommission: 0,
+      // 10 x 100 in the security's currency, pinned at 1.50 when it was EUR.
+      amount: -1000,
+      currencyCode: 'CAD',
+      // The security is USD now, and USD -> CAD resolves at 1.35.
+      effectiveAmount: -1350,
+      effectiveAmountComplete: true,
+      effectiveCurrencyCode: 'CAD',
     })];
     render(<ScheduledTransactionList transactions={transactions} />);
-    // 10 * 100 + 9.99 = 1009.99, BUY -> negative
-    expect(screen.getByText('-$1009.99')).toBeInTheDocument();
+    expect(screen.getByText('-$1350.00')).toBeInTheDocument();
+    // Neither the pre-FX impact nor the figure the stale 1.50 would have given.
+    expect(screen.queryByText('-$1000.00')).not.toBeInTheDocument();
+    expect(screen.queryByText('-$1500.00')).not.toBeInTheDocument();
+  });
+
+  it('renders an unavailable marker when the effective amount is unknown', () => {
+    const transactions = [createTransaction({
+      isInvestment: true,
+      investmentAction: 'BUY',
+      investmentQuantity: 10,
+      investmentPrice: 100,
+      amount: -1000,
+      currencyCode: 'CAD',
+      effectiveAmount: null,
+      effectiveAmountComplete: false,
+      effectiveCurrencyCode: 'CAD',
+    })];
+    render(<ScheduledTransactionList transactions={transactions} />);
+    // Not the stale stored figure, at either rate, and not a measured zero.
+    expect(screen.queryByText('-$1000.00')).not.toBeInTheDocument();
+    expect(screen.queryByText('-$1500.00')).not.toBeInTheDocument();
+    expect(screen.queryByText('-$0.00')).not.toBeInTheDocument();
   });
 
   it('shows base vs override amount for an investment override that changes quantity', () => {
@@ -234,13 +265,18 @@ describe('ScheduledTransactionList', () => {
       investmentQuantity: 10,
       investmentPrice: 100,
       investmentCommission: 0,
-      amount: 0,
+      amount: -1000,
+      effectiveAmount: -1000,
+      effectiveAmountComplete: true,
+      effectiveCurrencyCode: 'CAD',
       nextOverride: {
         amount: null,
         overrideDate: null,
         investmentQuantity: 5,
         investmentPrice: 100,
         investmentTotalAmount: null,
+        effectiveAmount: -500,
+        effectiveAmountComplete: true,
       },
     })];
     render(<ScheduledTransactionList transactions={transactions} />);
@@ -257,13 +293,18 @@ describe('ScheduledTransactionList', () => {
       investmentPrice: null,
       investmentTotalAmount: 50,
       investmentCommission: 0,
-      amount: 0,
+      amount: 50,
+      effectiveAmount: 50,
+      effectiveAmountComplete: true,
+      effectiveCurrencyCode: 'CAD',
       nextOverride: {
         amount: null,
         overrideDate: null,
         investmentQuantity: null,
         investmentPrice: null,
         investmentTotalAmount: 125,
+        effectiveAmount: 125,
+        effectiveAmountComplete: true,
       },
     })];
     render(<ScheduledTransactionList transactions={transactions} />);
@@ -278,13 +319,18 @@ describe('ScheduledTransactionList', () => {
       investmentQuantity: 10,
       investmentPrice: 100,
       investmentCommission: 0,
-      amount: 0,
+      amount: -1000,
+      effectiveAmount: -1000,
+      effectiveAmountComplete: true,
+      effectiveCurrencyCode: 'CAD',
       nextOverride: {
         amount: null,
         overrideDate: null,
         investmentQuantity: 10,
         investmentPrice: 100,
         investmentTotalAmount: null,
+        effectiveAmount: -1000,
+        effectiveAmountComplete: true,
       },
     })];
     render(<ScheduledTransactionList transactions={transactions} />);

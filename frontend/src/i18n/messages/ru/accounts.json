@@ -210,6 +210,7 @@
     "frequencyOptions": {
       "weekly": "Еженедельно",
       "biweekly": "Каждые 2 недели",
+      "semiMonthly": "Дважды в месяц",
       "monthly": "Ежемесячно",
       "quarterly": "Ежеквартально",
       "yearly": "Ежегодно"
@@ -308,12 +309,13 @@
     "previewFirstInterest": "Проценты первого платежа:",
     "previewTotalPayments": "Итого платежей:",
     "previewTotalInterest": "Итого процентов:",
+    "previewFinalPayment": "Последний платёж:",
     "previewPayoffDate": "Ожидаемая дата погашения:",
     "previewNA": "Н/Д",
     "calculatingPreview": "Расчёт предпросмотра...",
     "frequencyOptions": {
       "monthly": "Ежемесячно",
-      "semiMonthly": "Дважды в месяц (1-е и 15-е)",
+      "semiMonthly": "Дважды в месяц (15-е и конец месяца)",
       "biweekly": "Раз в две недели",
       "acceleratedBiweekly": "Ускоренный раз в две недели",
       "weekly": "Еженедельно",
@@ -367,6 +369,7 @@
       "WEEKLY": "Еженедельно",
       "BIWEEKLY": "Раз в две недели",
       "SEMI_MONTHLY": "Дважды в месяц",
+      "SEMIMONTHLY": "Дважды в месяц",
       "MONTHLY": "Ежемесячно",
       "QUARTERLY": "Ежеквартально",
       "YEARLY": "Ежегодно",
@@ -436,7 +439,8 @@
         "effect": "→ экономит {interest}, погашение {date}",
         "alreadyMet": "Цель уже достигнута без досрочных платежей.",
         "unreachableInterest": "Недостижимо — даже очень большая доплата не даст такой экономии на процентах.",
-        "unreachableDate": "Недостижимо — этот месяц раньше самого раннего возможного погашения."
+        "unreachableDate": "Недостижимо — этот месяц раньше самого раннего возможного погашения.",
+        "baselineIncomplete": "Этот кредит не погашается в течение прогнозируемого периода, поэтому нет общей суммы процентов, от которой можно считать."
       },
       "simulationTypeLabel": "Тип симуляции",
       "overpaymentAmount": "Сумма досрочного платежа",
@@ -463,6 +467,7 @@
       "interestSaved": "Сэкономленные проценты",
       "totalExtraContributed": "Всего внесено дополнительно",
       "beyondProjection": "За пределами прогноза",
+      "unknown": "Неизвестно",
       "newInstallment": "Новый платёж",
       "installmentDrop": "{payment} (−{reduction})",
       "monthlyPayment": "Ежемесячный платёж",
@@ -505,7 +510,9 @@
       "colOverpayment": "Досрочный платёж",
       "overpaymentWithFrequency": "{amount} ({frequency})",
       "loadAria": "Загрузить сценарий «{name}»",
-      "budgetSummary": "Бюджет {amount}/мес."
+      "budgetSummary": "Бюджет {amount}/мес.",
+      "chartExcludedUnknown": "{count, plural, one {# сценарий не показан: экономия на процентах неизвестна.} few {# сценария не показаны: экономия на процентах неизвестна.} many {# сценариев не показаны: экономия на процентах неизвестна.} other {# сценария не показаны: экономия на процентах неизвестна.}}",
+      "chartNeedsTwoKnown": "Для графика сравнения нужны как минимум два сценария с известной экономией на процентах."
     },
     "scenarioChart": {
       "title": "Сравнение сценариев",

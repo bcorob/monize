@@ -128,7 +128,8 @@
     "backToReports": "Terug naar rapporten",
     "switchReport": "Naar een ander rapport gaan",
     "switchPlaceholder": "Rapporten filteren...",
-    "switchNoMatches": "Geen rapporten gevonden"
+    "switchNoMatches": "Geen rapporten gevonden",
+    "favourites": "Favorieten"
   },
   "reportPage": {
     "notFound": "Rapport niet gevonden",
@@ -437,6 +438,7 @@
     "currentBalance": "Huidig saldo",
     "principalPaid": "Betaalde aflossing",
     "estTotalInterest": "Geschatte totale rente",
+    "interestOverProjection": "Rente over de projectie",
     "interestPaid": "Betaalde rente",
     "progress": "Voortgang",
     "estPayoff": "Gesch. aflossing",
@@ -807,6 +809,7 @@
     "originalAmount": "Oorspronkelijk bedrag",
     "interestRate": "Rentepercentage",
     "estTotalInterest": "Geschatte totale rente",
+    "interestOverProjection": "Rente over de projectie",
     "totalInterestPaid": "Totale betaalde rente",
     "paymentsMade": "Gedane betalingen",
     "estPayoff": "Gesch. aflossing",
@@ -839,7 +842,8 @@
     "typeLineOfCredit": "Kredietlijn",
     "typeLoan": "Lening",
     "typeMortgage": "Hypotheek",
-    "pdfSubtitlePaymentsSummary": "{count} betalingen gedaan, {interest} totale rente"
+    "pdfSubtitlePaymentsSummary": "{count} betalingen gedaan, {interest} totale rente",
+    "pdfSubtitlePaymentsProjection": "{count} betalingen gedaan, {interest} rente over de projectie"
   },
   "monteCarlo": {
     "toasts": {
@@ -1548,12 +1552,16 @@
     "csvColBillName": "Rekeningnaam",
     "csvColDueDate": "Vervaldatum",
     "csvColAmount": "Bedrag",
+    "csvColCurrency": "Valuta",
     "csvColFrequency": "Frequentie",
     "csvColAccount": "Rekening",
     "csvColStatus": "Status",
     "csvStatusOverdue": "Achterstallig",
     "csvStatusAuto": "Auto",
     "csvStatusManual": "Handmatig",
+    "amountUnavailable": "Niet beschikbaar",
+    "occurrencesUnavailable": "De geprojecteerde termijnen konden niet worden geladen, dus de agenda en de bedragen hieronder zijn niet beschikbaar. Je rekeningen zelf zijn niet gewijzigd.",
+    "csvAmountUnavailable": "Niet beschikbaar (geen actuele wisselkoers)",
     "pdfTitle": "Rapport aankomende rekeningen",
     "pdfSubtitle": "{month} | {count} actieve rekeningen",
     "pdfActiveBills": "Actieve rekeningen",

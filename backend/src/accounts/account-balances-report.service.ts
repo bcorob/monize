@@ -19,6 +19,7 @@ import { todayYMD } from "../common/date-utils";
 import { UserPreference } from "../users/entities/user-preference.entity";
 import { ExchangeRateService } from "../currencies/exchange-rate.service";
 import { SecurityPriceService } from "../securities/security-price.service";
+import { preferredCurrency } from "../common/default-currency.util";
 
 /**
  * One account's worth at the end of a single day.
@@ -893,7 +894,7 @@ export class AccountBalancesReportService {
     const preference = await withScopedDb(this.dataSource, (m) =>
       m.getRepository(UserPreference).findOne({ where: { userId } }),
     );
-    return preference?.defaultCurrency || "USD";
+    return preferredCurrency(preference);
   }
 
   /**

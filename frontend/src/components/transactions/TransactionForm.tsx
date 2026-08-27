@@ -569,19 +569,34 @@ function TransactionFormFields({ transaction, duplicateFrom, defaultAccountId, d
   }, [transaction?.payeeId, t]);
 
   // Quick-fill the form from a previously entered transaction (chosen from
-  // the history popover next to the Payee field). Resets date to today and
-  // status to UNRECONCILED, otherwise mirrors duplicateFrom behaviour. When
-  // the source is a split, the form switches into split mode and the splits
-  // state is restored so the user gets back the same split breakdown.
+  // the history popover next to the Payee field). Resets status to
+  // UNRECONCILED, otherwise mirrors duplicateFrom behaviour. When the source
+  // is a split, the form switches into split mode and the splits state is
+  // restored so the user gets back the same split breakdown.
+  //
+  // Quick-fill copies what the source row SAYS, never the context the user is
+  // entering in. Three fields are therefore left exactly as the form holds
+  // them:
+  //  - accountId: the recents list is global, so a chosen row often belongs to
+  //    a different account than the one the user opened the form on, and
+  //    silently moving the entry there is never what they asked for.
+  //  - currencyCode: it follows from that account (see the currencyCode effect
+  //    above), and taking the source's code would denominate the amount in a
+  //    currency the account does not hold.
+  //  - transactionDate: the date on screen is the user's - either the one they
+  //    typed or the remembered last-entry date - so a batch of receipts dated
+  //    last week stays dated last week. The old reset to today was the worse
+  //    half of this: DateInput is uncontrolled here (it renders its own state
+  //    and only reads the DOM on mount), so setValue moved the SUBMITTED date
+  //    without moving the box, and the user saved a date the screen never
+  //    showed. The source row's own date is not copied either: it is when that
+  //    transaction happened, not when this one did.
   const handleQuickFill = (source: Transaction) => {
     const amount = Math.round(Number(source.amount) * 100) / 100;
-    setValue('accountId', source.accountId, { shouldDirty: true, shouldValidate: true });
-    setValue('transactionDate', getLocalDateString(), { shouldDirty: true, shouldValidate: true });
     setValue('payeeId', source.payeeId || undefined, { shouldDirty: true });
     setValue('payeeName', source.payeeName || '', { shouldDirty: true });
     setValue('categoryId', source.categoryId || '', { shouldDirty: true });
     setValue('amount', amount, { shouldDirty: true, shouldValidate: true });
-    setValue('currencyCode', source.currencyCode, { shouldDirty: true });
     setValue('description', source.description || '', { shouldDirty: true });
     setValue('referenceNumber', '', { shouldDirty: true });
     setValue('status', TransactionStatus.UNRECONCILED, { shouldDirty: true });

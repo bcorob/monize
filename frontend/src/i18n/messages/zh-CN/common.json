@@ -237,6 +237,12 @@
     "explanation": "部分合计：有 {count, plural, other {# 笔金额}} 无法计入，因此所示数字已将其排除。没有 {currencies} 兑 {displayCurrency} 的汇率。",
     "explanationExcluded": "部分合计：有 {count, plural, other {# 笔金额}} 无法计算，因此所示数字已将其排除。"
   },
+  "unknownAmount": {
+    "marker": "—",
+    "srLabel": "金额不可用",
+    "scheduledFx": "无法计算当前金额：找不到该计划项目结算货币对的汇率。已保存的金额是按旧汇率计算的，因此不予显示。",
+    "displayFx": "此金额无法在此处显示：金额本身已知，但没有可用汇率将其换算为该合计所用的货币。请在“货币”页面刷新汇率。"
+  },
   "density": {
     "title": "切换行密度",
     "normal": "正常",

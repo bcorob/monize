@@ -1,5 +1,5 @@
 import { Test, TestingModule } from "@nestjs/testing";
-import { DataSource } from "typeorm";
+import { DataSource, QueryFailedError } from "typeorm";
 import { NotFoundException, BadRequestException } from "@nestjs/common";
 import { ScheduledTransactionOverrideService } from "./scheduled-transaction-override.service";
 import { ScheduledTransactionOverride } from "./entities/scheduled-transaction-override.entity";
@@ -120,6 +120,59 @@ describe("ScheduledTransactionOverrideService", () => {
       await expect(
         service.createOverride(scheduledTransactionId, dto),
       ).rejects.toThrow(BadRequestException);
+    });
+
+    /**
+     * The pre-check is a courtesy; the constraint is the mechanism.
+     *
+     * Two concurrent creates for one recurrence slot both read no existing row
+     * and both proceed -- a SELECT is not a lock. Before migration 166 nothing
+     * downstream stopped them either: the table's uniqueness named
+     * `override_date`, so two overrides could replace one occurrence and the
+     * expander's `byOriginal` map kept whichever it saw first, letting row order
+     * choose the amount, category and date a posting used.
+     *
+     * The loser must see the same 400 the pre-check gives, not a driver error:
+     * a caller cannot be asked to tell the two paths apart.
+     */
+    it("reports the constraint's own refusal as the same bad request", async () => {
+      overridesRepository.createQueryBuilder.mockReturnValue(
+        mockQueryBuilder(null),
+      );
+      const conflict = new QueryFailedError("INSERT", [], new Error("dup"));
+      (conflict as unknown as { driverError: unknown }).driverError = {
+        code: "23505",
+        constraint: "uq_sched_txn_overrides_occurrence",
+      };
+      overridesRepository.save.mockRejectedValueOnce(conflict);
+
+      await expect(
+        service.createOverride(scheduledTransactionId, {
+          originalDate: "2025-02-15",
+          overrideDate: "2025-02-16",
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it("does not claim an occurrence conflict for some other violation", async () => {
+      // A message about the wrong thing sends the caller to fix something that
+      // is not broken, so the match is on the constraint NAME, not on 23505.
+      overridesRepository.createQueryBuilder.mockReturnValue(
+        mockQueryBuilder(null),
+      );
+      const other = new QueryFailedError("INSERT", [], new Error("dup"));
+      (other as unknown as { driverError: unknown }).driverError = {
+        code: "23505",
+        constraint: "some_other_unique_index",
+      };
+      overridesRepository.save.mockRejectedValueOnce(other);
+
+      await expect(
+        service.createOverride(scheduledTransactionId, {
+          originalDate: "2025-02-15",
+          overrideDate: "2025-02-16",
+        }),
+      ).rejects.toBe(other);
     });
 
     it("should handle optional fields being null", async () => {

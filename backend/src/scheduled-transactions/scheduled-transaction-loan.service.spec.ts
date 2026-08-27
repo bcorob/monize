@@ -132,6 +132,80 @@ describe("ScheduledTransactionLoanService", () => {
       expect(interestSave[0].amount).toBeLessThan(0);
     });
 
+    describe("the stored cadence decides the periodic rate", () => {
+      /**
+       * `accounts.payment_frequency` is a bare VARCHAR written in two spellings,
+       * and this path cast it into `MortgagePaymentFrequency` before asking
+       * `getMortgagePeriodsPerYear` -- whose `default: 12` turned SEMIMONTHLY
+       * into a monthly rate. Every posted split on a semi-monthly mortgage then
+       * carried twice the correct interest, for the life of the loan; quarterly
+       * carried three times.
+       *
+       * Asserted on the balance-based branch (no previous split figures), where
+       * the interest is exactly `balance * periodicRate` and the expectation can
+       * be derived by hand rather than from the implementation.
+       */
+      const splitsWithNoHistory = () => [
+        {
+          id: "split-principal",
+          transferAccountId: loanAccountId,
+          categoryId: null,
+          amount: 0,
+          memo: "Principal",
+        },
+        {
+          id: "split-interest",
+          transferAccountId: null,
+          categoryId: "cat-interest",
+          amount: 0,
+          memo: "Interest",
+        },
+      ];
+
+      it.each([
+        // 300000 at 6% nominal. 24 periods a year is 0.0025 per period: 750.
+        ["SEMIMONTHLY", 24, 750],
+        ["SEMI_MONTHLY", 24, 750],
+        // 12 a year is 0.005: 1500. The value the cast used to produce for all
+        // three of these rows.
+        ["MONTHLY", 12, 1500],
+        // 4 a year is 0.015: 4500 -- three times what the cast reported.
+        ["QUARTERLY", 4, 4500],
+        // 1 a year is 0.06: 18000.
+        ["YEARLY", 1, 18000],
+        ["BIWEEKLY", 26, 692.31],
+        ["ACCELERATED_BIWEEKLY", 26, 692.31],
+      ])(
+        "books %s interest at %i periods a year",
+        async (paymentFrequency, _periods, expectedInterest) => {
+          accountsRepository.findOne.mockResolvedValue(
+            makeLoanAccount({
+              accountType: AccountType.MORTGAGE,
+              currentBalance: -300000,
+              interestRate: 6,
+              paymentFrequency,
+              isCanadianMortgage: false,
+              isVariableRate: false,
+            }),
+          );
+          scheduledTransactionsRepository.findOne.mockResolvedValue(
+            makeScheduledTransaction({
+              amount: -20000,
+              splits: splitsWithNoHistory() as never,
+            }),
+          );
+
+          await service.recalculateLoanPaymentSplits(scheduledTransactionId);
+
+          const interestSave = splitsRepository.save.mock.calls.find(
+            (call: any) => call[0].categoryId === "cat-interest",
+          );
+          expect(interestSave).toBeDefined();
+          expect(interestSave[0].amount).toBeCloseTo(-expectedInterest, 2);
+        },
+      );
+    });
+
     describe("final installment (P5-008)", () => {
       it("reduces the parent amount with the principal when the balance is below one payment", async () => {
         // The audit's worked example: 50 outstanding at 0%, regular payment 100.

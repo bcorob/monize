@@ -22,6 +22,7 @@ import { InstitutionLogo, InstitutionLogoData } from '@/components/institutions/
 import { InfoTooltip } from '@/components/ui/InfoTooltip';
 import { safeHttpUrl } from '@/lib/safe-url';
 import { getNextScheduled } from '@/lib/scheduled-utils';
+import { UnknownAmount } from '@/components/ui/UnknownAmount';
 
 interface AccountInfoWidgetProps {
   account: Account;
@@ -267,12 +268,19 @@ export function AccountInfoWidget({
               </p>
               <p
                 className={`text-base font-semibold ${
-                  nextPayment.amount < 0
+                  nextPayment.amount !== null && nextPayment.amount < 0
                     ? 'text-red-600 dark:text-red-400'
                     : 'text-green-600 dark:text-green-400'
                 }`}
               >
-                {formatCurrency(Math.abs(nextPayment.amount), nextPayment.currencyCode)}
+                {/* An occurrence whose current amount could not be resolved is shown
+                  as unavailable, never as its stale stored figure (issue
+                  #1247). */}
+              {nextPayment.amount === null ? (
+                <UnknownAmount />
+              ) : (
+                formatCurrency(Math.abs(nextPayment.amount), nextPayment.currencyCode)
+              )}
               </p>
             </div>
             <div className="text-right min-w-0">

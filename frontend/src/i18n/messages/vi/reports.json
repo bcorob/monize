@@ -128,7 +128,8 @@
     "backToReports": "Quay lại báo cáo",
     "switchReport": "Chuyển sang báo cáo khác",
     "switchPlaceholder": "Lọc báo cáo...",
-    "switchNoMatches": "Không có báo cáo nào khớp"
+    "switchNoMatches": "Không có báo cáo nào khớp",
+    "favourites": "Yêu thích"
   },
   "reportPage": {
     "notFound": "Không tìm thấy báo cáo",
@@ -437,6 +438,7 @@
     "currentBalance": "Số dư hiện tại",
     "principalPaid": "Vốn gốc đã trả",
     "estTotalInterest": "Ước tính tổng lãi",
+    "interestOverProjection": "Lãi trong kỳ dự báo",
     "interestPaid": "Lãi đã trả",
     "progress": "Tiến độ",
     "estPayoff": "Ước tính thanh toán xong",
@@ -807,6 +809,7 @@
     "originalAmount": "Số tiền gốc",
     "interestRate": "Lãi suất",
     "estTotalInterest": "Ước tính tổng lãi",
+    "interestOverProjection": "Lãi trong kỳ dự báo",
     "totalInterestPaid": "Tổng lãi đã trả",
     "paymentsMade": "Số lần thanh toán",
     "estPayoff": "Ước tính thanh toán xong",
@@ -839,7 +842,8 @@
     "typeLineOfCredit": "Hạn mức tín dụng",
     "typeLoan": "Vay",
     "typeMortgage": "Thế chấp",
-    "pdfSubtitlePaymentsSummary": "Đã thực hiện {count} lần thanh toán, tổng lãi {interest}"
+    "pdfSubtitlePaymentsSummary": "Đã thực hiện {count} lần thanh toán, tổng lãi {interest}",
+    "pdfSubtitlePaymentsProjection": "Đã thanh toán {count} lần, lãi {interest} trong kỳ dự phóng"
   },
   "monteCarlo": {
     "toasts": {
@@ -1548,12 +1552,16 @@
     "csvColBillName": "Tên hóa đơn",
     "csvColDueDate": "Ngày đến hạn",
     "csvColAmount": "Số tiền",
+    "csvColCurrency": "Tiền tệ",
     "csvColFrequency": "Tần suất",
     "csvColAccount": "Tài khoản",
     "csvColStatus": "Trạng thái",
     "csvStatusOverdue": "Quá hạn",
     "csvStatusAuto": "Tự động",
     "csvStatusManual": "Thủ công",
+    "amountUnavailable": "Không có",
+    "occurrencesUnavailable": "Không thể tải các lần phát sinh dự kiến, vì vậy lịch và số tiền bên dưới không khả dụng. Các hóa đơn của bạn không bị ảnh hưởng.",
+    "csvAmountUnavailable": "Không có (không có tỷ giá hiện tại)",
     "pdfTitle": "Báo cáo hóa đơn sắp tới",
     "pdfSubtitle": "{month} | {count} hóa đơn đang hoạt động",
     "pdfActiveBills": "Hóa đơn đang hoạt động",

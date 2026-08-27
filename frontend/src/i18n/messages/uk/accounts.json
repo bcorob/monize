@@ -210,6 +210,7 @@
     "frequencyOptions": {
       "weekly": "Щотижня",
       "biweekly": "Кожні 2 тижні",
+      "semiMonthly": "Двічі на місяць",
       "monthly": "Щомісяця",
       "quarterly": "Щокварталу",
       "yearly": "Щороку"
@@ -308,12 +309,13 @@
     "previewFirstInterest": "Відсотки першого платежу:",
     "previewTotalPayments": "Усього платежів:",
     "previewTotalInterest": "Усього відсотків:",
+    "previewFinalPayment": "Останній платіж:",
     "previewPayoffDate": "Орієнт. дата погашення:",
     "previewNA": "Н/Д",
     "calculatingPreview": "Розрахунок попереднього перегляду...",
     "frequencyOptions": {
       "monthly": "Щомісяця",
-      "semiMonthly": "Двічі на місяць (1-е та 15-е)",
+      "semiMonthly": "Двічі на місяць (15-те і кінець місяця)",
       "biweekly": "Кожні два тижні",
       "acceleratedBiweekly": "Прискорено кожні два тижні",
       "weekly": "Щотижня",
@@ -367,6 +369,7 @@
       "WEEKLY": "Щотижня",
       "BIWEEKLY": "Раз на два тижні",
       "SEMI_MONTHLY": "Двічі на місяць",
+      "SEMIMONTHLY": "Двічі на місяць",
       "MONTHLY": "Щомісяця",
       "QUARTERLY": "Щокварталу",
       "YEARLY": "Щороку",
@@ -436,7 +439,8 @@
         "effect": "→ заощаджує {interest}, погашення {date}",
         "alreadyMet": "Ціль уже досягнуто без дострокових платежів.",
         "unreachableInterest": "Недосяжно — навіть дуже велика доплата не дасть такої економії на відсотках.",
-        "unreachableDate": "Недосяжно — цей місяць раніший за найранішнє можливе погашення."
+        "unreachableDate": "Недосяжно — цей місяць раніший за найранішнє можливе погашення.",
+        "baselineIncomplete": "Цей кредит не погашається протягом прогнозованого періоду, тому немає загальної суми відсотків, від якої можна відлічувати."
       },
       "simulationTypeLabel": "Тип симуляції",
       "overpaymentAmount": "Сума дострокового платежу",
@@ -463,6 +467,7 @@
       "interestSaved": "Заощаджені відсотки",
       "totalExtraContributed": "Усього внесено додатково",
       "beyondProjection": "Поза прогнозом",
+      "unknown": "Невідомо",
       "newInstallment": "Новий платіж",
       "installmentDrop": "{payment} (−{reduction})",
       "monthlyPayment": "Щомісячний платіж",
@@ -505,7 +510,9 @@
       "colOverpayment": "Достроковий платіж",
       "overpaymentWithFrequency": "{amount} ({frequency})",
       "loadAria": "Завантажити сценарій «{name}»",
-      "budgetSummary": "Бюджет {amount}/міс."
+      "budgetSummary": "Бюджет {amount}/міс.",
+      "chartExcludedUnknown": "{count, plural, one {# сценарій не показано: економія на відсотках невідома.} few {# сценарії не показано: економія на відсотках невідома.} many {# сценаріїв не показано: економія на відсотках невідома.} other {# сценарію не показано: економія на відсотках невідома.}}",
+      "chartNeedsTwoKnown": "Для графіка порівняння потрібні щонайменше два сценарії з відомою економією на відсотках."
     },
     "scenarioChart": {
       "title": "Порівняння сценаріїв",

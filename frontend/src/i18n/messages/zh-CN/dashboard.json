@@ -27,7 +27,6 @@
     "manualTitle": "需要手动过账",
     "negativeBalanceWarning": "此交易将导致账户余额低于零",
     "viewAll": "查看所有账单与存款",
-    "totalDue": "应付总额",
     "totalIncoming": "应收总额",
     "moreItems": "+{count} 条",
     "overdue": "已逾期",
@@ -38,7 +37,8 @@
       "bill": "账单",
       "deposit": "存款",
       "transfer": "转账",
-      "reminder": "提醒"
+      "reminder": "提醒",
+      "unknown": "未知"
     }
   },
   "gettingStarted": {

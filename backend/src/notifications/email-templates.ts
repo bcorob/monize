@@ -19,10 +19,41 @@ export function testEmailTemplate(
 
 interface BillData {
   payee: string;
-  amount: number;
+  /**
+   * What this occurrence would cost today, as a positive magnitude, or `null`
+   * when the server could not determine it (issue #1247). A reminder that
+   * printed the persisted snapshot instead would tell the recipient to pay a
+   * figure nothing in the app will post.
+   */
+  amount: number | null;
   dueDate: string;
   currencyCode: string;
-  isIncome: boolean;
+  /**
+   * `null` when the occurrence's direction could not be derived -- an unpriceable
+   * mixed-sign split posts on either side of zero, and a red "Expense" badge
+   * would be a guess presented as a fact.
+   */
+  isIncome: boolean | null;
+}
+
+/**
+ * The badge colour for a bill row's direction. Grey for a direction the server
+ * could not derive: red would read as "you owe this", green as "this is coming
+ * in", and neither is known for an unpriceable mixed-sign occurrence.
+ */
+function billTypeColour(isIncome: boolean | null): string {
+  if (isIncome === null) return "#6b7280";
+  return isIncome ? "#059669" : "#dc2626";
+}
+
+/** The badge's label, by the same three-way rule. */
+function billTypeLabel(isIncome: boolean | null, t: EmailT): string {
+  if (isIncome === null) {
+    return t("emails.billReminder.typeUnknown", "Direction unknown");
+  }
+  return isIncome
+    ? t("emails.billReminder.typeIncome", "Income")
+    : t("emails.billReminder.typeExpense", "Expense");
 }
 
 export function billReminderTemplate(
@@ -39,9 +70,9 @@ export function billReminderTemplate(
           <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb;">${escapeHtml(b.payee)}</td>
           <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb;">${escapeHtml(b.dueDate)}</td>
           <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb;">
-            <span style="display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; color: white; background: ${b.isIncome ? "#059669" : "#dc2626"};">${b.isIncome ? t("emails.billReminder.typeIncome", "Income") : t("emails.billReminder.typeExpense", "Expense")}</span>
+            <span style="display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; color: white; background: ${billTypeColour(b.isIncome)};">${escapeHtml(billTypeLabel(b.isIncome, t))}</span>
           </td>
-          <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: right; color: ${b.isIncome ? "#059669" : "#dc2626"}; font-weight: 500;">${formatCurrency(Math.abs(b.amount), b.currencyCode)}</td>
+          <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: right; color: ${billTypeColour(b.isIncome)}; font-weight: 500;">${b.amount === null ? escapeHtml(t("emails.billReminder.amountUnavailable", "Amount unavailable")) : formatCurrency(Math.abs(b.amount), b.currencyCode)}</td>
         </tr>`,
     )
     .join("");

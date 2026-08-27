@@ -6,6 +6,11 @@
     "summaryActiveBills": "Fatture attive",
     "summaryActiveDeposits": "Versamenti attivi",
     "summaryMonthlyNet": "Netto mensile",
+    "summaryAmountUnavailable": "Non disponibile",
+    "summaryNetRatesUnavailable": "I tassi di cambio non sono disponibili al momento, quindi il netto non può essere calcolato.",
+    "summaryNetMissingRates": "Nessun tasso di cambio per {currencies} — aggiungine uno in Valute",
+    "summaryNetMissingRatesAndUnpriceable": "Nessun tasso di cambio per {currencies} e non è stato possibile valorizzare una o più pianificazioni.",
+    "summaryNetUnpriceable": "Non è stato possibile valorizzare una o più pianificazioni",
     "summaryDueNow": "In scadenza",
     "loadingText": "Caricamento transazioni pianificate...",
     "chartUnavailable": "Grafico temporaneamente non disponibile"

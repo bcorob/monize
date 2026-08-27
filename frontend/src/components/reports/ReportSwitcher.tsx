@@ -22,7 +22,12 @@ interface ReportSwitcherProps {
  *
  * Fifty-odd reports are too many to read as one column, so the menu is grouped
  * by the section the Reports page files each under, in the same order its
- * filter chips use.
+ * filter chips use. The reports the user has starred are lifted into a
+ * "Favourites" section above those, so the ones they open most are the first
+ * thing the caret shows -- and because favourite status is read live (built-ins
+ * from the reactive preference, saved reports from their own flag), toggling a
+ * star reorders the menu without a reload. A favourite is shown once, at the
+ * top; its category section keeps only the remaining reports.
  *
  * Picking a report navigates, and the route is built here rather than by each
  * caller: an id in this menu *is* a path under `/reports/`, and two call sites
@@ -36,20 +41,36 @@ export function ReportSwitcher({ currentId }: ReportSwitcherProps) {
   const items = useMemo<EntitySwitcherItem[]>(() => {
     const label = (category: string) =>
       t(`page.categories.${category}` as Parameters<typeof t>[0]);
+    const favouritesLabel = t('detailHeader.favourites');
+    const toItem = (
+      report: (typeof reports)[number],
+      group: string,
+    ): EntitySwitcherItem => ({
+      id: report.id,
+      primary: report.name,
+      // The section is the heading above the row, so repeating it beside the
+      // name would say the same thing twice. A favourite is searchable by its
+      // own category too, so typing "spending" still finds a starred spending
+      // report sitting in the Favourites section.
+      group,
+      searchText: `${report.name} ${label(report.category)}`,
+    });
     // Ordered section by section: `EntitySwitcher` takes the order of the
-    // sections from the order their first item appears in.
-    return REPORT_CATEGORIES.flatMap((category) =>
+    // sections from the order their first item appears in, so the Favourites
+    // rows come first by being emitted first -- each in REPORT_CATEGORIES order
+    // so the top section reads in the same order as the rest of the menu.
+    const favourites = REPORT_CATEGORIES.flatMap((category) =>
       reports
-        .filter((report) => report.category === category)
-        .map((report) => ({
-          id: report.id,
-          primary: report.name,
-          // The section is the heading above the row, so repeating it beside
-          // the name would say the same thing twice.
-          group: label(category),
-          searchText: `${report.name} ${label(category)}`,
-        })),
+        .filter((report) => report.category === category && report.isFavourite)
+        .map((report) => toItem(report, favouritesLabel)),
     );
+    // The remaining (non-favourite) reports, filed under their own section.
+    const rest = REPORT_CATEGORIES.flatMap((category) =>
+      reports
+        .filter((report) => report.category === category && !report.isFavourite)
+        .map((report) => toItem(report, label(category))),
+    );
+    return [...favourites, ...rest];
   }, [reports, t]);
 
   return (

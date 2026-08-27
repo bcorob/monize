@@ -302,7 +302,10 @@ export function useTransactionFilters({ accounts, categories, payees, tags, week
   const categoryLabelMap = useMemo(() => buildCategoryLabelMap(categories), [categories]);
 
   const accountFilterOptions = useMemo(() => {
-    return filteredAccounts
+    // Copy before sorting: `filteredAccounts` is a memoized array other
+    // consumers read (it is what the bulk-update account scope is derived
+    // from), and Array.prototype.sort reorders in place.
+    return [...filteredAccounts]
       .sort((a, b) => a.name.localeCompare(b.name))
       .map(account => ({ value: account.id, label: account.name }));
   }, [filteredAccounts]);

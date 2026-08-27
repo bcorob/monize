@@ -124,6 +124,172 @@ describe('RecurringChargesPanel', () => {
     expect(transfer.className).toContain('text-blue-600');
   });
 
+  // Issue #1247: the amount shown is what the next occurrence would post today,
+  // in the settlement currency, not the persisted snapshot.
+  it("shows the server's effective amount for an FX-sensitive schedule", async () => {
+    mockGetScheduled.mockResolvedValue([
+      schedule({
+        id: 'st-inv',
+        payeeName: 'Monthly ETF buy',
+        payeeId: null,
+        // The security-currency cash impact, pinned at 1.50 when it was EUR.
+        amount: -1000,
+        currencyCode: 'CAD',
+        isInvestment: true,
+        // The security is USD now, and USD -> CAD resolves at 1.35.
+        effectiveAmount: -1350,
+        effectiveAmountComplete: true,
+        effectiveCurrencyCode: 'CAD',
+      }),
+    ]);
+    await renderPanel();
+    await waitFor(() =>
+      expect(screen.getByText('Monthly ETF buy')).toBeInTheDocument(),
+    );
+
+    expect(screen.getByText('-$1350.00')).toBeInTheDocument();
+    expect(screen.queryByText('-$1000.00')).not.toBeInTheDocument();
+    expect(screen.queryByText('-$1500.00')).not.toBeInTheDocument();
+  });
+
+  it('signs and colours the row by the occurrence, not the stored amount', async () => {
+    // A mixed-sign split parent stored at -10 (an ordinary -100 line beside a
+    // SELL line worth +90) whose investment line re-priced to +120: the occurrence
+    // is an inflow of 20. Keyed off the stored sign, the row rendered '-$20.00'
+    // in red -- the sign, the colour and the number describing two events.
+    mockGetScheduled.mockResolvedValue([
+      schedule({
+        id: 'st-split',
+        payeeName: 'Share sale, net of fee',
+        payeeId: null,
+        amount: -10,
+        isSplit: true,
+        splits: [
+          { id: 'sp-1', kind: 'category', amount: -100 },
+          { id: 'sp-2', kind: 'investment', amount: 90, investmentAction: 'SELL' },
+        ],
+        effectiveAmount: 20,
+        effectiveAmountComplete: true,
+        effectiveCurrencyCode: 'CAD',
+      }),
+    ]);
+    await renderPanel();
+    await waitFor(() =>
+      expect(screen.getByText('Share sale, net of fee')).toBeInTheDocument(),
+    );
+
+    const amount = screen.getByText('+$20.00');
+    expect(amount).toBeInTheDocument();
+    expect(amount.className).toContain('text-green-600');
+    expect(screen.queryByText('-$20.00')).not.toBeInTheDocument();
+  });
+
+  it('keeps an unpriceable bill a bill rather than a grey reminder', async () => {
+    // `Number(null)` is 0, which `occurrenceKind` must not reach: the fallback is
+    // the schedule's own sign, so the row stays red and marked unavailable.
+    mockGetScheduled.mockResolvedValue([
+      schedule({
+        id: 'st-inv',
+        payeeName: 'Monthly ETF buy',
+        payeeId: null,
+        amount: -1000,
+        isInvestment: true,
+        effectiveAmount: null,
+        effectiveAmountComplete: false,
+        // A top-level investment is one scalar times one positive rate, so the
+        // server can still prove which way it goes.
+        effectiveDirectionAmount: -1000,
+        effectiveCurrencyCode: 'CAD',
+      }),
+    ]);
+    await renderPanel();
+    await waitFor(() =>
+      expect(screen.getByText('Monthly ETF buy')).toBeInTheDocument(),
+    );
+
+    expect(screen.getByTestId('unknown-amount')).toBeInTheDocument();
+    const row = screen.getByText('Monthly ETF buy').closest('li')!;
+    expect(row.innerHTML).toContain('text-red-600');
+  });
+
+  it('shows no sign or colour for a direction the server could not derive', async () => {
+    // A mixed-sign split whose investment line cannot be priced posts on either
+    // side of zero: '+' green or '-' red would both be a guess with a symbol in
+    // front of it (issue #1247 re-audit).
+    mockGetScheduled.mockResolvedValue([
+      schedule({
+        id: 'st-split',
+        payeeName: 'Sell shares, pay the fee',
+        payeeId: null,
+        amount: 10,
+        isSplit: true,
+        effectiveAmount: null,
+        effectiveAmountComplete: false,
+        effectiveDirectionAmount: null,
+        effectiveCurrencyCode: 'CAD',
+      }),
+    ]);
+    await renderPanel();
+    await waitFor(() =>
+      expect(screen.getByText('Sell shares, pay the fee')).toBeInTheDocument(),
+    );
+
+    expect(screen.getByTestId('unknown-amount')).toBeInTheDocument();
+    const row = screen.getByText('Sell shares, pay the fee').closest('li')!;
+    expect(row.innerHTML).not.toContain('text-red-600');
+    expect(row.innerHTML).not.toContain('text-green-600');
+  });
+
+  it('prints the date the occurrence actually falls on, not the recurrence slot', async () => {
+    // An override addressed to the slot moved this occurrence, and the panel is
+    // already sorted by the moved date -- printing `nextDueDate` beside the
+    // re-priced amount announced a payment on a day the user had changed
+    // (issue #1247).
+    mockGetScheduled.mockResolvedValue([
+      schedule({
+        nextDueDate: '2026-07-01',
+        nextOverride: {
+          id: 'ovr-1',
+          originalDate: '2026-07-01',
+          overrideDate: '2026-07-10',
+          amount: -1250,
+          effectiveAmount: -1250,
+        },
+      }),
+    ]);
+    await renderPanel();
+    await waitFor(() => expect(screen.getByText('Landlord')).toBeInTheDocument());
+
+    expect(screen.getByText(/Next due 2026-07-10/)).toBeInTheDocument();
+    expect(screen.queryByText(/Next due 2026-07-01/)).not.toBeInTheDocument();
+    // The amount on that line is the occurrence's own too.
+    expect(screen.getByText('-$1250.00')).toBeInTheDocument();
+  });
+
+  it('marks an unresolvable occurrence unavailable, not stale', async () => {
+    mockGetScheduled.mockResolvedValue([
+      schedule({
+        id: 'st-inv',
+        payeeName: 'Monthly ETF buy',
+        payeeId: null,
+        amount: -1000,
+        currencyCode: 'CAD',
+        isInvestment: true,
+        effectiveAmount: null,
+        effectiveAmountComplete: false,
+        effectiveCurrencyCode: 'CAD',
+      }),
+    ]);
+    await renderPanel();
+    await waitFor(() =>
+      expect(screen.getByText('Monthly ETF buy')).toBeInTheDocument(),
+    );
+
+    expect(screen.getByTestId('unknown-amount')).toBeInTheDocument();
+    expect(screen.queryByText('-$1000.00')).not.toBeInTheDocument();
+    expect(screen.queryByText('-$1500.00')).not.toBeInTheDocument();
+  });
+
   it('flags detected charges not already scheduled', async () => {
     await renderPanel();
     await waitFor(() => expect(screen.getByText('Netflix')).toBeInTheDocument());

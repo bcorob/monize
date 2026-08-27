@@ -128,7 +128,8 @@
     "backToReports": "Raporlara Geri Dön",
     "switchReport": "Başka bir rapora geç",
     "switchPlaceholder": "Raporları filtrele...",
-    "switchNoMatches": "Eşleşen rapor yok"
+    "switchNoMatches": "Eşleşen rapor yok",
+    "favourites": "Favoriler"
   },
   "reportPage": {
     "notFound": "Rapor Bulunamadı",
@@ -437,6 +438,7 @@
     "currentBalance": "Mevcut Bakiye",
     "principalPaid": "Ödenen Anapara",
     "estTotalInterest": "Tahmini Toplam Faiz",
+    "interestOverProjection": "Öngörü dönemi faizi",
     "interestPaid": "Ödenen Faiz",
     "progress": "İlerleme",
     "estPayoff": "Tahmini Kapanma",
@@ -807,6 +809,7 @@
     "originalAmount": "Orijinal Tutar",
     "interestRate": "Faiz Oranı",
     "estTotalInterest": "Tahmini Toplam Faiz",
+    "interestOverProjection": "Öngörü dönemi faizi",
     "totalInterestPaid": "Ödenen Toplam Faiz",
     "paymentsMade": "Yapılan Ödemeler",
     "estPayoff": "Tahmini Kapanma",
@@ -839,7 +842,8 @@
     "typeLineOfCredit": "Kredi Limiti",
     "typeLoan": "Kredi",
     "typeMortgage": "İpotek",
-    "pdfSubtitlePaymentsSummary": "{count} ödeme yapıldı, {interest} toplam faiz"
+    "pdfSubtitlePaymentsSummary": "{count} ödeme yapıldı, {interest} toplam faiz",
+    "pdfSubtitlePaymentsProjection": "{count} ödeme yapıldı, projeksiyon boyunca {interest} faiz"
   },
   "monteCarlo": {
     "toasts": {
@@ -1548,12 +1552,16 @@
     "csvColBillName": "Fatura Adı",
     "csvColDueDate": "Vade Tarihi",
     "csvColAmount": "Miktar",
+    "csvColCurrency": "Para Birimi",
     "csvColFrequency": "Sıklık",
     "csvColAccount": "Hesap",
     "csvColStatus": "Durum",
     "csvStatusOverdue": "Gecikmiş",
     "csvStatusAuto": "Otomatik",
     "csvStatusManual": "Manuel",
+    "amountUnavailable": "Kullanılamıyor",
+    "occurrencesUnavailable": "Öngörülen ödeme tarihleri yüklenemedi, bu nedenle aşağıdaki takvim ve tutarlar kullanılamıyor. Faturalarınızın kendisi etkilenmedi.",
+    "csvAmountUnavailable": "Kullanılamıyor (geçerli döviz kuru yok)",
     "pdfTitle": "Yaklaşan Faturalar Raporu",
     "pdfSubtitle": "{month} | {count} aktif fatura",
     "pdfActiveBills": "Aktif Faturalar",

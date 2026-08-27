@@ -237,6 +237,12 @@
     "explanation": "Totale parziale: non è stato possibile includere {count, plural, one {# importo} other {# importi}}, quindi la cifra mostrata li esclude. Nessun tasso verso {displayCurrency} è disponibile per {currencies}.",
     "explanationExcluded": "Totale parziale: non è stato possibile calcolare {count, plural, one {# importo} other {# importi}}, quindi la cifra mostrata li esclude."
   },
+  "unknownAmount": {
+    "marker": "—",
+    "srLabel": "Importo non disponibile",
+    "scheduledFx": "Non è possibile determinare l'importo attuale: non è disponibile alcun tasso di cambio per la coppia di valute di regolamento di questa voce pianificata. L'importo salvato è stato calcolato con un tasso precedente, quindi non viene mostrato.",
+    "displayFx": "Questo importo non può essere mostrato qui: il valore è noto, ma non è disponibile alcun tasso di cambio per convertirlo nella valuta di questo totale. Aggiorna i tassi nella pagina Valute."
+  },
   "density": {
     "title": "Cambia densità righe",
     "normal": "Normale",

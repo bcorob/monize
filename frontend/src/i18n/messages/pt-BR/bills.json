@@ -6,6 +6,11 @@
     "summaryActiveBills": "Faturas ativas",
     "summaryActiveDeposits": "Depósitos ativos",
     "summaryMonthlyNet": "Líquido mensal",
+    "summaryAmountUnavailable": "Não disponível",
+    "summaryNetRatesUnavailable": "As taxas de câmbio não estão disponíveis agora, então não é possível calcular o valor líquido.",
+    "summaryNetMissingRates": "Sem taxa de câmbio para {currencies} — adicione uma em Moedas",
+    "summaryNetMissingRatesAndUnpriceable": "Sem taxa de câmbio para {currencies} e não foi possível calcular o valor de uma ou mais programações.",
+    "summaryNetUnpriceable": "Não foi possível calcular o valor de uma ou mais programações",
     "summaryDueNow": "A vencer agora",
     "loadingText": "Carregando transações agendadas...",
     "chartUnavailable": "Gráfico temporariamente indisponível"

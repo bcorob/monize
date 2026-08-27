@@ -1,16 +1,21 @@
 import { describe, it, expect } from 'vitest';
 import {
+  DEFAULT_MAX_PROJECTION_YEARS,
   ScheduleFrequency,
   advanceDate,
   buildRateTimeline,
   calculateMortgagePaymentAmount,
   calculatePaymentForTerm,
   compareSchedules,
+  effectiveAnnualRate,
   effectiveAnnualRateOn,
   generateLoanSchedule,
   getPeriodicRate,
   getPeriodsPerYear,
+  maxPaymentsForHorizon,
+  recurringOccurrencesDue,
   LoanScheduleInput,
+  RecurringOverpaymentFrequency,
 } from './loan-schedule';
 
 function baseInput(overrides: Partial<LoanScheduleInput> = {}): LoanScheduleInput {
@@ -58,6 +63,29 @@ describe('getPeriodicRate', () => {
     expect(getPeriodicRate(6, 26, false, false)).toBeCloseTo(6 / 100 / 26, 10);
   });
 
+  it('is the nominal convention, not monthly compounding converted', () => {
+    // The convention is named in docs/financial-semantics.md section 9: the
+    // quoted rate is nominal, compounded at the payment frequency. Backend
+    // parity cannot prove this (both layers mirror one formula), so the
+    // alternative contract is spelled out here and asserted to be a DIFFERENT
+    // number -- otherwise a future change to either convention would look like
+    // agreement.
+    const monthlyEquivalentBiweekly = Math.pow(1 + 0.06 / 12, 12 / 26) - 1;
+    expect(getPeriodicRate(6, 26, false, false)).not.toBeCloseTo(
+      monthlyEquivalentBiweekly,
+      9,
+    );
+    expect(getPeriodicRate(6, 52, false, false)).not.toBeCloseTo(
+      Math.pow(1 + 0.06 / 12, 12 / 52) - 1,
+      9,
+    );
+    // Monthly is the one frequency where the two conventions coincide.
+    expect(getPeriodicRate(6, 12, false, false)).toBeCloseTo(
+      Math.pow(1 + 0.06 / 12, 12 / 12) - 1,
+      12,
+    );
+  });
+
   it('uses simple division for Canadian variable-rate mortgages', () => {
     expect(getPeriodicRate(6, 12, true, true)).toBeCloseTo(0.005, 10);
   });
@@ -72,21 +100,69 @@ describe('getPeriodicRate', () => {
   });
 });
 
+describe('effectiveAnnualRate', () => {
+  // Parity with backend calculateEffectiveAnnualRate (which rounds to 2dp for
+  // its API contract; this returns the raw percentage). Fixtures derived here,
+  // not read back from either implementation.
+  it('compounds at the payment frequency outside the Canadian fixed branch', () => {
+    for (const periodsPerYear of [12, 24, 26, 52]) {
+      expect(effectiveAnnualRate(6, periodsPerYear, false, false)).toBeCloseTo(
+        (Math.pow(1 + 0.06 / periodsPerYear, periodsPerYear) - 1) * 100,
+        10,
+      );
+    }
+    // More compounding periods cost more.
+    expect(effectiveAnnualRate(6, 12, false, false)).toBeLessThan(
+      effectiveAnnualRate(6, 52, false, false),
+    );
+  });
+
+  it('compounds semi-annually for Canadian fixed, whatever the frequency', () => {
+    const expected = (Math.pow(1 + 0.05 / 2, 2) - 1) * 100;
+    expect(effectiveAnnualRate(5, 12, true, false)).toBeCloseTo(expected, 10);
+    expect(effectiveAnnualRate(5, 26, true, false)).toBeCloseTo(expected, 10);
+    // A Canadian VARIABLE mortgage is on the nominal convention, like any other.
+    expect(effectiveAnnualRate(5, 26, true, true)).toBeCloseTo(
+      (Math.pow(1 + 0.05 / 26, 26) - 1) * 100,
+      10,
+    );
+  });
+
+  it('is 0 for a 0% rate on either branch', () => {
+    expect(effectiveAnnualRate(0, 12, true, false)).toBe(0);
+    expect(effectiveAnnualRate(0, 26, false, false)).toBe(0);
+  });
+});
+
 describe('advanceDate', () => {
   it('advances weekly and biweekly by days', () => {
     expect(advanceDate(new Date(2026, 0, 1), 'WEEKLY')).toEqual(new Date(2026, 0, 8));
     expect(advanceDate(new Date(2026, 0, 1), 'BIWEEKLY')).toEqual(new Date(2026, 0, 15));
   });
 
-  it('advances semi-monthly between the 1st and 15th', () => {
-    expect(advanceDate(new Date(2026, 0, 1), 'SEMI_MONTHLY')).toEqual(new Date(2026, 0, 15));
-    expect(advanceDate(new Date(2026, 0, 15), 'SEMI_MONTHLY')).toEqual(new Date(2026, 1, 1));
+  it('advances semi-monthly between the 15th and the last day of the month', () => {
+    // The recurrence engine's convention, because it is the engine that posts
+    // these payments -- projecting the 1st and the 15th showed a semi-monthly
+    // borrower dates their register never has. Both stored spellings step alike;
+    // loan-frequency.guard.test.ts asserts the agreement over two years.
+    expect(advanceDate(new Date(2026, 0, 1), 'SEMI_MONTHLY')).toEqual(new Date(2026, 0, 31));
+    expect(advanceDate(new Date(2026, 0, 31), 'SEMI_MONTHLY')).toEqual(new Date(2026, 1, 15));
+    expect(advanceDate(new Date(2026, 1, 15), 'SEMI_MONTHLY')).toEqual(new Date(2026, 1, 28));
+    expect(advanceDate(new Date(2026, 0, 1), 'SEMIMONTHLY')).toEqual(new Date(2026, 0, 31));
   });
 
   it('advances monthly, quarterly, and yearly by calendar units', () => {
-    expect(advanceDate(new Date(2026, 0, 31), 'MONTHLY').getMonth()).toBe(2); // Jan 31 -> Mar 3 (JS overflow)
+    // Clamped, not overflowed. This assertion used to read `.toBe(2)` with the
+    // comment "Jan 31 -> Mar 3 (JS overflow)" -- a test pinning the defect: the
+    // projection skipped February outright while the backend's own end date,
+    // stepped by the recurrence engine, clamped to 28 February. `advanceDate`
+    // delegates to that engine now, so the two calendars are one.
+    expect(advanceDate(new Date(2026, 0, 31), 'MONTHLY')).toEqual(new Date(2026, 1, 28));
+    expect(advanceDate(new Date(2028, 0, 31), 'MONTHLY')).toEqual(new Date(2028, 1, 29));
     expect(advanceDate(new Date(2026, 0, 15), 'QUARTERLY')).toEqual(new Date(2026, 3, 15));
     expect(advanceDate(new Date(2026, 0, 15), 'YEARLY')).toEqual(new Date(2027, 0, 15));
+    // A leap-day anniversary clamps rather than rolling into March.
+    expect(advanceDate(new Date(2028, 1, 29), 'YEARLY')).toEqual(new Date(2029, 1, 28));
   });
 });
 
@@ -546,13 +622,21 @@ describe('compareSchedules', () => {
     expect(comparison.interestSaved).toBeGreaterThan(0);
   });
 
-  it('returns zero months saved when either schedule never pays off', () => {
+  it('reports every saving as unknown when either schedule never pays off', () => {
     const baseline = generateLoanSchedule(baseInput({ paymentAmount: 40 }));
     const scenario = generateLoanSchedule(
       baseInput({ paymentAmount: 40, overpayments: { recurringExtra: { amount: 200 } } }),
     );
     const comparison = compareSchedules(baseline, scenario);
-    expect(comparison.monthsSaved).toBe(0);
+    // Not zero: zero is a claim that the overpayment bought nothing. All three
+    // savings compare against a schedule that has no lifetime to compare with.
+    expect(comparison.monthsSaved).toBeNull();
+    expect(comparison.paymentsSaved).toBeNull();
+    expect(comparison.interestSaved).toBeNull();
+    // The ending installment is not a property of a truncated schedule either:
+    // `finalPaymentAmount` is then the installment at the last PROJECTED row,
+    // mid-schedule, so a drop measured from it is unknown too.
+    expect(comparison.installmentReduction).toBeNull();
   });
 });
 
@@ -876,15 +960,19 @@ describe('recurring extra frequency', () => {
     expect(quarterly.rows[3].extraPrincipal).toBeCloseTo(300, 2);
   });
 
-  it('levels a cadence denser than the loan payments across every payment', () => {
+  it('carries every due occurrence of a denser cadence at the next payment', () => {
     const base = baseInput({ startingBalance: 100000, paymentAmount: 600 });
-    // Weekly on a monthly loan is approximated: ~100 * 52/12 each month.
+    // Weekly on a monthly loan, first payment 2026-01-15. Only the Jan 15
+    // occurrence is due at payment 1; Jan 22, 29, Feb 5 and Feb 12 arrive with
+    // payment 2. Four or five per month, never a levelled 433.33 that falls on
+    // no actual overpayment date.
     const weekly = generateLoanSchedule({
       ...base,
       overpayments: { recurringExtra: { amount: 100, frequency: 'WEEKLY' } },
     });
-    expect(weekly.rows[0].extraPrincipal).toBeCloseTo((100 * 52) / 12, 2);
-    expect(weekly.rows[1].extraPrincipal).toBeCloseTo((100 * 52) / 12, 2);
+    expect(weekly.rows[0].extraPrincipal).toBeCloseTo(100, 2);
+    expect(weekly.rows[1].extraPrincipal).toBeCloseTo(400, 2);
+    expect(weekly.rows[2].extraPrincipal).toBeCloseTo(400, 2);
   });
 
   it('treats an omitted frequency as a per-payment amount (legacy behaviour)', () => {
@@ -899,5 +987,629 @@ describe('recurring extra frequency', () => {
     });
     // On a monthly loan, "monthly" and "per payment" coincide.
     expect(legacy.totalInterest).toBeCloseTo(monthly.totalInterest, 2);
+  });
+});
+
+describe('recurringOccurrencesDue', () => {
+  // The cadence in isolation: how many occurrences a payment on a given date
+  // has to carry. Counted against the calendar by hand, independent of any loan.
+  const first = new Date(2026, 0, 1);
+
+  it('counts one MONTHLY occurrence per calendar month', () => {
+    const counter = recurringOccurrencesDue(
+      { amount: 100, frequency: 'MONTHLY' },
+      first,
+    );
+    // Twelve payment dates, one occurrence each -- the count does not depend on
+    // how often the loan itself is paid.
+    const months = [
+      '2026-01-01', '2026-02-01', '2026-03-01', '2026-04-01',
+      '2026-05-01', '2026-06-01', '2026-07-01', '2026-08-01',
+      '2026-09-01', '2026-10-01', '2026-11-01', '2026-12-01',
+    ];
+    expect(months.map((d) => counter.dueBy(d))).toEqual(Array(12).fill(1));
+    // A thirteenth month is a new year's first occurrence, not a thirteenth one
+    // for 2026.
+    expect(counter.dueBy('2026-12-31')).toBe(0);
+    expect(counter.dueBy('2027-01-01')).toBe(1);
+  });
+
+  it('counts 12 MONTHLY occurrences over a biweekly payment calendar', () => {
+    const counter = recurringOccurrencesDue(
+      { amount: 100, frequency: 'MONTHLY' },
+      first,
+    );
+    // Every biweekly payment date in 2026, in order.
+    let total = 0;
+    const date = new Date(first);
+    while (date.getFullYear() === 2026) {
+      total += counter.dueBy(
+        `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
+          date.getDate(),
+        ).padStart(2, '0')}`,
+      );
+      date.setDate(date.getDate() + 14);
+    }
+    // round(26 / 12) = 2 gave 13 here.
+    expect(total).toBe(12);
+  });
+
+  it('spaces occurrences exactly one cadence step apart', () => {
+    // WEEKLY and BIWEEKLY are day cadences, so "52 a year" is nominal: a
+    // 365-day year holds 53 seven-day steps, exactly as a weekly standing order
+    // does. The invariant is the step, asserted here directly.
+    for (const [frequency, stepDays] of [
+      ['WEEKLY', 7],
+      ['BIWEEKLY', 14],
+    ] as [RecurringOverpaymentFrequency, number][]) {
+      const counter = recurringOccurrencesDue({ amount: 1, frequency }, first);
+      expect(counter.dueBy('2026-01-01')).toBe(1);
+      const dayBefore = new Date(2026, 0, 1 + stepDays - 1);
+      const onStep = new Date(2026, 0, 1 + stepDays);
+      const iso = (d: Date) =>
+        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
+          d.getDate(),
+        ).padStart(2, '0')}`;
+      expect(counter.dueBy(iso(dayBefore))).toBe(0);
+      expect(counter.dueBy(iso(onStep))).toBe(1);
+    }
+  });
+
+  it('counts 4 QUARTERLY and 1 ANNUALLY occurrence per calendar year', () => {
+    // Calendar cadences, so the annual count is exact.
+    for (const [frequency, expected] of [
+      ['QUARTERLY', 4],
+      ['ANNUALLY', 1],
+    ] as [RecurringOverpaymentFrequency, number][]) {
+      const counter = recurringOccurrencesDue({ amount: 1, frequency }, first);
+      expect(counter.dueBy('2026-12-31')).toBe(expected);
+      expect(counter.dueBy('2027-12-31')).toBe(expected);
+    }
+  });
+
+  it('steps a month-end anchor on the loan\'s own calendar', () => {
+    // The cadence walks the recurrence engine, the same calendar the loan's
+    // payment dates walk. Deriving each occurrence from the anchor instead
+    // (2026-01-31, 02-28, 03-31, 04-30 ...) looked tidier in isolation and was
+    // wrong where it mattered: a monthly loan first paid on the 31st has rows on
+    // 01-31, 02-28, 03-28, 04-28, so the occurrence due 03-31 arrived AFTER the
+    // March row, waited for 04-28, and the borrower paid eleven monthly extras
+    // in the first calendar year and two on one row the next February.
+    //
+    // So a clamp is absorbed once and kept: after February the cadence settles
+    // onto the 28th, exactly where the loan's payments have settled.
+    const counter = recurringOccurrencesDue(
+      { amount: 100, frequency: 'MONTHLY' },
+      new Date(2026, 0, 31),
+    );
+    expect(counter.dueBy('2026-01-31')).toBe(1);
+    expect(counter.dueBy('2026-02-27')).toBe(0);
+    expect(counter.dueBy('2026-02-28')).toBe(1);
+    expect(counter.dueBy('2026-03-27')).toBe(0);
+    expect(counter.dueBy('2026-03-28')).toBe(1);
+    expect(counter.dueBy('2026-04-27')).toBe(0);
+    expect(counter.dueBy('2026-04-28')).toBe(1);
+  });
+
+  it('lands every occurrence on a payment of a month-end monthly loan', () => {
+    // The whole reason the cadence follows the engine. Twelve rows in 2026,
+    // twelve occurrences, one each -- no month with none and no row carrying
+    // two. The anchor-derived cadence gave 11 and then a doubled February.
+    const result = generateLoanSchedule(
+      baseInput({
+        startingBalance: 100000,
+        annualRate: 5,
+        paymentAmount: 1000,
+        frequency: 'MONTHLY',
+        firstPaymentDate: new Date(2026, 0, 31),
+        overpayments: { recurringExtra: { amount: 200, frequency: 'MONTHLY' } },
+      }),
+    );
+    const in2026 = result.rows.filter((r) => r.date.startsWith('2026'));
+    expect(in2026).toHaveLength(12);
+    for (const row of in2026) {
+      expect(row.extraPrincipal).toBeCloseTo(200, 2);
+    }
+  });
+
+  it('yields 12 monthly occurrences a year from any anchor day', () => {
+    // The invariant INV-LOAN-001 states, checked across every anchor day a month
+    // can start on -- the 29th to 31st are the ones that used to lose one.
+    for (const day of [1, 5, 15, 28, 29, 30, 31]) {
+      const counter = recurringOccurrencesDue(
+        { amount: 100, frequency: 'MONTHLY' },
+        new Date(2026, 0, day),
+      );
+      // Sweep every day of 2026 so the count cannot depend on payment dates.
+      let total = 0;
+      const cursor = new Date(2026, 0, day);
+      while (cursor.getFullYear() === 2026) {
+        total += counter.dueBy(
+          `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}-${String(
+            cursor.getDate(),
+          ).padStart(2, '0')}`,
+        );
+        cursor.setDate(cursor.getDate() + 1);
+      }
+      expect(total).toBe(12);
+    }
+  });
+
+  it('pays a month-end monthly extra on a biweekly loan without skipping a month', () => {
+    // The reproduction: a biweekly loan whose first payment is 2026-01-31. The
+    // old accumulation put the second occurrence on Mar 3 and every later one on
+    // the 3rd, so February was skipped outright and the year paid 1100 of a
+    // declared 1200.
+    const result = generateLoanSchedule(
+      baseInput({
+        startingBalance: 400000,
+        annualRate: 6,
+        paymentAmount: calculateMortgagePaymentAmount(
+          400000,
+          6,
+          360,
+          'BIWEEKLY',
+          false,
+          false,
+        ),
+        frequency: 'BIWEEKLY',
+        firstPaymentDate: new Date(2026, 0, 31),
+        overpayments: { recurringExtra: { amount: 100, frequency: 'MONTHLY' } },
+      }),
+    );
+    const paidBy = (throughIso: string) =>
+      Math.round(
+        result.rows
+          .filter((r) => r.date <= throughIso)
+          .reduce((sum, r) => sum + r.extraPrincipal, 0) * 100,
+      ) / 100;
+
+    // February's occurrence (the 28th, clamped from the 31st) lands on the
+    // 2026-02-28 payment. The old code paid nothing at all that month.
+    const february = result.rows.find((r) => r.date === '2026-02-28');
+    expect(february?.extraPrincipal).toBeCloseTo(100, 2);
+
+    // Twelve occurrences fall in 2026 -- the cadence absorbed February's clamp
+    // and settled onto the 28th, so the last of the twelve is due 2026-12-28 and
+    // the thirteenth is 2027-01-28. Twelve to a calendar year from any anchor
+    // day is the invariant; which day of the month they land on is not.
+    //
+    // The PAYMENT carrying the twelfth is 2027-01-02, because a biweekly row
+    // does not exist on 2026-12-28: an occurrence is applied at the first
+    // payment on or after its due date, so a year's worth of cadence can be
+    // completed a few days into the next year. That is the cadence being a
+    // calendar of its own, which is the point.
+    expect(paidBy('2026-12-31')).toBeCloseTo(1100, 2);
+    expect(paidBy('2027-01-02')).toBeCloseTo(1200, 2);
+    expect(paidBy('2027-01-27')).toBeCloseTo(1200, 2);
+  });
+
+  it('refuses a rowDate that goes backwards', () => {
+    // The counter consumes occurrences, so an out-of-order call would silently
+    // swallow everything between the two dates. Prose could not make that
+    // checkable; the throw can.
+    const counter = recurringOccurrencesDue(
+      { amount: 100, frequency: 'MONTHLY' },
+      new Date(2026, 0, 1),
+    );
+    expect(counter.dueBy('2026-06-01')).toBe(6);
+    expect(() => counter.dueBy('2026-03-01')).toThrow(/precedes/);
+    // Asking again for the same row is allowed (nothing new is due).
+    expect(counter.dueBy('2026-06-01')).toBe(0);
+  });
+
+  it('never counts an occurrence before the first projected payment', () => {
+    // A start date already in the past means "from now", not a backlog.
+    const counter = recurringOccurrencesDue(
+      { amount: 100, frequency: 'MONTHLY', startDate: '2020-01-01' },
+      first,
+    );
+    expect(counter.dueBy('2026-01-01')).toBe(1);
+    expect(counter.dueBy('2026-02-01')).toBe(1);
+  });
+
+  it('delays the first occurrence to a future start date', () => {
+    const counter = recurringOccurrencesDue(
+      { amount: 100, frequency: 'MONTHLY', startDate: '2026-04-10' },
+      first,
+    );
+    expect(counter.dueBy('2026-04-01')).toBe(0);
+    // The April 10 occurrence is carried by the first payment on or after it.
+    expect(counter.dueBy('2026-05-01')).toBe(1);
+    expect(counter.dueBy('2026-06-01')).toBe(1);
+  });
+
+  it('stops counting past the end date, and stays stopped', () => {
+    const counter = recurringOccurrencesDue(
+      { amount: 100, frequency: 'MONTHLY', endDate: '2026-06-30' },
+      first,
+    );
+    let total = 0;
+    for (const month of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]) {
+      total += counter.dueBy(`2026-${String(month).padStart(2, '0')}-01`);
+    }
+    expect(total).toBe(6);
+    expect(counter.dueBy('2027-01-01')).toBe(0);
+  });
+
+  it('contributes nothing for a cadence it does not recognize', () => {
+    // `loan_scenarios.recurring_extra_frequency` is an unconstrained VARCHAR, so
+    // a legacy row or a restored backup can carry a value the map has no key
+    // for. The undefined lookup used to land in the legacy branch and apply the
+    // FULL amount on every payment -- the densest possible reading of an unknown
+    // value. Nothing is the direction that cannot invent a saving.
+    const counter = recurringOccurrencesDue(
+      { amount: 5000, frequency: 'ONE_OFF' as unknown as never },
+      new Date(2026, 0, 1),
+    );
+    expect(counter.dueBy('2026-01-01')).toBe(0);
+    expect(counter.dueBy('2027-01-01')).toBe(0);
+
+    // And an omitted frequency still means the legacy per-payment amount, which
+    // is a different thing from an unrecognized one.
+    const legacy = recurringOccurrencesDue({ amount: 5000 }, new Date(2026, 0, 1));
+    expect(legacy.dueBy('2026-01-01')).toBe(1);
+  });
+
+  it('treats an omitted frequency as one occurrence per in-window payment', () => {
+    const counter = recurringOccurrencesDue({ amount: 100 }, first);
+    expect(counter.dueBy('2026-01-01')).toBe(1);
+    expect(counter.dueBy('2026-01-15')).toBe(1);
+    const windowed = recurringOccurrencesDue(
+      { amount: 100, startDate: '2026-03-01', endDate: '2026-04-30' },
+      first,
+    );
+    expect(windowed.dueBy('2026-02-01')).toBe(0);
+    expect(windowed.dueBy('2026-03-15')).toBe(1);
+    expect(windowed.dueBy('2026-05-01')).toBe(0);
+  });
+});
+
+describe('recurring overpayment cadence in a schedule', () => {
+  /** Extra principal carried by rows dated within `year`. */
+  const extraInYear = (
+    rows: { date: string; extraPrincipal: number }[],
+    year: number,
+  ): number =>
+    Math.round(
+      rows
+        .filter((r) => r.date.startsWith(String(year)))
+        .reduce((sum, r) => sum + r.extraPrincipal, 0) * 100,
+    ) / 100;
+
+  /** Rows in `year` that carried any extra principal. */
+  const hitsInYear = (
+    rows: { date: string; extraPrincipal: number }[],
+    year: number,
+  ): number =>
+    rows.filter((r) => r.date.startsWith(String(year)) && r.extraPrincipal > 0)
+      .length;
+
+  // A real 30-year contractual schedule from 2026-01-01, so the first calendar
+  // years are complete whatever the overpayment does to the tail.
+  const longLoan = (frequency: ScheduleFrequency): LoanScheduleInput =>
+    baseInput({
+      startingBalance: 400000,
+      annualRate: 6,
+      paymentAmount: calculateMortgagePaymentAmount(
+        400000,
+        6,
+        360,
+        frequency,
+        false,
+        false,
+      ),
+      frequency,
+      firstPaymentDate: new Date(2026, 0, 1),
+    });
+
+  it('pays a MONTHLY extra 12 times a year on a BIWEEKLY loan, not 13', () => {
+    // round(26 / 12) = 2 landed the extra every second biweekly payment: 13
+    // hits a year and 8.3% more cash than the borrower asked to pay.
+    const result = generateLoanSchedule({
+      ...longLoan('BIWEEKLY'),
+      overpayments: { recurringExtra: { amount: 100, frequency: 'MONTHLY' } },
+    });
+    expect(hitsInYear(result.rows, 2026)).toBe(12);
+    expect(hitsInYear(result.rows, 2027)).toBe(12);
+    expect(extraInYear(result.rows, 2026)).toBeCloseTo(1200, 2);
+    expect(extraInYear(result.rows, 2027)).toBeCloseTo(1200, 2);
+  });
+
+  it('pays a MONTHLY extra 12 times a year on a WEEKLY loan', () => {
+    // round(52 / 12) = 4 also produced 13 hits a year.
+    const result = generateLoanSchedule({
+      ...longLoan('WEEKLY'),
+      overpayments: { recurringExtra: { amount: 100, frequency: 'MONTHLY' } },
+    });
+    expect(hitsInYear(result.rows, 2026)).toBe(12);
+    expect(extraInYear(result.rows, 2026)).toBeCloseTo(1200, 2);
+  });
+
+  it('pays a QUARTERLY extra 4 times a year on a BIWEEKLY loan', () => {
+    const result = generateLoanSchedule({
+      ...longLoan('BIWEEKLY'),
+      overpayments: { recurringExtra: { amount: 300, frequency: 'QUARTERLY' } },
+    });
+    expect(hitsInYear(result.rows, 2026)).toBe(4);
+    expect(extraInYear(result.rows, 2026)).toBeCloseTo(1200, 2);
+  });
+
+  it('pays an ANNUALLY extra once a year, whatever the loan frequency', () => {
+    for (const frequency of [
+      'MONTHLY',
+      'BIWEEKLY',
+      'WEEKLY',
+    ] as ScheduleFrequency[]) {
+      const result = generateLoanSchedule({
+        ...longLoan(frequency),
+        overpayments: { recurringExtra: { amount: 5000, frequency: 'ANNUALLY' } },
+      });
+      expect(hitsInYear(result.rows, 2026)).toBe(1);
+      expect(extraInYear(result.rows, 2026)).toBeCloseTo(5000, 2);
+    }
+  });
+
+  it('carries a cadence denser than the payments as batched occurrences', () => {
+    // Weekly occurrences on a monthly loan: payments on the 1st carry 4 or 5
+    // occurrences each. 48 of the year's 52 land on a 2026 payment -- the four
+    // due after 2026-12-01 are carried by the January 2027 payment, because an
+    // occurrence is applied at the first payment on or after its due date.
+    const result = generateLoanSchedule({
+      ...longLoan('MONTHLY'),
+      overpayments: { recurringExtra: { amount: 100, frequency: 'WEEKLY' } },
+    });
+    expect(hitsInYear(result.rows, 2026)).toBe(12);
+    expect(extraInYear(result.rows, 2026)).toBeCloseTo(4800, 2);
+    // Payment 1 carries only the occurrence due on its own date; every later
+    // 2026 payment carries the four or five that fell since the previous one.
+    expect(result.rows[0].extraPrincipal).toBeCloseTo(100, 2);
+    for (const row of result.rows.filter(
+      (r) => r.date.startsWith('2026') && r.date !== result.rows[0].date,
+    )) {
+      expect([400, 500]).toContain(Math.round(row.extraPrincipal));
+    }
+  });
+
+  it('pays every occurrence exactly once across the whole schedule', () => {
+    // The cumulative invariant: total extra principal is the amount times the
+    // occurrences the schedule's own dates carried -- no double-counting and
+    // nothing dropped, before the final payoff cap.
+    const input = {
+      ...longLoan('BIWEEKLY'),
+      overpayments: {
+        recurringExtra: { amount: 100, frequency: 'MONTHLY' as const },
+      },
+    };
+    const result = generateLoanSchedule(input);
+    const counter = recurringOccurrencesDue(
+      input.overpayments.recurringExtra,
+      input.firstPaymentDate,
+    );
+    const occurrences = result.rows.reduce(
+      (sum, row) => sum + counter.dueBy(row.date),
+      0,
+    );
+    // The last row's extra is capped at the remaining balance, so the total can
+    // only fall short by less than one occurrence.
+    expect(result.totalExtraPrincipal).toBeGreaterThan(occurrences * 100 - 100);
+    expect(result.totalExtraPrincipal).toBeLessThanOrEqual(occurrences * 100);
+  });
+
+  it('starts the cadence at the window start, without a backlog', () => {
+    const past = generateLoanSchedule({
+      ...longLoan('MONTHLY'),
+      overpayments: {
+        recurringExtra: {
+          amount: 100,
+          frequency: 'MONTHLY',
+          startDate: '2020-01-01',
+        },
+      },
+    });
+    expect(past.rows[0].extraPrincipal).toBeCloseTo(100, 2);
+    expect(extraInYear(past.rows, 2026)).toBeCloseTo(1200, 2);
+
+    const future = generateLoanSchedule({
+      ...longLoan('MONTHLY'),
+      overpayments: {
+        recurringExtra: {
+          amount: 100,
+          frequency: 'MONTHLY',
+          startDate: '2026-04-01',
+        },
+      },
+    });
+    expect(future.rows[0].extraPrincipal).toBe(0);
+    expect(future.rows[3].date).toBe('2026-04-01');
+    expect(future.rows[3].extraPrincipal).toBeCloseTo(100, 2);
+    expect(extraInYear(future.rows, 2026)).toBeCloseTo(900, 2);
+  });
+
+  it('stops at the window end and never pays past it', () => {
+    const result = generateLoanSchedule({
+      ...longLoan('BIWEEKLY'),
+      overpayments: {
+        recurringExtra: {
+          amount: 100,
+          frequency: 'MONTHLY',
+          endDate: '2026-06-30',
+        },
+      },
+    });
+    expect(hitsInYear(result.rows, 2026)).toBe(6);
+    expect(extraInYear(result.rows, 2026)).toBeCloseTo(600, 2);
+    expect(extraInYear(result.rows, 2027)).toBe(0);
+  });
+});
+
+describe('projection horizon', () => {
+  it('derives the default cap from the frequency, not a flat row count', () => {
+    expect(DEFAULT_MAX_PROJECTION_YEARS).toBe(50);
+    // 50 years of monthly payments is the 600 the flat default used to be.
+    expect(maxPaymentsForHorizon('MONTHLY')).toBe(600);
+    expect(maxPaymentsForHorizon('BIWEEKLY')).toBe(1300);
+    expect(maxPaymentsForHorizon('WEEKLY')).toBe(2600);
+    expect(maxPaymentsForHorizon('SEMI_MONTHLY')).toBe(1200);
+    expect(maxPaymentsForHorizon('QUARTERLY')).toBe(200);
+    expect(maxPaymentsForHorizon('YEARLY')).toBe(50);
+  });
+
+  it('clamps the derived cap to the hard maximum', () => {
+    expect(maxPaymentsForHorizon('WEEKLY', 1000)).toBe(10000);
+  });
+
+  // Ordinary contractual terms that the flat 600-payment default cut short.
+  const longTerms: [ScheduleFrequency, number, number][] = [
+    ['BIWEEKLY', 300, 650],
+    ['BIWEEKLY', 360, 780],
+    ['WEEKLY', 300, 1300],
+    ['WEEKLY', 360, 1560],
+  ];
+
+  it.each(longTerms)(
+    'pays off an ordinary %s mortgage over %i months (%i payments)',
+    (frequency, amortizationMonths, expectedPayments) => {
+      const payment = calculateMortgagePaymentAmount(
+        300000,
+        5,
+        amortizationMonths,
+        frequency,
+        false,
+        false,
+      );
+      const result = generateLoanSchedule(
+        baseInput({
+          startingBalance: 300000,
+          annualRate: 5,
+          paymentAmount: payment,
+          frequency,
+        }),
+      );
+      expect(result.paidOff).toBe(true);
+      expect(result.payoffDate).not.toBeNull();
+      // The contractual count, give or take the rounding of the installment.
+      expect(result.numPayments).toBeGreaterThan(expectedPayments - 3);
+      expect(result.numPayments).toBeLessThanOrEqual(expectedPayments + 1);
+      expect(result.numPayments).toBeGreaterThan(600);
+    },
+  );
+
+  it('still stops a genuinely non-amortizing schedule at the horizon', () => {
+    const result = generateLoanSchedule(
+      // Barely amortizing: far longer than 50 years of monthly payments.
+      baseInput({ startingBalance: 500000, annualRate: 6, paymentAmount: 2510 }),
+    );
+    expect(result.numPayments).toBe(600);
+    expect(result.paidOff).toBe(false);
+    expect(result.payoffDate).toBeNull();
+  });
+});
+
+describe('a truncated schedule is not a lifetime total', () => {
+  // 500k at 6% paying 2510/month runs well past the 50-year horizon.
+  const truncating = () =>
+    baseInput({ startingBalance: 500000, annualRate: 6, paymentAmount: 2510 });
+
+  it('reports no interest saved when the baseline never pays off', () => {
+    const baseline = generateLoanSchedule(truncating());
+    const scenario = generateLoanSchedule({
+      ...truncating(),
+      overpayments: { recurringExtra: { amount: 100, frequency: 'MONTHLY' } },
+    });
+    expect(baseline.paidOff).toBe(false);
+    // Both stop at the horizon, so both accumulated a horizon's interest. Their
+    // difference is not a saving -- and it would even come out NEGATIVE here,
+    // since the scenario's larger principal payments accrue less interest over
+    // the same 600 rows while still not paying the loan off.
+    expect(compareSchedules(baseline, scenario).interestSaved).toBeNull();
+  });
+
+  it('reports no interest saved when only the scenario pays off', () => {
+    const baseline = generateLoanSchedule(truncating());
+    const scenario = generateLoanSchedule({
+      ...truncating(),
+      overpayments: { recurringExtra: { amount: 4000, frequency: 'MONTHLY' } },
+    });
+    expect(baseline.paidOff).toBe(false);
+    expect(scenario.paidOff).toBe(true);
+    expect(compareSchedules(baseline, scenario).interestSaved).toBeNull();
+  });
+
+  it('reports a saving when both schedules pay off', () => {
+    const baseline = generateLoanSchedule(baseInput());
+    const scenario = generateLoanSchedule(
+      baseInput({ overpayments: { recurringExtra: { amount: 200 } } }),
+    );
+    expect(baseline.paidOff).toBe(true);
+    expect(compareSchedules(baseline, scenario).interestSaved).toBeGreaterThan(0);
+  });
+});
+
+describe('lowerEndPeriod', () => {
+  const input = {
+    startingBalance: 250000,
+    annualRate: 5.5,
+    paymentAmount: 1600,
+    frequency: 'MONTHLY' as const,
+    firstPaymentDate: new Date(2026, 0, 15),
+    overpayments: {
+      recurringExtra: {
+        amount: 300,
+        frequency: 'MONTHLY' as const,
+        mode: 'LOWER_INSTALLMENT' as const,
+      },
+    },
+  };
+  const baselineTerm = generateLoanSchedule({
+    ...input,
+    overpayments: undefined,
+  }).numPayments;
+
+  it('reproduces the schedule the engine derives for itself', () => {
+    // The field is a performance shortcut for a value the engine would compute
+    // by generating a second schedule -- so the only thing that makes it safe is
+    // that supplying the right value changes nothing. A goal-seek runs ~30
+    // candidates and every one of them used to pay for that second schedule.
+    const derived = generateLoanSchedule(input);
+    const supplied = generateLoanSchedule({
+      ...input,
+      lowerEndPeriod: baselineTerm,
+    });
+    expect(supplied.rows).toEqual(derived.rows);
+    expect(supplied.payoffDate).toBe(derived.payoffDate);
+    expect(supplied.totalInterest).toBe(derived.totalInterest);
+    expect(supplied.finalPaymentAmount).toBe(derived.finalPaymentAmount);
+  });
+
+  it('is load-bearing, so the equality above is not vacuous', () => {
+    // A wrong term re-levels the installment toward a schedule the loan does not
+    // have. If this passed, the field would be ignored and the test above would
+    // prove nothing.
+    const wrong = generateLoanSchedule({
+      ...input,
+      lowerEndPeriod: Math.round(baselineTerm / 2),
+    });
+    expect(wrong.finalPaymentAmount).not.toBe(
+      generateLoanSchedule(input).finalPaymentAmount,
+    );
+  });
+
+  it('is ignored where the engine has no use for it', () => {
+    // SHORTEN_TERM keeps the installment, so there is no term to re-level
+    // toward; fixedEndPeriod supersedes it outright. Neither may be perturbed by
+    // a value a caller threads through generically.
+    const shorten = {
+      ...input,
+      overpayments: {
+        recurringExtra: { amount: 300, frequency: 'MONTHLY' as const },
+      },
+    };
+    expect(
+      generateLoanSchedule({ ...shorten, lowerEndPeriod: 7 }).rows,
+    ).toEqual(generateLoanSchedule(shorten).rows);
+    expect(
+      generateLoanSchedule({ ...input, fixedEndPeriod: 240, lowerEndPeriod: 7 }).rows,
+    ).toEqual(generateLoanSchedule({ ...input, fixedEndPeriod: 240 }).rows);
   });
 });

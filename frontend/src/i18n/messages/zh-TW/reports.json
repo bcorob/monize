@@ -128,7 +128,8 @@
     "backToReports": "返回報表",
     "switchReport": "切換到其他報表",
     "switchPlaceholder": "篩選報表...",
-    "switchNoMatches": "沒有符合的報表"
+    "switchNoMatches": "沒有符合的報表",
+    "favourites": "我的最愛"
   },
   "reportPage": {
     "notFound": "找不到報表",
@@ -437,6 +438,7 @@
     "currentBalance": "目前結餘",
     "principalPaid": "已還本金",
     "estTotalInterest": "預估總利息",
+    "interestOverProjection": "預測期利息",
     "interestPaid": "已付利息",
     "progress": "進度",
     "estPayoff": "預估還清日期",
@@ -807,6 +809,7 @@
     "originalAmount": "原始金額",
     "interestRate": "利率",
     "estTotalInterest": "預估總利息",
+    "interestOverProjection": "預測期利息",
     "totalInterestPaid": "已付總利息",
     "paymentsMade": "已付次數",
     "estPayoff": "預估還清日期",
@@ -839,7 +842,8 @@
     "typeLineOfCredit": "信用額度",
     "typeLoan": "貸款",
     "typeMortgage": "抵押貸款",
-    "pdfSubtitlePaymentsSummary": "{count} 筆付款已完成，總利息 {interest}"
+    "pdfSubtitlePaymentsSummary": "{count} 筆付款已完成，總利息 {interest}",
+    "pdfSubtitlePaymentsProjection": "已還款 {count} 期，預測期內利息 {interest}"
   },
   "monteCarlo": {
     "toasts": {
@@ -1548,12 +1552,16 @@
     "csvColBillName": "帳單名稱",
     "csvColDueDate": "到期日",
     "csvColAmount": "金額",
+    "csvColCurrency": "貨幣",
     "csvColFrequency": "頻率",
     "csvColAccount": "科目",
     "csvColStatus": "狀態",
     "csvStatusOverdue": "逾期",
     "csvStatusAuto": "自動",
     "csvStatusManual": "手動",
+    "amountUnavailable": "不可用",
+    "occurrencesUnavailable": "無法載入預計的發生紀錄，因此下方的日曆與金額不可用。您的帳單本身未受影響。",
+    "csvAmountUnavailable": "不可用（無目前匯率）",
     "pdfTitle": "即將到期帳單報表",
     "pdfSubtitle": "{month} | {count} 個有效帳單",
     "pdfActiveBills": "有效帳單",

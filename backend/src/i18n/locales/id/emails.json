@@ -18,6 +18,8 @@
     "colAmount": "Jumlah",
     "typeIncome": "Pendapatan",
     "typeExpense": "Pengeluaran",
+    "typeUnknown": "Arah tidak diketahui",
+    "amountUnavailable": "Jumlah tidak tersedia",
     "button": "Lihat Tagihan &amp; Setoran"
   },
   "mortgageReminder": {

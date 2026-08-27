@@ -424,5 +424,100 @@ describe("LoanPaymentSetupService", () => {
       const createCall = scheduledTransactionsService.create.mock.calls[0][1];
       expect(createCall.name).toBe("Mortgage Payment - Home Mortgage");
     });
+
+    it("refuses a Canadian mortgage at a cadence the helpers cannot express", async () => {
+      // getMortgagePeriodsPerYear has no QUARTERLY case, so casting the DTO's
+      // value in used to reach its `default: 12` and split the payment at three
+      // times the correct interest for the life of the mortgage. A refusal is
+      // the only honest answer -- and the setup dialog no longer OFFERS these
+      // two to a Canadian mortgage, so this is the server half of one rule.
+      const mortgageAccount = {
+        ...mockLoanAccount,
+        id: "mortgage-2",
+        accountType: AccountType.MORTGAGE,
+        isCanadianMortgage: true,
+        isVariableRate: false,
+      };
+
+      for (const paymentFrequency of ["QUARTERLY", "YEARLY"]) {
+        accountsRepository.findOne
+          .mockResolvedValueOnce(mortgageAccount)
+          .mockResolvedValueOnce(mockSourceAccount);
+        scheduledTransactionsService.create.mockClear();
+
+        await expect(
+          service.setupLoanPayments("user-1", "mortgage-2", {
+            paymentAmount: 1500,
+            paymentFrequency,
+            sourceAccountId: "source-1",
+            nextDueDate: "2026-04-01",
+            interestRate: 4.25,
+          }),
+        ).rejects.toBeInstanceOf(BadRequestException);
+
+        // Rejection happens before the write: no schedule, no account update.
+        expect(scheduledTransactionsService.create).not.toHaveBeenCalled();
+      }
+    });
+
+    it("lets an explicit false override a stored Canadian flag", async () => {
+      // The same request writes the flag, so unticking the box means "this is
+      // not a Canadian mortgage" and must decide the split it arrives with.
+      // Under `||` the stored `true` won: the account was saved as non-Canadian
+      // while its first split was computed the Canadian way, and the setup
+      // dialog -- which filters its cadence list on the checkbox -- offered
+      // quarterly to an account the server then refused with a 400.
+      const storedCanadian = {
+        ...mockLoanAccount,
+        id: "mortgage-3",
+        accountType: AccountType.MORTGAGE,
+        isCanadianMortgage: true,
+        isVariableRate: false,
+      };
+
+      accountsRepository.findOne
+        .mockResolvedValueOnce(storedCanadian)
+        .mockResolvedValueOnce(mockSourceAccount);
+      scheduledTransactionsService.create.mockClear();
+
+      await service.setupLoanPayments("user-1", "mortgage-3", {
+        paymentAmount: 1500,
+        paymentFrequency: "QUARTERLY",
+        sourceAccountId: "source-1",
+        nextDueDate: "2026-04-01",
+        interestRate: 4.25,
+        isCanadianMortgage: false,
+      });
+
+      // No refusal, and the flag is written as the request asked.
+      expect(scheduledTransactionsService.create).toHaveBeenCalled();
+      expect(accountsRepository.update).toHaveBeenCalledWith(
+        "mortgage-3",
+        expect.objectContaining({ isCanadianMortgage: false }),
+      );
+    });
+
+    it("refuses a frequency the recurrence table cannot schedule", async () => {
+      // The DTO's @IsIn list keeps this unreachable through the controller, and
+      // loan-payment-frequency.guard.spec.ts holds the two lists together -- but
+      // the fallback that used to stand here (`?? "MONTHLY"`, behind an `as any`
+      // the compiler could not see through) scheduled an unmapped cadence twelve
+      // times a year and said nothing. A refusal fails loudly instead.
+      accountsRepository.findOne
+        .mockResolvedValueOnce(mockLoanAccount)
+        .mockResolvedValueOnce(mockSourceAccount);
+      scheduledTransactionsService.create.mockClear();
+
+      await expect(
+        service.setupLoanPayments("user-1", "loan-1", {
+          paymentAmount: 500,
+          paymentFrequency: "FORTNIGHTLY_ISH",
+          sourceAccountId: "source-1",
+          nextDueDate: "2026-04-01",
+          interestRate: 5,
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(scheduledTransactionsService.create).not.toHaveBeenCalled();
+    });
   });
 });

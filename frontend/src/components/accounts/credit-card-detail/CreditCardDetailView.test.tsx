@@ -74,7 +74,11 @@ beforeEach(() => {
   mockGetStatementCycle.mockResolvedValue(cycle);
   mockGetInterestPaid.mockResolvedValue({ amount: 45.5, count: 3 });
   mockGetDailyBalances.mockResolvedValue([{ date: '2026-06-01', balance: -1000 }]);
-  mockGetBalanceForecast.mockResolvedValue({ points: [{ date: '2026-06-01', balance: -1000 }] });
+  mockGetBalanceForecast.mockResolvedValue({
+    points: [{ date: '2026-06-01', balance: -1000 }],
+    complete: true,
+    gaps: [],
+  });
   mockGetGroupedTotals.mockResolvedValue([
     { id: 'c1', name: 'Groceries', currencyCode: 'CAD', total: -450, count: 5 },
     { id: 'c2', name: 'Gas', currencyCode: 'CAD', total: -200, count: 2 },
@@ -159,6 +163,38 @@ describe('CreditCardDetailView', () => {
       expect.objectContaining({ accountId: 'cc-1' }),
     );
     expect(mockGetRecurringCharges.mock.calls[0][0]).not.toHaveProperty('payeeIds');
+  });
+
+  // Issue #1247: an incomplete projection is withheld and explained rather than
+  // drawn as a line that stops at today with no reason given.
+  it('explains a withheld projection instead of drawing a stub line', async () => {
+    mockGetBalanceForecast.mockResolvedValue({
+      points: [{ date: '2026-06-01', balance: -1000 }],
+      complete: false,
+      gaps: [
+        {
+          scheduledTransactionId: 'st-inv',
+          name: 'Monthly ETF buy',
+          reason: 'unresolvedSettlementRate',
+          fromCurrency: 'USD',
+          toCurrency: 'CAD',
+        },
+      ],
+    });
+
+    await renderView();
+
+    const panel = screen.getByTestId('balance-forecast-unavailable');
+    expect(panel).toHaveTextContent('Monthly ETF buy');
+    expect(panel).toHaveTextContent(/refresh the rates/i);
+  });
+
+  it('says nothing when the projection is complete', async () => {
+    await renderView();
+
+    expect(
+      screen.queryByTestId('balance-forecast-unavailable'),
+    ).not.toBeInTheDocument();
   });
 
   it('does not offer a make-a-payment action', async () => {

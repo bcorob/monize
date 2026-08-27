@@ -145,6 +145,42 @@ export function formatByPattern(
 }
 
 /**
+ * The same pattern with its year removed, keeping day and month in the order
+ * and with the separators the pattern already uses: `MM/DD/YYYY` becomes
+ * `MM/DD`, `DD/MM/YYYY` becomes `DD/MM`, `YYYY-MM-DD` becomes `MM-DD` and
+ * `DD-MMM-YYYY` becomes `DD-MMM`.
+ *
+ * Derived from the pattern rather than switched on the four presets, so a
+ * locale-resolved arrangement (`DD.MM.YYYY`, `YYYY. MM. DD`) shortens the same
+ * way. The separator that would be left dangling goes with the year: the one
+ * before it where the year trails, the one after it where the year leads.
+ *
+ * A pattern that does not name both a day and a month has nothing to shorten
+ * and is returned unchanged -- the caller renders a full date rather than a
+ * fragment.
+ */
+export function dropYearFromPattern(pattern: string): string {
+  const tokens = tokenizeDatePattern(pattern);
+  const yearIndex = tokens.findIndex((token) => token.type === 'year');
+  if (yearIndex === -1) return pattern;
+
+  const kept = tokens.filter((_, i) => {
+    if (i === yearIndex) return false;
+    // Only one of the two neighbours is dropped, and never a field token.
+    if (i === yearIndex - 1) return tokens[i].type !== 'literal';
+    if (i === yearIndex + 1) {
+      return tokens[i].type !== 'literal' || tokens[yearIndex - 1]?.type === 'literal';
+    }
+    return true;
+  });
+
+  const hasField = (type: DateFieldType) => kept.some((token) => token.type === type);
+  if (!hasField('day') || !hasField('month')) return pattern;
+
+  return kept.map((token) => token.text).join('');
+}
+
+/**
  * Build a `YYYY-MM-DD` string, or null when the parts do not name a real day.
  * February 30 is rejected here rather than silently rolling into March.
  */

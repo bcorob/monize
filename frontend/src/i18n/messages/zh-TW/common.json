@@ -237,6 +237,12 @@
     "explanation": "部分合計：有 {count, plural, other {# 筆金額}} 無法計入，因此所示數字已將其排除。沒有 {currencies} 兌 {displayCurrency} 的匯率。",
     "explanationExcluded": "部分合計：有 {count, plural, other {# 筆金額}} 無法計算，因此所示數字已將其排除。"
   },
+  "unknownAmount": {
+    "marker": "—",
+    "srLabel": "金額不可用",
+    "scheduledFx": "無法計算目前金額：找不到此排程項目結算貨幣對的匯率。已儲存的金額是以舊匯率計算，因此不予顯示。",
+    "displayFx": "此金額無法在此處顯示：金額本身已知，但沒有可用匯率將其換算為該合計所用的貨幣。請在「貨幣」頁面重新整理匯率。"
+  },
   "density": {
     "title": "切換列間距",
     "normal": "一般",

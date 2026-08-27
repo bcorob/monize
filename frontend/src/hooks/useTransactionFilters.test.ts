@@ -459,6 +459,27 @@ describe('useTransactionFilters - derived data and options', () => {
     expect(result.current.filteredAccounts.every(a => a.isClosed)).toBe(true);
   });
 
+  // `accountFilterOptions` sorts for display, and `filteredAccounts` is what the
+  // transactions page derives the bulk-update account scope from. Sorting in
+  // place reordered that scope as a side effect of rendering the dropdown, so
+  // the scope's value depended on which memo ran first.
+  it('sorts the account dropdown without reordering filteredAccounts', () => {
+    const unsorted = [
+      { id: 'a3', name: 'Zebra Credit Union', isClosed: false } as any,
+      { id: 'a1', name: 'Alpha Bank', isClosed: false } as any,
+    ];
+    const { result } = renderHook(() =>
+      useTransactionFilters({ ...defaultOptions, accounts: unsorted } as any),
+    );
+
+    expect(result.current.accountFilterOptions.map(o => o.label)).toEqual([
+      'Alpha Bank',
+      'Zebra Credit Union',
+    ]);
+    expect(result.current.filteredAccounts.map(a => a.id)).toEqual(['a3', 'a1']);
+    expect(unsorted.map(a => a.id)).toEqual(['a3', 'a1']);
+  });
+
   it('sorts payees alphabetically and excludes inactive', () => {
     const { result } = renderHook(() => useTransactionFilters({ ...defaultOptions, payees } as any));
     const labels = result.current.payeeFilterOptions.map(o => o.label);

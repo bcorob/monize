@@ -12,11 +12,16 @@ import { useNumberFormat } from '@/hooks/useNumberFormat';
 import { useExchangeRates } from '@/hooks/useExchangeRates';
 import {
   SCHEDULED_KIND_AMOUNT_CLASSES,
-  scheduledKind,
+  occurrenceKind,
   type ScheduledKind,
 } from '@/lib/scheduled-kind';
 import { sumConverted } from '@/lib/currency-total';
 import { PartialTotal } from '@/components/ui/PartialTotal';
+import { UnknownAmount } from '@/components/ui/UnknownAmount';
+import {
+  nextOccurrenceDueDate,
+  nextOccurrenceEffectiveAmount,
+} from '@/lib/scheduled-effective-amount';
 import { WidgetHeading } from './widget-meta';
 import { CARD_CLASS } from '@/components/ui/Card';
 
@@ -41,13 +46,15 @@ export function UpcomingBills({ scheduledTransactions, accounts, isLoading, maxI
   const upcomingItems = useMemo(() => scheduledTransactions
     .filter((st) => {
       if (!st.isActive) return false;
-      const dueDate = parseLocalDate(st.nextDueDate);
+      const dueDate = parseLocalDate(nextOccurrenceDueDate(st));
       const daysUntil = differenceInDays(dueDate, today);
       // Include overdue items (daysUntil < 0) and items within their reminder window
       return daysUntil < 0 || (daysUntil >= 0 && daysUntil <= (st.reminderDaysBefore ?? 3));
     })
     .sort((a, b) => {
-      const dateDiff = parseLocalDate(a.nextDueDate).getTime() - parseLocalDate(b.nextDueDate).getTime();
+      const dateDiff =
+        parseLocalDate(nextOccurrenceDueDate(a)).getTime() -
+        parseLocalDate(nextOccurrenceDueDate(b)).getTime();
       if (dateDiff !== 0) return dateDiff;
       // On the same day, show manual items first so they're visible before truncation
       if (!a.autoPost && b.autoPost) return -1;
@@ -70,6 +77,8 @@ export function UpcomingBills({ scheduledTransactions, accounts, isLoading, maxI
     const result = new Set<string>();
     // Running balance per account: start with currentBalance + futureTransactionsSum
     const runningBalances = new Map<string, number>();
+    /** Accounts whose projection hit an unknown amount and cannot continue. */
+    const unknown = new Set<string>();
 
     for (const item of upcomingItems) {
       const account = accountMap.get(item.accountId);
@@ -85,7 +94,16 @@ export function UpcomingBills({ scheduledTransactions, accounts, isLoading, maxI
         );
       }
 
-      const effectiveAmount = item.nextOverride?.amount ?? item.amount;
+      // A running balance built from an unknown amount is not a smaller
+      // balance, it is an unknown one -- so the projection stops for that
+      // account rather than carrying on as if the item cost nothing and
+      // flagging (or clearing) the rows after it (issue #1247).
+      const { amount: effectiveAmount } = nextOccurrenceEffectiveAmount(item);
+      if (effectiveAmount === null) {
+        unknown.add(item.accountId);
+        continue;
+      }
+      if (unknown.has(item.accountId)) continue;
       const newBalance = runningBalances.get(item.accountId)! + effectiveAmount;
       runningBalances.set(item.accountId, newBalance);
 
@@ -123,12 +141,16 @@ export function UpcomingBills({ scheduledTransactions, accounts, isLoading, maxI
     return 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30';
   };
 
-  const getEffectiveAmount = (item: ScheduledTransaction): number => {
-    return item.nextOverride?.amount ?? item.amount;
-  };
+  // The amount this occurrence would post TODAY, from the server's
+  // effective-amount contract -- `null` when it cannot be determined (issue
+  // #1247). Never `nextOverride?.amount ?? amount`: for an FX-sensitive schedule
+  // that scalar was written at an older rate, which is how this widget came to
+  // disagree with the cash-flow forecast about the same bill.
+  const getEffective = (item: ScheduledTransaction) =>
+    nextOccurrenceEffectiveAmount(item);
 
   const getItemType = (item: ScheduledTransaction): ScheduledKind =>
-    scheduledKind({ amount: getEffectiveAmount(item), isTransfer: item.isTransfer });
+    occurrenceKind(getEffective(item), item);
 
   const getTypeBadge = (type: ScheduledKind) => {
     switch (type) {
@@ -140,17 +162,25 @@ export function UpcomingBills({ scheduledTransactions, accounts, isLoading, maxI
         return <span className="px-1.5 py-0.5 bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 text-xs rounded font-medium">{t('upcomingBills.typeBadge.transfer')}</span>;
       case 'reminder':
         return <span className="px-1.5 py-0.5 bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300 text-xs rounded font-medium">{t('upcomingBills.typeBadge.reminder')}</span>;
+      case 'unknown':
+        // The server could not derive which way this occurrence goes, so the
+        // badge says that rather than picking a colour: red would read as money
+        // out and green as money in (issue #1247 re-audit).
+        return <span className="px-1.5 py-0.5 bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300 text-xs rounded font-medium">{t('upcomingBills.typeBadge.unknown')}</span>;
     }
   };
 
   const getAmountDisplay = (item: ScheduledTransaction) => {
-    const amount = getEffectiveAmount(item);
+    const effective = getEffective(item);
     const type = getItemType(item);
     // A reminder carries no sign: its amount is a placeholder the user will fill
     // in when the real one arrives, so it is neither money out nor money in.
     const sign = type === 'bill' ? '-' : type === 'deposit' ? '+' : '';
     return {
-      text: `${sign}${formatCurrency(amount, item.currencyCode)}`,
+      text:
+        effective.amount === null
+          ? null
+          : `${sign}${formatCurrency(effective.amount, effective.currencyCode)}`,
       className: SCHEDULED_KIND_AMOUNT_CLASSES[type],
     };
   };
@@ -190,22 +220,37 @@ export function UpcomingBills({ scheduledTransactions, accounts, isLoading, maxI
   }
 
   // Totals use the full list; display is capped at maxItems. An item with no
-  // rate is excluded and its currency named, so "due" is marked as a subtotal
-  // rather than quietly understating what is owed. Transfers and zero-amount
-  // reminders are classified out by scheduledKind, not summed.
-  const totalDue = sumConverted(
-    upcomingItems.filter((item) => getItemType(item) === 'bill'),
-    (item) => getEffectiveAmount(item),
-    (item) => item.currencyCode,
-    (amount, currency) => {
-      const converted = convertToDefault(amount, currency);
-      return converted === null ? null : Math.abs(converted);
-    },
+  // rate is excluded and its currency named, so the total is marked as a
+  // subtotal rather than quietly understating it. Bills, transfers and
+  // zero-amount reminders are classified out by scheduledKind, not summed.
+  //
+  // The "Total due" row this widget used to draw was removed upstream (#1264),
+  // so the bills side is no longer totalled here. The three rules below govern
+  // the one total that is left -- they were written for both and are not
+  // weakened by there being one (issue #1247):
+  //
+  // An item whose current amount is unknown is excluded and counted, so the
+  // figure is marked a subtotal rather than quietly understating what is coming
+  // in. It goes through `sumConverted`'s non-finite branch -- a value failure
+  // with no currency to blame, which is exactly what an unresolvable settlement
+  // rate is; the missing-rate branch below still names a currency when it is the
+  // *display* conversion that has no rate.
+  //
+  // An occurrence whose direction the server could not derive might be a
+  // deposit, so it is counted here and withholds this total rather than being
+  // quietly left out: filtering it away left "Total incoming" rendering as a
+  // complete figure beside a row that says its own amount is unknown. Its
+  // amount is null, which is what that same non-finite branch withholds on.
+  const unclassified = upcomingItems.filter(
+    (item) => getItemType(item) === 'unknown',
   );
   const totalIncoming = sumConverted(
-    upcomingItems.filter((item) => getItemType(item) === 'deposit'),
-    (item) => getEffectiveAmount(item),
-    (item) => item.currencyCode,
+    [
+      ...upcomingItems.filter((item) => getItemType(item) === 'deposit'),
+      ...unclassified,
+    ],
+    (item) => getEffective(item).amount ?? NaN,
+    (item) => getEffective(item).currencyCode,
     convertToDefault,
   );
 
@@ -238,7 +283,7 @@ export function UpcomingBills({ scheduledTransactions, accounts, isLoading, maxI
               }}
               title={t('upcomingBills.postTransaction')}
               className={`flex items-center justify-between p-2 sm:p-3 rounded-lg border cursor-pointer transition-colors hover:border-blue-400 hover:bg-gray-50 dark:hover:border-blue-500 dark:hover:bg-gray-700/50 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                isOverdue(item.nextDueDate)
+                isOverdue(nextOccurrenceDueDate(item))
                   ? 'border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/10'
                   : 'border-gray-200 dark:border-gray-700'
               }`}
@@ -246,10 +291,10 @@ export function UpcomingBills({ scheduledTransactions, accounts, isLoading, maxI
               <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                 <span
                   className={`px-2 py-1 text-xs font-medium rounded ${getDueDateColour(
-                    item.nextDueDate
+                    nextOccurrenceDueDate(item)
                   )}`}
                 >
-                  {getDueDateLabel(item.nextDueDate)}
+                  {getDueDateLabel(nextOccurrenceDueDate(item))}
                 </span>
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5">
@@ -282,7 +327,7 @@ export function UpcomingBills({ scheduledTransactions, accounts, isLoading, maxI
                   </span>
                 )}
                 <div className={`font-semibold ${amountDisplay.className} whitespace-nowrap`}>
-                  {amountDisplay.text}
+                  {amountDisplay.text ?? <UnknownAmount />}
                 </div>
               </div>
             </div>
@@ -301,16 +346,6 @@ export function UpcomingBills({ scheduledTransactions, accounts, isLoading, maxI
         {/* Also shown when the value is 0 but items were excluded for want of a
             rate, so the missing-currency marker still tells the user the total
             could not be worked out rather than hiding the row entirely. */}
-        {(totalDue.value > 0 || totalDue.excludedCount > 0) && (
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-gray-600 dark:text-gray-400">{t('upcomingBills.totalDue')}</span>
-            <span className="font-semibold text-red-600 dark:text-red-400">
-              <PartialTotal total={totalDue} displayCurrency={defaultCurrency}>
-                {'-'}{formatCurrencyBase(totalDue.value)}
-              </PartialTotal>
-            </span>
-          </div>
-        )}
         {(totalIncoming.value > 0 || totalIncoming.excludedCount > 0) && (
           <div className="flex items-center justify-between">
             <span className="text-sm text-gray-600 dark:text-gray-400">{t('upcomingBills.totalIncoming')}</span>

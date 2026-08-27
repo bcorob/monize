@@ -14,6 +14,14 @@
       "warning": "Cảnh báo",
       "success": "Tin vui",
       "info": "Thông tin"
+    },
+    "billDue": {
+      "titleOverdue": "{payee} đã quá hạn",
+      "titleToday": "{payee} đến hạn hôm nay",
+      "titleTomorrow": "{payee} đến hạn ngày mai",
+      "titleInDays": "{payee} đến hạn sau {days} ngày",
+      "amountDue": "{amount} đến hạn vào {date}",
+      "amountUnavailable": "Không có số tiền (không có tỷ giá hiện tại), đến hạn vào {date}"
     }
   },
   "summary503020": {

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { customReportsApi } from '@/lib/custom-reports';
 import { investmentReportsApi } from '@/lib/investment-reports';
+import { usePreferencesStore } from '@/store/preferencesStore';
 import { createLogger } from '@/lib/logger';
 import {
   builtInReports,
@@ -20,6 +21,13 @@ export interface ReportCatalogEntry {
   id: string;
   name: string;
   category: ReportCategory;
+  /**
+   * Whether the user has starred this report. Built-ins read it from the
+   * reactive `favouriteReportIds` preference, so toggling a favourite anywhere
+   * reorders the switcher on the next render; a saved report carries its own
+   * `isFavourite`.
+   */
+  isFavourite: boolean;
 }
 
 /**
@@ -34,11 +42,14 @@ export interface ReportCatalogEntry {
  */
 export function useReportCatalog(): { reports: readonly ReportCatalogEntry[] } {
   const t = useTranslations('reports');
+  const favouriteReportIds = usePreferencesStore(
+    (s) => s.preferences?.favouriteReportIds,
+  );
   const [customNames, setCustomNames] = useState<
-    readonly { id: string; name: string }[]
+    readonly { id: string; name: string; isFavourite: boolean }[]
   >([]);
   const [investmentNames, setInvestmentNames] = useState<
-    readonly { id: string; name: string }[]
+    readonly { id: string; name: string; isFavourite: boolean }[]
   >([]);
 
   useEffect(() => {
@@ -47,14 +58,26 @@ export function useReportCatalog(): { reports: readonly ReportCatalogEntry[] } {
       .getAll()
       .then((reports) => {
         if (!active) return;
-        setCustomNames(reports.map((r) => ({ id: r.id, name: r.name })));
+        setCustomNames(
+          reports.map((r) => ({
+            id: r.id,
+            name: r.name,
+            isFavourite: r.isFavourite,
+          })),
+        );
       })
       .catch((error) => logger.error('Failed to load custom reports:', error));
     investmentReportsApi
       .getAll()
       .then((reports) => {
         if (!active) return;
-        setInvestmentNames(reports.map((r) => ({ id: r.id, name: r.name })));
+        setInvestmentNames(
+          reports.map((r) => ({
+            id: r.id,
+            name: r.name,
+            isFavourite: r.isFavourite,
+          })),
+        );
       })
       .catch((error) =>
         logger.error('Failed to load investment reports:', error),
@@ -70,19 +93,22 @@ export function useReportCatalog(): { reports: readonly ReportCatalogEntry[] } {
         id: report.id,
         name: t(`page.names.${report.id}` as Parameters<typeof t>[0]),
         category: report.category,
+        isFavourite: (favouriteReportIds ?? []).includes(report.id),
       })),
       ...customNames.map((report) => ({
         id: `custom/${report.id}`,
         name: report.name,
         category: 'custom' as ReportCategory,
+        isFavourite: report.isFavourite,
       })),
       ...investmentNames.map((report) => ({
         id: `investment/${report.id}`,
         name: report.name,
         category: 'investment' as ReportCategory,
+        isFavourite: report.isFavourite,
       })),
     ],
-    [customNames, investmentNames, t],
+    [customNames, investmentNames, favouriteReportIds, t],
   );
 
   return { reports };

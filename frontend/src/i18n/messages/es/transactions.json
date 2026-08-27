@@ -123,6 +123,10 @@
       "status": "Estado",
       "actions": "Acciones"
     },
+    "dateDisplay": {
+      "toggleLabel": "Ocultar el año",
+      "toggleTitle": "Quitar el año de las fechas para que se vea más del beneficiario"
+    },
     "attachmentsCount": "{count, plural, one {# adjunto} other {# adjuntos}}",
     "today": "Hoy",
     "export": {

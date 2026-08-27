@@ -123,6 +123,10 @@
       "status": "状態",
       "actions": "操作"
     },
+    "dateDisplay": {
+      "toggleLabel": "年を非表示",
+      "toggleTitle": "日付から年を省いて支払先の表示幅を広げます"
+    },
     "attachmentsCount": "{count, plural, other {# 件の添付ファイル}}",
     "today": "今日",
     "export": {

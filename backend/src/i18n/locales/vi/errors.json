@@ -27,6 +27,8 @@
     "loanRequiresInstitution": "Tài khoản vay yêu cầu tên tổ chức",
     "mortgageRequiredFields": "Tài khoản thế chấp yêu cầu mortgagePaymentFrequency, paymentStartDate, sourceAccountId và amortizationMonths",
     "mortgageRequiresInterestRate": "Tài khoản thế chấp yêu cầu lãi suất",
+    "mortgageFrequencyUnsupported": "Không thể lên lịch thế chấp Canada với tần suất thanh toán {frequency}",
+    "paymentFrequencyUnsupported": "Không thể lên lịch tần suất thanh toán {frequency}",
     "mortgageRequiresInstitution": "Tài khoản thế chấp yêu cầu tên tổ chức",
     "onlyMortgageAccounts": "Thao tác này chỉ hợp lệ cho tài khoản thế chấp",
     "updateRateClosed": "Không thể cập nhật lãi suất cho tài khoản đã đóng",
@@ -193,13 +195,16 @@
     "reauthUnavailable": "Hãy hoàn tất việc thiết lập mật khẩu tài khoản trước khi phục hồi bản sao lưu.",
     "supportPasswordRequired": "Bản sao lưu hỗ trợ phải được mã hoá: hãy cung cấp mật khẩu.",
     "passwordHeaderNotBase64": "Tiêu đề {header} phải được mã hoá base64.",
-    "decompressTooLarge": "Bản sao lưu quá lớn để phục hồi: khi giải nén nó vượt quá giới hạn {limit} byte đã cấu hình. Hãy tăng BACKUP_RESTORE_EXPANDED_LIMIT nếu đây là bản sao lưu hợp lệ.",
+    "decompressTooLarge": "Bản sao lưu quá lớn để khôi phục: khi giải nén nó vượt quá giới hạn {limit} byte của bản triển khai này. Giới hạn đó được suy ra từ bộ nhớ của container và chi phí đo được trên mỗi byte, nên chỉ nâng giới hạn là mô tả một lượt khôi phục mà tiến trình không thể hoàn tất -- hãy nâng giới hạn bộ nhớ của container (Kubernetes: backend.resources.limits.memory).",
     "exportTooLarge": "Bản sao lưu này quá lớn để tạo trong một lần (vượt {limit} byte tại bảng \"{table}\"). Bản sao lưu tự động và hỗ trợ phải được giữ trong bộ nhớ; hãy tải bản sao lưu thủ công có truyền theo luồng, hoặc tăng BACKUP_EXPORT_BUFFER_LIMIT.",
     "supportExportTooLarge": "Bản sao lưu hỗ trợ này sẽ là {{ size }} MiB JSON, vượt giới hạn {{ limit }} MiB. Hãy thu hẹp bằng cách chọn tài khoản hoặc khoảng thời gian, hoặc tăng BACKUP_EXPORT_BUFFER_LIMIT.",
     "folderUnusable": "Không thể dùng thư mục \"{{ path }}\" làm thư mục ({{ reason }}).",
     "folderOutsideAllowedRoots": "Thư mục sao lưu \"{path}\" nằm ngoài các gốc được phép ({roots}). Hãy đặt BACKUP_ALLOWED_ROOTS để cho phép.",
     "noBackupStorage": "Bản triển khai này không có bộ lưu trữ sao lưu ghi được: {{ safePath }} không tồn tại và không thể tạo ({{ reason }}). Hãy gắn một volume ở đó (Docker: bind mount hoặc named volume; Kubernetes: đặt backend.persistence.backups trong Helm chart) rồi thử lại.",
-    "restoreNoMemoryHeadroom": "Bản triển khai này không có dư địa bộ nhớ cho việc phục hồi: mức đỉnh mô hình hoá của một lần phục hồi không vừa với container. Hãy tăng giới hạn bộ nhớ của container hoặc giảm BACKUP_RESTORE_EXPANDED_LIMIT."
+    "restoreNoMemoryHeadroom": "Bản triển khai này không có dư địa bộ nhớ cho việc phục hồi: mức đỉnh mô hình hoá của một lần phục hồi không vừa với container. Hãy tăng giới hạn bộ nhớ của container hoặc giảm BACKUP_RESTORE_EXPANDED_LIMIT.",
+    "restoreQueueFull": "Quá nhiều lượt khôi phục đang chờ dung lượng khôi phục của bản triển khai này. Hãy thử lại sau một lát.",
+    "restoreQueueWaitTimeout": "Hết thời gian chờ dung lượng khôi phục: một lượt khôi phục khác vẫn đang chạy. Hãy thử lại sau một lát.",
+    "restoreTicketUnavailable": "Bản triển khai này không thể cấp quyền cho việc tải lên khôi phục."
   },
   "budgets": {
     "notFound": "Không tìm thấy ngân sách với ID {{ id }}",

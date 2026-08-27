@@ -6,6 +6,11 @@
     "summaryActiveBills": "Tagihan Aktif",
     "summaryActiveDeposits": "Setoran Aktif",
     "summaryMonthlyNet": "Bersih Bulanan",
+    "summaryAmountUnavailable": "Tidak tersedia",
+    "summaryNetRatesUnavailable": "Nilai tukar tidak tersedia saat ini, jadi nilai neto tidak dapat dihitung.",
+    "summaryNetMissingRates": "Tidak ada nilai tukar untuk {currencies} — tambahkan di Mata Uang",
+    "summaryNetMissingRatesAndUnpriceable": "Tidak ada nilai tukar untuk {currencies}, dan satu atau beberapa jadwal tidak dapat dihitung nilainya.",
+    "summaryNetUnpriceable": "Satu atau beberapa jadwal tidak dapat dihitung nilainya",
     "summaryDueNow": "Jatuh Tempo Sekarang",
     "loadingText": "Memuat transaksi terjadwal...",
     "chartUnavailable": "Grafik sementara tidak tersedia"

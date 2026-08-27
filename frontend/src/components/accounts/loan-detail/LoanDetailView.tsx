@@ -15,7 +15,11 @@ import { PayoffComparisonChart } from '@/components/accounts/loan-detail/PayoffC
 import { RateHistorySidebar } from '@/components/accounts/loan-detail/RateHistorySidebar';
 import { ComparisonSummaryCards } from '@/components/accounts/loan-detail/ComparisonSummaryCards';
 import { SavedScenariosPanel } from '@/components/accounts/loan-detail/SavedScenariosPanel';
-import type { ScenarioOutcome } from '@/components/accounts/loan-detail/ScenarioComparisonChart';
+import {
+  hasKnownInterestSaved,
+  type ScenarioChartOutcome,
+  type ScenarioOutcome,
+} from '@/components/accounts/loan-detail/ScenarioComparisonChart';
 import { createScenarioLabels } from '@/components/accounts/loan-detail/loan-scenario-labels';
 import { ExportDropdown } from '@/components/ui/ExportDropdown';
 import { sanitizeFilename } from '@/lib/export-filename';
@@ -35,6 +39,7 @@ import {
   OverpaymentPlan,
   ScenarioComparison,
   compareSchedules,
+  effectiveOverpaymentMode,
   generateLoanSchedule,
 } from '@/lib/loan-schedule';
 import { scenarioToPlan } from '@/lib/loan-scenarios';
@@ -172,10 +177,25 @@ export function LoanDetailView({
 
   // The comparison chart is only meaningful with more than one saved scenario;
   // the no-overpayment baseline renders as a context line, not a bar.
-  const scenarioChartOutcomes = useMemo<ScenarioOutcome[]>(
-    () => (scenarioOutcomes.length < 2 || !baseline ? [] : scenarioOutcomes),
-    [scenarioOutcomes, baseline],
-  );
+  // Only scenarios with a known interest saving can be drawn (the arc's height
+  // IS that saving), so the "more than one scenario" test counts drawable ones --
+  // and the count left out travels to the panel, which says so rather than
+  // letting rows or the whole toggle vanish unexplained.
+  const { scenarioChartOutcomes, scenarioChartExcluded } = useMemo(() => {
+    if (!baseline) {
+      return { scenarioChartOutcomes: [] as ScenarioChartOutcome[], scenarioChartExcluded: 0 };
+    }
+    const drawable = scenarioOutcomes.filter(hasKnownInterestSaved);
+    // Only report an exclusion when an unknown saving is actually why the chart
+    // is short. With a single saved scenario the chart is hidden for the count,
+    // and blaming an unknown saving would be the wrong reason.
+    const excluded =
+      scenarioOutcomes.length >= 2 ? scenarioOutcomes.length - drawable.length : 0;
+    return {
+      scenarioChartOutcomes: drawable.length < 2 ? [] : drawable,
+      scenarioChartExcluded: excluded,
+    };
+  }, [scenarioOutcomes, baseline]);
 
   // Past impact of overpayments. It reuses the baseline (no-overpayment)
   // projection as the current projection -- computed once here, not twice --
@@ -304,10 +324,20 @@ export function LoanDetailView({
                         comparison={comparison}
                         currencyCode={account.currencyCode}
                         recurringOverpayment={
-                          plan?.recurringExtra
+                          plan
                             ? {
-                                amount: plan.recurringExtra.amount,
-                                frequency: plan.recurringExtra.frequency,
+                                amount: plan.recurringExtra?.amount ?? 0,
+                                frequency: plan.recurringExtra?.frequency,
+                                // The mode travels with the plan rather than
+                                // being inferred from the installment drop,
+                                // which is unknown on a truncated schedule --
+                                // and it is read off the whole plan, because a
+                                // budget or a lump sum carries its own. Keyed on
+                                // `plan` rather than `plan.recurringExtra` for
+                                // the same reason: a budget-only plan has no
+                                // recurring extra and used to arrive with no
+                                // mode at all.
+                                mode: effectiveOverpaymentMode(plan) ?? undefined,
                               }
                             : undefined
                         }
@@ -323,6 +353,7 @@ export function LoanDetailView({
                     currencyCode={account.currencyCode}
                     activePlan={plan}
                     chartOutcomes={scenarioChartOutcomes}
+                    chartExcludedCount={scenarioChartExcluded}
                     chartBaseline={
                       baseline ? { payoffDate: baseline.payoffDate } : null
                     }

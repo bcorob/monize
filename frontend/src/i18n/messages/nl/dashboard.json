@@ -27,7 +27,6 @@
     "manualTitle": "Vereist handmatige boeking",
     "negativeBalanceWarning": "Deze transactie zorgt ervoor dat het rekeningsaldo onder nul komt",
     "viewAll": "Alle facturen en stortingen bekijken",
-    "totalDue": "Totaal verschuldigd",
     "totalIncoming": "Totaal inkomend",
     "moreItems": "+{count} meer",
     "overdue": "Achterstallig",
@@ -38,7 +37,8 @@
       "bill": "Factuur",
       "deposit": "Storting",
       "transfer": "Overboeking",
-      "reminder": "Herinnering"
+      "reminder": "Herinnering",
+      "unknown": "Onbekend"
     }
   },
   "gettingStarted": {

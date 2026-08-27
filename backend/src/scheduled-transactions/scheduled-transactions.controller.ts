@@ -28,6 +28,7 @@ import { ScheduledTransactionsService } from "./scheduled-transactions.service";
 import { CreateScheduledTransactionDto } from "./dto/create-scheduled-transaction.dto";
 import { UpdateScheduledTransactionDto } from "./dto/update-scheduled-transaction.dto";
 import { PostScheduledTransactionDto } from "./dto/post-scheduled-transaction.dto";
+import { ScheduledOccurrencesQueryDto } from "./dto/scheduled-occurrences-query.dto";
 import {
   CreateScheduledTransactionOverrideDto,
   UpdateScheduledTransactionOverrideDto,
@@ -153,6 +154,33 @@ export class ScheduledTransactionsController {
       req.user.id,
       days,
     );
+    return this.filterForDelegate(req, rows);
+  }
+
+  // Declared before `:id` on purpose: Nest matches in declaration order, and a
+  // parameterised route above this one would swallow the literal path.
+  @Get("occurrences")
+  @ApiOperation({
+    summary:
+      "Get scheduled occurrences due through a date, priced at what each would post today",
+  })
+  @ApiResponse({
+    status: 200,
+    description: "List of effective scheduled occurrences",
+  })
+  @ApiResponse({ status: 400, description: "Bad request" })
+  @ApiResponse({ status: 401, description: "Unauthorized" })
+  @AllowDelegate()
+  @DelegateRequiresSection("bills")
+  async findOccurrences(
+    @Request() req,
+    @Query() query: ScheduledOccurrencesQueryDto,
+  ) {
+    const rows =
+      await this.scheduledTransactionsService.findEffectiveOccurrences(
+        req.user.id,
+        { through: query.through, maxPerSchedule: query.maxPerSchedule },
+      );
     return this.filterForDelegate(req, rows);
   }
 

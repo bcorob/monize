@@ -19,7 +19,13 @@ import { institutionsApi } from '@/lib/institutions';
 import { Institution } from '@/types/institution';
 import { useAuthStore } from '@/store/authStore';
 import toast from 'react-hot-toast';
-import { Account, PaymentFrequency, InterestBookingMode } from '@/types/account';
+import {
+  Account,
+  InterestBookingMode,
+  MORTGAGE_PAYMENT_FREQUENCIES,
+  PAYMENT_FREQUENCIES,
+  PaymentFrequency,
+} from '@/types/account';
 import { Category } from '@/types/category';
 import { accountsApi } from '@/lib/accounts';
 import { useMainAccountName } from '@/hooks/useMainAccountName';
@@ -57,8 +63,11 @@ const optionalNumberWithRange = (min: number, max: number) =>
     z.number().min(min).max(max).optional()
   );
 
-const paymentFrequencies = ['WEEKLY', 'BIWEEKLY', 'MONTHLY', 'QUARTERLY', 'YEARLY'] as const;
-const mortgagePaymentFrequencies = ['MONTHLY', 'SEMI_MONTHLY', 'BIWEEKLY', 'ACCELERATED_BIWEEKLY', 'WEEKLY', 'ACCELERATED_WEEKLY'] as const;
+// From @/types/account, not a local copy: `optionalEnum` below maps an unlisted
+// value to `undefined`, so a list missing a frequency the backend can store
+// would silently erase it on the first edit of such an account.
+const paymentFrequencies = PAYMENT_FREQUENCIES;
+const mortgagePaymentFrequencies = MORTGAGE_PAYMENT_FREQUENCIES;
 
 // An optional enum that maps any value outside its allowed set to undefined
 // rather than failing validation. This also absorbs the empty-string
@@ -960,6 +969,11 @@ export function AccountForm({ account, onSubmit, onCancel, onDirtyChange, submit
             accountName: account.name,
             accountType: account.accountType,
             currencyCode: account.currencyCode,
+            // Both flags travel: the dialog submits its own checkboxes, so
+            // starting them at false on a Canadian mortgage turned the flag off
+            // on save and offered cadences the server refuses.
+            isCanadianMortgage: account.isCanadianMortgage,
+            isVariableRate: account.isVariableRate,
           }}
           accounts={accounts}
           onSetupComplete={() => {

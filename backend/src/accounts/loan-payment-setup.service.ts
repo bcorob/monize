@@ -18,12 +18,16 @@ import { ScheduledTransactionsService } from "../scheduled-transactions/schedule
 import {
   calculatePaymentSplit,
   PaymentFrequency,
+  SCHEDULED_FREQUENCY_BY_PAYMENT_FREQUENCY,
 } from "./loan-amortization.util";
 import {
   calculateMortgagePaymentSplit,
-  MortgagePaymentFrequency,
+  toMortgagePaymentFrequency,
 } from "./mortgage-amortization.util";
+import { mortgageTermEndDate } from "./payment-frequency.util";
+import { localDateForColumn } from "../common/date-utils";
 import { allocateLoanPayment } from "./loan-payment-waterfall.util";
+import { FrequencyType as FrequencyTypeDto } from "../scheduled-transactions/dto/create-scheduled-transaction.dto";
 import { tr } from "../i18n/translate";
 import { withScopedDb } from "../common/db/scoped-db";
 
@@ -127,14 +131,41 @@ export class LoanPaymentSetupService {
       }
     } else if (
       account.accountType === AccountType.MORTGAGE &&
-      (dto.isCanadianMortgage || account.isCanadianMortgage)
+      // `??`, not `||`: the same request WRITES this flag
+      // (`updateData.isCanadianMortgage = dto.isCanadianMortgage` below), so an
+      // explicit `false` means "this is not a Canadian mortgage" and must decide
+      // the split it is submitted with. Under `||` the stored flag won, and the
+      // account was saved as non-Canadian with a split computed the Canadian
+      // way -- and the setup dialog, which filters its cadence list on the
+      // checkbox, offered quarterly to an account the server then refused.
+      (dto.isCanadianMortgage ?? account.isCanadianMortgage)
     ) {
-      // Use mortgage-specific calculation for Canadian mortgages
+      // Use mortgage-specific calculation for Canadian mortgages.
+      //
+      // The DTO's frequency is a *recurrence* spelling, and casting it into
+      // MortgagePaymentFrequency handed getMortgagePeriodsPerYear a value it has
+      // no case for: SEMIMONTHLY, QUARTERLY and YEARLY all fell through to its
+      // monthly default, so a semi-monthly Canadian mortgage was split at twice
+      // the correct interest for the life of the loan. Normalize instead, and
+      // refuse a cadence these helpers cannot express rather than computing a
+      // confident wrong number for it.
+      const mortgageFrequency = toMortgagePaymentFrequency(
+        dto.paymentFrequency,
+      );
+      if (!mortgageFrequency) {
+        throw new BadRequestException(
+          tr(
+            "errors.accounts.mortgageFrequencyUnsupported",
+            "Canadian mortgages cannot be scheduled at this payment frequency",
+            { frequency: dto.paymentFrequency },
+          ),
+        );
+      }
       const split = calculateMortgagePaymentSplit(
         currentBalance,
         interestRate,
         basePaymentAmount,
-        dto.paymentFrequency as MortgagePaymentFrequency,
+        mortgageFrequency,
         dto.isCanadianMortgage ?? account.isCanadianMortgage ?? false,
         dto.isVariableRate ?? account.isVariableRate ?? false,
       );
@@ -181,20 +212,29 @@ export class LoanPaymentSetupService {
     const scheduledExtraPrincipal = allocation.extraPrincipal;
     const parentAmount = allocation.total;
 
-    // Map frequency for scheduled transactions
-    // Mortgage frequencies like ACCELERATED_BIWEEKLY map to BIWEEKLY in scheduling
-    const frequencyMap: Record<string, string> = {
-      WEEKLY: "WEEKLY",
-      BIWEEKLY: "BIWEEKLY",
-      SEMIMONTHLY: "SEMIMONTHLY",
-      MONTHLY: "MONTHLY",
-      QUARTERLY: "QUARTERLY",
-      YEARLY: "YEARLY",
-      ACCELERATED_BIWEEKLY: "BIWEEKLY",
-      ACCELERATED_WEEKLY: "WEEKLY",
-      SEMI_MONTHLY: "SEMIMONTHLY",
-    };
-    const scheduledFrequency = frequencyMap[dto.paymentFrequency] || "MONTHLY";
+    // The DTO accepts loan spellings; mortgage callers may also carry the
+    // mortgage ones, so both tables are merged rather than a third copy written.
+    // Deriving it means a new frequency in either domain is scheduled correctly
+    // here without anybody remembering this line.
+    //
+    // Refused rather than defaulted. `?? "MONTHLY"` scheduled an unmapped
+    // frequency twelve times a year and said nothing -- the same silent
+    // fall-through migration 165 exists to heal -- and the `as any` that used to
+    // sit on the payload below hid it from the compiler too. A frequency the
+    // table cannot express is a 400, and `loan-payment-frequency.guard.spec.ts`
+    // reads the DTO's own `@IsIn` list so the refusal is unreachable for every
+    // value the DTO actually accepts.
+    const scheduledFrequency =
+      SCHEDULED_FREQUENCY_BY_PAYMENT_FREQUENCY[dto.paymentFrequency];
+    if (!scheduledFrequency) {
+      throw new BadRequestException(
+        tr(
+          "errors.accounts.paymentFrequencyUnsupported",
+          "This payment frequency cannot be scheduled",
+          { frequency: dto.paymentFrequency },
+        ),
+      );
+    }
 
     // Build scheduled transaction splits
     const splits: Array<{
@@ -241,7 +281,7 @@ export class LoanPaymentSetupService {
         payeeName: dto.payeeName || account.institution || undefined,
         amount: -parentAmount,
         currencyCode: account.currencyCode,
-        frequency: scheduledFrequency as any,
+        frequency: FrequencyTypeDto[scheduledFrequency],
         nextDueDate: dto.nextDueDate,
         startDate: dto.nextDueDate,
         isActive: true,
@@ -258,7 +298,11 @@ export class LoanPaymentSetupService {
       // once a transient clamp (an interest spike) has passed.
       extraPaymentAmount: extraPrincipal,
       paymentFrequency: dto.paymentFrequency,
-      paymentStartDate: new Date(dto.nextDueDate),
+      // Through `localDateForColumn`, not `new Date(...)`: this is a TypeORM
+      // `date` column, serialized with local getters, so a UTC-midnight value
+      // is stored a day early west of Greenwich -- and this date anchors every
+      // amortization the account later computes.
+      paymentStartDate: localDateForColumn(dto.nextDueDate),
       sourceAccountId: dto.sourceAccountId,
       interestCategoryId,
       scheduledTransactionId: scheduledTransaction.id,
@@ -280,9 +324,10 @@ export class LoanPaymentSetupService {
       }
       if (dto.termMonths) {
         updateData.termMonths = dto.termMonths;
-        const termEndDate = new Date(dto.nextDueDate);
-        termEndDate.setMonth(termEndDate.getMonth() + dto.termMonths);
-        updateData.termEndDate = termEndDate;
+        updateData.termEndDate = mortgageTermEndDate(
+          new Date(dto.nextDueDate),
+          dto.termMonths,
+        );
       }
       if (!account.originalPrincipal) {
         updateData.originalPrincipal = Math.abs(Number(account.openingBalance));

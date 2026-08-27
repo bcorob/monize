@@ -131,11 +131,16 @@ export function DebtPayoffTimelineReport() {
   };
 
   // Build payment timeline from actual transactions + projected future payments
-  const { payoffSchedule, projectionStartLabel } = useMemo((): {
+  const { payoffSchedule, projectionStartLabel, projectionPaidOff } = useMemo((): {
     payoffSchedule: PayoffScheduleItem[];
+    /** Whether the forward projection reached payoff, or stopped at the
+     *  projection horizon. False also when there is no projection at all --
+     *  the flag only ever gates a figure derived from one. */
+    projectionPaidOff: boolean;
     projectionStartLabel: string | null;
   } => {
-    if (!selectedAccount) return { payoffSchedule: [], projectionStartLabel: null };
+    if (!selectedAccount)
+      return { payoffSchedule: [], projectionStartLabel: null, projectionPaidOff: false };
 
     // --- Historical payments from actual transactions ---
     const history = deriveLoanPaymentHistory(selectedAccount, transactions, [], interestTransactions);
@@ -151,6 +156,7 @@ export function DebtPayoffTimelineReport() {
     }));
 
     // --- Project future payments ---
+    let projectionPaidOff = false;
     const projectionInput = buildLoanProjectionInput(selectedAccount, history);
     if (projectionInput) {
       const projection = generateLoanSchedule({
@@ -158,6 +164,10 @@ export function DebtPayoffTimelineReport() {
         initialCumulativePrincipal: history.cumulativePrincipal,
         initialCumulativeInterest: history.cumulativeInterest,
       });
+      // A projection that stopped at the horizon has no payoff and its running
+      // interest is a subtotal, so the summary below cannot report either as a
+      // lifetime figure (INV-LOAN-002).
+      projectionPaidOff = projection.paidOff;
 
       for (const row of projection.rows) {
         schedule.push({
@@ -228,7 +238,11 @@ export function DebtPayoffTimelineReport() {
       startLabel = monthlySchedule[0].label;
     }
 
-    return { payoffSchedule: monthlySchedule, projectionStartLabel: startLabel };
+    return {
+      payoffSchedule: monthlySchedule,
+      projectionStartLabel: startLabel,
+      projectionPaidOff,
+    };
   }, [selectedAccount, transactions, interestTransactions, formatChartDate]);
 
   const summary = useMemo(() => {
@@ -239,21 +253,38 @@ export function DebtPayoffTimelineReport() {
     // Use openingBalance if set, otherwise derive from principal paid + remaining balance
     const originalBalance = Math.abs(selectedAccount.openingBalance) || (totalPrincipalPaid + currentBalance);
     const hasProjection = payoffSchedule.some((item) => item.isProjected);
-    const projectedPayoffDate = hasProjection ? lastItem.label : null;
-    const projectedTotalInterest = hasProjection ? lastItem.cumulativeInterest : null;
+    // A projected figure is only a payoff, or a lifetime interest total, when the
+    // projection actually reached payoff. Truncated at the horizon, the last
+    // row's date is 50 years out with a balance still owing and its cumulative
+    // interest is a subtotal -- both unknown, not measured (INV-LOAN-002).
+    const projectionComplete = hasProjection && projectionPaidOff;
+    const projectedPayoffDate = projectionComplete ? lastItem.label : null;
     return {
       lastPaymentDate: lastItem.label,
       totalPayments: payoffSchedule.length,
+      // Interest over the rows shown: a lifetime total only when the projection
+      // completed, which is why the headline reads it through `hasLifetimeTotal`.
       totalInterest: lastItem.cumulativeInterest,
+      hasLifetimeTotal: !hasProjection || projectionPaidOff,
       totalPrincipalPaid,
       originalBalance,
       currentBalance,
       percentPaid: originalBalance > 0 ? ((originalBalance - currentBalance) / originalBalance) * 100 : 0,
       hasProjection,
       projectedPayoffDate,
-      projectedTotalInterest,
     };
-  }, [payoffSchedule, selectedAccount]);
+  }, [payoffSchedule, selectedAccount, projectionPaidOff]);
+
+  // The interest figure's caption has to match what the figure is: history alone,
+  // a lifetime estimate, or -- when the projection stopped at the horizon -- the
+  // interest across the rows shown, which is neither. Relabelling a partial
+  // figure is the rule; leaving a total's caption over it is the defect.
+  const interestLabel = (s: { hasProjection: boolean; hasLifetimeTotal: boolean }) =>
+    !s.hasProjection
+      ? t('debtPayoff.interestPaid')
+      : s.hasLifetimeTotal
+        ? t('debtPayoff.estTotalInterest')
+        : t('debtPayoff.interestOverProjection');
 
   const distributionData = useMemo(() => {
     return payoffSchedule
@@ -321,7 +352,7 @@ export function DebtPayoffTimelineReport() {
       summaryCards: summary ? [
         { label: t('debtPayoff.currentBalance'), value: formatCurrency(summary.currentBalance), color: '#dc2626' },
         { label: t('debtPayoff.principalPaid'), value: formatCurrency(summary.totalPrincipalPaid), color: '#16a34a' },
-        { label: summary.hasProjection ? t('debtPayoff.estTotalInterest') : t('debtPayoff.interestPaid'), value: formatCurrency(summary.totalInterest), color: '#ea580c' },
+        { label: interestLabel(summary), value: formatCurrency(summary.totalInterest), color: '#ea580c' },
         { label: t('debtPayoff.progress'), value: `${summary.percentPaid.toFixed(1)}%`, color: '#2563eb' },
       ] : undefined,
       chartContainer: chartRef.current,
@@ -417,7 +448,14 @@ export function DebtPayoffTimelineReport() {
 
       {/* Summary Cards */}
       {summary && (
-        <div className={`grid grid-cols-2 ${summary.hasProjection ? 'md:grid-cols-5' : 'md:grid-cols-4'} gap-4`}>
+        // The fifth column exists only when the fifth card does. Sizing on
+        // `hasProjection` while the card also requires a payoff date left a
+        // blank column for a projection truncated at the horizon.
+        <div
+          className={`grid grid-cols-2 ${
+            summary.projectedPayoffDate ? 'md:grid-cols-5' : 'md:grid-cols-4'
+          } gap-4`}
+        >
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-4">
             <div className="text-sm text-gray-500 dark:text-gray-400">{t('debtPayoff.currentBalance')}</div>
             <div className="text-xl font-bold text-red-600 dark:text-red-400">
@@ -432,7 +470,7 @@ export function DebtPayoffTimelineReport() {
           </div>
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-4">
             <div className="text-sm text-gray-500 dark:text-gray-400">
-              {summary.hasProjection ? t('debtPayoff.estTotalInterest') : t('debtPayoff.interestPaid')}
+              {interestLabel(summary)}
             </div>
             <div className="text-xl font-bold text-orange-600 dark:text-orange-400">
               {formatCurrency(summary.totalInterest)}
@@ -444,7 +482,7 @@ export function DebtPayoffTimelineReport() {
               {summary.percentPaid.toFixed(1)}%
             </div>
           </div>
-          {summary.hasProjection && summary.projectedPayoffDate && (
+          {summary.projectedPayoffDate && (
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-4">
               <div className="text-sm text-gray-500 dark:text-gray-400">{t('debtPayoff.estPayoff')}</div>
               <div className="text-xl font-bold text-purple-600 dark:text-purple-400">

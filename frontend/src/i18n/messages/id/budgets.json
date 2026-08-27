@@ -14,6 +14,14 @@
       "warning": "Peringatan",
       "success": "Kabar Baik",
       "info": "Info"
+    },
+    "billDue": {
+      "titleOverdue": "{payee} terlambat",
+      "titleToday": "{payee} jatuh tempo hari ini",
+      "titleTomorrow": "{payee} jatuh tempo besok",
+      "titleInDays": "{payee} jatuh tempo dalam {days} hari",
+      "amountDue": "{amount} jatuh tempo pada {date}",
+      "amountUnavailable": "Jumlah tidak tersedia (tidak ada kurs saat ini), jatuh tempo pada {date}"
     }
   },
   "summary503020": {

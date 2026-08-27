@@ -22,6 +22,21 @@ function encodePasswordHeader(value: string): string {
   return btoa(binary);
 }
 
+/**
+ * Short-lived authorization for one restore upload.
+ *
+ * The backend's upload admission runs in front of its body parser -- and so in
+ * front of every guard -- which is why this exists: the ticket is minted by an
+ * ordinary authenticated request and verified before any memory is reserved for
+ * the upload. `header` travels with it so the client cannot drift from the server
+ * on the header name.
+ */
+export interface RestoreUploadTicket {
+  ticket: string;
+  expiresInSeconds: number;
+  header: string;
+}
+
 export interface RestoreResult {
   message: string;
   restored: Record<string, number>;
@@ -267,6 +282,16 @@ export const backupApi = {
     return response.data;
   },
 
+  // Short-lived authorization for one restore upload. The header name comes back
+  // with the ticket so the client cannot drift from the server on it.
+  mintRestoreUploadTicket: async (): Promise<RestoreUploadTicket> => {
+    const response = await apiClient.post<RestoreUploadTicket>(
+      '/backup/restore/ticket',
+      {},
+    );
+    return response.data;
+  },
+
   restoreBackup: async (params: {
     file: File;
     password?: string;
@@ -284,8 +309,17 @@ export const backupApi = {
       ? params.file
       : await compressGzip(await params.file.arrayBuffer());
 
+    // The upload's memory admission runs in front of the body parser, which is in
+    // front of every backend guard -- so it cannot authenticate the request it is
+    // budgeting for. This ticket is how authorization gets there first: an upload
+    // without one is refused 403 before a byte is buffered. Minted here rather
+    // than at page load because it is short-lived, and the file picker and any
+    // password prompt happen before this call.
+    const ticket = await backupApi.mintRestoreUploadTicket();
+
     const headers: Record<string, string> = {
       'Content-Type': isEncrypted ? 'application/octet-stream' : 'application/gzip',
+      [ticket.header]: ticket.ticket,
     };
     if (params.password) {
       headers['X-Restore-Password'] = encodePasswordHeader(params.password);

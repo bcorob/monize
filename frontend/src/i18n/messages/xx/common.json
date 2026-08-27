@@ -237,6 +237,12 @@
     "explanation": "[XX-Partial total: {count, plural, one {# amount} other {# amounts}} could not be included, so the figure shown excludes them. No rate to {displayCurrency} is available for {currencies}.-XX]",
     "explanationExcluded": "[XX-Partial total: {count, plural, one {# amount} other {# amounts}} could not be worked out, so the figure shown excludes them.-XX]"
   },
+  "unknownAmount": {
+    "marker": "[XX-—-XX]",
+    "srLabel": "[XX-Amount not available-XX]",
+    "scheduledFx": "[XX-The current amount cannot be worked out: no exchange rate is available for this scheduled item's settlement currency pair. The stored amount was calculated at an older rate, so it is not shown.-XX]",
+    "displayFx": "[XX-This figure cannot be shown here: the amount is known, but no exchange rate is available to convert it into the currency this total is reported in. Refresh your rates on the Currencies page.-XX]"
+  },
   "density": {
     "title": "[XX-Toggle row density-XX]",
     "normal": "[XX-Normal-XX]",

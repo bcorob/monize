@@ -26,7 +26,7 @@ import {
   decryptBackup,
   isEncryptedBackup,
 } from "./backup-crypto.util";
-import { resolveConfiguredBackupLimit } from "./backup-limits";
+import { resolveRestoreExpandedLimitBytes } from "./backup-limits";
 import { resolveStoredBackupPassword } from "./backup-password.util";
 import { restoreProcessingGate } from "./restore-processing-gate";
 import { RESTORE_PLAN } from "./restore-plan";
@@ -72,11 +72,19 @@ export class BackupRestoreService {
 
   /**
    * Ceiling on a restore's decompressed payload (see backup-limits.ts).
+   *
+   * The **same** resolver `computeRestoreProcessingSlots` budgets against. It used
+   * to be `resolveConfiguredBackupLimit`, which derives a quarter of the container
+   * -- the same number the slot math derived, so the two agreed by coincidence.
+   * Once the expanded ceiling became capacity-first (issue #1073) that coincidence
+   * would have broken: the gate would admit one restore modeled at the new
+   * ceiling while `gunzip` allowed the old one. A slot count that budgets against
+   * a limit the parser does not enforce is F3R7-002 again.
    */
   get restoreExpandedLimitBytes(): number {
-    return resolveConfiguredBackupLimit(
-      "BACKUP_RESTORE_EXPANDED_LIMIT",
+    return resolveRestoreExpandedLimitBytes(
       process.env.BACKUP_RESTORE_EXPANDED_LIMIT,
+      undefined,
       (message) => this.logger.warn(message),
     );
   }
@@ -128,182 +136,191 @@ export class BackupRestoreService {
     // Keeping the gate outside and #1060's ordering inside satisfies both: nothing
     // decompresses unbudgeted, and no artifact is spent on a file that was never
     // going to restore.
-    return restoreProcessingGate.run(async () => {
-      const gzippedPayload = await this.maybeDecrypt(input, user);
-      const rawData = await this.decompressAndParse(gzippedPayload);
-      this.validateBackupFormat(rawData);
+    return restoreProcessingGate.run(
+      async () => {
+        // Everything below holds a slot, so nothing below is cancellable: the
+        // signal above bounds the wait for the slot and is not consulted again.
+        const gzippedPayload = await this.maybeDecrypt(input, user);
+        const rawData = await this.decompressAndParse(gzippedPayload);
+        this.validateBackupFormat(rawData);
 
-      await this.verifyAuthentication(user, input);
+        await this.verifyAuthentication(user, input);
 
-      // A support (de-identified) backup restores like any other, but the data
-      // is synthetic -- masked names, amounts scaled by a hidden factor. Log it
-      // so scaled balances aren't mistaken for corruption later.
-      if ((rawData as { supportBackup?: unknown }).supportBackup === true) {
-        this.logger.log(
-          `Restoring a de-identified support backup for user ${userId} (names masked, amounts scaled)`,
+        // A support (de-identified) backup restores like any other, but the data
+        // is synthetic -- masked names, amounts scaled by a hidden factor. Log it
+        // so scaled balances aren't mistaken for corruption later.
+        if ((rawData as { supportBackup?: unknown }).supportBackup === true) {
+          this.logger.log(
+            `Restoring a de-identified support backup for user ${userId} (names masked, amounts scaled)`,
+          );
+        }
+
+        this.warnIfArtifactIncomplete(userId, rawData);
+
+        // Remap every primary key in the backup to a fresh UUID (and rewrite all
+        // references to those keys, including ids embedded in JSONB columns) so the
+        // restore behaves as if the backup came from an entirely separate system.
+        // Without this, restoring one user's backup into another user's account on
+        // the SAME system would collide on the original UUIDs: the inserts would be
+        // silently skipped by ON CONFLICT DO NOTHING, and the Phase-3 deferred-FK
+        // UPDATEs (keyed only by id) would mutate the OTHER user's rows.
+        const idRemap = this.buildBackupIdRemap(rawData);
+        const data = this.remapBackupIds(rawData, idRemap);
+        this.rehashGemSignalFingerprints(data, idRemap);
+
+        this.logger.log(`Starting backup restore for user ${userId}`);
+
+        // Attachment bytes are staged before anything is deleted: an object that is
+        // missing or fails its checksum has to be discovered while the user's
+        // current data is still there, not halfway through replacing it.
+        const {
+          stagedKeys,
+          sourceKeys,
+          skipped: skippedAttachments,
+        } = await this.attachments.stageAttachmentObjects(
+          userId,
+          data,
+          idRemap,
         );
-      }
 
-      this.warnIfArtifactIncomplete(userId, rawData);
+        // Everything between staging and the restore transaction runs after
+        // objects have been written to the store but before the transaction's
+        // `.catch` (below) is wired to discard them. A throw here would therefore
+        // orphan every staged object: the failure never reaches the handler that
+        // cleans them up. So this region discards the staged objects itself before
+        // re-raising. The cleanup swallows its own delete failures, so it cannot
+        // mask the error that actually aborted the restore.
+        let displacedKeys: string[];
+        let unusableAiProviderKeys: number;
+        try {
+          // The keys this user's *current* attachments occupy, read before the
+          // delete because afterwards there is nothing left to read them from.
+          // They are deleted after a successful commit -- see
+          // `deleteDisplacedAttachmentObjects` for why that is the only safe
+          // moment and why the backup's own old keys are not in this set.
+          displacedKeys =
+            await this.attachments.collectExternalAttachmentKeys(userId);
 
-      // Remap every primary key in the backup to a fresh UUID (and rewrite all
-      // references to those keys, including ids embedded in JSONB columns) so the
-      // restore behaves as if the backup came from an entirely separate system.
-      // Without this, restoring one user's backup into another user's account on
-      // the SAME system would collide on the original UUIDs: the inserts would be
-      // silently skipped by ON CONFLICT DO NOTHING, and the Phase-3 deferred-FK
-      // UPDATEs (keyed only by id) would mutate the OTHER user's rows.
-      const idRemap = this.buildBackupIdRemap(rawData);
-      const data = this.remapBackupIds(rawData, idRemap);
-      this.rehashGemSignalFingerprints(data, idRemap);
-
-      this.logger.log(`Starting backup restore for user ${userId}`);
-
-      // Attachment bytes are staged before anything is deleted: an object that is
-      // missing or fails its checksum has to be discovered while the user's
-      // current data is still there, not halfway through replacing it.
-      const {
-        stagedKeys,
-        sourceKeys,
-        skipped: skippedAttachments,
-      } = await this.attachments.stageAttachmentObjects(userId, data, idRemap);
-
-      // Everything between staging and the restore transaction runs after
-      // objects have been written to the store but before the transaction's
-      // `.catch` (below) is wired to discard them. A throw here would therefore
-      // orphan every staged object: the failure never reaches the handler that
-      // cleans them up. So this region discards the staged objects itself before
-      // re-raising. The cleanup swallows its own delete failures, so it cannot
-      // mask the error that actually aborted the restore.
-      let displacedKeys: string[];
-      let unusableAiProviderKeys: number;
-      try {
-        // The keys this user's *current* attachments occupy, read before the
-        // delete because afterwards there is nothing left to read them from.
-        // They are deleted after a successful commit -- see
-        // `deleteDisplacedAttachmentObjects` for why that is the only safe
-        // moment and why the backup's own old keys are not in this set.
-        displacedKeys =
-          await this.attachments.collectExternalAttachmentKeys(userId);
-
-        // Re-encrypt every AI provider key the artifact carries in plaintext
-        // under *this* instance's AI_ENCRYPTION_KEY, before the transaction: the
-        // work is scrypt-bound (tens of milliseconds per key) and does not
-        // belong inside the transaction that holds every one of this user's
-        // rows. Rows an older artifact carries as foreign ciphertext are left
-        // alone and counted, which is the pre-transport behaviour and the only
-        // case still reportable.
-        unusableAiProviderKeys = this.restoreAiProviderKeys(userId, data);
-      } catch (error) {
-        await this.attachments.discardStagedAttachmentObjects(stagedKeys);
-        throw error;
-      }
-
-      const restored: Record<string, number> = {};
-
-      // One transaction for the whole restore, exactly as the QueryRunner block
-      // was: a half-applied restore would leave the account in a state that is
-      // neither the backup nor what was there before. `preserveTimestamps` makes
-      // withScopedDb emit `app.preserve_timestamps` for this transaction (in
-      // every RLS mode), so the GUC-aware `updated_at` trigger keeps the backup's
-      // timestamps through the Phase-3 deferred-FK UPDATEs -- replacing the old
-      // trigger-disabling ALTER TABLE DDL, which the unprivileged runtime role
-      // cannot execute under enforcement (task C5).
-      // The delete-and-reinsert runs under this user's maintenance lease, taken
-      // only now -- after authentication, before the first delete. A concurrent
-      // restore, delete-my-data, or `.mny` import already replacing this
-      // account's data makes the lease refuse with a 409, and because the refusal
-      // precedes `fn`, nothing here has run: no row deleted, the account left
-      // exactly as the other operation will leave it (audit DR-04-02). Staged
-      // attachment bytes are discarded by the `.catch` below, since they were
-      // written before the lease and this request no longer owns the restore.
-      // One thing has happened by here, though: the OIDC step-up proof was
-      // already spent in its own committed transaction during
-      // verifyAuthentication above, so a 409 (or any later throw) leaves it
-      // consumed and the user must re-authenticate to retry. That is the safe
-      // direction -- do not "fix" this path by treating it as replay-safe.
-      return this.maintenance
-        .withMaintenanceLease(userId, "backup restore", () =>
-          withPreserveTimestamps(() =>
-            withScopedDb(this.dataSource, async (manager) => {
-              // Phase 1: Delete all existing user data (same order as deleteData in users.service)
-              await this.db.deleteAllUserData(userId, manager);
-
-              // Phase 2a: ensure every referenced currency code exists before
-              // restoring the tables with FK references to currencies(code).
-              await this.db.ensureCurrenciesExist(manager, data, userId);
-
-              // Phase 2b: insert every backed-up table in FK-safe order. The order,
-              // the row-count key and whether user_id is forced live in
-              // RESTORE_PLAN, which restore-plan.spec.ts checks against the schema's
-              // foreign keys -- so a new table or a new FK cannot quietly land in the
-              // wrong position.
-              for (const { table, countKey, scopeToUser } of RESTORE_PLAN) {
-                // monthly_account_balances is a derived cache, not authoritative
-                // data. Trusting the backup's rows re-imports whatever
-                // calculation semantics produced them -- so a backup taken
-                // before the #1242 fix would restore its wrong investment
-                // market_value even on a fixed instance, and migration 164 (a
-                // one-time delete) cannot catch a backup restored after it ran
-                // (review MZ-1242-R3). Skip the insert and let
-                // NetWorthService.ensurePopulated rebuild every account from the
-                // restored source transactions and prices on the next net-worth
-                // read (count === 0 -> full recalculateAllAccounts).
-                if (table === "monthly_account_balances") {
-                  restored[countKey] = 0;
-                  continue;
-                }
-                restored[countKey] = await this.db.insertRows(
-                  manager,
-                  table,
-                  backupTables(data)[table],
-                  scopeToUser ? userId : null,
-                );
-              }
-
-              // Phase 3: Restore deferred FK columns that were stripped during insert
-              // to avoid circular/forward reference violations.
-              await this.db.restoreDeferredFkColumns(manager, data);
-
-              this.logger.log(`Backup restore completed for user ${userId}`);
-              // `skippedAttachments` and `unusableAiProviderKeys` are reported
-              // beside `restored`, never inside it: the client sums `restored`'s
-              // values to show a row total, and neither a count of rows that were
-              // deliberately not written nor a count of rows whose contents did not
-              // survive belongs in that sum. Both are omitted at zero so "no field"
-              // and "nothing to report" are the same answer.
-              return {
-                message: "Backup restored successfully",
-                restored,
-                ...(skippedAttachments > 0 ? { skippedAttachments } : {}),
-                ...(unusableAiProviderKeys > 0
-                  ? { unusableAiProviderKeys }
-                  : {}),
-              };
-            }),
-          ),
-        )
-        .then(async (result) => {
-          // After the commit, never before: until it lands, the metadata that
-          // references these objects may come back with a rollback.
-          await this.attachments.deleteDisplacedAttachmentObjects(
-            displacedKeys,
-            [...stagedKeys, ...sourceKeys],
-          );
-          return result;
-        })
-        .catch(async (error) => {
-          this.logger.error(
-            `Backup restore failed for user ${userId}: ${error.message}`,
-          );
-          // The database rolled back; the objects staged for it did not, so remove
-          // them rather than leaving bytes nothing references. The user's own old
-          // objects stay exactly where they are -- their metadata rolled back with
-          // everything else, so those bytes are still referenced.
+          // Re-encrypt every AI provider key the artifact carries in plaintext
+          // under *this* instance's AI_ENCRYPTION_KEY, before the transaction: the
+          // work is scrypt-bound (tens of milliseconds per key) and does not
+          // belong inside the transaction that holds every one of this user's
+          // rows. Rows an older artifact carries as foreign ciphertext are left
+          // alone and counted, which is the pre-transport behaviour and the only
+          // case still reportable.
+          unusableAiProviderKeys = this.restoreAiProviderKeys(userId, data);
+        } catch (error) {
           await this.attachments.discardStagedAttachmentObjects(stagedKeys);
           throw error;
-        });
-    });
+        }
+
+        const restored: Record<string, number> = {};
+
+        // One transaction for the whole restore, exactly as the QueryRunner block
+        // was: a half-applied restore would leave the account in a state that is
+        // neither the backup nor what was there before. `preserveTimestamps` makes
+        // withScopedDb emit `app.preserve_timestamps` for this transaction (in
+        // every RLS mode), so the GUC-aware `updated_at` trigger keeps the backup's
+        // timestamps through the Phase-3 deferred-FK UPDATEs -- replacing the old
+        // trigger-disabling ALTER TABLE DDL, which the unprivileged runtime role
+        // cannot execute under enforcement (task C5).
+        // The delete-and-reinsert runs under this user's maintenance lease, taken
+        // only now -- after authentication, before the first delete. A concurrent
+        // restore, delete-my-data, or `.mny` import already replacing this
+        // account's data makes the lease refuse with a 409, and because the refusal
+        // precedes `fn`, nothing here has run: no row deleted, the account left
+        // exactly as the other operation will leave it (audit DR-04-02). Staged
+        // attachment bytes are discarded by the `.catch` below, since they were
+        // written before the lease and this request no longer owns the restore.
+        // One thing has happened by here, though: the OIDC step-up proof was
+        // already spent in its own committed transaction during
+        // verifyAuthentication above, so a 409 (or any later throw) leaves it
+        // consumed and the user must re-authenticate to retry. That is the safe
+        // direction -- do not "fix" this path by treating it as replay-safe.
+        return this.maintenance
+          .withMaintenanceLease(userId, "backup restore", () =>
+            withPreserveTimestamps(() =>
+              withScopedDb(this.dataSource, async (manager) => {
+                // Phase 1: Delete all existing user data (same order as deleteData in users.service)
+                await this.db.deleteAllUserData(userId, manager);
+
+                // Phase 2a: ensure every referenced currency code exists before
+                // restoring the tables with FK references to currencies(code).
+                await this.db.ensureCurrenciesExist(manager, data, userId);
+
+                // Phase 2b: insert every backed-up table in FK-safe order. The order,
+                // the row-count key and whether user_id is forced live in
+                // RESTORE_PLAN, which restore-plan.spec.ts checks against the schema's
+                // foreign keys -- so a new table or a new FK cannot quietly land in the
+                // wrong position.
+                for (const { table, countKey, scopeToUser } of RESTORE_PLAN) {
+                  // monthly_account_balances is a derived cache, not authoritative
+                  // data. Trusting the backup's rows re-imports whatever
+                  // calculation semantics produced them -- so a backup taken
+                  // before the #1242 fix would restore its wrong investment
+                  // market_value even on a fixed instance, and migration 164 (a
+                  // one-time delete) cannot catch a backup restored after it ran
+                  // (review MZ-1242-R3). Skip the insert and let
+                  // NetWorthService.ensurePopulated rebuild every account from the
+                  // restored source transactions and prices on the next net-worth
+                  // read (count === 0 -> full recalculateAllAccounts).
+                  if (table === "monthly_account_balances") {
+                    restored[countKey] = 0;
+                    continue;
+                  }
+                  restored[countKey] = await this.db.insertRows(
+                    manager,
+                    table,
+                    backupTables(data)[table],
+                    scopeToUser ? userId : null,
+                  );
+                }
+
+                // Phase 3: Restore deferred FK columns that were stripped during insert
+                // to avoid circular/forward reference violations.
+                await this.db.restoreDeferredFkColumns(manager, data);
+
+                this.logger.log(`Backup restore completed for user ${userId}`);
+                // `skippedAttachments` and `unusableAiProviderKeys` are reported
+                // beside `restored`, never inside it: the client sums `restored`'s
+                // values to show a row total, and neither a count of rows that were
+                // deliberately not written nor a count of rows whose contents did not
+                // survive belongs in that sum. Both are omitted at zero so "no field"
+                // and "nothing to report" are the same answer.
+                return {
+                  message: "Backup restored successfully",
+                  restored,
+                  ...(skippedAttachments > 0 ? { skippedAttachments } : {}),
+                  ...(unusableAiProviderKeys > 0
+                    ? { unusableAiProviderKeys }
+                    : {}),
+                };
+              }),
+            ),
+          )
+          .then(async (result) => {
+            // After the commit, never before: until it lands, the metadata that
+            // references these objects may come back with a rollback.
+            await this.attachments.deleteDisplacedAttachmentObjects(
+              displacedKeys,
+              [...stagedKeys, ...sourceKeys],
+            );
+            return result;
+          })
+          .catch(async (error) => {
+            this.logger.error(
+              `Backup restore failed for user ${userId}: ${error.message}`,
+            );
+            // The database rolled back; the objects staged for it did not, so remove
+            // them rather than leaving bytes nothing references. The user's own old
+            // objects stay exactly where they are -- their metadata rolled back with
+            // everything else, so those bytes are still referenced.
+            await this.attachments.discardStagedAttachmentObjects(stagedKeys);
+            throw error;
+          });
+      },
+      { signal: input.queueAbortSignal },
+    );
   }
 
   /**
@@ -396,7 +413,7 @@ export class BackupRestoreService {
         throw new BadRequestException(
           tr(
             "errors.backup.decompressTooLarge",
-            `Backup is too large to restore: it expands past the configured limit of ${this.restoreExpandedLimitBytes} bytes. Raise BACKUP_RESTORE_EXPANDED_LIMIT if this is a genuine backup.`,
+            `Backup is too large to restore: it expands past this deployment's limit of ${this.restoreExpandedLimitBytes} bytes. That ceiling is derived from the container's memory and a measured cost per byte, so raising it alone models a restore the process cannot finish -- raise the container memory limit instead (Kubernetes: backend.resources.limits.memory).`,
             { limit: this.restoreExpandedLimitBytes },
           ),
         );

@@ -7,12 +7,12 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { OverpaymentPlan, ScenarioComparison } from '@/lib/loan-schedule';
+import { OverpaymentPlan, ScenarioComparison, effectiveOverpaymentMode } from '@/lib/loan-schedule';
 import { loanScenariosApi, planToScenarioData, scenarioToPlan } from '@/lib/loan-scenarios';
 import {
   BaselineOutcome,
   ScenarioComparisonChart,
-  ScenarioOutcome,
+  ScenarioChartOutcome,
 } from '@/components/accounts/loan-detail/ScenarioComparisonChart';
 import { LoanScenario } from '@/types/loan-scenario';
 import { getErrorMessage } from '@/lib/errors';
@@ -31,7 +31,12 @@ interface SavedScenariosPanelProps {
   activePlan: OverpaymentPlan | null;
   /** Outcomes for the comparison chart; the chart toggle only shows when
    *  there are at least two (comparing one scenario has nothing to say). */
-  chartOutcomes?: ScenarioOutcome[];
+  chartOutcomes?: ScenarioChartOutcome[];
+  /** Scenarios left out of the chart because their interest saving is unknown
+   *  (a schedule that stopped at the projection horizon). The chart's arc height
+   *  IS the saving, so they cannot be drawn -- but a chart quietly missing rows,
+   *  or a toggle that disappeared since yesterday, has to say why. */
+  chartExcludedCount?: number;
   /** No-overpayment baseline for the comparison chart's context marker */
   chartBaseline?: BaselineOutcome | null;
   onLoad: (plan: OverpaymentPlan | null, scenario: LoanScenario) => void;
@@ -49,6 +54,7 @@ export function SavedScenariosPanel({
   currencyCode,
   activePlan,
   chartOutcomes = [],
+  chartExcludedCount = 0,
   chartBaseline = null,
   onLoad,
   onScenariosChanged,
@@ -207,7 +213,11 @@ export function SavedScenariosPanel({
                       {payoffLabel(comparison)}
                     </td>
                     <td className="px-3 py-2 text-right whitespace-nowrap text-green-600 dark:text-green-400">
-                      {timeSavedLabel(comparison)}
+                      {/* The mode travels with the scenario, as it does in
+                          comparisonTable's export -- inferring it from the
+                          installment drop made the visible table and its own CSV
+                          disagree for the same row. */}
+                      {timeSavedLabel(comparison, effectiveOverpaymentMode(scenarioToPlan(scenario)))}
                     </td>
                     <td className="px-3 py-2 text-right whitespace-nowrap text-green-600 dark:text-green-400">
                       {interestSavedLabel(comparison)}
@@ -252,6 +262,21 @@ export function SavedScenariosPanel({
           baseline={chartBaseline}
           currencyCode={currencyCode}
         />
+      )}
+
+      {/* Shown whether or not the chart is open: when too few scenarios are
+          drawable the toggle is gone entirely, and that is exactly when the
+          reader needs the reason. Two messages, because the two situations are
+          different -- naming only the unknown ones while the chart is suppressed
+          would say "1 of 2 is missing" when in fact both are. */}
+      {chartExcludedCount > 0 && (
+        <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+          {chartAvailable
+            ? t('loanDetail.scenarios.chartExcludedUnknown', {
+                count: chartExcludedCount,
+              })
+            : t('loanDetail.scenarios.chartNeedsTwoKnown')}
+        </p>
       )}
 
       <Modal isOpen={nameModal !== null} onClose={() => setNameModal(null)} maxWidth="sm">

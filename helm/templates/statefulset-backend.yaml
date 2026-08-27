@@ -72,6 +72,22 @@ spec:
               value: {{ . | quote }}
             {{- end }}
             {{- end }}
+            {{- /*
+              The queue behind the restore processing slots. Bounded and
+              deadlined because an unbounded one holds sockets and upload
+              memory reservations open; unset, the backend uses its own
+              defaults (4 waiters, 120s).
+            */ -}}
+            {{- with .Values.backend.restoreQueue }}
+            {{- with .limit }}
+            - name: BACKUP_RESTORE_QUEUE_LIMIT
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with .waitMs }}
+            - name: BACKUP_RESTORE_QUEUE_WAIT_MS
+              value: {{ . | quote }}
+            {{- end }}
+            {{- end }}
             {{- with .Values.backend.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

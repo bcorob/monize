@@ -77,7 +77,17 @@ function addDays(ymd: string, days: number): string {
   );
 }
 
-function addMonthsClamped(ymd: string, months: number): string {
+/**
+ * `ymd` plus `months`, with the day clamped to the target month's length --
+ * 31 January plus one month is 28 February, never 3 March.
+ *
+ * Exported because a term end date is the same arithmetic on the same calendar:
+ * `Date.setMonth(getMonth() + n)` OVERFLOWS instead, and on a UTC-midnight Date
+ * its local accessors also shift the day west of Greenwich, so a mortgage's
+ * stored term_end_date skipped February and differed by a day between
+ * deployments.
+ */
+export function addMonthsClamped(ymd: string, months: number): string {
   const { y, m, d } = parseYMD(ymd);
   const total = y * 12 + (m - 1) + months;
   const ny = Math.floor(total / 12);

@@ -6,6 +6,11 @@
     "summaryActiveBills": "Facturas activas",
     "summaryActiveDeposits": "Depósitos activos",
     "summaryMonthlyNet": "Neto mensual",
+    "summaryAmountUnavailable": "No disponible",
+    "summaryNetRatesUnavailable": "Los tipos de cambio no están disponibles ahora, así que no se puede calcular el neto.",
+    "summaryNetMissingRates": "Sin tipo de cambio para {currencies}: añade uno en Divisas",
+    "summaryNetMissingRatesAndUnpriceable": "Sin tipo de cambio para {currencies} y no se pudo valorar una o más programaciones.",
+    "summaryNetUnpriceable": "No se pudo valorar una o más programaciones",
     "summaryDueNow": "Vence ahora",
     "loadingText": "Cargando transacciones planificadas...",
     "chartUnavailable": "Gráfico temporalmente no disponible"

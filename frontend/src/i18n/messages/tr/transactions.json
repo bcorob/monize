@@ -123,6 +123,10 @@
       "status": "Durum",
       "actions": "İşlemler"
     },
+    "dateDisplay": {
+      "toggleLabel": "Yılı gizle",
+      "toggleTitle": "Alacaklının adının daha fazlası sığması için tarihlerden yılı çıkar"
+    },
     "attachmentsCount": "{count, plural, other {# ek}}",
     "today": "Bugün",
     "export": {

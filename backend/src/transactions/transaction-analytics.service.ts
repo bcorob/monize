@@ -5,7 +5,13 @@ import { Transaction, TransactionStatus } from "./entities/transaction.entity";
 import { Category } from "../categories/entities/category.entity";
 import { UserPreference } from "../users/entities/user-preference.entity";
 import { getAllCategoryIdsWithChildren } from "../common/category-tree.util";
-import { applyInvestmentTransactionFilters } from "../common/investment-filter.util";
+import {
+  applyInvestmentTransactionFilters,
+  brokerageExclusionForEntity,
+  investmentLinkedSplitExclusion,
+  investmentLinkedTransactionExclusion,
+  reportableTransactionAmountSql,
+} from "../common/investment-filter.util";
 import {
   joinSplitsForAnalytics,
   SPLIT_AMOUNT,
@@ -28,6 +34,14 @@ import {
   UNKNOWN_CATEGORY_LABEL,
 } from "../categories/category-name.util";
 import { roundMoney, sumMoney } from "../common/round.util";
+
+/**
+ * The ordinary-cash amount of one transaction, for the recurring-charge
+ * detector: it reads one row per payment and joins no splits, so a split
+ * parent's own amount (the sum of every line, embedded investment included) is
+ * not what recurred.
+ */
+const RECURRING_REPORTABLE_AMOUNT = reportableTransactionAmountSql("t");
 
 export interface FxFeeMonthlySummaryRow {
   /** Calendar month in 'YYYY-MM'. */
@@ -596,9 +610,7 @@ export class TransactionAnalyticsService {
     // counts/totals match the transaction list.
     queryBuilder.leftJoin("transaction.account", "summaryAccount");
 
-    queryBuilder.andWhere(
-      "(summaryAccount.accountSubType IS NULL OR summaryAccount.accountSubType != 'INVESTMENT_BROKERAGE')",
-    );
+    queryBuilder.andWhere(brokerageExclusionForEntity("summaryAccount"));
 
     // Always expand split transactions so mixed-sign splits are bucketed
     // into income/expense per split. A split parent carries `amount =
@@ -610,6 +622,13 @@ export class TransactionAnalyticsService {
     queryBuilder.andWhere(
       "(splits.transferAccountId IS NULL OR splits.id IS NULL)",
     );
+    // ...and an embedded investment line is the trade's own cash side, not
+    // ordinary cash. Unconditional, unlike excludeInvestmentLinked below: that
+    // flag is about whole rows a caller may want to see, while this line's
+    // amount would otherwise land in the NULL "Uncategorized" bucket of every
+    // grouped total -- whose drill-down (the register filtered to
+    // uncategorized) excludes it, so the two disagreed by the trade amount.
+    queryBuilder.andWhere(investmentLinkedSplitExclusion("splits"));
 
     // Optionally exclude cash-side transactions created as a side-effect
     // of an investment BUY/SELL/DIVIDEND. Those transactions live in the
@@ -618,8 +637,7 @@ export class TransactionAnalyticsService {
     // leak into expense/income totals as "uncategorised" spending.
     if (excludeInvestmentLinked) {
       queryBuilder.andWhere(
-        // includes VOID rows: records read -- identity, not effect.
-        "NOT EXISTS (SELECT 1 FROM investment_transactions it WHERE it.transaction_id = transaction.id)",
+        investmentLinkedTransactionExclusion("transaction"),
       );
     }
 
@@ -695,14 +713,18 @@ export class TransactionAnalyticsService {
                 new Brackets((unc) => {
                   unc
                     .where(
-                      "transaction.categoryId IS NULL AND transaction.isSplit = false AND transaction.isTransfer = false AND summaryAccount.accountType != 'INVESTMENT'",
+                      `transaction.categoryId IS NULL AND transaction.isSplit = false AND transaction.isTransfer = false AND ${investmentLinkedTransactionExclusion(
+                        "transaction",
+                      )}`,
                     )
                     // A split transaction counts as uncategorised when any of
                     // its non-transfer split lines has no category (transfer
                     // splits are already excluded by the base query), matching
                     // the category breakdown grouping.
                     .orWhere(
-                      "transaction.isSplit = true AND transaction.isTransfer = false AND summaryAccount.accountType != 'INVESTMENT' AND splits.categoryId IS NULL",
+                      `transaction.isSplit = true AND transaction.isTransfer = false AND splits.categoryId IS NULL AND ${investmentLinkedSplitExclusion(
+                        "splits",
+                      )}`,
                     );
                 }),
               );
@@ -1656,8 +1678,11 @@ export class TransactionAnalyticsService {
         .addSelect("chargePayee.id", "payeeId")
         .addSelect(categoryNameSelect, "categoryName")
         .addSelect("cat.id", "categoryId")
+        // A split parent's own amount is the sum of every line, so the charge
+        // has to be the ordinary part -- otherwise this answers 560 where the
+        // built-in Recurring Expenses report answers 60 for the same rows.
         .addSelect(
-          "ARRAY_AGG(ABS(t.amount) ORDER BY t.transactionDate ASC)",
+          `ARRAY_AGG(ABS(${RECURRING_REPORTABLE_AMOUNT}) ORDER BY t.transactionDate ASC)`,
           "amounts",
         )
         .addSelect(
@@ -1668,17 +1693,14 @@ export class TransactionAnalyticsService {
         .where("t.userId = :userId", { userId })
         .andWhere("t.transactionDate >= :startDate", { startDate })
         .andWhere("t.transactionDate <= :endDate", { endDate })
-        .andWhere("t.amount < 0")
+        .andWhere(`${RECURRING_REPORTABLE_AMOUNT} < 0`)
         .andWhere("t.status != 'VOID'")
         .andWhere("t.isTransfer = false")
         .andWhere("t.parentTransactionId IS NULL")
         .andWhere("(t.payeeId IS NOT NULL OR t.payeeName IS NOT NULL)")
         // Exclude investment-linked cash debits so regular BUY activity
         // isn't flagged as a subscription-like "recurring charge".
-        .andWhere(
-          // includes VOID rows: records read -- identity, not effect.
-          "NOT EXISTS (SELECT 1 FROM investment_transactions it WHERE it.transaction_id = t.id)",
-        )
+        .andWhere(investmentLinkedTransactionExclusion("t"))
         .setParameters(
           options.uncategorizedLabel
             ? { uncategorizedLabel: options.uncategorizedLabel }

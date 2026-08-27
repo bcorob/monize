@@ -210,6 +210,7 @@
     "frequencyOptions": {
       "weekly": "[XX-Weekly-XX]",
       "biweekly": "[XX-Every 2 Weeks-XX]",
+      "semiMonthly": "[XX-Semi-Monthly-XX]",
       "monthly": "[XX-Monthly-XX]",
       "quarterly": "[XX-Quarterly-XX]",
       "yearly": "[XX-Yearly-XX]"
@@ -318,12 +319,13 @@
     "previewFirstInterest": "[XX-First Payment Interest:-XX]",
     "previewTotalPayments": "[XX-Total Payments:-XX]",
     "previewTotalInterest": "[XX-Total Interest:-XX]",
+    "previewFinalPayment": "[XX-Final Payment:-XX]",
     "previewPayoffDate": "[XX-Est. Payoff Date:-XX]",
     "previewNA": "[XX-N/A-XX]",
     "calculatingPreview": "[XX-Calculating preview...-XX]",
     "frequencyOptions": {
       "monthly": "[XX-Monthly-XX]",
-      "semiMonthly": "[XX-Semi-Monthly (1st & 15th)-XX]",
+      "semiMonthly": "[XX-Semi-Monthly (15th & month end)-XX]",
       "biweekly": "[XX-Bi-Weekly-XX]",
       "acceleratedBiweekly": "[XX-Accelerated Bi-Weekly-XX]",
       "weekly": "[XX-Weekly-XX]",
@@ -367,6 +369,7 @@
       "WEEKLY": "[XX-Weekly-XX]",
       "BIWEEKLY": "[XX-Bi-Weekly-XX]",
       "SEMI_MONTHLY": "[XX-Semi-Monthly-XX]",
+      "SEMIMONTHLY": "[XX-Semi-Monthly-XX]",
       "MONTHLY": "[XX-Monthly-XX]",
       "QUARTERLY": "[XX-Quarterly-XX]",
       "YEARLY": "[XX-Yearly-XX]",
@@ -520,7 +523,8 @@
         "effect": "[XX-→ saves {interest}, payoff {date}-XX]",
         "alreadyMet": "[XX-Already met without any overpayment.-XX]",
         "unreachableInterest": "[XX-Out of reach — even a very large overpayment cannot save that much interest.-XX]",
-        "unreachableDate": "[XX-Out of reach — that month is earlier than the soonest possible payoff.-XX]"
+        "unreachableDate": "[XX-Out of reach — that month is earlier than the soonest possible payoff.-XX]",
+        "baselineIncomplete": "[XX-This loan does not pay off within the projected period, so there is no total interest to work back from.-XX]"
       }
     },
     "scenarioChart": {
@@ -546,6 +550,7 @@
       "installmentDrop": "[XX-{payment} (−{reduction})-XX]",
       "totalExtraContributed": "[XX-Total Extra Contributed-XX]",
       "beyondProjection": "[XX-Beyond projection-XX]",
+      "unknown": "[XX-Unknown-XX]",
       "overpaymentAtFrequency": "[XX-{frequency}: +{amount}-XX]"
     },
     "chart": {
@@ -585,7 +590,9 @@
       "colOverpayment": "[XX-Overpayment-XX]",
       "overpaymentWithFrequency": "[XX-{amount} ({frequency})-XX]",
       "loadAria": "[XX-Load scenario \"{name}\"-XX]",
-      "budgetSummary": "[XX-Budget {amount}/month-XX]"
+      "budgetSummary": "[XX-Budget {amount}/month-XX]",
+      "chartExcludedUnknown": "[XX-{count, plural, one {# scenario is not shown: its interest saving is unknown.} other {# scenarios are not shown: their interest saving is unknown.}}-XX]",
+      "chartNeedsTwoKnown": "[XX-The comparison chart needs at least two scenarios with a known interest saving.-XX]"
     },
     "pastImpact": {
       "title": "[XX-Impact of Overpayments Made-XX]",

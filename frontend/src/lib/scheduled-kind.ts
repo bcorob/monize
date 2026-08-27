@@ -10,7 +10,12 @@
  * belong on a calendar; classifying with a bare `amount < 0` / `amount > 0`
  * pair silently drops them.
  */
-export type ScheduledKind = 'bill' | 'deposit' | 'transfer' | 'reminder';
+export type ScheduledKind =
+  | 'bill'
+  | 'deposit'
+  | 'transfer'
+  | 'reminder'
+  | 'unknown';
 
 export function scheduledKind(st: {
   amount: number | string;
@@ -25,6 +30,36 @@ export function scheduledKind(st: {
 }
 
 /**
+ * The kind of ONE occurrence.
+ *
+ * Direction comes from the server's `directionAmount`: the occurrence's own
+ * amount when known, the schedule's snapshot only where that sign is *provable*
+ * without the missing rate, and `null` when it is not. `null` is `unknown` here,
+ * not a guess and not a grey reminder-by-accident -- an unpriceable mixed-sign
+ * split posts on either side of zero, so a red bill and a green deposit are
+ * equally unfounded (issue #1247 re-audit).
+ *
+ * An **absent** `directionAmount` is an older backend mid rolling deploy, which
+ * is no information: it falls back to the occurrence's amount, then to the
+ * schedule's sign, which is what this function did for every case before the
+ * server could tell the two apart. The magnitude never comes from the schedule --
+ * use the occurrence's `amount`, and `UnknownAmount` when it is null.
+ */
+export function occurrenceKind(
+  occurrence: { amount: number | null; directionAmount?: number | null },
+  schedule: { amount: number | string; isTransfer?: boolean },
+): ScheduledKind {
+  if (schedule.isTransfer) return 'transfer';
+  if (occurrence.directionAmount !== undefined) {
+    if (occurrence.directionAmount === null) return 'unknown';
+    return scheduledKind({ amount: occurrence.directionAmount });
+  }
+  return scheduledKind({
+    amount: occurrence.amount ?? Number(schedule.amount),
+  });
+}
+
+/**
  * Chip styling for a calendar occurrence, so the Bills & Deposits calendar and
  * the Upcoming Bills report read the same way. Red is spending, green is money
  * arriving, blue is a transfer between the user's own accounts, and grey is a
@@ -36,6 +71,9 @@ export const SCHEDULED_KIND_CHIP_CLASSES: Record<ScheduledKind, string> = {
   deposit: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
   transfer: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
   reminder: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300',
+  // Neutral on purpose: red would say "you owe this" and green "this is coming
+  // in", and an occurrence whose direction is not derivable supports neither.
+  unknown: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300',
 };
 
 /** Text colour for the amount printed beside an occurrence, by the same rule. */
@@ -44,4 +82,5 @@ export const SCHEDULED_KIND_AMOUNT_CLASSES: Record<ScheduledKind, string> = {
   deposit: 'text-green-600 dark:text-green-400',
   transfer: 'text-blue-600 dark:text-blue-400',
   reminder: 'text-gray-500 dark:text-gray-400',
+  unknown: 'text-gray-500 dark:text-gray-400',
 };

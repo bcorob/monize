@@ -3,6 +3,13 @@ import { DataSource } from "typeorm";
 import { ConfigService } from "@nestjs/config";
 import { I18nService } from "nestjs-i18n";
 import { BillReminderService } from "./bill-reminder.service";
+import { ScheduledEffectiveAmountService } from "../scheduled-transactions/scheduled-effective-amount.service";
+import { ScheduledOccurrenceService } from "../scheduled-transactions/scheduled-occurrence.service";
+import { InvestmentTransactionsService } from "../securities/investment-transactions.service";
+import {
+  createInvestmentFxMock,
+  InvestmentFxMock,
+} from "../test-helpers/investment-fx-testing";
 import { EmailService } from "./email.service";
 import { ScheduledTransaction } from "../scheduled-transactions/entities/scheduled-transaction.entity";
 import { ScheduledTransactionOverride } from "../scheduled-transactions/entities/scheduled-transaction-override.entity";
@@ -25,10 +32,12 @@ describe("BillReminderService", () => {
   const jobClaims: JobClaimMock = createJobClaimMock();
   let service: BillReminderService;
   let scheduledTransactionsRepo: Record<string, jest.Mock>;
+  let overridesRepo: Record<string, jest.Mock>;
   let usersRepo: Record<string, jest.Mock>;
   let preferencesRepo: Record<string, jest.Mock>;
   let emailService: Record<string, jest.Mock>;
   let configService: Record<string, jest.Mock>;
+  let investmentTransactionsService: InvestmentFxMock;
 
   beforeEach(async () => {
     // The claim double is shared across tests, so recorded calls and any queued
@@ -42,6 +51,13 @@ describe("BillReminderService", () => {
 
     scheduledTransactionsRepo = {
       find: jest.fn(),
+    };
+
+    // The occurrence contract loads a bill's overrides itself, keyed by schedule
+    // id -- the per-bill fixtures below still carry them on the row for the
+    // cross-user window filter, which cannot reach the database.
+    overridesRepo = {
+      find: jest.fn().mockResolvedValue([]),
     };
 
     usersRepo = {
@@ -61,8 +77,15 @@ describe("BillReminderService", () => {
       get: jest.fn(),
     };
 
+    // Issue #1247: the reminder's amounts come from the real effective-amount
+    // resolver, so the double is the FX source beneath it, not the resolver
+    // itself. Same-currency by default -- a plain bill's effective amount then
+    // equals its stored one, which is what the pre-existing expectations assert.
+    investmentTransactionsService = createInvestmentFxMock();
+
     const { dataSource } = createScopedDbMocks([
       [ScheduledTransaction, scheduledTransactionsRepo],
+      [ScheduledTransactionOverride, overridesRepo],
       [User, usersRepo],
       [UserPreference, preferencesRepo],
     ]);
@@ -70,6 +93,14 @@ describe("BillReminderService", () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         BillReminderService,
+        // Both read-side services are real over the stubbed FX source: which
+        // occurrence is due and what it costs ARE their output (issue #1247).
+        ScheduledOccurrenceService,
+        ScheduledEffectiveAmountService,
+        {
+          provide: InvestmentTransactionsService,
+          useValue: investmentTransactionsService,
+        },
         jobClaimProvider(jobClaims),
         { provide: DataSource, useValue: dataSource },
         { provide: EmailService, useValue: emailService },
@@ -279,7 +310,10 @@ describe("BillReminderService", () => {
 
         expect(scheduledTransactionsRepo.find).toHaveBeenCalledWith({
           where: { isActive: true, autoPost: false },
-          relations: ["payee", "overrides"],
+          // `splits` is loaded because the effective-amount resolver decides from
+          // them whether a schedule's cash total re-prices at the current FX rate
+          // (issue #1247).
+          relations: ["payee", "overrides", "splits"],
         });
         expect(emailService.sendMail).not.toHaveBeenCalled();
       });
@@ -475,6 +509,7 @@ describe("BillReminderService", () => {
           });
 
           scheduledTransactionsRepo.find.mockResolvedValue([bill]);
+          overridesRepo.find.mockResolvedValue(bill.overrides ?? []);
           preferencesRepo.findOne.mockResolvedValue(mockPrefsEmailEnabled);
           usersRepo.findOne.mockResolvedValue(mockUser1);
 
@@ -545,6 +580,7 @@ describe("BillReminderService", () => {
           });
 
           scheduledTransactionsRepo.find.mockResolvedValue([bill]);
+          overridesRepo.find.mockResolvedValue(bill.overrides ?? []);
           preferencesRepo.findOne.mockResolvedValue(mockPrefsEmailEnabled);
           usersRepo.findOne.mockResolvedValue(mockUser1);
 
@@ -565,6 +601,7 @@ describe("BillReminderService", () => {
           });
 
           scheduledTransactionsRepo.find.mockResolvedValue([bill]);
+          overridesRepo.find.mockResolvedValue(bill.overrides ?? []);
           preferencesRepo.findOne.mockResolvedValue(mockPrefsEmailEnabled);
           usersRepo.findOne.mockResolvedValue(mockUser1);
 
@@ -585,6 +622,7 @@ describe("BillReminderService", () => {
           });
 
           scheduledTransactionsRepo.find.mockResolvedValue([bill]);
+          overridesRepo.find.mockResolvedValue(bill.overrides ?? []);
           preferencesRepo.findOne.mockResolvedValue(mockPrefsEmailEnabled);
           usersRepo.findOne.mockResolvedValue(mockUser1);
 
@@ -605,6 +643,7 @@ describe("BillReminderService", () => {
           });
 
           scheduledTransactionsRepo.find.mockResolvedValue([bill]);
+          overridesRepo.find.mockResolvedValue(bill.overrides ?? []);
           preferencesRepo.findOne.mockResolvedValue(mockPrefsEmailEnabled);
           usersRepo.findOne.mockResolvedValue(mockUser1);
 
@@ -612,6 +651,85 @@ describe("BillReminderService", () => {
 
           const htmlArg = emailService.sendMail.mock.calls[0][2];
           expect(htmlArg).toContain("€250.75");
+        });
+
+        it("says the amount is unavailable rather than naming a stale one (issue #1247)", async () => {
+          // The issue's schedule: 10 x 100 pinned at 1.50 while the security was
+          // priced in EUR. The security is USD now and no USD -> CAD rate
+          // resolves, so the amount is unknown -- and the reminder must say so
+          // rather than repeating the CAD 1,500 snapshot the user would pay.
+          const bill = makeBill({
+            userId: userId1,
+            nextDueDate: daysFromNow(1),
+            reminderDaysBefore: 3,
+            name: "Monthly ETF buy",
+            amount: -1000,
+            currencyCode: "CAD",
+            isInvestment: true,
+            investmentAction: "BUY" as never,
+            investmentSecurityId: "SEC-1",
+            investmentQuantity: 10,
+            investmentPrice: 100,
+            investmentCommission: 0,
+            investmentExchangeRate: 1.5,
+            investmentExchangeRateFromCurrency: "EUR",
+            investmentExchangeRateToCurrency: "CAD",
+          });
+
+          scheduledTransactionsRepo.find.mockResolvedValue([bill]);
+          overridesRepo.find.mockResolvedValue(bill.overrides ?? []);
+          preferencesRepo.findOne.mockResolvedValue(mockPrefsEmailEnabled);
+          usersRepo.findOne.mockResolvedValue(mockUser1);
+          investmentTransactionsService.resolveSettlementCurrencyPair.mockResolvedValue(
+            { from: "USD", to: "CAD" },
+          );
+          investmentTransactionsService.resolveCashExchangeRateOrNull.mockResolvedValue(
+            null,
+          );
+
+          await service.sendBillReminders();
+
+          const htmlArg = emailService.sendMail.mock.calls[0][2];
+          expect(htmlArg).toContain("Amount unavailable");
+          expect(htmlArg).not.toContain("1,500");
+          expect(htmlArg).not.toContain("1,000");
+        });
+
+        it("quotes the re-priced amount when the current rate is known (issue #1247)", async () => {
+          const bill = makeBill({
+            userId: userId1,
+            nextDueDate: daysFromNow(1),
+            reminderDaysBefore: 3,
+            name: "Monthly ETF buy",
+            amount: -1000,
+            currencyCode: "CAD",
+            isInvestment: true,
+            investmentAction: "BUY" as never,
+            investmentSecurityId: "SEC-1",
+            investmentQuantity: 10,
+            investmentPrice: 100,
+            investmentCommission: 0,
+            investmentExchangeRate: 1.5,
+            investmentExchangeRateFromCurrency: "EUR",
+            investmentExchangeRateToCurrency: "CAD",
+          });
+
+          scheduledTransactionsRepo.find.mockResolvedValue([bill]);
+          overridesRepo.find.mockResolvedValue(bill.overrides ?? []);
+          preferencesRepo.findOne.mockResolvedValue(mockPrefsEmailEnabled);
+          usersRepo.findOne.mockResolvedValue(mockUser1);
+          investmentTransactionsService.resolveSettlementCurrencyPair.mockResolvedValue(
+            { from: "USD", to: "CAD" },
+          );
+          investmentTransactionsService.resolveCashExchangeRateOrNull.mockResolvedValue(
+            1.35,
+          );
+
+          await service.sendBillReminders();
+
+          const htmlArg = emailService.sendMail.mock.calls[0][2];
+          expect(htmlArg).toContain("1,350.00");
+          expect(htmlArg).not.toContain("1,500.00");
         });
 
         it("passes appUrl from config to email template", async () => {
@@ -624,6 +742,7 @@ describe("BillReminderService", () => {
           });
 
           scheduledTransactionsRepo.find.mockResolvedValue([bill]);
+          overridesRepo.find.mockResolvedValue(bill.overrides ?? []);
           preferencesRepo.findOne.mockResolvedValue(mockPrefsEmailEnabled);
           usersRepo.findOne.mockResolvedValue(mockUser1);
 
@@ -685,6 +804,7 @@ describe("BillReminderService", () => {
           });
 
           scheduledTransactionsRepo.find.mockResolvedValue([bill]);
+          overridesRepo.find.mockResolvedValue(bill.overrides ?? []);
           preferencesRepo.findOne.mockResolvedValue(mockPrefsEmailEnabled);
           usersRepo.findOne.mockResolvedValue(mockUser1);
 
@@ -746,6 +866,7 @@ describe("BillReminderService", () => {
           });
 
           scheduledTransactionsRepo.find.mockResolvedValue([bill]);
+          overridesRepo.find.mockResolvedValue(bill.overrides ?? []);
           preferencesRepo.findOne.mockResolvedValue(mockPrefsEmailEnabled);
           usersRepo.findOne.mockResolvedValue(mockUser1);
           emailService.sendMail.mockRejectedValue(
@@ -824,12 +945,256 @@ describe("BillReminderService", () => {
           });
 
           scheduledTransactionsRepo.find.mockResolvedValue([bill]);
+          overridesRepo.find.mockResolvedValue(bill.overrides ?? []);
           preferencesRepo.findOne.mockResolvedValue(mockPrefsEmailEnabled);
           usersRepo.findOne.mockResolvedValue(mockUser1);
 
           await service.sendBillReminders();
 
           expect(emailService.sendMail).toHaveBeenCalledTimes(1);
+        });
+
+        /**
+         * The two halves of the cron ask their own question, against their own
+         * "today". They can disagree -- the run crosses midnight, an override
+         * moves in between -- and an email with an empty table plus a
+         * `delivered_at` record is the worst possible outcome: the subject claims
+         * a bill, the body shows none, and the delivery record makes the genuine
+         * reminder unsendable for the rest of the day.
+         */
+        it("sends nothing and records nothing when no occurrence survives the owner's own window", async () => {
+          const bill = makeBill({
+            userId: userId1,
+            nextDueDate: daysFromNow(0),
+            reminderDaysBefore: 3,
+          });
+          scheduledTransactionsRepo.find.mockResolvedValue([bill]);
+          preferencesRepo.findOne.mockResolvedValue(mockPrefsEmailEnabled);
+          usersRepo.findOne.mockResolvedValue(mockUser1);
+          // The divergence is real and in the code: the cross-user pass reads the
+          // overrides hydrated on the row, while `expand` re-reads them from the
+          // database. An override written between the two moves this occurrence
+          // out of the window, so the second pass has nothing to say.
+          overridesRepo.find.mockResolvedValue([
+            {
+              id: "ovr-moved",
+              scheduledTransactionId: bill.id,
+              originalDate: String(bill.nextDueDate).split("T")[0],
+              overrideDate: daysFromNow(90),
+              amount: null,
+            },
+          ]);
+
+          await service.sendBillReminders();
+
+          expect(emailService.sendMail).not.toHaveBeenCalled();
+          expect(jobClaims.markDelivered).not.toHaveBeenCalled();
+          // The lease goes back, so the next run can try again.
+          expect(jobClaims.releaseLease).toHaveBeenCalled();
+        });
+
+        /**
+         * A run that crosses local midnight measures both of its windows from
+         * one day.
+         *
+         * Each pass used to read `todayYMD()` for itself. The selecting pass ran
+         * at 23:59 and matched a bill due that day; the delivering pass ran a
+         * minute later, on the next date, and its window opened AFTER the
+         * occurrence -- so the bill vanished, nothing was emailed, and the next
+         * run (now also on D+1) no longer selected it either. A reminder nobody
+         * would ever get, and no record that one was owed.
+         *
+         * The window's date is a value passed down, so advancing the clock
+         * mid-run cannot move it.
+         */
+        it("measures both passes from one date when the run crosses midnight", async () => {
+          const oneSecond = 1000;
+          // 23:59:30 local, so a minute's advance lands on the next date whatever
+          // the runner's timezone. Derived from the boundary the defect is about,
+          // not a hardcoded instant.
+          const almostMidnight = new Date(2026, 2, 15, 23, 59, 30);
+          jest.useFakeTimers({
+            now: almostMidnight,
+            // `Date` only: faking the microtask queue under the async repository
+            // doubles below deadlocks the run rather than failing it.
+            doNotFake: [
+              "nextTick",
+              "queueMicrotask",
+              "setImmediate",
+              "setTimeout",
+              "setInterval",
+            ],
+          });
+          try {
+            const bill = makeBill({
+              userId: userId1,
+              nextDueDate: daysFromNow(0),
+              // Zero, so the window is exactly one day and a one-day slip moves
+              // the occurrence out of it entirely.
+              reminderDaysBefore: 0,
+            });
+            scheduledTransactionsRepo.find.mockResolvedValue([bill]);
+            overridesRepo.find.mockResolvedValue([]);
+            preferencesRepo.findOne.mockResolvedValue(mockPrefsEmailEnabled);
+            // The clock crosses midnight between the two passes: this read
+            // happens inside the delivering pass, before it computes its window.
+            usersRepo.findOne.mockImplementation(async () => {
+              jest.setSystemTime(
+                new Date(almostMidnight.getTime() + 60 * oneSecond),
+              );
+              return mockUser1 as User;
+            });
+
+            await service.sendBillReminders();
+
+            // The bill is still reported, against the date the run started on.
+            expect(emailService.sendMail).toHaveBeenCalledTimes(1);
+            expect(emailService.sendMail).toHaveBeenCalledWith(
+              "user1@example.com",
+              "Monize: 1 upcoming bill needs attention",
+              expect.any(String),
+            );
+            expect(jobClaims.markDelivered).toHaveBeenCalled();
+          } finally {
+            jest.useRealTimers();
+          }
+        });
+
+        /**
+         * Every claim in one run carries the run's date, not the date the user's
+         * turn happened to fall on.
+         *
+         * The claim key is what makes the reminder single-shot, and it is built
+         * once per user inside the loop. Reading the clock there, a run that
+         * spans local midnight claims the early users under `key(D)` and the
+         * rest under `key(D+1)` while every window is measured from D -- so the
+         * next run re-selects a user emailed at 23:59:59, finds no delivery
+         * record under its own `key(D+1)`, and sends the identical reminder a
+         * second time. Pinning the windows and leaving the key unpinned moves the
+         * midnight bug rather than fixing it.
+         */
+        it("keys every user's claim on the run's date, not on their turn's", async () => {
+          const almostMidnight = new Date(2026, 2, 15, 23, 59, 30);
+          jest.useFakeTimers({
+            now: almostMidnight,
+            doNotFake: [
+              "nextTick",
+              "queueMicrotask",
+              "setImmediate",
+              "setTimeout",
+              "setInterval",
+            ],
+          });
+          try {
+            scheduledTransactionsRepo.find.mockResolvedValue([
+              makeBill({
+                id: "bill-u1",
+                userId: userId1,
+                nextDueDate: daysFromNow(0),
+                reminderDaysBefore: 0,
+              }),
+              makeBill({
+                id: "bill-u2",
+                userId: userId2,
+                nextDueDate: daysFromNow(0),
+                reminderDaysBefore: 0,
+              }),
+            ]);
+            overridesRepo.find.mockResolvedValue([]);
+            preferencesRepo.findOne.mockResolvedValue(mockPrefsEmailEnabled);
+            // The clock crosses midnight while the FIRST user is being served,
+            // so the second user's turn happens on the next date.
+            let served = 0;
+            usersRepo.findOne.mockImplementation(async () => {
+              served += 1;
+              if (served === 1) {
+                jest.setSystemTime(
+                  new Date(almostMidnight.getTime() + 60 * 1000),
+                );
+              }
+              return (served === 1 ? mockUser1 : mockUser2) as User;
+            });
+
+            await service.sendBillReminders();
+
+            const runDate = `${almostMidnight.getFullYear()}-${String(
+              almostMidnight.getMonth() + 1,
+            ).padStart(
+              2,
+              "0",
+            )}-${String(almostMidnight.getDate()).padStart(2, "0")}`;
+            expect(jobClaims.claimLease).toHaveBeenCalledTimes(2);
+            const claimKeys = jobClaims.claimLease.mock.calls.map((call) =>
+              String(call[2]),
+            );
+            for (const key of claimKeys) {
+              expect(key.startsWith(`${runDate}#`)).toBe(true);
+            }
+            // Two users, two different bill sets, so two different digests --
+            // the date prefix being shared is the point, not the whole key.
+            expect(new Set(claimKeys).size).toBe(2);
+          } finally {
+            jest.useRealTimers();
+          }
+        });
+
+        /**
+         * The partial case: pass one selected two bills, pass two can report
+         * only one.
+         *
+         * Reachable through the same divergence as the empty case above -- pass
+         * one reads the overrides hydrated on the row, pass two re-reads them
+         * from the database -- so an override written in between can move ONE of
+         * the two occurrences out of the window. The email must describe what it
+         * actually lists (a subject counted from the pre-expansion list is how
+         * "1 upcoming bill needs attention" came to sit over an empty table), and
+         * the claim still settles: a bill that is no longer due is one there is
+         * nothing to remind about.
+         */
+        it("emails the bills it can report when only some survive the second pass", async () => {
+          const staying = makeBill({
+            id: "bill-staying",
+            userId: userId1,
+            nextDueDate: daysFromNow(0),
+            reminderDaysBefore: 3,
+            name: "Rent",
+          });
+          const moving = makeBill({
+            id: "bill-moving",
+            userId: userId1,
+            nextDueDate: daysFromNow(1),
+            reminderDaysBefore: 3,
+            name: "Hydro",
+          });
+          scheduledTransactionsRepo.find.mockResolvedValue([staying, moving]);
+          preferencesRepo.findOne.mockResolvedValue(mockPrefsEmailEnabled);
+          usersRepo.findOne.mockResolvedValue(mockUser1);
+          overridesRepo.find.mockResolvedValue([
+            {
+              id: "ovr-moved",
+              scheduledTransactionId: "bill-moving",
+              originalDate: String(moving.nextDueDate).split("T")[0],
+              overrideDate: daysFromNow(90),
+              amount: null,
+            },
+          ]);
+
+          await service.sendBillReminders();
+
+          expect(emailService.sendMail).toHaveBeenCalledTimes(1);
+          // Counted from the body, not from what pass one selected.
+          expect(emailService.sendMail).toHaveBeenCalledWith(
+            "user1@example.com",
+            "Monize: 1 upcoming bill needs attention",
+            expect.any(String),
+          );
+          const html = String(emailService.sendMail.mock.calls[0][2]);
+          expect(html).toContain("Rent");
+          expect(html).not.toContain("Hydro");
+          // Something was sent, so the claim settles rather than being handed
+          // back -- the empty case above is the one that releases.
+          expect(jobClaims.markDelivered).toHaveBeenCalled();
+          expect(jobClaims.releaseLease).not.toHaveBeenCalled();
         });
 
         it("groups multiple bills for the same user into one email", async () => {
@@ -893,6 +1258,7 @@ describe("BillReminderService", () => {
           });
 
           scheduledTransactionsRepo.find.mockResolvedValue([bill]);
+          overridesRepo.find.mockResolvedValue(bill.overrides ?? []);
           preferencesRepo.findOne.mockResolvedValue(mockPrefsEmailEnabled);
           usersRepo.findOne.mockResolvedValue(mockUser1);
 
@@ -920,6 +1286,7 @@ describe("BillReminderService", () => {
           });
 
           scheduledTransactionsRepo.find.mockResolvedValue([bill]);
+          overridesRepo.find.mockResolvedValue(bill.overrides ?? []);
           preferencesRepo.findOne.mockResolvedValue(mockPrefsEmailEnabled);
           usersRepo.findOne.mockResolvedValue(mockUser1);
 
@@ -947,6 +1314,7 @@ describe("BillReminderService", () => {
           });
 
           scheduledTransactionsRepo.find.mockResolvedValue([bill]);
+          overridesRepo.find.mockResolvedValue(bill.overrides ?? []);
           preferencesRepo.findOne.mockResolvedValue(mockPrefsEmailEnabled);
           usersRepo.findOne.mockResolvedValue(mockUser1);
 
@@ -998,6 +1366,7 @@ describe("BillReminderService", () => {
           });
 
           scheduledTransactionsRepo.find.mockResolvedValue([bill]);
+          overridesRepo.find.mockResolvedValue(bill.overrides ?? []);
           preferencesRepo.findOne.mockResolvedValue(mockPrefsEmailEnabled);
           usersRepo.findOne.mockResolvedValue(mockUser1);
 
@@ -1024,6 +1393,7 @@ describe("BillReminderService", () => {
           });
 
           scheduledTransactionsRepo.find.mockResolvedValue([bill]);
+          overridesRepo.find.mockResolvedValue(bill.overrides ?? []);
           preferencesRepo.findOne.mockResolvedValue(mockPrefsEmailEnabled);
           usersRepo.findOne.mockResolvedValue(mockUser1);
 
@@ -1045,6 +1415,7 @@ describe("BillReminderService", () => {
           });
 
           scheduledTransactionsRepo.find.mockResolvedValue([bill]);
+          overridesRepo.find.mockResolvedValue(bill.overrides ?? []);
           preferencesRepo.findOne.mockResolvedValue(mockPrefsEmailEnabled);
           usersRepo.findOne.mockResolvedValue(mockUser1);
 
@@ -1064,6 +1435,7 @@ describe("BillReminderService", () => {
           });
 
           scheduledTransactionsRepo.find.mockResolvedValue([bill]);
+          overridesRepo.find.mockResolvedValue(bill.overrides ?? []);
           preferencesRepo.findOne.mockResolvedValue(mockPrefsEmailEnabled);
           usersRepo.findOne.mockResolvedValue(mockUser1);
 
@@ -1089,6 +1461,7 @@ describe("BillReminderService", () => {
           });
 
           scheduledTransactionsRepo.find.mockResolvedValue([bill]);
+          overridesRepo.find.mockResolvedValue(bill.overrides ?? []);
           preferencesRepo.findOne.mockResolvedValue(mockPrefsEmailEnabled);
           usersRepo.findOne.mockResolvedValue(mockUser1);
 

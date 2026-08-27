@@ -210,6 +210,7 @@
     "frequencyOptions": {
       "weekly": "साप्ताहिक",
       "biweekly": "हर 2 सप्ताह",
+      "semiMonthly": "अर्ध-मासिक",
       "monthly": "मासिक",
       "quarterly": "त्रैमासिक",
       "yearly": "वार्षिक"
@@ -308,12 +309,13 @@
     "previewFirstInterest": "पहला भुगतान ब्याज:",
     "previewTotalPayments": "कुल भुगतान:",
     "previewTotalInterest": "कुल ब्याज:",
+    "previewFinalPayment": "अंतिम भुगतान:",
     "previewPayoffDate": "अनुमानित भुगतान तिथि:",
     "previewNA": "लागू नहीं",
     "calculatingPreview": "पूर्वावलोकन गणना हो रही है...",
     "frequencyOptions": {
       "monthly": "मासिक",
-      "semiMonthly": "अर्ध-मासिक (1 और 15 तारीख)",
+      "semiMonthly": "अर्ध-मासिक (15 तारीख और महीने का अंत)",
       "biweekly": "द्वि-साप्ताहिक",
       "acceleratedBiweekly": "त्वरित द्वि-साप्ताहिक",
       "weekly": "साप्ताहिक",
@@ -367,6 +369,7 @@
       "WEEKLY": "साप्ताहिक",
       "BIWEEKLY": "पाक्षिक",
       "SEMI_MONTHLY": "महीने में दो बार",
+      "SEMIMONTHLY": "महीने में दो बार",
       "MONTHLY": "मासिक",
       "QUARTERLY": "त्रैमासिक",
       "YEARLY": "वार्षिक",
@@ -436,7 +439,8 @@
         "effect": "→ {interest} की बचत, चुकौती {date}",
         "alreadyMet": "बिना किसी अतिरिक्त भुगतान के ही लक्ष्य पूरा है।",
         "unreachableInterest": "पहुँच से बाहर — बहुत बड़ा अतिरिक्त भुगतान भी इतना ब्याज नहीं बचा सकता।",
-        "unreachableDate": "पहुँच से बाहर — यह माह जल्द से जल्द संभव चुकौती से पहले है।"
+        "unreachableDate": "पहुँच से बाहर — यह माह जल्द से जल्द संभव चुकौती से पहले है।",
+        "baselineIncomplete": "यह ऋण अनुमानित अवधि के भीतर नहीं चुकता है, इसलिए पीछे की ओर गणना करने के लिए कोई कुल ब्याज नहीं है।"
       },
       "simulationTypeLabel": "सिमुलेशन प्रकार",
       "overpaymentAmount": "अतिरिक्त भुगतान राशि",
@@ -463,6 +467,7 @@
       "interestSaved": "बचा हुआ ब्याज",
       "totalExtraContributed": "कुल अतिरिक्त योगदान",
       "beyondProjection": "अनुमान से परे",
+      "unknown": "अज्ञात",
       "newInstallment": "नई किस्त",
       "installmentDrop": "{payment} (−{reduction})",
       "monthlyPayment": "मासिक भुगतान",
@@ -505,7 +510,9 @@
       "colOverpayment": "अतिरिक्त भुगतान",
       "overpaymentWithFrequency": "{amount} ({frequency})",
       "loadAria": "परिदृश्य \"{name}\" लोड करें",
-      "budgetSummary": "बजट {amount}/माह"
+      "budgetSummary": "बजट {amount}/माह",
+      "chartExcludedUnknown": "{count, plural, one {# परिदृश्य नहीं दिखाया गया: उसकी ब्याज बचत अज्ञात है।} other {# परिदृश्य नहीं दिखाए गए: उनकी ब्याज बचत अज्ञात है।}}",
+      "chartNeedsTwoKnown": "तुलना चार्ट के लिए ज्ञात ब्याज बचत वाले कम से कम दो परिदृश्य आवश्यक हैं।"
     },
     "scenarioChart": {
       "title": "परिदृश्य तुलना",

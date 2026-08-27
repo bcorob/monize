@@ -71,6 +71,29 @@ export const INTEGRATION_TYPEORM_OPTIONS: TypeOrmModuleOptions = {
 class TestI18nModule {}
 
 /**
+ * What the real `ScheduledTransactionsModule` lets other modules inject, read
+ * off its own metadata rather than restated here.
+ *
+ * The stub below stands in for that module, so its export list is a claim about
+ * the real one -- and a hand-written copy of a list only fails when a consumer
+ * appears. Issue #1247 added `ScheduledEffectiveAmountService` and
+ * `ScheduledOccurrenceService` to those exports and gave
+ * `NotificationsModule`/`BudgetsModule` a dependency on them; the stub went on
+ * compiling until those consumers were reached, and then eighteen suites failed
+ * with "argument ScheduledOccurrenceService at index [5] is available in the
+ * NotificationsModule module". Derived, a new export is stubbed the day it
+ * exists.
+ */
+const SCHEDULED_TRANSACTIONS_EXPORTS: unknown[] =
+  Reflect.getMetadata("exports", ScheduledTransactionsModule) ?? [];
+
+/** Stubbed but deliberately not exported: internal collaborators the real module keeps to itself. */
+const SCHEDULED_TRANSACTIONS_INTERNALS: unknown[] = [
+  ScheduledTransactionOverrideService,
+  ScheduledTransactionLoanService,
+];
+
+/**
  * Creates a NestJS TestingModule wired to a real PostgreSQL database.
  * Uses `synchronize: true` and `dropSchema: true` so each test suite
  * starts with a clean schema derived from entity metadata.
@@ -84,6 +107,14 @@ class TestI18nModule {}
 export async function createIntegrationModule(
   modules: any[],
 ): Promise<TestingModule> {
+  if (!SCHEDULED_TRANSACTIONS_EXPORTS.includes(ScheduledTransactionsService)) {
+    // A floor on the derivation: an empty or unrecognisable metadata read would
+    // otherwise produce a stub that exports nothing and blame every consumer.
+    throw new Error(
+      "could not read ScheduledTransactionsModule's exports -- the integration stub would export nothing",
+    );
+  }
+
   const moduleBuilder = Test.createTestingModule({
     imports: [
       ConfigModule.forRoot({ isGlobal: true }),
@@ -94,7 +125,7 @@ export async function createIntegrationModule(
   })
     // Replace ScheduledTransactionsModule to break circular dependency.
     // AccountsModule imports ScheduledTransactionsModule (forwardRef),
-    // which imports TransactionsModule (no forwardRef), causing undefined
+    // which imports TransactionsModule (forwardRef), causing undefined
     // in the circular chain. We stub it with just the entity registrations
     // and mock services.
     .overrideModule(ScheduledTransactionsModule)
@@ -109,20 +140,10 @@ export async function createIntegrationModule(
         ]),
       ],
       providers: [
-        {
-          provide: ScheduledTransactionsService,
-          useValue: {},
-        },
-        {
-          provide: ScheduledTransactionOverrideService,
-          useValue: {},
-        },
-        {
-          provide: ScheduledTransactionLoanService,
-          useValue: {},
-        },
-      ],
-      exports: [ScheduledTransactionsService],
+        ...SCHEDULED_TRANSACTIONS_EXPORTS,
+        ...SCHEDULED_TRANSACTIONS_INTERNALS,
+      ].map((token) => ({ provide: token as never, useValue: {} })),
+      exports: SCHEDULED_TRANSACTIONS_EXPORTS as never[],
     });
 
   const module = await moduleBuilder.compile();

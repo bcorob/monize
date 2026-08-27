@@ -7,6 +7,11 @@ import {
 } from '@/types/investment-report';
 import { getCached, setCache, invalidateCache } from './apiCache';
 
+// The saved investment-reports list lives under one cache key; keep the key and
+// TTL in one place so getAll and the optimistic favourite patch cannot drift.
+const INVESTMENT_REPORTS_CACHE_KEY = 'investment-reports:all';
+const INVESTMENT_REPORTS_CACHE_TTL = 300_000; // 5 minutes
+
 export interface ExecuteInvestmentReportParams {
   asOfDate?: string;
   /**
@@ -24,10 +29,10 @@ export const investmentReportsApi = {
   },
 
   getAll: async (): Promise<InvestmentReport[]> => {
-    const cached = getCached<InvestmentReport[]>('investment-reports:all');
+    const cached = getCached<InvestmentReport[]>(INVESTMENT_REPORTS_CACHE_KEY);
     if (cached) return cached;
     const response = await apiClient.get<InvestmentReport[]>('/reports/investment');
-    setCache('investment-reports:all', response.data, 300_000);
+    setCache(INVESTMENT_REPORTS_CACHE_KEY, response.data, INVESTMENT_REPORTS_CACHE_TTL);
     return response.data;
   },
 
@@ -62,10 +67,31 @@ export const investmentReportsApi = {
   },
 
   toggleFavourite: async (id: string, isFavourite: boolean): Promise<InvestmentReport> => {
-    const response = await apiClient.patch<InvestmentReport>(`/reports/investment/${id}`, {
-      isFavourite,
-    });
-    invalidateCache('investment-reports:');
-    return response.data;
+    // Reflect the new favourite in the shared list cache the moment the toggle
+    // starts, so a surface re-reading getAll before the request settles -- the
+    // report switcher mounting as the user navigates straight to the report they
+    // just starred -- already shows the new order (issue #1224). The
+    // invalidateCache below drops this optimistic copy once the server answers,
+    // on either path, so the next read reconciles against the server.
+    const cached = getCached<InvestmentReport[]>(INVESTMENT_REPORTS_CACHE_KEY);
+    if (cached) {
+      setCache(
+        INVESTMENT_REPORTS_CACHE_KEY,
+        cached.map((report) =>
+          report.id === id ? { ...report, isFavourite } : report,
+        ),
+        INVESTMENT_REPORTS_CACHE_TTL,
+      );
+    }
+    try {
+      const response = await apiClient.patch<InvestmentReport>(`/reports/investment/${id}`, {
+        isFavourite,
+      });
+      invalidateCache('investment-reports:');
+      return response.data;
+    } catch (error) {
+      invalidateCache('investment-reports:');
+      throw error;
+    }
   },
 };

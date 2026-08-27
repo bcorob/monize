@@ -1,6 +1,7 @@
 import {
   IsString,
   IsNumber,
+  IsInt,
   IsUUID,
   IsOptional,
   IsBoolean,
@@ -19,6 +20,7 @@ import { CreateScheduledTransactionSplitDto } from "./create-scheduled-transacti
 import { SanitizeHtml } from "../../common/decorators/sanitize-html.decorator";
 import { IsCurrencyCode } from "../../common/validators/is-currency-code.validator";
 import { InvestmentAction } from "../../securities/entities/investment-transaction.entity";
+import { MAX_REMINDER_DAYS_BEFORE } from "../reminder-window";
 
 export enum FrequencyType {
   ONCE = "ONCE",
@@ -121,9 +123,21 @@ export class CreateScheduledTransactionDto {
   @IsBoolean()
   autoPost?: boolean;
 
+  /**
+   * How many days before an occurrence the reminder email goes out.
+   *
+   * Bounded, and an integer. Unbounded, a value past `Date`'s range made
+   * `addDaysYMD` produce the literal string "NaN-NaN-NaN", which the
+   * string-comparing occurrence expander read as an unlimited window: every one
+   * of that user's manual bills came back due today, every day, each walked to
+   * the 2000-step guard inside a cron shared by every tenant. A year is more
+   * than any reminder needs, and `@IsInt` keeps a fractional value out of an
+   * INTEGER column.
+   */
   @IsOptional()
-  @IsNumber()
+  @IsInt()
   @Min(0)
+  @Max(MAX_REMINDER_DAYS_BEFORE)
   reminderDaysBefore?: number;
 
   @IsOptional()

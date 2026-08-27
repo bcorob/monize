@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import apiClient from './api';
-import { getCached } from './apiCache';
+import { getCached, setCache, invalidateCache } from './apiCache';
 import { investmentReportsApi } from './investment-reports';
 
 vi.mock('./api', () => ({
@@ -76,5 +76,40 @@ describe('investmentReportsApi', () => {
     vi.mocked(apiClient.patch).mockResolvedValue({ data: { id: 'r1' } });
     await investmentReportsApi.toggleFavourite('r1', true);
     expect(apiClient.patch).toHaveBeenCalledWith('/reports/investment/r1', { isFavourite: true });
+  });
+
+  // Issue #1224 requirement 3: reflect the favourite change in the shared list
+  // cache up front, so the switcher mounting mid-flight reads the new order.
+  it('toggleFavourite optimistically patches the cached list up front', async () => {
+    vi.mocked(getCached).mockReturnValue([
+      { id: 'r1', isFavourite: false },
+      { id: 'r2', isFavourite: false },
+    ] as never);
+    vi.mocked(apiClient.patch).mockResolvedValue({ data: { id: 'r1', isFavourite: true } });
+    await investmentReportsApi.toggleFavourite('r1', true);
+    expect(setCache).toHaveBeenCalledWith(
+      'investment-reports:all',
+      [
+        { id: 'r1', isFavourite: true },
+        { id: 'r2', isFavourite: false },
+      ],
+      300_000,
+    );
+    expect(invalidateCache).toHaveBeenCalledWith('investment-reports:');
+  });
+
+  it('toggleFavourite skips the optimistic patch when nothing is cached', async () => {
+    vi.mocked(getCached).mockReturnValue(undefined);
+    vi.mocked(apiClient.patch).mockResolvedValue({ data: { id: 'r1' } });
+    await investmentReportsApi.toggleFavourite('r1', true);
+    expect(setCache).not.toHaveBeenCalled();
+    expect(invalidateCache).toHaveBeenCalledWith('investment-reports:');
+  });
+
+  it('toggleFavourite drops the optimistic value and rethrows on failure', async () => {
+    vi.mocked(getCached).mockReturnValue([{ id: 'r1', isFavourite: false }] as never);
+    vi.mocked(apiClient.patch).mockRejectedValue(new Error('boom'));
+    await expect(investmentReportsApi.toggleFavourite('r1', true)).rejects.toThrow('boom');
+    expect(invalidateCache).toHaveBeenCalledWith('investment-reports:');
   });
 });

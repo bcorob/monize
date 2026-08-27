@@ -27,7 +27,6 @@
     "manualTitle": "Requires manual posting",
     "negativeBalanceWarning": "This transaction will cause the account balance to go below zero",
     "viewAll": "View all bills & deposits",
-    "totalDue": "Total due",
     "totalIncoming": "Total incoming",
     "moreItems": "+{count} more",
     "overdue": "Overdue",
@@ -38,7 +37,8 @@
       "bill": "Bill",
       "deposit": "Deposit",
       "transfer": "Transfer",
-      "reminder": "Reminder"
+      "reminder": "Reminder",
+      "unknown": "Unknown"
     }
   },
   "gettingStarted": {

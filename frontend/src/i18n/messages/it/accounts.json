@@ -210,6 +210,7 @@
     "frequencyOptions": {
       "weekly": "Settimanale",
       "biweekly": "Ogni 2 settimane",
+      "semiMonthly": "Bimensile",
       "monthly": "Mensile",
       "quarterly": "Trimestrale",
       "yearly": "Annuale"
@@ -308,12 +309,13 @@
     "previewFirstInterest": "Interessi primo pagamento:",
     "previewTotalPayments": "Pagamenti totali:",
     "previewTotalInterest": "Interessi totali:",
+    "previewFinalPayment": "Ultimo pagamento:",
     "previewPayoffDate": "Data estinzione prevista:",
     "previewNA": "N/A",
     "calculatingPreview": "Calcolo anteprima...",
     "frequencyOptions": {
       "monthly": "Mensile",
-      "semiMonthly": "Bimensile (1° e 15°)",
+      "semiMonthly": "Bimensile (15 e fine mese)",
       "biweekly": "Bisettimanale",
       "acceleratedBiweekly": "Bisettimanale accelerato",
       "weekly": "Settimanale",
@@ -367,6 +369,7 @@
       "WEEKLY": "Settimanale",
       "BIWEEKLY": "Quindicinale",
       "SEMI_MONTHLY": "Bimensile",
+      "SEMIMONTHLY": "Bimensile",
       "MONTHLY": "Mensile",
       "QUARTERLY": "Trimestrale",
       "YEARLY": "Annuale",
@@ -436,7 +439,8 @@
         "effect": "→ risparmia {interest}, estinzione {date}",
         "alreadyMet": "Già raggiunto senza alcun pagamento extra.",
         "unreachableInterest": "Irraggiungibile: nemmeno un pagamento extra molto grande può far risparmiare così tanti interessi.",
-        "unreachableDate": "Irraggiungibile: quel mese è precedente alla prima estinzione possibile."
+        "unreachableDate": "Irraggiungibile: quel mese è precedente alla prima estinzione possibile.",
+        "baselineIncomplete": "Questo prestito non si estingue entro il periodo proiettato, quindi non esiste un totale interessi da cui partire."
       },
       "simulationTypeLabel": "Tipo di simulazione",
       "overpaymentAmount": "Importo del versamento extra",
@@ -463,6 +467,7 @@
       "interestSaved": "Interessi risparmiati",
       "totalExtraContributed": "Totale extra versato",
       "beyondProjection": "Oltre la proiezione",
+      "unknown": "Sconosciuto",
       "newInstallment": "Nuova rata",
       "installmentDrop": "{payment} (−{reduction})",
       "monthlyPayment": "Rata mensile",
@@ -505,7 +510,9 @@
       "colOverpayment": "Versamento extra",
       "overpaymentWithFrequency": "{amount} ({frequency})",
       "loadAria": "Carica lo scenario \"{name}\"",
-      "budgetSummary": "Budget {amount}/mese"
+      "budgetSummary": "Budget {amount}/mese",
+      "chartExcludedUnknown": "{count, plural, one {# scenario non è mostrato: il suo risparmio di interessi è sconosciuto.} other {# scenari non sono mostrati: il loro risparmio di interessi è sconosciuto.}}",
+      "chartNeedsTwoKnown": "Il grafico di confronto richiede almeno due scenari con un risparmio di interessi noto."
     },
     "scenarioChart": {
       "title": "Confronto scenari",

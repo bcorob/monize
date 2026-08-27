@@ -580,7 +580,20 @@ jobs:
           # context are separately allowlist-validated (SAFE_CSS_COLOR), not escaped.
           # Covered by the escaping and CSS-injection cases in src/test/sw-offline.test.ts.
           # e717be7fe9c133adba7d48ccb371c6ba_0 - Manual HTML sanitization [CWE-79] in the SW offline fallback, no DOM sanitizer available in a worker - review-by: 2026-11-19
-          exclude-fingerprint: "b65bd7b1a0585cd1d0a326cdb09ce40d_0,da119900eefffd8b84e7693e0388568a_0,95857358158e4664c01c05441df9f2a9_0,842822dd22cd4403ab5800ac89480c0a_0,b04cb91b90deb5e16504baa7ab95f678_0,b04cb91b90deb5e16504baa7ab95f678_1,30770548d4592a14c9099ac0103a2564_0,b6c4552155ecc9b65a9205911f502bf1_0,b6c4552155ecc9b65a9205911f502bf1_1,b6c4552155ecc9b65a9205911f502bf1_2,b6c4552155ecc9b65a9205911f502bf1_3,c055716bae113b20589f9ea5c5963e65_0,f9b26e7d59d0f577ff9a0e93ea4f7b7c_0,f9b26e7d59d0f577ff9a0e93ea4f7b7c_1,f6196720ad017b3d11d24487792c1479_0,45093073db7d96d61cd30bceb943f63f_0,45093073db7d96d61cd30bceb943f63f_1,45093073db7d96d61cd30bceb943f63f_2,b7502b6ea7c0a272ab08099b55d0392c_0,4beb484f871a7489b5f5ff2df93f72f1_0,0ff64c8083ce01b1e8c867832c0dff85_0,1f87dd3b3950178c2eac383cfcead816_0,e717be7fe9c133adba7d48ccb371c6ba_0"
+          # The one below is the presence check at the top of
+          # verifyRestoreUploadTicket (backend/src/backup/restore-upload-ticket.ts):
+          # `typeof token !== "string" || token.trim() === ""`. It compares nothing
+          # secret -- it answers "did this request carry a ticket at all" before any
+          # key is touched. The signature itself is compared with timingSafeEqual on
+          # equal-length buffers, and the expiry inside the token is only read after
+          # that comparison holds, so no secret material is inferable from how early
+          # the function returns: the caller already knows whether it sent a
+          # well-formed token. Same rule and same reasoning as the payee-token entry
+          # above. NOTE for whoever tidies this file: the fingerprint covers that
+          # exact line, so hoisting the two `token.trim()` calls into a local will
+          # re-report it under a new id.
+          # 173289a7a56f6f6b27dc2314746e9451_0 - Observable timing discrepancy [CWE-208] on the ticket presence check, no secret compared - review-by: 2026-11-26
+          exclude-fingerprint: "b65bd7b1a0585cd1d0a326cdb09ce40d_0,da119900eefffd8b84e7693e0388568a_0,95857358158e4664c01c05441df9f2a9_0,842822dd22cd4403ab5800ac89480c0a_0,b04cb91b90deb5e16504baa7ab95f678_0,b04cb91b90deb5e16504baa7ab95f678_1,30770548d4592a14c9099ac0103a2564_0,b6c4552155ecc9b65a9205911f502bf1_0,b6c4552155ecc9b65a9205911f502bf1_1,b6c4552155ecc9b65a9205911f502bf1_2,b6c4552155ecc9b65a9205911f502bf1_3,c055716bae113b20589f9ea5c5963e65_0,f9b26e7d59d0f577ff9a0e93ea4f7b7c_0,f9b26e7d59d0f577ff9a0e93ea4f7b7c_1,f6196720ad017b3d11d24487792c1479_0,45093073db7d96d61cd30bceb943f63f_0,45093073db7d96d61cd30bceb943f63f_1,45093073db7d96d61cd30bceb943f63f_2,b7502b6ea7c0a272ab08099b55d0392c_0,4beb484f871a7489b5f5ff2df93f72f1_0,0ff64c8083ce01b1e8c867832c0dff85_0,1f87dd3b3950178c2eac383cfcead816_0,e717be7fe9c133adba7d48ccb371c6ba_0,173289a7a56f6f6b27dc2314746e9451_0"
 
   # Resolve the release version and shared build metadata ONCE, so the parallel
   # backend/frontend build jobs below stamp identical version/date/sha values.

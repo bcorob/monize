@@ -18,6 +18,9 @@ const baseVelocity: BudgetVelocity = {
   paceStatus: 'under',
   upcomingBills: [],
   totalUpcomingBills: 0,
+  knownUpcomingBillsSubtotal: 0,
+  upcomingBillsComplete: true,
+  upcomingBillsMissingRates: [],
   trulyAvailable: 3185,
 };
 
@@ -105,9 +108,12 @@ describe('BudgetVelocityWidget', () => {
     const velocityWithBills: BudgetVelocity = {
       ...baseVelocity,
       upcomingBills: [
-        { id: 'st-1', name: 'Rent', amount: 1200, dueDate: '2026-02-25', categoryId: null },
+        { id: 'st-1', name: 'Rent', amount: 1200, currencyCode: 'USD', amountComplete: true, dueDate: '2026-02-25', categoryId: null },
       ],
       totalUpcomingBills: 1200,
+      knownUpcomingBillsSubtotal: 1200,
+      upcomingBillsComplete: true,
+      upcomingBillsMissingRates: [],
       trulyAvailable: 1985,
     };
 
@@ -130,13 +136,64 @@ describe('BudgetVelocityWidget', () => {
     expect(screen.queryByText('Truly available')).not.toBeInTheDocument();
   });
 
+  // Issue #1247: an upcoming bill whose current amount cannot be determined makes
+  // the bills total, truly-available and safe-daily-spend unknown, not larger.
+  it('renders the unavailable marker when the upcoming-bills total is unknown', () => {
+    const velocityIncomplete: BudgetVelocity = {
+      ...baseVelocity,
+      upcomingBills: [
+        {
+          id: 'st-inv',
+          name: 'Monthly ETF buy',
+          amount: null,
+          currencyCode: 'USD',
+          amountComplete: false,
+          dueDate: '2026-02-25',
+          categoryId: null,
+        },
+        {
+          id: 'st-rent',
+          name: 'Rent',
+          amount: 1200,
+          currencyCode: 'USD',
+          amountComplete: true,
+          dueDate: '2026-02-26',
+          categoryId: null,
+        },
+      ],
+      totalUpcomingBills: null,
+      knownUpcomingBillsSubtotal: 1200,
+      upcomingBillsComplete: false,
+      upcomingBillsMissingRates: [],
+      trulyAvailable: null,
+      safeDailySpend: null,
+    };
+
+    render(
+      <BudgetVelocityWidget velocity={velocityIncomplete} formatCurrency={mockFormat} />,
+    );
+
+    // The section is still drawn -- hiding it would make an unresolvable bill
+    // indistinguishable from no bills at all.
+    expect(screen.getByText('Bills coming')).toBeInTheDocument();
+    expect(screen.getByText('Truly available')).toBeInTheDocument();
+    // Bills coming, truly available and safe-to-spend are all unavailable.
+    expect(screen.getAllByTestId('unknown-amount')).toHaveLength(3);
+    // The known part is never shown under a total's caption.
+    expect(screen.queryByText('$1200.00')).not.toBeInTheDocument();
+    expect(screen.queryByText('$0.00')).not.toBeInTheDocument();
+  });
+
   it('shows negative truly available as over', () => {
     const velocityOverBudget: BudgetVelocity = {
       ...baseVelocity,
       upcomingBills: [
-        { id: 'st-1', name: 'Big Bill', amount: 5000, dueDate: '2026-02-25', categoryId: null },
+        { id: 'st-1', name: 'Big Bill', amount: 5000, currencyCode: 'USD', amountComplete: true, dueDate: '2026-02-25', categoryId: null },
       ],
       totalUpcomingBills: 5000,
+      knownUpcomingBillsSubtotal: 5000,
+      upcomingBillsComplete: true,
+      upcomingBillsMissingRates: [],
       trulyAvailable: -1815,
     };
 

@@ -20,6 +20,17 @@ export interface RestoreBackupInput {
   // the same as `password`; if the user rotated their login password since the
   // backup was made, the frontend re-prompts and sends the old one here.
   backupPassword?: string;
+  /**
+   * Fires when the caller disconnects, and governs **only** the wait for a
+   * processing slot (DR-F3RB-002).
+   *
+   * Named for the queue rather than for the request so the scope is visible at
+   * every call site: a queued restore has done nothing and may be dropped, while
+   * a restore that holds a slot is part-way through replacing the user's data and
+   * must never be cancelled by a socket event. `RestoreProcessingGate` stops
+   * listening the moment the slot is granted.
+   */
+  queueAbortSignal?: AbortSignal;
 }
 
 export interface RestoreResult {

@@ -72,6 +72,7 @@ import { exportToCsv } from '@/lib/csv-export';
 import { PAGE_SIZE } from '@/lib/constants';
 import { budgetsApi } from '@/lib/budgets';
 import { CategoryBudgetStatus } from '@/types/budget';
+import { preferredCurrency } from '@/lib/default-currency';
 
 const logger = createLogger('Transactions');
 
@@ -101,7 +102,9 @@ function TransactionsContent() {
   const router = useRouter();
   const { formatDate } = useDateFormat();
   const weekStartsOn = (usePreferencesStore((s) => s.preferences?.weekStartsOn) ?? 1) as 0 | 1 | 2 | 3 | 4 | 5 | 6;
-  const defaultCurrency = usePreferencesStore((s) => s.preferences?.defaultCurrency) || 'CAD';
+  const defaultCurrency = preferredCurrency(
+    usePreferencesStore((s) => s.preferences?.defaultCurrency),
+  );
   const { convertToDefault } = useExchangeRates();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -770,10 +773,27 @@ function TransactionsContent() {
     return institutions.find((i) => i.id === widgetAccount.institutionId);
   }, [widgetAccount, institutions]);
 
+  // The selection resets on the criteria the *user* chose, not on
+  // `bulkUpdateFilters`: that object falls back to every visible account when
+  // no account filter is set, so it changes the moment the accounts request
+  // lands, and clearing there dropped a selection the user had already made.
+  // Derived from `bulkUpdateFilters` -- with only the derived account scope
+  // swapped for the user's own choice -- so the two lists cannot drift apart.
+  const selectionUserFilterKey = useMemo(
+    () =>
+      JSON.stringify({
+        ...bulkUpdateFilters,
+        accountIds: filters.filterAccountIds,
+        accountStatus: filters.filterAccountStatus,
+      }),
+    [bulkUpdateFilters, filters.filterAccountIds, filters.filterAccountStatus],
+  );
+
   const selection = useTransactionSelection(
     transactions,
     pagination?.total ?? 0,
     bulkUpdateFilters,
+    selectionUserFilterKey,
   );
 
   const handleBulkUpdate = useCallback(async (updateFields: Partial<Pick<BulkUpdateData, 'payeeId' | 'payeeName' | 'categoryId' | 'description' | 'status' | 'tagIds'>>) => {

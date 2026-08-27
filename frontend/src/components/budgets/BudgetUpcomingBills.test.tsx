@@ -71,7 +71,8 @@ describe('BudgetUpcomingBills', () => {
         currentSpent={3000}
         totalBudgeted={5200}
         periodEnd="2026-02-28"
-        formatCurrency={mockFormat}
+        displayCurrency="USD"
+      formatCurrency={mockFormat}
       />,
     );
 
@@ -85,7 +86,8 @@ describe('BudgetUpcomingBills', () => {
         currentSpent={3000}
         totalBudgeted={5200}
         periodEnd="2026-02-28"
-        formatCurrency={mockFormat}
+        displayCurrency="USD"
+      formatCurrency={mockFormat}
       />,
     );
 
@@ -104,7 +106,8 @@ describe('BudgetUpcomingBills', () => {
         currentSpent={3000}
         totalBudgeted={5200}
         periodEnd="2026-02-28"
-        formatCurrency={mockFormat}
+        displayCurrency="USD"
+      formatCurrency={mockFormat}
       />,
     );
 
@@ -126,7 +129,8 @@ describe('BudgetUpcomingBills', () => {
         currentSpent={3000}
         totalBudgeted={5200}
         periodEnd="2026-02-28"
-        formatCurrency={mockFormat}
+        displayCurrency="USD"
+      formatCurrency={mockFormat}
       />,
     );
 
@@ -145,7 +149,8 @@ describe('BudgetUpcomingBills', () => {
         currentSpent={3000}
         totalBudgeted={5200}
         periodEnd="2026-02-28"
-        formatCurrency={mockFormat}
+        displayCurrency="USD"
+      formatCurrency={mockFormat}
       />,
     );
 
@@ -164,7 +169,8 @@ describe('BudgetUpcomingBills', () => {
         currentSpent={3000}
         totalBudgeted={5200}
         periodEnd="2026-02-28"
-        formatCurrency={mockFormat}
+        displayCurrency="USD"
+      formatCurrency={mockFormat}
       />,
     );
 
@@ -184,7 +190,8 @@ describe('BudgetUpcomingBills', () => {
         currentSpent={3000}
         totalBudgeted={5200}
         periodEnd="2026-02-28"
-        formatCurrency={mockFormat}
+        displayCurrency="USD"
+      formatCurrency={mockFormat}
       />,
     );
 
@@ -207,7 +214,8 @@ describe('BudgetUpcomingBills', () => {
         currentSpent={3000}
         totalBudgeted={5200}
         periodEnd="2026-02-28"
-        formatCurrency={mockFormat}
+        displayCurrency="USD"
+      formatCurrency={mockFormat}
       />,
     );
 
@@ -229,7 +237,8 @@ describe('BudgetUpcomingBills', () => {
         currentSpent={3000}
         totalBudgeted={5200}
         periodEnd="2026-02-28"
-        formatCurrency={mockFormat}
+        displayCurrency="USD"
+      formatCurrency={mockFormat}
       />,
     );
 
@@ -250,7 +259,8 @@ describe('BudgetUpcomingBills', () => {
         currentSpent={3000}
         totalBudgeted={5200}
         periodEnd="2026-02-28"
-        formatCurrency={mockFormat}
+        displayCurrency="USD"
+      formatCurrency={mockFormat}
       />,
     );
 
@@ -274,7 +284,8 @@ describe('BudgetUpcomingBills', () => {
         currentSpent={1000}
         totalBudgeted={5200}
         periodEnd="2026-02-28"
-        formatCurrency={mockFormat}
+        displayCurrency="USD"
+      formatCurrency={mockFormat}
       />,
     );
 
@@ -293,7 +304,8 @@ describe('BudgetUpcomingBills', () => {
         currentSpent={3000}
         totalBudgeted={5200}
         periodEnd="2026-02-28"
-        formatCurrency={mockFormat}
+        displayCurrency="USD"
+      formatCurrency={mockFormat}
       />,
     );
 
@@ -318,7 +330,8 @@ describe('BudgetUpcomingBills', () => {
         currentSpent={3000}
         totalBudgeted={5200}
         periodEnd="2026-02-28"
-        formatCurrency={mockFormat}
+        displayCurrency="USD"
+      formatCurrency={mockFormat}
       />,
     );
 
@@ -326,6 +339,62 @@ describe('BudgetUpcomingBills', () => {
     const amounts = screen.getAllByText('$50.00');
     expect(amounts.length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByText('$80.00')).not.toBeInTheDocument();
+  });
+
+  /**
+   * The occurrence's identity is its recurrence slot, but the date it falls on is
+   * the override's. Filtering, sorting and printing the slot announces a payment
+   * on a day the user has already changed (issue #1247).
+   */
+  it('shows the date an override moved the occurrence to', () => {
+    const bills = [
+      createBill({
+        id: 'st-1',
+        name: 'Moved Bill',
+        amount: -80,
+        nextDueDate: '2026-02-10',
+        nextOverride: { amount: -50, overrideDate: '2026-02-25' } as any,
+      }),
+    ];
+
+    render(
+      <BudgetUpcomingBills
+        scheduledTransactions={bills}
+        currentSpent={3000}
+        totalBudgeted={5200}
+        periodEnd="2026-02-28"
+        displayCurrency="USD"
+      formatCurrency={mockFormat}
+      />,
+    );
+
+    expect(screen.getByText('2026-02-25')).toBeInTheDocument();
+    expect(screen.queryByText('2026-02-10')).not.toBeInTheDocument();
+  });
+
+  it('excludes a bill an override moved past the period end', () => {
+    const bills = [
+      createBill({
+        id: 'st-1',
+        name: 'Pushed Out',
+        amount: -80,
+        nextDueDate: '2026-02-20',
+        nextOverride: { amount: -50, overrideDate: '2026-03-20' } as any,
+      }),
+    ];
+
+    render(
+      <BudgetUpcomingBills
+        scheduledTransactions={bills}
+        currentSpent={3000}
+        totalBudgeted={5200}
+        periodEnd="2026-02-28"
+        displayCurrency="USD"
+      formatCurrency={mockFormat}
+      />,
+    );
+
+    expect(screen.queryByText('Pushed Out')).not.toBeInTheDocument();
   });
 
   it('calculates truly available using override amounts', () => {
@@ -346,11 +415,93 @@ describe('BudgetUpcomingBills', () => {
         currentSpent={3000}
         totalBudgeted={5200}
         periodEnd="2026-02-28"
-        formatCurrency={mockFormat}
+        displayCurrency="USD"
+      formatCurrency={mockFormat}
       />,
     );
 
     expect(screen.getByText('$2150.00')).toBeInTheDocument();
+  });
+
+  // ---- Effective amounts (issue #1247) ----
+
+  it("counts a bill at the server's effective amount, not its persisted one", () => {
+    const bills = [
+      createBill({
+        id: 'st-inv',
+        name: 'Monthly ETF buy',
+        // The security-currency cash impact, pinned at 1.50 when it was EUR.
+        amount: -1000,
+        isInvestment: true,
+        // The security is USD now, and USD -> CAD resolves at 1.35.
+        effectiveAmount: -1350,
+        effectiveAmountComplete: true,
+        effectiveCurrencyCode: 'USD',
+        nextDueDate: '2026-02-25',
+      }),
+    ];
+
+    render(
+      <BudgetUpcomingBills
+        scheduledTransactions={bills}
+        currentSpent={0}
+        totalBudgeted={2000}
+        periodEnd="2026-02-28"
+        displayCurrency="USD"
+      formatCurrency={mockFormat}
+      />,
+    );
+
+    // The row and the total both read 1,350; neither reads the stale figure.
+    expect(screen.getAllByText('$1350.00').length).toBeGreaterThan(0);
+    expect(screen.queryByText('$1000.00')).not.toBeInTheDocument();
+    expect(screen.queryByText('$1500.00')).not.toBeInTheDocument();
+    // 2000 budgeted - 0 spent - 1350 upcoming.
+    expect(screen.getByText('$650.00')).toBeInTheDocument();
+  });
+
+  it('withholds the total and truly-available when a bill is unresolvable', () => {
+    const bills = [
+      createBill({
+        id: 'st-inv',
+        name: 'Monthly ETF buy',
+        amount: -1000,
+        isInvestment: true,
+        effectiveAmount: null,
+        effectiveAmountComplete: false,
+        effectiveCurrencyCode: 'USD',
+        nextDueDate: '2026-02-25',
+      }),
+      createBill({
+        id: 'st-net',
+        name: 'Internet',
+        amount: -80,
+        effectiveAmount: -80,
+        effectiveAmountComplete: true,
+        nextDueDate: '2026-02-26',
+      }),
+    ];
+
+    render(
+      <BudgetUpcomingBills
+        scheduledTransactions={bills}
+        currentSpent={0}
+        totalBudgeted={2000}
+        periodEnd="2026-02-28"
+        displayCurrency="USD"
+      formatCurrency={mockFormat}
+      />,
+    );
+
+    // Row, total and truly-available all carry the unavailable marker rather
+    // than a number built on a stale figure or a silent zero.
+    expect(screen.getAllByTestId('unknown-amount').length).toBe(3);
+    expect(screen.queryByText('$1000.00')).not.toBeInTheDocument();
+    expect(screen.queryByText('$1500.00')).not.toBeInTheDocument();
+    // 2000 - 0 - 80 would be the answer if the unknown bill counted as free.
+    expect(screen.queryByText('$1920.00')).not.toBeInTheDocument();
+    // The known bill still shows its own amount.
+    expect(screen.getByText('$80.00')).toBeInTheDocument();
   });
 
   it('excludes bills with positive override amount', () => {
@@ -370,7 +521,8 @@ describe('BudgetUpcomingBills', () => {
         currentSpent={3000}
         totalBudgeted={5200}
         periodEnd="2026-02-28"
-        formatCurrency={mockFormat}
+        displayCurrency="USD"
+      formatCurrency={mockFormat}
       />,
     );
 

@@ -123,6 +123,10 @@
       "status": "Trạng thái",
       "actions": "Hành động"
     },
+    "dateDisplay": {
+      "toggleLabel": "Ẩn năm",
+      "toggleTitle": "Bỏ năm khỏi ngày để hiện được nhiều tên người nhận hơn"
+    },
     "attachmentsCount": "{count, plural, other {# tệp đính kèm}}",
     "today": "Hôm nay",
     "export": {

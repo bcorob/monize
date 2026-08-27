@@ -237,6 +237,12 @@
     "explanation": "Teilsumme: {count, plural, one {# Betrag} other {# Beträge}} konnten nicht einbezogen werden, daher schließt der angezeigte Wert sie aus. Für {currencies} ist kein Kurs zu {displayCurrency} verfügbar.",
     "explanationExcluded": "Teilsumme: {count, plural, one {# Betrag} other {# Beträge}} konnten nicht ermittelt werden, daher schließt der angezeigte Wert sie aus."
   },
+  "unknownAmount": {
+    "marker": "—",
+    "srLabel": "Betrag nicht verfügbar",
+    "scheduledFx": "Der aktuelle Betrag lässt sich nicht ermitteln: Für das Abrechnungs-Währungspaar dieses geplanten Eintrags ist kein Wechselkurs verfügbar. Der gespeicherte Betrag wurde mit einem älteren Kurs berechnet und wird daher nicht angezeigt.",
+    "displayFx": "Dieser Wert kann hier nicht angezeigt werden: der Betrag ist bekannt, aber es ist kein Wechselkurs verfügbar, um ihn in die Währung dieser Summe umzurechnen. Aktualisieren Sie die Kurse auf der Seite Währungen."
+  },
   "density": {
     "title": "Zeilendichte umschalten",
     "normal": "Normal",

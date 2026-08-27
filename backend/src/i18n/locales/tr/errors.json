@@ -27,6 +27,8 @@
     "loanRequiresInstitution": "Kredi hesapları için kurum adı gereklidir",
     "mortgageRequiredFields": "İpotek hesapları için mortgagePaymentFrequency, paymentStartDate, sourceAccountId ve amortizationMonths gereklidir",
     "mortgageRequiresInterestRate": "İpotek hesapları için faiz oranı gereklidir",
+    "mortgageFrequencyUnsupported": "Kanada ipotekleri {frequency} ödeme sıklığıyla planlanamaz",
+    "paymentFrequencyUnsupported": "{frequency} ödeme sıklığı planlanamaz",
     "mortgageRequiresInstitution": "İpotek hesapları için kurum adı gereklidir",
     "onlyMortgageAccounts": "Bu işlem yalnızca ipotek hesapları için geçerlidir",
     "updateRateClosed": "Kapalı bir hesabın faiz oranı güncellenemiyor",
@@ -193,13 +195,16 @@
     "reauthUnavailable": "Bir yedeği geri yüklemeden önce hesap şifrenizi ayarlamayı tamamlayın.",
     "supportPasswordRequired": "Destek yedeği şifrelenmiş olmalıdır: bir parola girin.",
     "passwordHeaderNotBase64": "{header} başlığı base64 ile kodlanmış olmalıdır.",
-    "decompressTooLarge": "Yedek geri yüklenemeyecek kadar büyük: açıldığında yapılandırılmış {limit} bayt sınırını aşıyor. Bu gerçek bir yedekse BACKUP_RESTORE_EXPANDED_LIMIT değerini yükseltin.",
+    "decompressTooLarge": "Yedek geri yüklenmek için çok büyük: açıldığında bu kurulumun {limit} bayt sınırını aşıyor. Bu üst sınır, kapsayıcının belleğinden ve bayt başına ölçülmüş bir maliyetten türetilir; dolayısıyla yalnızca sınırı yükseltmek, sürecin tamamlayamayacağı bir geri yüklemeyi varsayar -- bunun yerine kapsayıcının bellek sınırını yükseltin (Kubernetes: backend.resources.limits.memory).",
     "exportTooLarge": "Bu yedek tek parçada üretilemeyecek kadar büyük (\"{table}\" tablosunda {limit} baytı aşıyor). Otomatik ve destek yedekleri bellekte tutulmak zorundadır; akış yapan bir elle yedek indirin veya BACKUP_EXPORT_BUFFER_LIMIT değerini yükseltin.",
     "supportExportTooLarge": "Bu destek yedeği {{ size }} MiB JSON olurdu ve {{ limit }} MiB sınırının üzerindedir. Hesap seçimi veya tarih aralığıyla daraltın ya da BACKUP_EXPORT_BUFFER_LIMIT değerini yükseltin.",
     "folderUnusable": "\"{{ path }}\" klasörü dizin olarak kullanılamıyor ({{ reason }}).",
     "folderOutsideAllowedRoots": "Yedek klasörü \"{path}\" izin verilen kök dizinlerin ({roots}) dışında. İzin vermek için BACKUP_ALLOWED_ROOTS ayarlayın.",
     "noBackupStorage": "Bu kurulumda yazılabilir yedek deposu yok: {{ safePath }} mevcut değil ve oluşturulamıyor ({{ reason }}). Oraya bir birim bağlayın (Docker: bind mount veya adlandırılmış birim; Kubernetes: Helm grafiğinde backend.persistence.backups ayarlayın) ve yeniden deneyin.",
-    "restoreNoMemoryHeadroom": "Bu kurulumda geri yükleme için bellek payı yok: bir geri yüklemenin modellenen tepe kullanımı kapsayıcıya sığmıyor. Kapsayıcının bellek sınırını yükseltin veya BACKUP_RESTORE_EXPANDED_LIMIT değerini düşürün."
+    "restoreNoMemoryHeadroom": "Bu kurulumda geri yükleme için bellek payı yok: bir geri yüklemenin modellenen tepe kullanımı kapsayıcıya sığmıyor. Kapsayıcının bellek sınırını yükseltin veya BACKUP_RESTORE_EXPANDED_LIMIT değerini düşürün.",
+    "restoreQueueFull": "Bu kurulumun geri yükleme kapasitesi için zaten çok fazla geri yükleme bekliyor. Birazdan yeniden deneyin.",
+    "restoreQueueWaitTimeout": "Geri yükleme kapasitesi beklenirken zaman aşımı: başka bir geri yükleme hâlâ sürüyor. Birazdan yeniden deneyin.",
+    "restoreTicketUnavailable": "Bu kurulum geri yükleme yüklemelerini yetkilendiremiyor."
   },
   "budgets": {
     "notFound": "{{ id }} kimliğine sahip bütçe bulunamadı",

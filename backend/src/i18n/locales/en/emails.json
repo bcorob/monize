@@ -18,6 +18,8 @@
     "colAmount": "Amount",
     "typeIncome": "Income",
     "typeExpense": "Expense",
+    "typeUnknown": "Direction unknown",
+    "amountUnavailable": "Amount unavailable",
     "button": "View Bills &amp; Deposits"
   },
   "mortgageReminder": {

@@ -2338,3 +2338,44 @@ describe("the card shadow is a named token, not a redefined shadow-sm", () => {
     expect(card).toContain("shadow-card");
   });
 });
+
+describe("a date-only string reaches formatDate unwrapped", () => {
+  /**
+   * `formatDate` takes `Date | string` and parses a string through
+   * `parseLocalDate`, which reads `YYYY-MM-DD` as a LOCAL day. Wrapping the same
+   * string in `new Date(...)` first parses it as UTC midnight, and the local
+   * getters that format it then report the day before for every viewer west of
+   * Greenwich -- the loan and mortgage previews printed "Dec 14, 2026" over a
+   * payoff date of 2026-12-15.
+   *
+   * The scan is scoped to the account surfaces because the pattern is correct
+   * elsewhere: `formatDate(new Date(token.createdAt))` formats an *instant*, and
+   * for an instant `new Date` is the right reading. What distinguishes them is
+   * the field's type, not its spelling -- so the rule is enforced where the
+   * fields are date-only (`AmortizationPreview.endDate`,
+   * `MortgagePreview.endDate`, and the account dates beside them) rather than
+   * repository-wide, where it would report seven correct call sites.
+   *
+   * CI runs in UTC, where the two readings agree, so no rendering test can see
+   * this difference. A source scan is the only mechanism left.
+   */
+  const SCOPE = /^\/src\/components\/accounts\//;
+  const WRAPPED = /formatDate\(\s*new Date\(/;
+
+  it("has no formatDate(new Date(...)) on an account surface", () => {
+    const offenders = productionSources()
+      .filter(([path]) => SCOPE.test(path))
+      .filter(([, content]) => WRAPPED.test(content))
+      .map(([path]) => path);
+    expect(offenders).toEqual([]);
+  });
+
+  it("still scans a non-empty set of account surfaces", () => {
+    const scanned = productionSources().filter(([path]) => SCOPE.test(path));
+    expect(scanned.length).toBeGreaterThan(10);
+    // And the pattern really does match, so an empty offender list means the
+    // rule holds rather than that the regex stopped working.
+    expect(WRAPPED.test("{formatDate(new Date(preview.endDate))}")).toBe(true);
+    expect(WRAPPED.test("{formatDate(preview.endDate)}")).toBe(false);
+  });
+});

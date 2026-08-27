@@ -3,6 +3,7 @@ import {
   cn,
   parseLocalDate,
   formatDate,
+  formatDateWithoutYear,
   formatMonth,
   resolveTimezone,
   isoToDatetimeLocal,
@@ -112,6 +113,38 @@ describe('formatDate', () => {
   it('falls back to browser locale for unknown format', () => {
     const result = formatDate('2026-01-24', 'unknown-format');
     expect(typeof result).toBe('string');
+  });
+});
+
+describe('formatDateWithoutYear', () => {
+  it.each([
+    ['MM/DD/YYYY', '09/14'],
+    ['DD/MM/YYYY', '14/09'],
+    ['YYYY-MM-DD', '09-14'],
+    ['DD-MMM-YYYY', '14-Sep'],
+    ['DD.MM.YYYY', '14.09'],
+  ])('keeps the day under %s', (pattern, expected) => {
+    expect(formatDateWithoutYear('2026-09-14', pattern)).toBe(expected);
+  });
+
+  it('takes a Date as readily as a string', () => {
+    expect(formatDateWithoutYear(new Date(2026, 8, 14), 'MM/DD/YYYY')).toBe('09/14');
+  });
+
+  it('reads a date string as local, never shifted a day by UTC', () => {
+    // parseLocalDate is the reason: `new Date('2026-01-01')` is midnight UTC,
+    // which is 31 December in every negative offset.
+    expect(formatDateWithoutYear('2026-01-01', 'MM/DD/YYYY')).toBe('01/01');
+  });
+
+  it('pads single digits so the column stays one width', () => {
+    expect(formatDateWithoutYear('2026-03-05', 'DD/MM/YYYY')).toBe('05/03');
+  });
+
+  it('renders the full date rather than a fragment it cannot label', () => {
+    // A pattern with no day has nothing to shorten to; a bare "09" would not
+    // say whether it is the month or the day.
+    expect(formatDateWithoutYear('2026-09-14', 'MM/YYYY')).toBe('09/2026');
   });
 });
 

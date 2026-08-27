@@ -1,76 +1,19 @@
-import { EventEmitter } from "events";
 import * as fs from "fs";
 import * as path from "path";
-import type { IncomingMessage, ServerResponse } from "http";
+import type { IncomingMessage } from "http";
 import {
-  MEMORY_SHARE_PER_RESTORE_UPLOAD,
   PEAK_MULTIPLE,
   resolveRestoreUploadLimitBytes,
+  restoreProcessBaselineBytes,
 } from "./backup-limits";
 import {
   DEFAULT_RECEIVE_TIMEOUT_MS,
   createRestoreUploadAdmission,
   releaseRestoreReservation,
 } from "./restore-upload-admission";
+import { bodyArrived, request, response } from "./__fixtures__/http-doubles";
 
 const MIB = 1024 * 1024;
-
-/**
- * A request carrying only what the middleware reads, plus the `end` event that
- * tells the gate the body has arrived.
- *
- * Method and content-type default to what a real restore upload sends, because
- * the gate budgets exactly what the parser downstream will buffer -- see the
- * "requests the parser will not buffer" block for the other side of that.
- */
-function request(
-  headers: Record<string, string | string[]> = {},
-  method = "POST",
-) {
-  const emitter = new EventEmitter();
-  const req = Object.assign(emitter, {
-    method,
-    headers: { "content-type": "application/gzip", ...headers },
-    destroyed: false,
-    destroy() {
-      req.destroyed = true;
-    },
-  });
-  return req as unknown as IncomingMessage & {
-    destroyed: boolean;
-    emit: (event: string) => boolean;
-  };
-}
-
-/** The body finished arriving, so the handler now owns it. */
-function bodyArrived(req: unknown) {
-  (req as unknown as EventEmitter).emit("end");
-}
-
-/**
- * A response that records what was written and can emit `finish`/`close`, which
- * is how a reservation is released. Not a mock of the calls -- the property under
- * test is that the budget goes back down, and only the event does that.
- */
-function response() {
-  const emitter = new EventEmitter();
-  const headers: Record<string, string> = {};
-  const res = Object.assign(emitter, {
-    statusCode: 200,
-    setHeader(name: string, value: string) {
-      headers[name.toLowerCase()] = value;
-    },
-    end(body?: string) {
-      res.body = body;
-    },
-  }) as EventEmitter & {
-    statusCode: number;
-    setHeader: (n: string, v: string) => void;
-    end: (b?: string) => void;
-    body?: string;
-  };
-  return { res: res as unknown as ServerResponse, raw: res, headers };
-}
 
 describe("restore upload admission", () => {
   const LIMIT = 200 * MIB;
@@ -401,6 +344,46 @@ describe("restore upload admission", () => {
  * the first, which is the situation the gate exists to prevent, reachable by
  * disconnect timing.
  */
+/**
+ * A container with no headroom derives a ceiling of zero, and the deployment then
+ * cannot restore anything at all. That is a real state (a 128 MiB pod), and the
+ * startup log, the processing gate and the contract all promise the same answer for
+ * it: a 503 naming the two levers. Falling through to the size check answered 413
+ * "exceeds the restore size limit" instead -- true in the letter, useless in
+ * practice, and reading as "your file is too big" when no file would fit.
+ */
+describe("restore upload admission on a container with no headroom", () => {
+  it("refuses with the lever, not with a size complaint", () => {
+    const admission = createRestoreUploadAdmission(0, 0);
+    const next = jest.fn();
+    const { res, raw, headers } = response();
+
+    admission.middleware(request({ "content-length": "1024" }), res, next);
+
+    expect(next).not.toHaveBeenCalled();
+    expect(raw.statusCode).toBe(503);
+    expect(raw.body).toMatch(/BACKUP_RESTORE_EXPANDED_LIMIT/);
+    expect(raw.body).toMatch(/container memory/i);
+    // No Retry-After: nothing about waiting changes this one.
+    expect(headers["retry-after"]).toBeUndefined();
+    expect(admission.reservedBytes()).toBe(0);
+  });
+
+  it("refuses a chunked upload the same way", () => {
+    // No Content-Length means no declared size to compare, so this is the path
+    // that would otherwise have claimed `perRequestLimitBytes * PEAK_MULTIPLE`
+    // -- which is zero, and would have been admitted.
+    const admission = createRestoreUploadAdmission(0, 0);
+    const next = jest.fn();
+    const { res, raw } = response();
+
+    admission.middleware(request(), res, next);
+
+    expect(next).not.toHaveBeenCalled();
+    expect(raw.statusCode).toBe(503);
+  });
+});
+
 describe("restore upload admission lifecycle", () => {
   const LIMIT = 200 * MIB;
 
@@ -501,13 +484,14 @@ describe("restore upload admission peak budgeting", () => {
   const WIRE_LIMIT = resolveRestoreUploadLimitBytes(undefined, CONTAINER);
   const BUDGET = WIRE_LIMIT * PEAK_MULTIPLE;
 
-  it("keeps a single full-size upload's peak inside the container's share", () => {
+  it("keeps a single full-size upload's peak inside the container", () => {
     // The arithmetic that was wrong one level up: half of a 400 MiB container to
     // the *wire* is PEAK_MULTIPLE times that at peak, so one legal request could
-    // not fit the pod it was sized for. The wire limit is now the peak share
-    // divided by the multiple.
-    expect(BUDGET).toBeLessThanOrEqual(
-      Math.floor(CONTAINER * MEMORY_SHARE_PER_RESTORE_UPLOAD),
+    // not fit the pod it was sized for. The wire ceiling is now the expanded
+    // ceiling, which is itself solved out of the memory left after the process
+    // baseline -- so what has to fit is the whole modeled peak, not a share.
+    expect(restoreProcessBaselineBytes(CONTAINER) + BUDGET).toBeLessThanOrEqual(
+      CONTAINER,
     );
 
     const admission = createRestoreUploadAdmission(WIRE_LIMIT, BUDGET);
@@ -654,5 +638,45 @@ describe("restore upload admission wiring", () => {
     expect(admissionAt).toBeGreaterThan(-1);
     expect(parserAt).toBeGreaterThan(-1);
     expect(admissionAt).toBeLessThan(parserAt);
+  });
+
+  /**
+   * CORS has to be registered before the gate, because the gate answers requests
+   * itself: a 403/413/503/408 written from inside the middleware chain with no
+   * Access-Control-Allow-Origin reaches a cross-origin browser as an opaque CORS
+   * failure instead of the actionable status it is. Ordering in `main.ts` is not
+   * covered by any test harness, so it is scanned for -- the same reason the
+   * express.raw ordering above is.
+   */
+  it("registers CORS ahead of the admission middleware", () => {
+    const source = fs.readFileSync(
+      path.join(__dirname, "..", "main.ts"),
+      "utf8",
+    );
+    const corsAt = source.indexOf("app.enableCors(");
+    const admissionAt = source.indexOf("restoreAdmission.middleware");
+    expect(corsAt).toBeGreaterThan(-1);
+    expect(admissionAt).toBeGreaterThan(-1);
+    expect(corsAt).toBeLessThan(admissionAt);
+  });
+
+  /**
+   * And that the gate is actually built with an authorizer. The hook is optional
+   * -- unit tests of the budgeting want it omitted -- so nothing but a scan
+   * catches a deployment that quietly went back to admitting everyone.
+   */
+  it("builds the gate with the ticket authorizer", () => {
+    const source = fs.readFileSync(
+      path.join(__dirname, "..", "main.ts"),
+      "utf8",
+    );
+    // The CALL, not the import -- which is why the needle carries its argument:
+    // matching the bare identifier finds the import line and passes on a file
+    // that imports the authorizer and never uses it.
+    const call = "createRestoreTicketAuthorizer(process.env.JWT_SECRET)";
+    expect(source).toContain(call);
+    expect(source.indexOf(call)).toBeGreaterThan(
+      source.indexOf("createRestoreUploadAdmission("),
+    );
   });
 });

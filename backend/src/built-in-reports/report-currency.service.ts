@@ -4,6 +4,7 @@ import { withScopedDb } from "../common/db/scoped-db";
 import { UserPreference } from "../users/entities/user-preference.entity";
 import { ExchangeRateService } from "../currencies/exchange-rate.service";
 import { convertWithRateLookup } from "../common/currency-conversion.util";
+import { preferredCurrency } from "../common/default-currency.util";
 
 export interface RawCategoryAggregate {
   category_id: string | null;
@@ -49,7 +50,7 @@ export class ReportCurrencyService {
         where: { userId },
       }),
     );
-    return pref?.defaultCurrency || "USD";
+    return preferredCurrency(pref);
   }
 
   async buildRateMap(_defaultCurrency: string): Promise<RateMap> {

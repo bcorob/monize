@@ -1337,6 +1337,83 @@ describe("BudgetAlertService", () => {
       );
     });
 
+    /**
+     * "Has the schedule moved past this occurrence" is a question about the
+     * occurrence's slot. An override can move an occurrence EARLIER than its
+     * slot, so comparing `nextDueDate` against the announced date reads an
+     * unposted bill as already paid and silently drops it from the digest
+     * (issue #1247).
+     */
+    it("keeps a bill-due alert whose occurrence an override moved earlier", async () => {
+      budgetsRepository.find.mockResolvedValue([makeBudget()]);
+      alertsRepository.find.mockResolvedValue([
+        makeAlert({
+          alertType: AlertType.BILL_DUE,
+          data: {
+            billId: "st-1",
+            // Announced for the 20th; its recurrence slot is the 1st of March.
+            dueDate: "2026-02-20",
+            originalDate: "2026-03-01",
+          },
+        }),
+      ]);
+      scheduledTransactionsRepository.createQueryBuilder.mockReturnValue({
+        where: jest.fn().mockReturnThis(),
+        getMany: jest
+          .fn()
+          .mockResolvedValue([{ id: "st-1", nextDueDate: "2026-03-01" }]),
+      });
+
+      await service.sendWeeklyDigest();
+
+      expect(emailService.sendMail).toHaveBeenCalled();
+    });
+
+    it("drops a bill-due alert once the schedule has advanced past its slot", async () => {
+      budgetsRepository.find.mockResolvedValue([makeBudget()]);
+      alertsRepository.find.mockResolvedValue([
+        makeAlert({
+          alertType: AlertType.BILL_DUE,
+          data: {
+            billId: "st-1",
+            dueDate: "2026-02-20",
+            originalDate: "2026-03-01",
+          },
+        }),
+      ]);
+      scheduledTransactionsRepository.createQueryBuilder.mockReturnValue({
+        where: jest.fn().mockReturnThis(),
+        getMany: jest.fn().mockResolvedValue([
+          // Posted: the schedule is on April now.
+          { id: "st-1", nextDueDate: "2026-04-01" },
+        ]),
+      });
+
+      await service.sendWeeklyDigest();
+
+      expect(emailService.sendMail).not.toHaveBeenCalled();
+    });
+
+    it("falls back to the announced date for a row written before the slot was recorded", async () => {
+      budgetsRepository.find.mockResolvedValue([makeBudget()]);
+      alertsRepository.find.mockResolvedValue([
+        makeAlert({
+          alertType: AlertType.BILL_DUE,
+          data: { billId: "st-1", dueDate: "2026-02-20" },
+        }),
+      ]);
+      scheduledTransactionsRepository.createQueryBuilder.mockReturnValue({
+        where: jest.fn().mockReturnThis(),
+        getMany: jest
+          .fn()
+          .mockResolvedValue([{ id: "st-1", nextDueDate: "2026-03-01" }]),
+      });
+
+      await service.sendWeeklyDigest();
+
+      expect(emailService.sendMail).not.toHaveBeenCalled();
+    });
+
     it("skips users with no recent alerts", async () => {
       budgetsRepository.find.mockResolvedValue([makeBudget()]);
       alertsRepository.find.mockResolvedValue([]);

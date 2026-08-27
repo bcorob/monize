@@ -34,5 +34,14 @@
       "yearly": "[XX-Yearly-XX]",
       "irregular": "[XX-Irregular-XX]"
     }
+  },
+  "forecastUnavailable": {
+    "intro": "[XX-The projected balance is not shown because at least one upcoming scheduled item cannot be priced yet. A projection runs one day into the next, so a single unknown amount would make every day after it wrong.-XX]",
+    "requestFailed": "[XX-The projected balance could not be loaded. Reload the page to try again.-XX]",
+    "reasonUnavailable": "[XX-The reason was not reported. Check the exchange rates for any scheduled item in a foreign currency.-XX]",
+    "missingRatePair": "[XX-{name}: no exchange rate is available for {from} to {to}, so the amount this occurrence will post is unknown.-XX]",
+    "missingRate": "[XX-{name}: the exchange rate this occurrence settles at is not available, so the amount it will post is unknown.-XX]",
+    "crossCurrencyTransfer": "[XX-{name}: a transfer arriving from an account in {from} while this account is in {to}. The amount that lands here is set when the transfer posts, so it cannot be projected in advance.-XX]",
+    "howToFix": "[XX-To fix a missing rate: open Currencies and refresh the rates, or check that the security and its settlement account carry the currencies you expect.-XX]"
   }
 }

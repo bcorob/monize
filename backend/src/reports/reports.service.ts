@@ -7,6 +7,12 @@ import { tr } from "../i18n/translate";
 import { Brackets, DataSource, Repository } from "typeorm";
 import { withScopedDb } from "../common/db/scoped-db";
 import {
+  brokerageExclusionForEntity,
+  investmentLinkedTransactionExclusion,
+  ordinarySplitLines,
+  reportableTransactionAmount,
+} from "../common/investment-filter.util";
+import {
   CustomReport,
   TimeframeType,
   GroupByType,
@@ -18,6 +24,7 @@ import {
   SortDirection,
 } from "./entities/custom-report.entity";
 import { Transaction } from "../transactions/entities/transaction.entity";
+import { TransactionSplit } from "../transactions/entities/transaction-split.entity";
 import { Category } from "../categories/entities/category.entity";
 import { Payee } from "../payees/entities/payee.entity";
 import { CreateCustomReportDto } from "./dto/create-custom-report.dto";
@@ -217,13 +224,16 @@ export class ReportsService {
     );
 
     // Query transactions with filters
-    const transactions = await this.getFilteredTransactions(
+    const selected = await this.getFilteredTransactions(
       userId,
       startDate,
       endDate,
       report.filters,
       report.config,
     );
+    // A split parent reached the aggregators whatever its own sign, so its lines
+    // are narrowed here, where each line's own amount and kind are readable.
+    const transactions = this.narrowSplitLines(selected, report.config);
 
     // Only fetch category/payee maps when the report groups by them (avoid over-fetching)
     const categoryMap = new Map<string, Category>();
@@ -374,6 +384,92 @@ export class ReportsService {
     return { startDate, endDate, label };
   }
 
+  /**
+   * Narrows each split parent to the lines this report asked for, and drops a
+   * parent left with none.
+   *
+   * Two decisions the SQL could only make about the PARENT, and a split parent
+   * is not its lines:
+   *
+   * - **Direction.** `transaction.amount` is the sum of every line, so its sign
+   *   is nobody's direction: a -60 expense beside a +500 embedded SELL is a +440
+   *   parent (audit F-CUSTOM-DIR-001).
+   * - **Transfers.** `transaction.isTransfer` is false on a split parent that
+   *   carries a transfer LINE, so `includeTransfers: false` counted a -200
+   *   transfer inside a -260 parent as 260 of spending.
+   *
+   * Both are the user's own configuration, applied to the representation the
+   * decision belongs to -- which is what the built-in split-row-granular reports
+   * have always done with the same rows. Investment provenance is NOT decided
+   * here: the aggregators ask `ordinarySplitLines` for that, because it is a
+   * property of the data rather than of the report.
+   */
+  private narrowSplitLines(
+    transactions: Transaction[],
+    config: ReportConfig,
+  ): Transaction[] {
+    const narrowsDirection = config.direction !== DirectionFilter.BOTH;
+    if (!narrowsDirection && config.includeTransfers) return transactions;
+
+    const wanted = (split: TransactionSplit): boolean => {
+      if (!config.includeTransfers && split.transferAccountId != null) {
+        return false;
+      }
+      if (!narrowsDirection) return true;
+      const amount = Number(split.amount);
+      return config.direction === DirectionFilter.INCOME_ONLY
+        ? amount > 0
+        : amount < 0;
+    };
+
+    return transactions.flatMap((tx) => {
+      if (!tx.isSplit || !tx.splits || tx.splits.length === 0) return [tx];
+
+      const splits = tx.splits.filter(wanted);
+      if (splits.length === 0) return [];
+
+      // A shallow copy: the entity is not re-saved, and the aggregators read
+      // only `splits` plus the parent's own scalar fields.
+      return [{ ...tx, splits } as Transaction];
+    });
+  }
+
+  /**
+   * The accounts this report explicitly names.
+   *
+   * Not "does the report restrict itself to accounts": a boolean cannot express
+   * a mixed OR group, and both of its answers are wrong for one shape.
+   * Conditions WITHIN a group are OR'd, groups are AND'ed, so
+   * `[account = Brokerage, category = Salary]` explicitly asks for Brokerage
+   * rows while `[account = Chequing, payee = Acme]` asks for none -- and a single
+   * boolean that admits the first also admits the second (or refuses both).
+   * The ids let the caller ask the question per row instead.
+   *
+   * Advanced filter groups REPLACE the legacy filters in
+   * `getFilteredTransactions`, so a report holding groups and a stale
+   * `accountIds` names nothing; and a condition carrying no values (what the
+   * filter builder saves for a half-finished one) adds no SQL, so it names
+   * nothing either.
+   */
+  private explicitAccountIds(filters: CustomReport["filters"]): string[] {
+    const groups = filters.filterGroups ?? [];
+    const named =
+      groups.length > 0
+        ? groups.flatMap((group) =>
+            (group.conditions ?? [])
+              .filter((condition) => condition.field === "account")
+              .flatMap((condition) =>
+                Array.isArray(condition.value)
+                  ? condition.value.filter(Boolean)
+                  : condition.value
+                    ? [condition.value]
+                    : [],
+              ),
+          )
+        : (filters.accountIds ?? []);
+    return [...new Set(named)];
+  }
+
   private async getFilteredTransactions(
     userId: string,
     startDate: string,
@@ -391,6 +487,9 @@ export class ReportsService {
         .leftJoinAndSelect("transaction.payee", "payee")
         .leftJoinAndSelect("transaction.tags", "tags")
         .leftJoinAndSelect("transaction.splits", "splits")
+        // Hydrated so an embedded investment line is recognisable by BOTH of its
+        // representations, exactly as the raw-SQL reports recognise it.
+        .leftJoinAndSelect("splits.investmentTransaction", "splitInvestmentTx")
         .leftJoinAndSelect("splits.category", "splitCategory")
         .leftJoinAndSelect("splitCategory.parent", "splitCategoryParent")
         .leftJoinAndSelect("splits.tags", "splitTags")
@@ -410,6 +509,41 @@ export class ReportsService {
         .andWhere("transaction.transactionDate >= :startDate", { startDate })
         .andWhere("transaction.transactionDate <= :endDate", { endDate })
         .andWhere("transaction.status != 'VOID'");
+
+      // INV-REPORT-001: a custom report reads the same ledger as the built-in
+      // ones, so it owes the same answer. The cash leg a free-standing trade
+      // generated is never ordinary cash -- including when an explicit funding
+      // account put that leg in an ordinary account, where no account-type
+      // predicate could see it.
+      queryBuilder.andWhere(
+        investmentLinkedTransactionExclusion("transaction"),
+      );
+      // The securities sleeve is noise in a whole-ledger figure -- built-in
+      // reports have no account picker, so they always drop it -- but here the
+      // user may have named that very account, and answering an explicitly
+      // scoped report with nothing is worse than showing the rows they asked to
+      // see. The exception is per ROW, not per report: a filter group reading
+      // `account = Brokerage OR category = Salary` names Brokerage, while
+      // `account = Chequing OR payee = Acme` does not name it, and a
+      // whole-report boolean cannot tell those apart (audit F-CUSTOM-OR-001).
+      const explicitAccountIds = this.explicitAccountIds(filters);
+      if (explicitAccountIds.length === 0) {
+        queryBuilder.andWhere(brokerageExclusionForEntity("account"));
+      } else {
+        queryBuilder.andWhere(
+          new Brackets((scope) => {
+            scope
+              .where(brokerageExclusionForEntity("account"))
+              .orWhere(
+                "transaction.accountId IN (:...explicitReportAccountIds)",
+                { explicitReportAccountIds: explicitAccountIds },
+              );
+          }),
+        );
+      }
+      // The embedded-investment half cannot be expressed here at all: the parent
+      // is a real row carrying real ordinary cash beside the investment line, so
+      // it is classified per line during aggregation.
 
       // Advanced filter groups take precedence over legacy filters
       if (filters.filterGroups && filters.filterGroups.length > 0) {
@@ -444,11 +578,20 @@ export class ReportsService {
         }
       }
 
-      // Filter by direction
+      // Filter by direction. A split parent's own amount is the SUM of its
+      // lines, so its sign is not the direction of any particular line: a -60
+      // expense beside a +500 embedded SELL is a +440 parent, and rejecting it
+      // here threw away the expense before provenance ever ran (audit
+      // F-CUSTOM-DIR-001). Split parents therefore pass this gate and are
+      // narrowed per line in `applyDirectionToSplitLines`.
       if (config.direction === DirectionFilter.INCOME_ONLY) {
-        queryBuilder.andWhere("transaction.amount > 0");
+        queryBuilder.andWhere(
+          "(transaction.isSplit = true OR transaction.amount > 0)",
+        );
       } else if (config.direction === DirectionFilter.EXPENSES_ONLY) {
-        queryBuilder.andWhere("transaction.amount < 0");
+        queryBuilder.andWhere(
+          "(transaction.isSplit = true OR transaction.amount < 0)",
+        );
       }
 
       // Filter transfers
@@ -660,7 +803,9 @@ export class ReportsService {
             ? transferPayeeLabel(tx.amount, tx.linkedTransaction.account.name)
             : undefined;
         if (tx.isSplit && tx.splits && tx.splits.length > 0) {
-          for (const split of tx.splits) {
+          // Only the lines that are ordinary cash: an embedded investment line
+          // is the trade's own cash side, not a row of this report.
+          for (const split of ordinarySplitLines(tx)) {
             result.push({
               id: tx.id,
               label:
@@ -706,7 +851,7 @@ export class ReportsService {
 
     for (const tx of transactions) {
       if (tx.isSplit && tx.splits && tx.splits.length > 0) {
-        for (const split of tx.splits) {
+        for (const split of ordinarySplitLines(tx)) {
           amounts.push(Math.abs(Number(split.amount)));
         }
       } else {
@@ -741,8 +886,10 @@ export class ReportsService {
 
     for (const tx of transactions) {
       if (tx.isSplit && tx.splits && tx.splits.length > 0) {
-        // Handle split transactions
-        for (const split of tx.splits) {
+        // Handle split transactions. An embedded investment line carries no
+        // category by definition, so counting it here filed a securities
+        // purchase under "Uncategorized" spending (re-audit F-CUSTOM-001).
+        for (const split of ordinarySplitLines(tx)) {
           const categoryId = split.categoryId || "uncategorized";
           const existing = dataMap.get(categoryId) || { sum: 0, count: 0 };
           existing.sum = roundMoney(
@@ -798,13 +945,18 @@ export class ReportsService {
     >();
 
     for (const tx of transactions) {
+      // `tx.amount` on a split parent is the sum of EVERY line, so a payee total
+      // has to ask for the ordinary part; `null` means this row represents no
+      // ordinary cash at all.
+      const reportable = reportableTransactionAmount(tx);
+      if (reportable === null) continue;
       const payeeId = tx.payeeId || "unknown";
       const existing = dataMap.get(payeeId) || {
         sum: 0,
         count: 0,
         payeeName: tx.payeeName ?? undefined,
       };
-      existing.sum = roundMoney(existing.sum + Math.abs(Number(tx.amount)));
+      existing.sum = roundMoney(existing.sum + Math.abs(reportable));
       existing.count += 1;
       if (!existing.payeeName && tx.payeeName) {
         existing.payeeName = tx.payeeName;
@@ -839,10 +991,14 @@ export class ReportsService {
     >();
 
     for (const tx of transactions) {
-      // Collect all tags: transaction-level + split-level
+      const reportable = reportableTransactionAmount(tx);
+      if (reportable === null) continue;
+      // Collect all tags: transaction-level + split-level. A tag on an embedded
+      // investment line describes the trade, not ordinary cash, so the lines
+      // that are not reportable do not open a bucket either.
       const allTags = [...(tx.tags || [])];
       if (tx.splits) {
-        for (const split of tx.splits) {
+        for (const split of ordinarySplitLines(tx)) {
           if (split.tags) {
             for (const tag of split.tags) {
               if (!allTags.some((t) => t.id === tag.id)) {
@@ -860,7 +1016,7 @@ export class ReportsService {
           count: 0,
           tagName: "Untagged",
         };
-        existing.sum = roundMoney(existing.sum + Math.abs(Number(tx.amount)));
+        existing.sum = roundMoney(existing.sum + Math.abs(reportable));
         existing.count += 1;
         dataMap.set("untagged", existing);
       } else {
@@ -871,7 +1027,7 @@ export class ReportsService {
             tagName: tag.name,
             color: tag.color ?? undefined,
           };
-          existing.sum = roundMoney(existing.sum + Math.abs(Number(tx.amount)));
+          existing.sum = roundMoney(existing.sum + Math.abs(reportable));
           existing.count += 1;
           dataMap.set(tag.id, existing);
         }
@@ -906,6 +1062,8 @@ export class ReportsService {
     >();
 
     for (const tx of transactions) {
+      const reportable = reportableTransactionAmount(tx);
+      if (reportable === null) continue;
       const date = parseISO(tx.transactionDate);
       let key: string;
       let label: string;
@@ -930,7 +1088,7 @@ export class ReportsService {
       }
 
       const existing = dataMap.get(key) || { sum: 0, count: 0, label };
-      existing.sum = roundMoney(existing.sum + Math.abs(Number(tx.amount)));
+      existing.sum = roundMoney(existing.sum + Math.abs(reportable));
       existing.count += 1;
       dataMap.set(key, existing);
     }

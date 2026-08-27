@@ -128,7 +128,8 @@
     "backToReports": "Voltar aos Relatórios",
     "switchReport": "Mudar para outro relatório",
     "switchPlaceholder": "Filtrar relatórios...",
-    "switchNoMatches": "Nenhum relatório corresponde"
+    "switchNoMatches": "Nenhum relatório corresponde",
+    "favourites": "Favoritos"
   },
   "reportPage": {
     "notFound": "Relatório Não Encontrado",
@@ -437,6 +438,7 @@
     "currentBalance": "Saldo Atual",
     "principalPaid": "Capital Pago",
     "estTotalInterest": "Juros Totais Estimados",
+    "interestOverProjection": "Juros do período projetado",
     "interestPaid": "Juros Pagos",
     "progress": "Progresso",
     "estPayoff": "Liquidação Estimada",
@@ -807,6 +809,7 @@
     "originalAmount": "Montante Original",
     "interestRate": "Taxa de Juro",
     "estTotalInterest": "Juros Totais Estimados",
+    "interestOverProjection": "Juros do período projetado",
     "totalInterestPaid": "Total de Juros Pagos",
     "paymentsMade": "Pagamentos Efetuados",
     "estPayoff": "Liquidação Estimada",
@@ -839,7 +842,8 @@
     "typeLineOfCredit": "Linha de Crédito",
     "typeLoan": "Empréstimo",
     "typeMortgage": "Crédito Habitação",
-    "pdfSubtitlePaymentsSummary": "{count} pagamentos efetuados, {interest} de juros totais"
+    "pdfSubtitlePaymentsSummary": "{count} pagamentos efetuados, {interest} de juros totais",
+    "pdfSubtitlePaymentsProjection": "{count} pagamentos efetuados, {interest} de juros durante a projeção"
   },
   "monteCarlo": {
     "toasts": {
@@ -1548,12 +1552,16 @@
     "csvColBillName": "Nome da Fatura",
     "csvColDueDate": "Data de Vencimento",
     "csvColAmount": "Montante",
+    "csvColCurrency": "Moeda",
     "csvColFrequency": "Frequência",
     "csvColAccount": "Conta",
     "csvColStatus": "Estado",
     "csvStatusOverdue": "Em Atraso",
     "csvStatusAuto": "Auto",
     "csvStatusManual": "Manual",
+    "amountUnavailable": "Não disponível",
+    "occurrencesUnavailable": "Não foi possível carregar as ocorrências previstas, pelo que o calendário e os valores abaixo não estão disponíveis. As suas contas em si não foram afetadas.",
+    "csvAmountUnavailable": "Não disponível (sem taxa de câmbio atual)",
     "pdfTitle": "Relatório de Faturas Futuras",
     "pdfSubtitle": "{month} | {count} faturas ativas",
     "pdfActiveBills": "Faturas Ativas",

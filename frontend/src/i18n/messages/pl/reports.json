@@ -128,7 +128,8 @@
     "backToReports": "Powrót do raportów",
     "switchReport": "Przejdź do innego raportu",
     "switchPlaceholder": "Filtruj raporty...",
-    "switchNoMatches": "Brak dopasowanych raportów"
+    "switchNoMatches": "Brak dopasowanych raportów",
+    "favourites": "Ulubione"
   },
   "reportPage": {
     "notFound": "Nie znaleziono raportu",
@@ -437,6 +438,7 @@
     "currentBalance": "Bieżące saldo",
     "principalPaid": "Spłacony kapitał",
     "estTotalInterest": "Szac. całk. odsetki",
+    "interestOverProjection": "Odsetki w okresie prognozy",
     "interestPaid": "Zapłacone odsetki",
     "progress": "Postęp",
     "estPayoff": "Szac. spłata",
@@ -807,6 +809,7 @@
     "originalAmount": "Pierwotna kwota",
     "interestRate": "Oprocentowanie",
     "estTotalInterest": "Szac. całk. odsetki",
+    "interestOverProjection": "Odsetki w okresie prognozy",
     "totalInterestPaid": "Łączne zapłacone odsetki",
     "paymentsMade": "Wykonane spłaty",
     "estPayoff": "Szac. spłata",
@@ -839,7 +842,8 @@
     "typeLineOfCredit": "Linia kredytowa",
     "typeLoan": "Pożyczka",
     "typeMortgage": "Kredyt hipoteczny",
-    "pdfSubtitlePaymentsSummary": "wykonane spłaty: {count}, łączne odsetki: {interest}"
+    "pdfSubtitlePaymentsSummary": "wykonane spłaty: {count}, łączne odsetki: {interest}",
+    "pdfSubtitlePaymentsProjection": "Wykonano {count} płatności, {interest} odsetek w okresie prognozy"
   },
   "monteCarlo": {
     "toasts": {
@@ -1548,12 +1552,16 @@
     "csvColBillName": "Nazwa rachunku",
     "csvColDueDate": "Termin płatności",
     "csvColAmount": "Kwota",
+    "csvColCurrency": "Waluta",
     "csvColFrequency": "Częstotliwość",
     "csvColAccount": "Konto",
     "csvColStatus": "Status",
     "csvStatusOverdue": "Zaległe",
     "csvStatusAuto": "Auto",
     "csvStatusManual": "Ręczne",
+    "amountUnavailable": "Niedostępna",
+    "occurrencesUnavailable": "Nie udało się wczytać prognozowanych wystąpień, więc kalendarz i kwoty poniżej są niedostępne. Same rachunki pozostają bez zmian.",
+    "csvAmountUnavailable": "Niedostępna (brak aktualnego kursu wymiany)",
     "pdfTitle": "Raport nadchodzących rachunków",
     "pdfSubtitle": "{month} | {count} aktywnych rachunków",
     "pdfActiveBills": "Aktywne rachunki",

@@ -468,22 +468,42 @@ Three, for three different failure modes. All configurable, all fail loudly.
 
 | Setting | Bounds | Default |
 |---|---|---|
-| `BACKUP_RESTORE_LIMIT` | the compressed upload | the half-share peak divided by `PEAK_MULTIPLE` (~a sixth), no floor |
-| `BACKUP_RESTORE_EXPANDED_LIMIT` | the **decompressed** payload | a quarter of the container's memory limit |
+| `BACKUP_RESTORE_LIMIT` | the compressed upload | the lower of the expanded ceiling below and what the container can hold |
+| `BACKUP_RESTORE_EXPANDED_LIMIT` | the **decompressed** payload | `(headroom * RESTORE_HEADROOM_SHARE - fixed) / slope`, no floor |
 | `BACKUP_EXPORT_BUFFER_LIMIT` | the artifact a buffered export may accumulate | a quarter of the container's memory limit |
 
-The expanded and buffered defaults are cgroup-derived with a 64 MiB usability
-floor, a 1024 MiB cap and a 256 MiB fallback when there is no limit to read. There
-are no fixed byte defaults left; the `1024mb` and `512mb` this table used to name
-were the numbers that could not fire.
+The buffered default is cgroup-derived with a 64 MiB usability floor, a 1024 MiB cap
+and a 256 MiB fallback when there is no limit to read. There are no fixed byte
+defaults left; the `1024mb` and `512mb` this table used to name were the numbers that
+could not fire.
 
-**The upload default has no floor, and that is deliberate (F3R6-005).** A usability
-minimum and a safety maximum are different quantities: `max(64 MiB, safe)` let the
-floor win, so on a 128 MiB pod it returned 64 MiB whose modeled peak (192 MiB)
+**The two restore ceilings are the same number** — about 23 MiB on the chart's
+default 400 MiB backend — solved out of the capacity rather than taken as a share of
+it (issue #1073; the measured cost model is below). The compressed ceiling follows
+the expanded one because gzip output is never smaller than what it expands to: an
+upload above the expanded ceiling is one this deployment could never decompress. Two
+separately derived numbers let a 66 MiB upload be accepted against a 100 MiB expanded
+ceiling and refused at decompression; reading the *derived* ceiling instead of the
+*resolved* one did the same to an operator who lowered
+`BACKUP_RESTORE_EXPANDED_LIMIT`. It is the **lower** of the two, though: an operator
+may raise what this deployment will attempt to decompress, but raising what
+`express.raw` will buffer without raising the container is an OOM kill, so the wire
+ceiling never rises above what the container can hold.
+
+**Neither restore default has a floor, and that is deliberate (F3R6-005).** A
+usability minimum and a safety maximum are different quantities: `max(64 MiB, safe)`
+let the floor win, so on a 128 MiB pod the upload limit was 64 MiB whose modeled peak
 exceeded the whole container. The safety bound is the only bound —
-`resolvedLimit * PEAK_MULTIPLE <= container * share` for every container size — so a
-small pod derives a small, safe upload limit and `warnIfRestoreUploadLimitIsCramped`
-says so at startup rather than flooring into a number the pod cannot survive.
+`baseline + restorePeakBytes(expanded) <= container` at every supported pod size,
+asserted in `backup-limits.spec.ts` — so a small pod derives a small, safe ceiling
+and `warnIfRestoreUploadLimitIsCramped` says so at startup.
+
+**A container that cannot afford the fixed cost derives `0`, and that is a bigger
+container than it sounds**: the fixed part is about 78 MiB, so anything at or below
+roughly 220 MiB refuses every restore however small. Refusing is the point — the
+measurement says those decodes do not complete — and the refusal is a 503 naming the
+two levers, from the admission middleware as well as the processing gate, rather than
+a 413 about a size no file could meet.
 
 The compressed limit bounds nothing about what comes out of gzip: a few hundred
 kilobytes of repeated text expands to gigabytes. Decompression is asynchronous
@@ -519,19 +539,25 @@ export holds. That was wrong about what happens next: the request goes on to hol
 the envelope, `decipher.update`'s output, `Buffer.concat`'s result, the decompressed
 payload, the UTF-8 string and the parsed object graph, several of them at once. Half
 of 400 MiB on the wire is `PEAK_MULTIPLE` times that at peak, so a *single* legal
-request could not fit the pod it was sized for. So the **peak** gets the half share
-and the wire gets that divided by `PEAK_MULTIPLE` — one constant, two numbers, and
-the aggregate admission budget below is the same half share, so exactly one
-full-size restore runs at a time.
+request could not fit the pod it was sized for.
 
-`PEAK_MULTIPLE = 3` is a floor, not a measurement: the real multiple depends on
-Node's version, the payload's entropy and the object graph's shape. Measuring it
-wants the cgroup peak-RSS test that has never run here.
+`PEAK_MULTIPLE` was `3` — a floor argued from counting those allocations rather than
+from measuring them. The measurement replaced it with a **line**, not a bigger
+multiple: the record's implied multiple rises as the artifact shrinks (6.9 at 96 MiB,
+8.0 at 24 MiB) because part of the cost does not scale with the payload, so the model
+is `restorePeakBytes(expanded) = 6.081 * expanded + 78 MiB` — the record's own
+least-squares slope, and the intercept that puts the line above every one of its 36
+measured cases. A line through the middle of the points is wrong half the time, and
+the half it is wrong about is the half that OOM-kills a pod. `PEAK_MULTIPLE` survives
+only as the upload gate's per-byte claim, where wire bytes make an exact model
+impossible anyway.
 
 An operator's explicit value always wins, and one too large for the container is
-warned about at startup — against the same share the default came from, in the same
-units they set, so the derived default never warns about itself and the figure the
-warning suggests is one they can paste back.
+warned about at startup — against the ceiling actually in force, in the same units
+they set, so the derived default never warns about itself and the figure the warning
+suggests is one they can paste back. With no cgroup limit visible there is nothing to
+warn against, and the check stays silent rather than quoting a fallback nobody
+measured.
 
 **The upload limit is the earliest one and therefore the only one that matters for
 an oversized request.** `express.raw` buffers the whole body before the controller,
@@ -567,13 +593,38 @@ it has promised. Three properties, each of which was wrong once:
   armed only while receiving: a timeout on *processing* would be the
   release-too-early defect with a delay.
 
-What is still not fixed: an unauthenticated client can occupy the budget for that
-bounded interval, so it can make a legitimate caller retry. Remaining options, none
-implemented, in rough order of preference: a smaller body limit at the ingress ahead
-of the process, a two-step restore session that issues a short-lived upload token
-after authorization, and streaming the upload through decryption and gzip into a
-bounded temporary file or an incremental parser instead of the JavaScript heap. The
-last of those is also what would replace `PEAK_MULTIPLE` with a real bound.
+**Authorization now runs before the reservation (DR-F3RB-003).** An unauthenticated
+client used to be able to occupy the budget for that bounded interval, so it could
+make a legitimate caller retry — during exactly the incident a restore is for.
+Authentication cannot move earlier, because Nest's guards run after parsing, so
+authorization moved instead: a caller asks `POST /backup/restore/ticket` (ordinary
+authenticated JSON, behind the JWT guard, CSRF and the throttler) for a short-lived
+signed ticket, and the admission middleware verifies it **before reserving anything**.
+An upload with no ticket is refused `403` having claimed no memory at all — `403`
+rather than `401` because the caller's session is valid and it is this request that
+carries no upload authorization, and because a client that reads `401` as an expired
+session retries the request after refreshing its token: a silent re-upload of the
+whole artifact, or a logout mid-restore.
+
+The ticket is an HMAC over `{userId, expiresAt}` keyed by a value derived from
+`JWT_SECRET` with a domain separator, not a database row
+(`backend/src/backup/restore-upload-ticket.ts`). Three reasons, and one honest cost:
+it verifies on any replica, where an in-memory single-use set would fail on the
+multi-replica deployments that matter; verification is one HMAC, so the check in front
+of the body parser stays synchronous and allocation-free, where a database round trip
+there would be a new lever for the load the gate exists to refuse; and rotating
+`JWT_SECRET` invalidates outstanding tickets, which is correct for a five-minute
+credential. The cost is that it is **not single-use** — it can be replayed until it
+expires. What that buys is bounded: the ticket authorizes *occupying upload budget*,
+not restoring anything, since the restore still needs the caller's JWT, the CSRF pair
+and (for an OIDC account) a single-use re-authentication artifact.
+
+Two things remain unaddressed, and both are named rather than implied. Ingress-level
+body and rate limits are a deployment concern the chart cannot express portably
+(`helm/README.md` says which annotation to set, and that the Gateway API path has no
+equivalent). And the memory shape itself: streaming the upload through decryption and
+gzip into a bounded temporary file or an incremental parser is what would replace
+`PEAK_MULTIPLE` with a real bound rather than a measured one.
 
 **The compressed budget does not bound decompressed memory (F3R6-004).** A small
 gzip expands to the `BACKUP_RESTORE_EXPANDED_LIMIT` ceiling regardless of its wire
@@ -593,14 +644,92 @@ restore's peak is `PEAK_MULTIPLE` × the **resolved** `BACKUP_RESTORE_EXPANDED_L
 version modeled every restore at the derived default and admitted five 2 GiB
 restores on a 16 GiB pod — and the ordinary process baseline
 (`restoreProcessBaselineBytes`) is subtracted before dividing. When one modeled
-restore does not fit at all, the count is `0`: the gate still floors capacity at
-one, because a running process must be able to attempt a restore, but startup warns
-that a restore may exceed memory and names the levers (raise the container limit, or
-lower `BACKUP_RESTORE_EXPANDED_LIMIT`). The cap is robust to `PEAK_MULTIPLE` being an
-estimate — serialising to one is safe under any true multiple *as long as one
-restore fits*, which is exactly the condition the warning surfaces when it does not.
-The baseline and the multiple are both estimates, not measurements; settling them
-needs the cgroup peak-RSS test that has never run here.
+restore does not fit at all, the count is `0` and **stays** `0` (F3RB-005): `acquire`
+refuses with a 503 naming the levers (raise the container limit, or lower
+`BACKUP_RESTORE_EXPANDED_LIMIT`), and startup logs the same thing as an error. There
+is no floor left — an earlier version of this paragraph said the gate raised such a
+zero back to one so a running process could always attempt a restore, which is the
+behaviour F3RB-005 removed: admitting work the model says cannot fit turned a fixable
+misconfiguration into an OOM kill mid-restore.
+
+What the gate establishes is concurrency, and only concurrency. It used to establish
+nothing else either, and could not: every ceiling in the chain was derived by dividing
+by `PEAK_MULTIPLE` — `safeDerivedUploadLimit` *was* `container * share /
+PEAK_MULTIPLE` — so none of them could vouch for it, and on the default 400 MiB pod
+the model left 4 MiB spare against a break-even multiple of 3.04. What makes one
+restore fit now is the ceiling it is admitted with, and that ceiling is solved out of
+the capacity (below).
+**The multiple was measured, and the derivation inverted (issue #1073).**
+`backend/src/backup/restore-peak-rss.harness.ts` decodes generated artifacts in a
+fresh process and records the peak; the committed result
+(`backend/src/backup/restore-peak-rss.record.json`) puts the **decode phases alone**
+at an implied multiple of 6.9 to 7.9 — rising as the artifact shrinks, because part of
+the cost does not scale with the payload — and shows four of five 96 MiB artifacts
+failing to decode inside the headroom the old model left on the chart's default pod.
+`PEAK_MULTIPLE` is now `8`, from `MEASURED_PEAK_MULTIPLE` rounded up, and
+`restore-peak-rss.record.spec.ts` holds the two to each other in both directions.
+
+Raising the constant alone would have refused every restore on an ordinary pod,
+because the expanded ceiling was a *share* of the container while the peak was a
+*multiple* of the ceiling — the same number on both sides of the inequality. So the
+ceiling is solved out of the capacity instead (`deriveRestoreExpandedLimitBytes`):
+
+    expanded = (container - baseline) * RESTORE_HEADROOM_SHARE / PEAK_MULTIPLE
+
+with no usability floor (F3R6-005: a floor resolved with `max()` beats the safety
+bound it was meant to respect), a 1 GiB cap, and `0` where the container has no
+headroom at all. One slot is then the answer by construction wherever there is
+headroom: a bigger pod buys a bigger artifact, not a second concurrent restore, and
+an operator wanting concurrency lowers `BACKUP_RESTORE_EXPANDED_LIMIT` deliberately.
+The process baseline's floor moved from 96 MiB to the 140 MiB the chart *requests*,
+because two numbers describing the same thing and disagreeing was the clearest
+argument in the issue for measuring anything.
+
+**The compressed ceiling is now the same number as the expanded one.** They were
+derived separately, so the default pod accepted a 66 MiB upload against a 100 MiB
+expanded ceiling it would then blow past on decompression. gzip output is never
+smaller than what it expands to, so an upload above the expanded ceiling is one this
+deployment could never decompress — refusing it before `express.raw` buffers it is
+strictly better than refusing it after.
+
+What this costs, plainly: the default 400 MiB pod now accepts about 23 MiB of
+expanded artifact rather than a nominal 100 MiB, and a pod below about 220 MiB
+accepts none. The nominal figure was never real —
+attempting it lost the pod — so the trade is a readable refusal for an OOM kill, and
+`resources.limits.memory` is the lever the startup warning already names. What is
+still open: the measurement covers the decode phases only, so the multiple is a lower
+bound, and no run has been cgroup-constrained, so "refused rather than killed" rests
+on the model rather than on a demonstration.
+
+**The queue behind those slots is bounded, deadlined and cancellation-aware
+(DR-F3RB-002).** It was a plain array of resolve callbacks: no limit, no deadline,
+and no removal when the request disconnected — so a client could hang up while
+queued and its **destructive** restore still ran when a slot freed. Three bounds,
+and one asymmetry that is the whole design:
+
+- **`BACKUP_RESTORE_QUEUE_LIMIT`** (default 4) caps the waiters. A request arriving
+  at a full queue is refused with 503 and `Retry-After` rather than joining it.
+- **`BACKUP_RESTORE_QUEUE_WAIT_MS`** (default 120000) caps one wait, so nobody holds
+  a socket and an upload reservation for a slot indefinitely. Same refusal.
+- **A waiter whose caller disconnected leaves the queue and never runs.** The
+  controller derives that signal from the response socket closing before the
+  response finished, and the request answers 499 nobody reads.
+
+The asymmetry: cancellation governs the **wait** and stops at the slot boundary. A
+queued restore has done nothing and may be dropped; a restore holding a slot is
+part-way through deleting and re-inserting the user's data, so no socket event
+cancels it — the gate unsubscribes from the signal the instant it grants the slot.
+This is the same receiving/processing split the upload reservation already draws,
+and both halves are tested (`restore-processing-gate.spec.ts` for the gate,
+`backup.controller.spec.ts` for where the signal comes from).
+
+Why queue at all rather than refuse the second restore outright: the caller has
+already uploaded up to `BACKUP_RESTORE_LIMIT` of artifact through a gate that
+budgeted memory for it, and an immediate 503 makes them upload it again. The three
+transient refusals — upload budget occupied, queue full, wait timed out — state one
+fact ("capacity exists, not for you now") and carry one `RESTORE_RETRY_AFTER_SECONDS`.
+The zero-capacity 503 carries no `Retry-After`, deliberately: retrying it without
+changing the deployment cannot help.
 
 **A budget checked after the allocation is not a budget.** The support export
 always discards `attachment_blobs`, which is base64 — thirty 10 MiB receipts are
@@ -657,9 +786,11 @@ not have (`DR-F3R6-002` / `DR-F3R7-003`). What the suite proves instead is the
 property the claim rests on — the export never has the whole of anything in hand:
 reads happen in batches, objects are opened one at a time between writes, bytes go
 out before the last table is read, and a blocked client stops the reads
-(`export-streaming.spec.ts`). `PEAK_MULTIPLE` on the **restore** side is untouched
-and still an estimate: the restore's `express.raw` upload is buffered before any
-of our code runs, so bounding it is a different change with a different shape.
+(`export-streaming.spec.ts`). The **restore** side's cost has since been measured
+(§6, issue #1073) — a multiple of `3` when this paragraph was written, a measured
+line now — but the restore's shape is unchanged: its `express.raw` upload is buffered
+before any of our code runs, so making the restore stream is a different change from
+this one, and it is what would replace a measured multiple with a bound.
 
 ## 7. Automatic backups on disk
 

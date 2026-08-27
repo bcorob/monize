@@ -802,7 +802,11 @@ describe("NetWorthService", () => {
               // security_prices. The manual is the latest close on or before
               // month end, so it wins -- and the raw-transaction fallback is
               // never consulted because the store can answer.
-              { security_id: "sec-1", price_date: "2026-08-01", close_price: "61" },
+              {
+                security_id: "sec-1",
+                price_date: "2026-08-01",
+                close_price: "61",
+              },
               {
                 security_id: "sec-1",
                 price_date: "2026-08-20",

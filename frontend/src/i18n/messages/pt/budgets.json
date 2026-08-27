@@ -14,6 +14,14 @@
       "warning": "Aviso",
       "success": "Boas Notícias",
       "info": "Informação"
+    },
+    "billDue": {
+      "titleOverdue": "{payee} em atraso",
+      "titleToday": "{payee} vence hoje",
+      "titleTomorrow": "{payee} vence amanhã",
+      "titleInDays": "{payee} vence em {days} dias",
+      "amountDue": "{amount} a pagar em {date}",
+      "amountUnavailable": "Valor indisponível (sem taxa de câmbio atual), vence em {date}"
     }
   },
   "summary503020": {

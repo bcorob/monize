@@ -27,6 +27,8 @@
     "loanRequiresInstitution": "ऋण खातों के लिए संस्थान का नाम आवश्यक है",
     "mortgageRequiredFields": "बंधक खातों के लिए mortgagePaymentFrequency, paymentStartDate, sourceAccountId और amortizationMonths आवश्यक हैं",
     "mortgageRequiresInterestRate": "बंधक खातों के लिए ब्याज दर आवश्यक है",
+    "mortgageFrequencyUnsupported": "कनाडाई गिरवी को {frequency} भुगतान आवृत्ति पर निर्धारित नहीं किया जा सकता",
+    "paymentFrequencyUnsupported": "{frequency} भुगतान आवृत्ति निर्धारित नहीं की जा सकती",
     "mortgageRequiresInstitution": "बंधक खातों के लिए संस्थान का नाम आवश्यक है",
     "onlyMortgageAccounts": "यह ऑपरेशन केवल बंधक खातों के लिए मान्य है",
     "updateRateClosed": "बंद खाते पर दर अपडेट नहीं की जा सकती",
@@ -193,13 +195,16 @@
     "reauthUnavailable": "बैकअप पुनर्स्थापित करने से पहले अपने खाते का पासवर्ड सेट करना पूरा करें।",
     "supportPasswordRequired": "सहायता बैकअप एन्क्रिप्टेड होना चाहिए: पासवर्ड दें।",
     "passwordHeaderNotBase64": "{header} हेडर base64 में एन्कोड होना चाहिए।",
-    "decompressTooLarge": "बैकअप पुनर्स्थापित करने के लिए बहुत बड़ा है: यह {limit} बाइट्स की कॉन्फ़िगर सीमा से आगे फैलता है। यदि यह वास्तविक बैकअप है तो BACKUP_RESTORE_EXPANDED_LIMIT बढ़ाएँ।",
+    "decompressTooLarge": "बैकअप पुनर्स्थापित करने के लिए बहुत बड़ा है: खुलने पर यह इस डिप्लॉयमेंट की {limit} बाइट की सीमा पार कर जाता है। यह सीमा कंटेनर की मेमरी और प्रति बाइट मापी गई लागत से निकाली जाती है, इसलिए केवल इसे बढ़ाना ऐसा पुनर्स्थापन दर्शाता है जिसे प्रक्रिया पूरा नहीं कर सकती -- इसके बजाय कंटेनर की मेमरी सीमा बढ़ाएँ (Kubernetes: backend.resources.limits.memory)।",
     "exportTooLarge": "यह बैकअप एक बार में तैयार करने के लिए बहुत बड़ा है (तालिका \"{table}\" पर {limit} बाइट्स से आगे)। स्वचालित और सहायता बैकअप मेमोरी में रखने पड़ते हैं; मैन्युअल बैकअप डाउनलोड करें, जो स्ट्रीम करता है, या BACKUP_EXPORT_BUFFER_LIMIT बढ़ाएँ।",
     "supportExportTooLarge": "यह सहायता बैकअप {{ size }} MiB JSON होगा, जो {{ limit }} MiB की सीमा से अधिक है। खाता चयन या दिनांक सीमा से इसे छोटा करें, या BACKUP_EXPORT_BUFFER_LIMIT बढ़ाएँ।",
     "folderUnusable": "फ़ोल्डर \"{{ path }}\" को निर्देशिका के रूप में उपयोग नहीं किया जा सकता ({{ reason }})।",
     "folderOutsideAllowedRoots": "बैकअप फ़ोल्डर \"{path}\" अनुमत रूट ({roots}) के बाहर है। इसे अनुमति देने के लिए BACKUP_ALLOWED_ROOTS सेट करें।",
     "noBackupStorage": "इस परिनियोजन में लिखने योग्य बैकअप संग्रहण नहीं है: {{ safePath }} मौजूद नहीं है और बनाया नहीं जा सकता ({{ reason }})। वहाँ एक वॉल्यूम माउंट करें (Docker: बाइंड माउंट या नामित वॉल्यूम; Kubernetes: Helm चार्ट में backend.persistence.backups सेट करें) और फिर प्रयास करें।",
-    "restoreNoMemoryHeadroom": "इस परिनियोजन में पुनर्स्थापना के लिए मेमोरी की गुंजाइश नहीं है: एक पुनर्स्थापना का अनुमानित शिखर कंटेनर में नहीं समाता। कंटेनर की मेमोरी सीमा बढ़ाएँ या BACKUP_RESTORE_EXPANDED_LIMIT घटाएँ।"
+    "restoreNoMemoryHeadroom": "इस परिनियोजन में पुनर्स्थापना के लिए मेमोरी की गुंजाइश नहीं है: एक पुनर्स्थापना का अनुमानित शिखर कंटेनर में नहीं समाता। कंटेनर की मेमोरी सीमा बढ़ाएँ या BACKUP_RESTORE_EXPANDED_LIMIT घटाएँ।",
+    "restoreQueueFull": "इस डिप्लॉयमेंट की रीस्टोर क्षमता के लिए बहुत सारे रीस्टोर पहले से प्रतीक्षा कर रहे हैं। कुछ क्षण बाद पुनः प्रयास करें।",
+    "restoreQueueWaitTimeout": "रीस्टोर क्षमता की प्रतीक्षा का समय समाप्त हो गया: एक अन्य रीस्टोर अभी भी चल रहा है। कुछ क्षण बाद पुनः प्रयास करें।",
+    "restoreTicketUnavailable": "यह डिप्लॉयमेंट रीस्टोर अपलोड को अधिकृत नहीं कर सकता।"
   },
   "budgets": {
     "notFound": "ID {{ id }} वाला बजट नहीं मिला",

@@ -123,6 +123,10 @@
       "status": "Статус",
       "actions": "Дії"
     },
+    "dateDisplay": {
+      "toggleLabel": "Приховати рік",
+      "toggleTitle": "Прибрати рік із дат, щоб вмістилося більше імені одержувача"
+    },
     "attachmentsCount": "{count, plural, one {# вкладення} few {# вкладення} many {# вкладень} other {# вкладення}}",
     "today": "Сьогодні",
     "export": {

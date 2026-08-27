@@ -601,48 +601,66 @@ describe('OverrideEditorDialog', () => {
       mockGetSecurityPrices.mockResolvedValue([]);
     });
 
-    it('hides Amount / Category / Split toggle for investment occurrences', () => {
+    /**
+     * The dialog looks the security's price up on mount. A test that asserts
+     * synchronously returns before that answer lands, so the state it sets
+     * commits outside act() -- against whatever tree happens to be mounted by
+     * then. The tests below that wait for "Use latest close" already settle the
+     * lookup; the ones mocking an empty price list have nothing to wait for and
+     * settle it here instead.
+     */
+    async function settlePriceLookup() {
+      await act(async () => {
+        await Promise.resolve();
+      });
+    }
+
+    it('hides Amount / Category / Split toggle for investment occurrences', async () => {
       render(
         <OverrideEditorDialog
           {...defaultProps}
           scheduledTransaction={investmentTransaction}
         />,
       );
+      await settlePriceLookup();
       expect(screen.queryByText('Amount')).not.toBeInTheDocument();
       expect(screen.queryByText('Category')).not.toBeInTheDocument();
       expect(screen.queryByLabelText('Split this occurrence')).not.toBeInTheDocument();
     });
 
-    it('shows Quantity, Price, and Total Price inputs', () => {
+    it('shows Quantity, Price, and Total Price inputs', async () => {
       render(
         <OverrideEditorDialog
           {...defaultProps}
           scheduledTransaction={investmentTransaction}
         />,
       );
+      await settlePriceLookup();
       expect(screen.getByLabelText('Quantity (shares)')).toBeInTheDocument();
       expect(screen.getByLabelText('Price per share')).toBeInTheDocument();
       expect(screen.getByLabelText('Total Price')).toBeInTheDocument();
     });
 
-    it('seeds Total Price from saved quantity * price', () => {
+    it('seeds Total Price from saved quantity * price', async () => {
       render(
         <OverrideEditorDialog
           {...defaultProps}
           scheduledTransaction={investmentTransaction}
         />,
       );
+      await settlePriceLookup();
       const totalInput = screen.getByLabelText('Total Price') as HTMLInputElement;
       expect(totalInput.value).toBe('1,000');
     });
 
-    it('updates Quantity when Total Price is changed', () => {
+    it('updates Quantity when Total Price is changed', async () => {
       render(
         <OverrideEditorDialog
           {...defaultProps}
           scheduledTransaction={investmentTransaction}
         />,
       );
+      await settlePriceLookup();
       const totalInput = screen.getByLabelText('Total Price') as HTMLInputElement;
       fireEvent.change(totalInput, { target: { value: '250' } });
       fireEvent.blur(totalInput);
@@ -815,6 +833,7 @@ describe('OverrideEditorDialog', () => {
           scheduledTransaction={investmentTransaction}
         />,
       );
+      await settlePriceLookup();
       fireEvent.change(screen.getByLabelText('Price per share'), {
         target: { value: '123.45' },
       });
@@ -858,6 +877,7 @@ describe('OverrideEditorDialog', () => {
           scheduledTransaction={investmentTransaction}
         />,
       );
+      await settlePriceLookup();
       // A brand-new override inherits the price from the schedule -> "from the
       // schedule", never "saved on this occurrence".
       expect(screen.getByText('Using the price from the schedule.')).toBeInTheDocument();
@@ -889,6 +909,7 @@ describe('OverrideEditorDialog', () => {
           existingOverride={existingOverride}
         />,
       );
+      await settlePriceLookup();
       expect(
         screen.getByText('Using the price saved on this occurrence.'),
       ).toBeInTheDocument();
@@ -908,6 +929,7 @@ describe('OverrideEditorDialog', () => {
           scheduledTransaction={investmentTransaction}
         />,
       );
+      await settlePriceLookup();
       expect(screen.getByText('Using the price from the schedule.')).toBeInTheDocument();
       const priceInput = screen.getByLabelText('Price per share') as HTMLInputElement;
       fireEvent.change(priceInput, { target: { value: '150' } });
@@ -1102,7 +1124,7 @@ describe('OverrideEditorDialog', () => {
       expect(payload.isSplit).toBeUndefined();
     });
 
-    it('prefills existing override values when editing', () => {
+    it('prefills existing override values when editing', async () => {
       const existingOverride = {
         id: 'ov1',
         scheduledTransactionId: 'inv1',
@@ -1126,6 +1148,7 @@ describe('OverrideEditorDialog', () => {
           existingOverride={existingOverride}
         />,
       );
+      await settlePriceLookup();
       const qtyInput = screen.getByLabelText('Quantity (shares)') as HTMLInputElement;
       const priceInput = screen.getByLabelText('Price per share') as HTMLInputElement;
       expect(Number(qtyInput.value)).toBe(3);

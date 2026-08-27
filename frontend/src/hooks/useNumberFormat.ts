@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { usePreferencesStore } from '@/store/preferencesStore';
 import { roundToDecimals, adaptiveFractionDigits } from '@/lib/format';
+import { preferredCurrency } from '@/lib/default-currency';
 
 /**
  * Get the effective locale for number formatting.
@@ -56,7 +57,9 @@ function getNumberFormat(
 export function useNumberFormat() {
   // Subscribe directly to numberFormat and defaultCurrency to ensure reactivity when they change
   const numberFormat = usePreferencesStore((state) => state.preferences?.numberFormat) || 'browser';
-  const defaultCurrency = usePreferencesStore((state) => state.preferences?.defaultCurrency) || 'CAD';
+  const defaultCurrency = preferredCurrency(
+    usePreferencesStore((state) => state.preferences?.defaultCurrency),
+  );
   const language = usePreferencesStore((state) => state.preferences?.language);
 
   const formatCurrency = useCallback(

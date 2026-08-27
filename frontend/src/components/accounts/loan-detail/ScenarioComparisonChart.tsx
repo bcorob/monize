@@ -20,7 +20,7 @@ import { ExportIconButton } from '@/components/ui/ExportIconButton';
 import { useChartDateFormat } from '@/hooks/useChartDateFormat';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
 import type { OverpaymentFrequency } from '@/lib/loan-schedule';
-import { FREQUENCY_LABEL_KEY } from '@/components/accounts/loan-detail/loan-scenario-labels';
+import { frequencyLabelKey } from '@/components/accounts/loan-detail/loan-scenario-labels';
 
 export interface ScenarioOutcome {
   id: string;
@@ -31,8 +31,11 @@ export interface ScenarioOutcome {
   recurringFrequency?: OverpaymentFrequency;
   /** Number of one-time lump sums in the scenario */
   lumpSumCount: number;
-  /** Interest saved vs the no-overpayment baseline */
-  interestSaved: number;
+  /**
+   * Interest saved vs the no-overpayment baseline, or null when either schedule
+   * stopped at the projection horizon so the saving is unknown.
+   */
+  interestSaved: number | null;
   /** Projected payoff date (yyyy-MM-dd), or null when not paid off in range */
   payoffDate: string | null;
   /** Date the overpayments begin (yyyy-MM-dd); undefined/past means from today,
@@ -44,8 +47,22 @@ export interface BaselineOutcome {
   payoffDate: string | null;
 }
 
+/**
+ * A scenario the chart can draw. The arc's apex height *is* the interest saved,
+ * so a scenario whose saving is unknown has no height to plot -- it leaves the
+ * chart rather than being drawn at zero, which would read as "saves nothing".
+ */
+export type ScenarioChartOutcome = ScenarioOutcome & { interestSaved: number };
+
+/** The one predicate deciding whether an outcome is drawable. */
+export function hasKnownInterestSaved(
+  outcome: ScenarioOutcome,
+): outcome is ScenarioChartOutcome {
+  return outcome.interestSaved != null;
+}
+
 interface ScenarioComparisonChartProps {
-  outcomes: ScenarioOutcome[];
+  outcomes: ScenarioChartOutcome[];
   baseline: BaselineOutcome;
   currencyCode: string;
 }
@@ -121,12 +138,12 @@ export function ScenarioComparisonChart({
   const overpaymentLabel = (o: ScenarioOutcome): string => {
     const parts: string[] = [];
     if (o.recurringExtra && o.recurringExtra > 0) {
-      const freq = o.recurringFrequency;
+      const freqKey = frequencyLabelKey(o.recurringFrequency);
       parts.push(
-        freq && freq !== 'MONTHLY'
+        freqKey && o.recurringFrequency !== 'MONTHLY'
           ? t('loanDetail.scenarios.overpaymentWithFrequency', {
               amount: formatCurrency(o.recurringExtra, currencyCode),
-              frequency: t(FREQUENCY_LABEL_KEY[freq]),
+              frequency: t(freqKey),
             })
           : t('loanDetail.scenarioChart.extraShort', {
               amount: formatCurrency(o.recurringExtra, currencyCode),

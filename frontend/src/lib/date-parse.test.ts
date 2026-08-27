@@ -3,6 +3,7 @@ import {
   buildValidatedIsoDate,
   datePatternFieldOrder,
   datePatternLiteralChars,
+  dropYearFromPattern,
   expandTwoDigitYear,
   formatByPattern,
   parseByPattern,
@@ -65,6 +66,41 @@ describe('formatByPattern', () => {
     ['DD.MM.YYYY', '14.09.2026'],
   ])('renders %s', (pattern, expected) => {
     expect(formatByPattern(2026, 9, 14, pattern)).toBe(expected);
+  });
+});
+
+describe('dropYearFromPattern', () => {
+  it.each([
+    // The separator that would dangle goes with the year: the one before it
+    // where the year trails, the one after it where the year leads.
+    ['MM/DD/YYYY', 'MM/DD'],
+    ['DD/MM/YYYY', 'DD/MM'],
+    ['YYYY-MM-DD', 'MM-DD'],
+    ['DD-MMM-YYYY', 'DD-MMM'],
+    // Locale-resolved arrangements shorten the same way, which is the whole
+    // reason this reads the pattern instead of switching on the four presets.
+    ['DD.MM.YYYY', 'DD.MM'],
+    ['YYYY. MM. DD', 'MM. DD'],
+  ])('shortens %s to %s', (pattern, expected) => {
+    expect(dropYearFromPattern(pattern)).toBe(expected);
+  });
+
+  it('keeps day and month in the order the pattern gave them', () => {
+    // The distinction the whole helper exists for: 09/14 and 14/09 are the
+    // same day, and which one a user reads is a property of their format.
+    expect(formatByPattern(2026, 9, 14, dropYearFromPattern('MM/DD/YYYY'))).toBe('09/14');
+    expect(formatByPattern(2026, 9, 14, dropYearFromPattern('DD/MM/YYYY'))).toBe('14/09');
+  });
+
+  it('leaves a pattern with no year alone', () => {
+    expect(dropYearFromPattern('MM/DD')).toBe('MM/DD');
+  });
+
+  it('refuses to leave a fragment when there is no day or no month', () => {
+    // Shortening these would render a lone number with no way to tell which
+    // field it is, so the caller gets the full pattern back instead.
+    expect(dropYearFromPattern('MM/YYYY')).toBe('MM/YYYY');
+    expect(dropYearFromPattern('YYYY')).toBe('YYYY');
   });
 });
 

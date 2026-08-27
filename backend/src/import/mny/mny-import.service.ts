@@ -62,6 +62,7 @@ import {
   writeExchangeRates,
   writeSecurityPrices,
 } from "./writers/write-prices";
+import { preferredCurrency } from "../../common/default-currency.util";
 
 /**
  * Runs a `.mny` import: staged bytes in, Monize rows and a verification report
@@ -792,6 +793,6 @@ export class MnyImportService {
     const preference = await withScopedDb(this.dataSource, (manager) =>
       manager.getRepository(UserPreference).findOne({ where: { userId } }),
     );
-    return preference?.defaultCurrency ?? "USD";
+    return preferredCurrency(preference);
   }
 }

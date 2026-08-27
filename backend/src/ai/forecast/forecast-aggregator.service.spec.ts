@@ -1,6 +1,14 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { DataSource } from "typeorm";
 import { ForecastAggregatorService } from "./forecast-aggregator.service";
+import { ScheduledEffectiveAmountService } from "../../scheduled-transactions/scheduled-effective-amount.service";
+import { ScheduledOccurrenceService } from "../../scheduled-transactions/scheduled-occurrence.service";
+import { ScheduledTransactionOverride } from "../../scheduled-transactions/entities/scheduled-transaction-override.entity";
+import {
+  createInvestmentFxMock,
+  InvestmentFxMock,
+} from "../../test-helpers/investment-fx-testing";
+import { InvestmentTransactionsService } from "../../securities/investment-transactions.service";
 import { Transaction } from "../../transactions/entities/transaction.entity";
 import { ScheduledTransaction } from "../../scheduled-transactions/entities/scheduled-transaction.entity";
 import { AccountsService } from "../../accounts/accounts.service";
@@ -17,8 +25,10 @@ describe("ForecastAggregatorService", () => {
   let service: ForecastAggregatorService;
   let mockTransactionRepo: Record<string, jest.Mock>;
   let mockScheduledTransactionRepo: Record<string, jest.Mock>;
+  let mockOverridesRepo: Record<string, jest.Mock>;
   let mockAccountsService: Record<string, jest.Mock>;
   let mockTransactionAnalytics: Record<string, jest.Mock>;
+  let fx: InvestmentFxMock;
 
   const userId = "user-1";
 
@@ -69,9 +79,13 @@ describe("ForecastAggregatorService", () => {
       ]),
     };
 
+    mockOverridesRepo = { find: jest.fn().mockResolvedValue([]) };
+
     mockTransactionAnalytics = {
       getRecurringCharges: jest.fn().mockResolvedValue([]),
     };
+
+    fx = createInvestmentFxMock();
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -81,6 +95,7 @@ describe("ForecastAggregatorService", () => {
           useValue: createScopedDbMocks([
             [Transaction, mockTransactionRepo],
             [ScheduledTransaction, mockScheduledTransactionRepo],
+            [ScheduledTransactionOverride, mockOverridesRepo],
           ]).dataSource,
         },
         {
@@ -90,6 +105,14 @@ describe("ForecastAggregatorService", () => {
         {
           provide: TransactionAnalyticsService,
           useValue: mockTransactionAnalytics,
+        },
+        // The real read-side services over a mocked FX source (issue #1247):
+        // the dates and amounts these assertions read ARE their output.
+        ScheduledOccurrenceService,
+        ScheduledEffectiveAmountService,
+        {
+          provide: InvestmentTransactionsService,
+          useValue: fx,
         },
       ],
     }).compile();
@@ -174,6 +197,9 @@ describe("ForecastAggregatorService", () => {
     it("fetches active scheduled transactions with categories", async () => {
       mockScheduledTransactionRepo.find.mockResolvedValue([
         {
+          // A real row always has an id, and the effective-amount resolver files
+          // its answer under it (issue #1247).
+          id: "st-rent",
           name: "Rent",
           amount: -1500,
           frequency: "MONTHLY",
@@ -182,6 +208,7 @@ describe("ForecastAggregatorService", () => {
           isTransfer: false,
         },
         {
+          id: "st-salary",
           name: "Salary",
           amount: 5000,
           frequency: "BIWEEKLY",
@@ -193,12 +220,90 @@ describe("ForecastAggregatorService", () => {
 
       const result = await service.computeAggregates(userId, "USD");
 
+      // Ordered by the date each occurrence actually falls on, so the salary due
+      // on the 28th precedes the rent due on the 1st (issue #1247).
       expect(result.scheduledTransactions).toHaveLength(2);
-      expect(result.scheduledTransactions[0].name).toBe("Rent");
-      expect(result.scheduledTransactions[0].amount).toBe(1500);
-      expect(result.scheduledTransactions[0].isIncome).toBe(false);
-      expect(result.scheduledTransactions[1].name).toBe("Salary");
-      expect(result.scheduledTransactions[1].isIncome).toBe(true);
+      expect(result.scheduledTransactions[0].name).toBe("Salary");
+      expect(result.scheduledTransactions[0].nextDueDate).toBe("2026-02-28");
+      expect(result.scheduledTransactions[0].isIncome).toBe(true);
+      expect(result.scheduledTransactions[1].name).toBe("Rent");
+      expect(result.scheduledTransactions[1].amount).toBe(1500);
+      expect(result.scheduledTransactions[1].isIncome).toBe(false);
+    });
+
+    it("quotes the next occurrence's own date and amount, override included", async () => {
+      mockScheduledTransactionRepo.find.mockResolvedValue([
+        {
+          id: "st-rent",
+          name: "Rent",
+          amount: -1500,
+          frequency: "MONTHLY",
+          nextDueDate: new Date("2026-09-01"),
+          category: { name: "Housing", isIncome: false },
+          isTransfer: false,
+        },
+      ]);
+      mockOverridesRepo.find.mockResolvedValue([
+        {
+          id: "ovr-1",
+          scheduledTransactionId: "st-rent",
+          originalDate: "2026-09-01",
+          overrideDate: "2026-09-05",
+          amount: -1650,
+        },
+      ]);
+
+      const result = await service.computeAggregates(userId, "USD");
+
+      expect(result.scheduledTransactions[0].amount).toBe(1650);
+      expect(result.scheduledTransactions[0].nextDueDate).toBe("2026-09-05");
+    });
+
+    it("takes the direction from the occurrence, not the stored parent sign", async () => {
+      // A mixed-sign split parent with no category of its own: an ordinary -1200
+      // line beside an embedded SELL of 10 x 100. The SELL's stored pair is stale,
+      // so the line re-prices at the current 1.35 to +1350 and the occurrence is
+      // an inflow of 150 -- while the stored parent still says -200.
+      fx.resolveSettlementCurrencyPair.mockResolvedValue({
+        from: "EUR",
+        to: "USD",
+      });
+      fx.resolveCashExchangeRateOrNull.mockResolvedValue(1.35);
+      mockScheduledTransactionRepo.find.mockResolvedValue([
+        {
+          id: "st-split",
+          name: "Sell 10 shares, pay the fee",
+          amount: -200,
+          currencyCode: "USD",
+          frequency: "MONTHLY",
+          nextDueDate: new Date("2026-09-01"),
+          category: null,
+          isTransfer: false,
+          isSplit: true,
+          splits: [
+            { id: "sp-1", kind: "category", amount: -1200 },
+            {
+              id: "sp-2",
+              kind: "investment",
+              amount: 1000,
+              investmentAction: "SELL",
+              investmentSecurityId: "SEC-1",
+              investmentQuantity: 10,
+              investmentPrice: 100,
+              investmentCommission: 0,
+              investmentExchangeRate: 1,
+              investmentExchangeRateFromCurrency: "CAD",
+              investmentExchangeRateToCurrency: "USD",
+            },
+          ],
+        },
+      ]);
+
+      const result = await service.computeAggregates(userId, "USD");
+
+      expect(result.scheduledTransactions[0].amount).toBe(150);
+      // The stored -200 would have made this an expense in the model's summary.
+      expect(result.scheduledTransactions[0].isIncome).toBe(true);
     });
 
     it("computes income patterns and variability", async () => {
@@ -331,6 +436,7 @@ describe("ForecastAggregatorService", () => {
     it("marks scheduled transactions with positive amounts as income", async () => {
       mockScheduledTransactionRepo.find.mockResolvedValue([
         {
+          id: "st-freelance",
           name: "Freelance Payment",
           amount: 2000,
           frequency: "MONTHLY",
@@ -348,6 +454,7 @@ describe("ForecastAggregatorService", () => {
     it("includes transfer flag on scheduled transactions", async () => {
       mockScheduledTransactionRepo.find.mockResolvedValue([
         {
+          id: "st-savings",
           name: "Savings Transfer",
           amount: -500,
           frequency: "MONTHLY",

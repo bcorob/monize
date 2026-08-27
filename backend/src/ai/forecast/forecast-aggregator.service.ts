@@ -1,8 +1,14 @@
 import { Injectable, Inject, Logger, forwardRef } from "@nestjs/common";
 import { DataSource } from "typeorm";
 import { withScopedDb } from "../../common/db/scoped-db";
+import {
+  investmentLinkedTransactionExclusion,
+  reportableTransactionAmountSql,
+} from "../../common/investment-filter.util";
 import { Transaction } from "../../transactions/entities/transaction.entity";
 import { ScheduledTransaction } from "../../scheduled-transactions/entities/scheduled-transaction.entity";
+import { ScheduledOccurrenceService } from "../../scheduled-transactions/scheduled-occurrence.service";
+import { addDaysYMD, todayYMD } from "../../common/date-utils";
 import { AccountsService } from "../../accounts/accounts.service";
 import { TransactionAnalyticsService } from "../../transactions/transaction-analytics.service";
 import { RecurringCharge } from "../../transactions/recurring-charges.util";
@@ -29,13 +35,26 @@ export interface AccountBalanceSummary {
   }>;
 }
 
+/**
+ * One scheduled schedule as the forecast prompt describes it. `amount` is the
+ * effective amount -- what the occurrence would post today -- as a positive
+ * magnitude, and `null` when the server could not determine it (issue #1247):
+ * the prompt must say "unknown" rather than quote a snapshot taken at an older
+ * exchange rate.
+ */
 export interface ScheduledTransactionSummary {
   name: string;
-  amount: number;
+  amount: number | null;
+  amountComplete: boolean;
   frequency: string;
   nextDueDate: string;
   categoryName: string | null;
-  isIncome: boolean;
+  /**
+   * `null` when the occurrence's direction cannot be derived: an unpriceable
+   * mixed-sign split can post on either side of zero, so the prompt must say so
+   * rather than let the model treat a guess as a classification.
+   */
+  isIncome: boolean | null;
   isTransfer: boolean;
 }
 
@@ -61,6 +80,29 @@ export interface ForecastAggregates {
 
 export { RecurringCharge };
 
+/**
+ * The forecast trains on one row per payment and joins no splits, so a split
+ * parent's own amount -- the sum of every line, an embedded investment line
+ * included -- is not what the household spent. A -60 grocery split beside a -500
+ * embedded BUY taught the baseline 560 of monthly spending (re-audit).
+ */
+const REPORTABLE_TX_AMOUNT = reportableTransactionAmountSql("t");
+
+/**
+ * How far ahead the forecast summary looks for each schedule's next occurrence.
+ *
+ * Not a product window: the summary describes every active schedule, and each
+ * contributes exactly one occurrence. Ten years is long enough that only a
+ * schedule which has genuinely run out of occurrences yields none.
+ *
+ * It is emphatically NOT what bounds the walk -- 3,650 daily steps is past
+ * `OCCURRENCE_WALK_GUARD`, so for a while the runaway backstop was quietly doing
+ * the bounding here. The expander stops as soon as no unwalked slot can change
+ * the answer, which for `maxOccurrences: 1` is one step past the first
+ * occurrence.
+ */
+const FORECAST_OCCURRENCE_HORIZON_DAYS = 3650;
+
 @Injectable()
 export class ForecastAggregatorService {
   private readonly logger = new Logger(ForecastAggregatorService.name);
@@ -70,6 +112,10 @@ export class ForecastAggregatorService {
     @Inject(forwardRef(() => AccountsService))
     private readonly accountsService: AccountsService,
     private readonly transactionAnalytics: TransactionAnalyticsService,
+    // The date and the amount a forecast prompt quotes are the occurrence's own,
+    // from the one server-side occurrence contract (issue #1247).
+    @Inject(forwardRef(() => ScheduledOccurrenceService))
+    private readonly occurrences: ScheduledOccurrenceService,
   ) {}
 
   async computeAggregates(
@@ -126,11 +172,11 @@ export class ForecastAggregatorService {
         .addSelect("COALESCE(cat.name, 'Uncategorized')", "categoryName")
         .addSelect("COALESCE(cat.isIncome, false)", "isIncome")
         .addSelect(
-          "SUM(CASE WHEN t.amount > 0 THEN t.amount ELSE 0 END)",
+          `SUM(CASE WHEN ${REPORTABLE_TX_AMOUNT} > 0 THEN ${REPORTABLE_TX_AMOUNT} ELSE 0 END)`,
           "income",
         )
         .addSelect(
-          "SUM(CASE WHEN t.amount < 0 THEN ABS(t.amount) ELSE 0 END)",
+          `SUM(CASE WHEN ${REPORTABLE_TX_AMOUNT} < 0 THEN ABS(${REPORTABLE_TX_AMOUNT}) ELSE 0 END)`,
           "expenses",
         )
         .where("t.userId = :userId", { userId })
@@ -142,9 +188,7 @@ export class ForecastAggregatorService {
         // Exclude investment-linked cash transactions so BUY/SELL/DIVIDEND
         // side-effects don't skew the historical income/expense baseline
         // used to train the forecast.
-        .andWhere(
-          "NOT EXISTS (SELECT 1 FROM investment_transactions it WHERE it.transaction_id = t.id)",
-        )
+        .andWhere(investmentLinkedTransactionExclusion("t"))
         .groupBy("TO_CHAR(t.transactionDate, 'YYYY-MM')")
         .addGroupBy("cat.name")
         .addGroupBy("cat.isIncome")
@@ -221,22 +265,48 @@ export class ForecastAggregatorService {
     const scheduled = await withScopedDb(this.dataSource, (manager) =>
       manager.getRepository(ScheduledTransaction).find({
         where: { userId, isActive: true },
-        relations: ["category"],
+        // `splits` decides whether the cash total re-prices at the current FX
+        // rate, which the effective-amount resolver needs (issue #1247).
+        relations: ["category", "splits"],
         order: { nextDueDate: "ASC" },
       }),
     );
+    // The NEXT occurrence of each schedule, with the date and amount it will
+    // actually post -- an occurrence the user re-priced or moved is what the
+    // model should be forecasting from, not the template it came from.
+    // The horizon is wide rather than a product window: every active schedule
+    // belongs in this summary, and asking for one occurrence costs one step past
+    // it (see FORECAST_OCCURRENCE_HORIZON_DAYS).
+    const occurrences = await this.occurrences.expand(userId, scheduled, {
+      through: addDaysYMD(todayYMD(), FORECAST_OCCURRENCE_HORIZON_DAYS),
+      maxOccurrences: 1,
+    });
 
-    return scheduled.map((st) => {
-      const amount = Number(st.amount);
-      const isIncome = st.category?.isIncome === true || amount > 0;
+    return occurrences.map((occurrence) => {
+      const st = occurrence.schedule;
+      // Both halves come from the occurrence. The category is an independent
+      // semantic and still wins where it is set; the sign is the occurrence's
+      // (`directionAmount`), because a mixed-sign split parent's effective
+      // amount can land on the other side of zero from its stored snapshot --
+      // "an FX rate is positive, so it cannot flip a sign" holds for one scalar
+      // times one rate, not for a parent whose investment line alone re-prices.
+      // The category is an independent semantic and still wins where it is set.
+      // Otherwise the occurrence's own direction decides -- and `null` there is
+      // "not derivable", which travels to the prompt rather than collapsing to
+      // "expense".
+      const isIncome =
+        st.category?.isIncome === true
+          ? true
+          : occurrence.directionAmount === null
+            ? null
+            : occurrence.directionAmount > 0;
 
       return {
         name: st.name,
-        amount: Math.abs(amount),
+        amount: occurrence.amount === null ? null : Math.abs(occurrence.amount),
+        amountComplete: occurrence.amount !== null,
         frequency: st.frequency,
-        nextDueDate: st.nextDueDate
-          ? new Date(st.nextDueDate).toISOString().substring(0, 10)
-          : "",
+        nextDueDate: occurrence.dueDate,
         categoryName: st.category?.name || null,
         isIncome,
         isTransfer: st.isTransfer,
@@ -254,20 +324,18 @@ export class ForecastAggregatorService {
         .getRepository(Transaction)
         .createQueryBuilder("t")
         .select("TO_CHAR(t.transactionDate, 'YYYY-MM')", "month")
-        .addSelect("SUM(t.amount)", "total")
+        .addSelect(`SUM(${REPORTABLE_TX_AMOUNT})`, "total")
         .addSelect("COUNT(DISTINCT t.payeeName)", "sourceCount")
         .where("t.userId = :userId", { userId })
         .andWhere("t.transactionDate >= :startDate", { startDate })
         .andWhere("t.transactionDate <= :endDate", { endDate })
-        .andWhere("t.amount > 0")
+        .andWhere(`${REPORTABLE_TX_AMOUNT} > 0`)
         .andWhere("t.status != 'VOID'")
         .andWhere("t.isTransfer = false")
         .andWhere("t.parentTransactionId IS NULL")
         // Exclude investment-linked cash credits (SELL / DIVIDEND) so
         // they don't inflate the income baseline.
-        .andWhere(
-          "NOT EXISTS (SELECT 1 FROM investment_transactions it WHERE it.transaction_id = t.id)",
-        )
+        .andWhere(investmentLinkedTransactionExclusion("t"))
         .groupBy("TO_CHAR(t.transactionDate, 'YYYY-MM')")
         .orderBy("month", "ASC")
         .getRawMany(),

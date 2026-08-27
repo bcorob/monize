@@ -25,6 +25,8 @@ import { BudgetActivityReportsService } from "./budget-activity-reports.service"
 import { BudgetsController } from "./budgets.controller";
 import { NotificationsModule } from "../notifications/notifications.module";
 import { ActionHistoryModule } from "../action-history/action-history.module";
+import { ScheduledTransactionsModule } from "../scheduled-transactions/scheduled-transactions.module";
+import { CurrenciesModule } from "../currencies/currencies.module";
 
 @Module({
   imports: [
@@ -45,6 +47,12 @@ import { ActionHistoryModule } from "../action-history/action-history.module";
     ]),
     NotificationsModule,
     ActionHistoryModule,
+    // For ScheduledEffectiveAmountService: the budget's upcoming-bill figures
+    // come from the one server-side effective-amount resolver (issue #1247).
+    ScheduledTransactionsModule,
+    // For ExchangeRateService: an occurrence's amount is in the occurrence's own
+    // currency, which the budget converts into its own before totalling.
+    CurrenciesModule,
   ],
   providers: [
     BudgetsService,

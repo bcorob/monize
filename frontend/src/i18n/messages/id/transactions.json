@@ -123,6 +123,10 @@
       "status": "Status",
       "actions": "Aksi"
     },
+    "dateDisplay": {
+      "toggleLabel": "Sembunyikan tahun",
+      "toggleTitle": "Hilangkan tahun dari tanggal agar nama penerima lebih terlihat"
+    },
     "attachmentsCount": "{count, plural, other {# lampiran}}",
     "today": "Hari ini",
     "export": {

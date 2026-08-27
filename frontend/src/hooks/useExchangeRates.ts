@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { exchangeRatesApi, ExchangeRate } from '@/lib/exchange-rates';
 import { usePreferencesStore } from '@/store/preferencesStore';
 import { createLogger } from '@/lib/logger';
+import { preferredCurrency } from '@/lib/default-currency';
 
 const logger = createLogger('ExchangeRates');
 
@@ -23,15 +24,30 @@ const logger = createLogger('ExchangeRates');
 export function useExchangeRates() {
   const [rates, setRates] = useState<ExchangeRate[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const defaultCurrency =
-    usePreferencesStore((state) => state.preferences?.defaultCurrency) || 'CAD';
+  /**
+   * The rate table could not be fetched.
+   *
+   * Distinct from an empty one, because the two mean opposite things to a
+   * caller. With no rates loaded every cross-currency `convert` returns `null`,
+   * and a surface reading only that reports "no exchange rate for CAD -- add one
+   * on Currencies": correct when the table really is missing that pair, and a
+   * wrong instruction while the request is still in flight or after it failed,
+   * pointing the reader at a rate that already exists. `docs` calls this out as
+   * a class: a failed lookup is not an empty dataset.
+   */
+  const [hasFailed, setHasFailed] = useState(false);
+  const defaultCurrency = preferredCurrency(
+    usePreferencesStore((state) => state.preferences?.defaultCurrency),
+  );
 
   const refresh = useCallback(async () => {
     try {
       const data = await exchangeRatesApi.getLatestRates();
       setRates(data);
+      setHasFailed(false);
     } catch (error) {
       logger.error('Failed to load exchange rates:', error);
+      setHasFailed(true);
     } finally {
       setIsLoading(false);
     }
@@ -105,6 +121,14 @@ export function useExchangeRates() {
     rates,
     rateMap,
     isLoading,
+    /**
+     * True when the rate table is not available to be consulted -- still
+     * loading, or the fetch failed. A caller reporting a missing PAIR has to
+     * check this first: while it holds, "no rate for X" is a statement about
+     * this request, not about the user's rates.
+     */
+    ratesUnavailable: isLoading || hasFailed,
+    ratesFailed: hasFailed,
     convert,
     convertToDefault,
     getRate,
