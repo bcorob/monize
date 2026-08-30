@@ -31,6 +31,7 @@ import {
   lockAccountsForBalanceWrite,
   lockHoldingScope,
 } from "../common/db/locks";
+import { LEDGER_MOVEMENT_PREDICATE } from "../common/ledger-balance.sql";
 
 export interface RecordActionParams {
   entityType: string;
@@ -1337,8 +1338,7 @@ export class ActionHistoryService {
       `SELECT a.opening_balance, COALESCE(SUM(t.amount), 0) as tx_sum
        FROM accounts a
        LEFT JOIN transactions t ON t.account_id = a.id
-         AND (t.status IS NULL OR t.status != 'VOID')
-         AND t.parent_transaction_id IS NULL
+         AND ${LEDGER_MOVEMENT_PREDICATE}
          AND t.transaction_date <= CURRENT_DATE
        WHERE a.id = $1
        GROUP BY a.id, a.opening_balance`,

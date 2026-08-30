@@ -5,7 +5,7 @@ import { I18nService } from "nestjs-i18n";
 import { EmergencyAccessMonitorService } from "./emergency-access-monitor.service";
 import { EmergencyAccessSettings } from "./entities/emergency-access-settings.entity";
 import { EmergencyAccessContact } from "./entities/emergency-access-contact.entity";
-import { AiEncryptionService } from "../ai/ai-encryption.service";
+import { EncryptionService } from "../common/encryption/encryption.service";
 import { EmailService } from "../notifications/email.service";
 import { User } from "../users/entities/user.entity";
 import { UserPreference } from "../users/entities/user-preference.entity";
@@ -363,7 +363,7 @@ describe("EmergencyAccessMonitorService", () => {
         EmergencyAccessMonitorService,
         jobClaimProvider(jobClaims),
         { provide: EmailService, useValue: emailService },
-        { provide: AiEncryptionService, useValue: encryption },
+        { provide: EncryptionService, useValue: encryption },
         { provide: ConfigService, useValue: configService },
         {
           provide: I18nService,

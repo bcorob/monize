@@ -61,7 +61,7 @@ every live table is either exported or named in
   definition means the restore invents a name, symbol and decimal places.
 - AI provider API keys, **decrypted**, in `api_key_plaintext`
   (`backend/src/backup/ai-provider-key-transport.ts`). `api_key_enc` is
-  ciphertext under `AI_ENCRYPTION_KEY`, which is server configuration and cannot
+  ciphertext under `ENCRYPTION_KEY`, which is server configuration and cannot
   travel — shipping the master key beside the ciphertext would make encrypting
   the column pointless — so the key is decrypted on the way out and re-encrypted
   on the way in under whichever key the receiving instance holds. The exported
@@ -841,6 +841,49 @@ this one, and it is what would replace a measured multiple with a bound.
   user is `partial-` in the name it shows them. The service returns a message
   saying more (`runManualBackup`) and the frontend does not use it.
 
+- **Encryption is on by default, and its key is announced before it is enforced
+  (issue #1269).** An automatic backup is encrypted with the user's own password
+  whenever the server holds a usable copy: captured for a local account when they
+  type it (registration, login, password change) or when they confirm it in
+  Settings, and set explicitly by an OIDC account. The copy lives in
+  `users.backup_password_enc` under `EncryptionService`, keyed by
+  `ENCRYPTION_KEY`. `AI_ENCRYPTION_KEY` is the variable's former name: still
+  read, and still preferred where both are set, so an existing deployment
+  upgrades without re-keying a column.
+
+  The key is **announced before it is enforced**. A deployment with neither
+  variable still boots — refusing would turn an upgrade into an outage for
+  exactly the deployments that have the problem — but `logEncryptionKeyStatus`
+  warns at every start that backups are going out unencrypted and that a future
+  release will require the variable. Until that release, the refusals live on
+  the write paths: `EncryptionService` throws rather than inventing a fallback,
+  so no secret is ever stored in the clear.
+
+  The previous arrangement keyed this on `AI_ENCRYPTION_KEY` while that variable
+  was optional and documented as being for cloud AI providers: a deployment that
+  configured no provider stored no password and wrote every automatic backup in
+  plaintext, while the release notes, the docs and Settings all said backups were
+  encrypted by default. Two rules follow. **A plaintext automatic backup is
+  logged, every time** — it stays a legitimate outcome (an OIDC account with no
+  backup password; a local account whose password has not been captured yet) but
+  never a silent one. And **"this server cannot encrypt" is reported separately
+  from "this user has not enabled it"** (`available` beside `enabled` in
+  `getStatus`), because the two have different fixes and rendering both as a
+  blank space is what made the defect invisible.
+
+- **`ENCRYPTION_KEY` does not open a backup file; the user's password does.** The
+  artifact is encrypted with the password it was written under, so a restore
+  needs *that* password and nothing else — losing `ENCRYPTION_KEY` does not lock
+  anyone out of a backup they can still supply the password for. What losing it
+  does cost: every AI provider key and emergency-access credential in the
+  database becomes unreadable, the stored copy of each user's backup password
+  becomes unreadable, and automatic backups then *refuse to run* (the
+  `unrecoverable` outcome above) until the copy is recaptured at the next
+  sign-in. The password half has its own trap, which the wiki states plainly: a
+  local account's artifact opens with the login password **as it was when that
+  artifact was written**, so changing a password strands every backup taken
+  before the change unless the old one is written down.
+
 On Kubernetes this needs `backend.persistence.backups.enabled` (see
 `helm/README.md`). With a read-only root filesystem and no mount, a schedule
 reports errors forever while the UI shows it as configured.
@@ -863,7 +906,7 @@ Known and unresolved; none of these is a bug report waiting to be filed:
 - **AI provider keys written by an older build do not cross instances.** Keys now
   travel decrypted and are re-encrypted on arrival (§1), so a current artifact is
   portable. One made before that carries `api_key_enc` under the exporting
-  instance's `AI_ENCRYPTION_KEY`, and restores onto any other instance populated
+  instance's `ENCRYPTION_KEY`, and restores onto any other instance populated
   and unreadable; so does any key the exporting instance could not decrypt
   itself. Re-entering the key is the only recovery.
 
@@ -871,7 +914,7 @@ Known and unresolved; none of these is a bug report waiting to be filed:
   every check that asks "is a key configured?" answered yes and the provider row
   drew a masked key; the only symptom was that AI calls failed. The restore now
   counts those rows — plus any it could not re-encrypt because this server has no
-  `AI_ENCRYPTION_KEY` — and reports `unusableAiProviderKeys` beside `restored`:
+  `ENCRYPTION_KEY` — and reports `unusableAiProviderKeys` beside `restored`:
   beside, never inside, for the same reason as `skippedAttachments` (§4), since
   the client sums `restored` into a row total and these rows *were* written. It
   is the key inside them that did not survive. `AiService.testConnection` says
@@ -879,7 +922,7 @@ Known and unresolved; none of these is a bug report waiting to be filed:
   settings", which is advice about settings that are in fact correct.
 
   Both the re-encryption and the count run before the restore's transaction:
-  `AiEncryptionService`'s derivation is `scryptSync`, tens of milliseconds per
+  `EncryptionService`'s derivation is `scryptSync`, tens of milliseconds per
   key, which does not belong inside the transaction holding every one of the
   user's rows — and does not belong on a list endpoint at all, which is why
   `getConfigs` still reports only whether the column is populated.

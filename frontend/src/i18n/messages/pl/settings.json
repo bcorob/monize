@@ -514,15 +514,24 @@
     "encryption": {
       "heading": "Szyfrowanie kopii zapasowej",
       "descriptionOidc": "Szyfruj ręczne i automatyczne kopie zapasowe dedykowanym hasłem kopii ustawionym tutaj. Hasło jest wymagane do przywrócenia.",
-      "loading": "Wczytywanie...",
+      "descriptionLocal": "Twoje kopie zapasowe są szyfrowane hasłem logowania. Nie musisz pamiętać nic więcej: to samo hasło je przywraca.",
+      "unavailable": "Ten serwer nie jest skonfigurowany do szyfrowania kopii zapasowych, więc są one zapisywane bez szyfrowania.",
       "enabledBadge": "Włączone",
+      "disabledBadge": "Nieaktywne",
+      "enabledLocalNote": "Kopie zapasowe są szyfrowane hasłem logowania.",
+      "disabledLocalNote": "Kopie zapasowe są zapisywane bez szyfrowania, dopóki nie potwierdzisz hasła logowania.",
+      "enableWithLoginPasswordButton": "Włącz moim hasłem logowania",
+      "loading": "Wczytywanie...",
       "changePasswordButton": "Zmień hasło kopii zapasowej",
       "disableButton": "Wyłącz",
       "setPasswordButton": "Ustaw hasło kopii zapasowej",
       "setupModal": {
         "titleOidc": "Ustaw hasło kopii zapasowej",
+        "titleLocal": "Włącz szyfrowane kopie zapasowe",
         "descriptionOidc": "Wybierz hasło, które będzie używane do szyfrowania kopii zapasowych. Zapisz je w bezpiecznym miejscu -- będzie potrzebne do przywrócenia.",
+        "descriptionLocal": "Potwierdź hasło logowania, aby włączyć szyfrowane kopie zapasowe. Tym hasłem zostaną zaszyfrowane kopie i tego samego hasła użyjesz do ich przywrócenia.",
         "placeholderOidc": "Nowe hasło kopii zapasowej (12+ znaków)",
+        "placeholderLocal": "Twoje hasło logowania",
         "savingButton": "Zapisywanie...",
         "confirmButton": "Potwierdź"
       },
@@ -768,7 +777,7 @@
     },
     "encryptionNotConfigured": {
       "heading": "Wymagany klucz szyfrowania",
-      "body": "Dostęp awaryjny wymaga ustawienia AI_ENCRYPTION_KEY na serwerze. Przyznanie dostępu przechowuje link dostępowy każdego kontaktu w postaci zaszyfrowanej, aby ponowna próba mogła wysłać ten sam link ponownie; bez tego klucza nie można wysłać żadnego linku."
+      "body": "Dostęp awaryjny wymaga ustawienia ENCRYPTION_KEY na serwerze. Przyznanie dostępu przechowuje link dostępowy każdego kontaktu w postaci zaszyfrowanej, aby ponowna próba mogła wysłać ten sam link ponownie; bez tego klucza nie można wysłać żadnego linku."
     },
     "alreadyGranted": {
       "heading": "Dostęp awaryjny został już przyznany",
@@ -874,7 +883,7 @@
   "aiProviders": {
     "heading": "Dostawcy AI",
     "addButton": "Dodaj dostawcę",
-    "encryptionWarning": "AI_ENCRYPTION_KEY nie jest skonfigurowany. Możesz używać Ollama (lokalnie, bez klucza API), ale dostawcy w chmurze wymagają szyfrowania do bezpiecznego przechowywania kluczy API.",
+    "encryptionWarning": "ENCRYPTION_KEY nie jest skonfigurowany. Możesz używać Ollama (lokalnie, bez klucza API), ale dostawcy w chmurze wymagają szyfrowania do bezpiecznego przechowywania kluczy API.",
     "systemDefault": {
       "heading": "Dostępny domyślny systemowy dostawca AI",
       "description": "Administrator skonfigurował centralnego dostawcę AI",

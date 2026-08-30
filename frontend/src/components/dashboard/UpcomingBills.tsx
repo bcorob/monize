@@ -9,14 +9,11 @@ import { Account } from '@/types/account';
 import { parseLocalDate } from '@/lib/utils';
 import { useDateFormat } from '@/hooks/useDateFormat';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
-import { useExchangeRates } from '@/hooks/useExchangeRates';
 import {
   SCHEDULED_KIND_AMOUNT_CLASSES,
   occurrenceKind,
   type ScheduledKind,
 } from '@/lib/scheduled-kind';
-import { sumConverted } from '@/lib/currency-total';
-import { PartialTotal } from '@/components/ui/PartialTotal';
 import { UnknownAmount } from '@/components/ui/UnknownAmount';
 import {
   nextOccurrenceDueDate,
@@ -39,7 +36,6 @@ export function UpcomingBills({ scheduledTransactions, accounts, isLoading, maxI
   const router = useRouter();
   const { formatDate } = useDateFormat();
   const { formatCurrency: formatCurrencyBase } = useNumberFormat();
-  const { convertToDefault, defaultCurrency } = useExchangeRates();
 
   // Filter to active bills, deposits, and transfers: overdue items + within each item's reminder window
   const today = useMemo(() => startOfDay(new Date()), []);
@@ -219,41 +215,12 @@ export function UpcomingBills({ scheduledTransactions, accounts, isLoading, maxI
     );
   }
 
-  // Totals use the full list; display is capped at maxItems. An item with no
-  // rate is excluded and its currency named, so the total is marked as a
-  // subtotal rather than quietly understating it. Bills, transfers and
-  // zero-amount reminders are classified out by scheduledKind, not summed.
-  //
-  // The "Total due" row this widget used to draw was removed upstream (#1264),
-  // so the bills side is no longer totalled here. The three rules below govern
-  // the one total that is left -- they were written for both and are not
-  // weakened by there being one (issue #1247):
-  //
-  // An item whose current amount is unknown is excluded and counted, so the
-  // figure is marked a subtotal rather than quietly understating what is coming
-  // in. It goes through `sumConverted`'s non-finite branch -- a value failure
-  // with no currency to blame, which is exactly what an unresolvable settlement
-  // rate is; the missing-rate branch below still names a currency when it is the
-  // *display* conversion that has no rate.
-  //
-  // An occurrence whose direction the server could not derive might be a
-  // deposit, so it is counted here and withholds this total rather than being
-  // quietly left out: filtering it away left "Total incoming" rendering as a
-  // complete figure beside a row that says its own amount is unknown. Its
-  // amount is null, which is what that same non-finite branch withholds on.
-  const unclassified = upcomingItems.filter(
-    (item) => getItemType(item) === 'unknown',
-  );
-  const totalIncoming = sumConverted(
-    [
-      ...upcomingItems.filter((item) => getItemType(item) === 'deposit'),
-      ...unclassified,
-    ],
-    (item) => getEffective(item).amount ?? NaN,
-    (item) => getEffective(item).currencyCode,
-    convertToDefault,
-  );
-
+  // This widget lists occurrences and nothing else: the summed "Total due" row
+  // went in #1264 and "Total incoming" followed it, so no figure here stands for
+  // more than the one occurrence printed beside it. Do not reintroduce a summary
+  // row -- a per-row amount needs no completeness flag, no cross-currency
+  // conversion and no subtotal marking, which is why the widget no longer reads
+  // exchange rates at all.
   const visibleItems = upcomingItems.slice(0, maxItems);
   const hiddenCount = upcomingItems.length - visibleItems.length;
 
@@ -342,21 +309,6 @@ export function UpcomingBills({ scheduledTransactions, accounts, isLoading, maxI
           {t('upcomingBills.moreItems', { count: hiddenCount })}
         </button>
       )}
-      <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 space-y-1">
-        {/* Also shown when the value is 0 but items were excluded for want of a
-            rate, so the missing-currency marker still tells the user the total
-            could not be worked out rather than hiding the row entirely. */}
-        {(totalIncoming.value > 0 || totalIncoming.excludedCount > 0) && (
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-gray-600 dark:text-gray-400">{t('upcomingBills.totalIncoming')}</span>
-            <span className="font-semibold text-green-600 dark:text-green-400">
-              <PartialTotal total={totalIncoming} displayCurrency={defaultCurrency}>
-                {'+'}{formatCurrencyBase(totalIncoming.value)}
-              </PartialTotal>
-            </span>
-          </div>
-        )}
-      </div>
       <button
         onClick={() => router.push('/bills')}
         className="mt-3 w-full text-center text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"

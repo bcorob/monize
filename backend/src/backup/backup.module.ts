@@ -11,11 +11,11 @@ import { AutoBackupService } from "./auto-backup.service";
 import { BackupEncryptionService } from "./backup-encryption.service";
 import { SupportBackupService } from "./support-backup/support-backup.service";
 import { AuthModule } from "../auth/auth.module";
-import { AiModule } from "../ai/ai.module";
+import { EncryptionModule } from "../common/encryption/encryption.module";
 import { AttachmentsModule } from "../attachments/attachments.module";
 
 @Module({
-  imports: [AuthModule, AiModule, ConfigModule, AttachmentsModule],
+  imports: [AuthModule, EncryptionModule, ConfigModule, AttachmentsModule],
   controllers: [BackupController, AutoBackupController],
   providers: [
     // The four components issue #1092 split BackupService into; BackupService

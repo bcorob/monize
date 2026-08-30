@@ -38,7 +38,8 @@
     "ambiguousBrokerage": "« {{ query }} » correspond à plusieurs comptes de courtage : {{ list }}. Utilisez le nom exact du compte.",
     "unknownInvestmentAccount": "Compte inconnu : {{ name }}. Utilisez un nom exact de la liste des comptes de l'utilisateur.",
     "notACreditCard": "Les cycles de facturation ne sont disponibles que pour les comptes de carte de crédit",
-    "noStatementSettlementDay": "Cette carte de crédit n'a aucun jour de clôture de relevé configuré"
+    "noStatementSettlementDay": "Cette carte de crédit n'a aucun jour de clôture de relevé configuré",
+    "loanLedgerUnreadable": "Le solde de ce prêt n'a pas pu être lu. Réessayez."
   },
   "actionHistory": {
     "nothingToUndo": "Rien à annuler",
@@ -76,8 +77,8 @@
     "crossOwnerTransferUnsupported": "Ce virement implique le compte d'un autre utilisateur, que l'assistant ne peut pas encore modifier ni supprimer. Utilisez plutôt l'écran Transactions.",
     "providerConfigNotFound": "Configuration du fournisseur IA introuvable",
     "maxProvidersExceeded": "Maximum de {{ maxProvidersPerUser }} configurations de fournisseurs IA par utilisateur",
-    "encryptionKeyNotConfigured": "AI_ENCRYPTION_KEY n'est pas configuré. Impossible de stocker les clés API de manière sécurisée.",
-    "apiKeyUndecryptable": "Ce serveur ne peut pas lire la clé d'API enregistrée. Cela se produit lorsqu'une sauvegarde est restaurée sur une autre instance ou après une modification de AI_ENCRYPTION_KEY. Saisissez à nouveau la clé d'API pour corriger le problème.",
+    "encryptionKeyNotConfigured": "ENCRYPTION_KEY n'est pas configuré. Impossible de stocker les clés API de manière sécurisée.",
+    "apiKeyUndecryptable": "Ce serveur ne peut pas lire la clé d'API enregistrée. Cela se produit lorsqu'une sauvegarde est restaurée sur une autre instance ou après une modification de ENCRYPTION_KEY. Saisissez à nouveau la clé d'API pour corriger le problème.",
     "noActiveProviders": "Aucun fournisseur IA actif configuré. Veuillez configurer un fournisseur dans les Paramètres IA.",
     "allProvidersFailed": "Tous les fournisseurs IA ont échoué. Vérifiez votre configuration de fournisseur et réessayez.",
     "noToolUseProvider": "Aucun fournisseur IA avec prise en charge des outils configuré. Les requêtes en langage naturel nécessitent Anthropic, OpenAI ou Ollama. Veuillez en configurer un dans les Paramètres IA.",
@@ -187,8 +188,10 @@
     "unsupportedBackupVersion": "Version de sauvegarde non prise en charge : {{ version }}. Attendu : {{ expected }}",
     "missingExportedAt": "Format de sauvegarde invalide : exportedAt manquant",
     "tableNotAllowed": "La table {{ table }} n'est pas autorisée dans la restauration de sauvegarde",
-    "encryptionNotConfigured": "Le serveur n'est pas configuré pour le chiffrement (AI_ENCRYPTION_KEY manquant)",
+    "encryptionNotConfigured": "Le serveur n'est pas configuré pour le chiffrement (JWT_SECRET manquant ou trop court)",
     "backupPasswordOidcOnly": "Le mot de passe de sauvegarde n'est configurable que pour les utilisateurs OIDC ; les utilisateurs locaux utilisent leur mot de passe de connexion",
+    "backupPasswordLocalOnly": "Ce compte n'a pas de mot de passe de connexion permettant de chiffrer les sauvegardes ; définissez plutôt un mot de passe de sauvegarde",
+    "loginPasswordIncorrect": "Ce n'est pas votre mot de passe de connexion actuel",
     "backupPasswordTooShort": "Le mot de passe de sauvegarde doit comporter au moins {{ minLength }} caractères",
     "backupPasswordBreached": "Ce mot de passe a été trouvé dans une fuite de données. Veuillez choisir un mot de passe différent.",
     "restoreBodyMustBeFile": "Le corps de la requête doit être un fichier de sauvegarde",
@@ -282,8 +285,8 @@
   },
   "emergencyAccess": {
     "smtpNotConfigured": "L'e-mail n'est pas configuré. L'accès d'urgence ne peut pas être activé tant que SMTP n'est pas configuré.",
-    "encryptionNotConfigured": "La clé de chiffrement n'est pas configurée. Le message libre ne peut pas être stocké de manière sécurisée tant que AI_ENCRYPTION_KEY n'est pas défini.",
-    "encryptionRequiredToEnable": "Le chiffrement des identifiants n'est pas configuré. L'accès d'urgence ne peut pas être activé tant que AI_ENCRYPTION_KEY n'est pas défini, car un octroi doit stocker de manière sécurisée le lien d'accès de chaque contact.",
+    "encryptionNotConfigured": "La clé de chiffrement n'est pas configurée. Le message libre ne peut pas être stocké de manière sécurisée tant que ENCRYPTION_KEY n'est pas défini.",
+    "encryptionRequiredToEnable": "Le chiffrement des identifiants n'est pas configuré. L'accès d'urgence ne peut pas être activé tant que ENCRYPTION_KEY n'est pas défini, car un octroi doit stocker de manière sécurisée le lien d'accès de chaque contact.",
     "contactEmailExists": "Un contact d'urgence avec cet e-mail existe déjà.",
     "contactNotFound": "Contact introuvable",
     "notConfigured": "Accès d'urgence non configuré",
@@ -384,7 +387,8 @@
     "splitOverrideRequiresAmount": "Le montant est requis lors de la création d'un remplacement fractionné",
     "overrideNotFound": "Remplacement avec l'ID {{ overrideId }} introuvable",
     "updateSplitOverrideRequiresAmount": "Le montant est requis pour le remplacement fractionné",
-    "dateMustBeYMD": "La date doit être au format YYYY-MM-DD"
+    "dateMustBeYMD": "La date doit être au format YYYY-MM-DD",
+    "loanLedgerUnreadable": "Ce paiement de prêt n'a pas pu être calculé car le solde de son grand livre n'a pas pu être lu. Réessayez."
   },
   "securities": {
     "exchangeRateUnavailable": "Impossible de déterminer un taux de change pour {{ from }} -> {{ to }} à la date de la transaction. Fournissez un exchangeRate explicite afin que l'écriture sur le compte d'espèces soit correcte.",

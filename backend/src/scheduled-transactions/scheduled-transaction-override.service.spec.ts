@@ -126,7 +126,7 @@ describe("ScheduledTransactionOverrideService", () => {
      * The pre-check is a courtesy; the constraint is the mechanism.
      *
      * Two concurrent creates for one recurrence slot both read no existing row
-     * and both proceed -- a SELECT is not a lock. Before migration 166 nothing
+     * and both proceed -- a SELECT is not a lock. Before migration 168 nothing
      * downstream stopped them either: the table's uniqueness named
      * `override_date`, so two overrides could replace one occurrence and the
      * expander's `byOriginal` map kept whichever it saw first, letting row order

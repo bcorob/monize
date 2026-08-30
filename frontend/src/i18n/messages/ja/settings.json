@@ -514,15 +514,24 @@
     "encryption": {
       "heading": "バックアップ暗号化",
       "descriptionOidc": "ここで設定した専用のバックアップパスワードで手動および自動バックアップを暗号化します。復元にはパスワードが必要です。",
-      "loading": "読み込み中...",
+      "descriptionLocal": "バックアップはログインパスワードで暗号化されます。他に覚えるものはありません。同じパスワードで復元できます。",
+      "unavailable": "このサーバーはバックアップの暗号化が設定されていないため、暗号化せずに書き込まれます。",
       "enabledBadge": "有効",
+      "disabledBadge": "未有効",
+      "enabledLocalNote": "バックアップはログインパスワードで暗号化されています。",
+      "disabledLocalNote": "ログインパスワードを確認するまで、バックアップは暗号化されずに書き込まれます。",
+      "enableWithLoginPasswordButton": "ログインパスワードで有効にする",
+      "loading": "読み込み中...",
       "changePasswordButton": "バックアップパスワードを変更",
       "disableButton": "無効化",
       "setPasswordButton": "バックアップパスワードを設定",
       "setupModal": {
         "titleOidc": "バックアップパスワードを設定",
+        "titleLocal": "暗号化バックアップを有効にする",
         "descriptionOidc": "バックアップの暗号化に使用するパスワードを選択してください。安全な場所に保存してください — 復元に必要です。",
+        "descriptionLocal": "暗号化バックアップを有効にするには、ログインパスワードを確認してください。このパスワードでバックアップが暗号化され、復元にも同じパスワードが必要です。",
         "placeholderOidc": "新しいバックアップパスワード（12文字以上）",
+        "placeholderLocal": "ログインパスワード",
         "savingButton": "保存中...",
         "confirmButton": "確認"
       },
@@ -768,7 +777,7 @@
     },
     "encryptionNotConfigured": {
       "heading": "暗号化キーが必要です",
-      "body": "緊急アクセスにはサーバーで AI_ENCRYPTION_KEY が設定されている必要があります。付与では各連絡先のアクセスリンクを暗号化して保存し、再試行時に同じリンクを再送できるようにします。このキーがないとリンクを一切送信できません。"
+      "body": "緊急アクセスにはサーバーで ENCRYPTION_KEY が設定されている必要があります。付与では各連絡先のアクセスリンクを暗号化して保存し、再試行時に同じリンクを再送できるようにします。このキーがないとリンクを一切送信できません。"
     },
     "alreadyGranted": {
       "heading": "緊急アクセスはすでに付与されています",
@@ -874,7 +883,7 @@
   "aiProviders": {
     "heading": "AIプロバイダー",
     "addButton": "プロバイダーを追加",
-    "encryptionWarning": "AI_ENCRYPTION_KEYが設定されていません。Ollama（ローカル、APIキー不要）は使用できますが、クラウドプロバイダーはAPIキーを安全に保存するために暗号化が必要です。",
+    "encryptionWarning": "ENCRYPTION_KEYが設定されていません。Ollama（ローカル、APIキー不要）は使用できますが、クラウドプロバイダーはAPIキーを安全に保存するために暗号化が必要です。",
     "systemDefault": {
       "heading": "システムデフォルトAIプロバイダーが利用可能",
       "description": "管理者が中央AIプロバイダーを設定しました",

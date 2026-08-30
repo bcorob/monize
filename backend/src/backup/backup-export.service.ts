@@ -29,7 +29,7 @@ import {
   ExportTableQuery,
   INTENTIONALLY_EXCLUDED_TABLES,
 } from "./export-table-queries";
-import { AiEncryptionService } from "../ai/ai-encryption.service";
+import { EncryptionService } from "../common/encryption/encryption.service";
 import { exportAiProviderKey } from "./ai-provider-key-transport";
 import { tr } from "../i18n/translate";
 
@@ -85,7 +85,7 @@ export class BackupExportService {
     private readonly dataSource: DataSource,
     @Inject(ATTACHMENT_STORAGE_PROVIDER)
     private readonly attachmentStorage: AttachmentStorageProvider,
-    private readonly aiEncryption: AiEncryptionService,
+    private readonly aiEncryption: EncryptionService,
   ) {}
 
   /** Ceiling on the artifact a buffered export may accumulate. */
@@ -137,7 +137,7 @@ export class BackupExportService {
         this.logger.warn(
           `Backup export could not decrypt a stored AI provider API key (${leftEncrypted} so far); ` +
             "it travels as ciphertext and will only restore onto an instance " +
-            "holding the AI_ENCRYPTION_KEY that produced it.",
+            "holding the ENCRYPTION_KEY that produced it.",
         );
       }
       return result.row;

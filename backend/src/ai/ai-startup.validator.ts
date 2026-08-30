@@ -5,7 +5,7 @@ import {
   AiProviderType,
 } from "./entities/ai-provider-config.entity";
 import { AiProviderFactory } from "./ai-provider.factory";
-import { AiEncryptionService } from "./ai-encryption.service";
+import { EncryptionService } from "../common/encryption/encryption.service";
 
 /**
  * Validates connectivity to the system-default AI provider on backend startup
@@ -20,7 +20,7 @@ export class AiStartupValidator implements OnApplicationBootstrap {
 
   constructor(
     private readonly providerFactory: AiProviderFactory,
-    private readonly encryptionService: AiEncryptionService,
+    private readonly encryptionService: EncryptionService,
     private readonly configService: ConfigService,
   ) {}
 

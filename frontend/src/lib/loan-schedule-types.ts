@@ -26,6 +26,29 @@ export interface RateTimelineRow {
   effectiveDate: string;
   annualRate: number;
   newPaymentAmount?: number | null;
+  /**
+   * How the row was created. Load-bearing for the payment, not the rate.
+   *
+   * `manual` (typed by the user) and `inferred` (the modal observed payment from
+   * detection, and deliberately null when interest is booked separately) STATE
+   * the payment: they are answers to "what is being paid".
+   *
+   * Optional only because callers build `RateTimelineRow`s by hand (fixtures,
+   * and `loan-past-impact`'s contractual timeline); the API's `LoanRateChange`
+   * declares it required, so a row that came from the server always has one.
+   * Absent is read as "states the payment", which is what every caller meant
+   * before this field existed -- the demotion applies to a row that says
+   * `initial`, never to one that says nothing.
+   *
+   * `initial` is written by two things and means different things in each, with
+   * no way to tell them apart from the row: `insertInitialRowIfFirst` copies
+   * `account.paymentAmount` verbatim (a snapshot of a field the user may since
+   * have corrected), while detection's first segment carries a real observed
+   * payment. So it is neither authoritative nor worthless -- it comes back as
+   * `snapshotPaymentAmount`, a candidate its caller tests before using
+   * (`resolveEffectiveLoanTerms` in `loan-comparison.ts`).
+   */
+  source?: 'manual' | 'inferred' | 'initial';
 }
 
 export interface RateTimeline {

@@ -252,7 +252,7 @@ records where it is implemented additively instead.
 
 An occurrence may carry an override. `scheduled_transaction_overrides` is unique
 on `(scheduled_transaction_id, original_date)`
-(`uq_sched_txn_overrides_occurrence`, migration 166), so one occurrence has at
+(`uq_sched_txn_overrides_occurrence`, migration 168), so one occurrence has at
 most one override.
 
 That constraint used to name `override_date`, and the sentence above was drawn

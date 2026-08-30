@@ -29,6 +29,8 @@ import { DataSource } from "typeorm";
 import { parseRlsMode } from "./common/db/rls-config";
 import { assertRuntimeRoleSafe } from "./common/db/runtime-role-check";
 import { assertRequiredDbFunctions } from "./common/db/required-db-functions";
+import { ConfigService } from "@nestjs/config";
+import { logEncryptionKeyStatus } from "./common/encryption/encryption-key";
 
 // node-oidc-provider writes its notices straight to console.info/console.warn,
 // which would otherwise be the only unformatted lines in the log. Installed
@@ -137,10 +139,34 @@ async function assertRequiredDbFunctionsOrExit(
   }
 }
 
+/**
+ * Say what this deployment's encryption key situation is, at every boot.
+ *
+ * Deliberately a warning and not a refusal, unlike the two database checks
+ * below. `ENCRYPTION_KEY` is not required yet: refusing to boot would turn an
+ * upgrade into an outage for every deployment that never set the variable under
+ * its old name, `AI_ENCRYPTION_KEY`, which was optional and documented as being
+ * for cloud AI providers. But an unkeyed server is precisely the state issue
+ * #1269 was reported from -- backups written in plaintext with nothing saying so
+ * -- so the absence is announced loudly, on every start, and named as a coming
+ * hard requirement. The individual write paths still refuse; only the boot does
+ * not.
+ */
+function reportEncryptionKeyStatus(configService: ConfigService): void {
+  logEncryptionKeyStatus(
+    (name) => configService.get<string>(name, ""),
+    new Logger("EncryptionKeyCheck"),
+  );
+}
+
 async function bootstrap() {
   logger.log("Starting application");
 
   const app = await NestFactory.create(AppModule);
+
+  // Before anything that could store a secret: a server with no key writes
+  // plaintext where it promises ciphertext, and used to say nothing.
+  reportEncryptionKeyStatus(app.get(ConfigService));
 
   // RLS_MODE=enforce promises a database-level tenant boundary. Selecting the
   // application role and supplying its password does not deliver one: a

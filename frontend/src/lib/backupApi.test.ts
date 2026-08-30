@@ -375,6 +375,15 @@ describe('backupApi', () => {
     );
   });
 
+  it('enableWithLoginPassword posts the confirmed login password', async () => {
+    vi.mocked(apiClient.post).mockResolvedValue({ data: { enabled: true } });
+    await backupApi.enableWithLoginPassword('hunter2hunter2');
+    expect(apiClient.post).toHaveBeenCalledWith(
+      '/backup/encryption/login-password',
+      { loginPassword: 'hunter2hunter2' },
+    );
+  });
+
   it('disableEncryption issues DELETE /backup/encryption', async () => {
     vi.mocked(apiClient.delete).mockResolvedValue({ data: { enabled: false } });
     await backupApi.disableEncryption();

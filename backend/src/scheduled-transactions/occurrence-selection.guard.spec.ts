@@ -130,6 +130,13 @@ describe("occurrence selection stays in one place", () => {
       // import. No window and no overrides: it answers "when is this bill next
       // due" for a row being created, not "which occurrences fall in a range".
       "import/mny/map/map-bills.ts",
+      // `advancePaymentDates`: one date in, one date out -- the date N payments
+      // after this one, which dates a loan's payoff and a mortgage's term end.
+      // No window, no overrides, and no list of occurrences, so nothing here
+      // can price one. It walks the shared engine on purpose: deriving the date
+      // arithmetically is exactly how a second calendar gets written, which is
+      // the defect this guard was built for rather than an instance of it.
+      "accounts/payment-frequency.util.ts",
     ];
 
     const offenders: string[] = [];

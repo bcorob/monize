@@ -8,7 +8,7 @@ import {
 import { EmergencyAccessService } from "./emergency-access.service";
 import { EmergencyAccessSettings } from "./entities/emergency-access-settings.entity";
 import { EmergencyAccessContact } from "./entities/emergency-access-contact.entity";
-import { AiEncryptionService } from "../ai/ai-encryption.service";
+import { EncryptionService } from "../common/encryption/encryption.service";
 import { EmailService } from "../notifications/email.service";
 import { User } from "../users/entities/user.entity";
 import { createScopedDbMocks } from "../test-helpers/scoped-db-testing";
@@ -95,7 +95,7 @@ describe("EmergencyAccessService", () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         EmergencyAccessService,
-        { provide: AiEncryptionService, useValue: encryption },
+        { provide: EncryptionService, useValue: encryption },
         { provide: EmailService, useValue: emailService },
         { provide: DataSource, useValue: dataSource },
       ],
@@ -274,7 +274,7 @@ describe("EmergencyAccessService", () => {
       expect(dataSource.transaction).toHaveBeenCalled();
     });
 
-    it("refuses to save a non-empty message when AI_ENCRYPTION_KEY is missing", async () => {
+    it("refuses to save a non-empty message when ENCRYPTION_KEY is missing", async () => {
       encryption.isConfigured.mockReturnValue(false);
       await expect(
         service.updateMessage(userId, "secret"),
@@ -303,7 +303,7 @@ describe("EmergencyAccessService", () => {
     });
 
     /**
-     * `.env.example` presents `AI_ENCRYPTION_KEY` as optional, needed only for
+     * `.env.example` presents `ENCRYPTION_KEY` as optional, needed only for
      * cloud AI providers, so an SMTP-only self-hosted install without it is the
      * documented configuration rather than an edge case. Grant delivery now
      * requires it, and the failure is invisible: `credentialFor` throws per
@@ -334,7 +334,7 @@ describe("EmergencyAccessService", () => {
           grantAfterDays: 14,
           reminderAfterDays: 7,
         }),
-      ).rejects.toThrow(/AI_ENCRYPTION_KEY/);
+      ).rejects.toThrow(/ENCRYPTION_KEY/);
     });
 
     it("still lets the owner turn the feature off without SMTP", async () => {

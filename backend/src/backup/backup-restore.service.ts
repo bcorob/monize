@@ -13,7 +13,7 @@ import { promisify } from "util";
 import { withScopedDb } from "../common/db/scoped-db";
 import { withPreserveTimestamps } from "../common/db/with-context";
 import { UserMaintenanceService } from "../common/jobs/user-maintenance.service";
-import { AiEncryptionService } from "../ai/ai-encryption.service";
+import { EncryptionService } from "../common/encryption/encryption.service";
 import { OidcReauthService } from "../auth/oidc/oidc-reauth.service";
 import { User } from "../users/entities/user.entity";
 import { tr } from "../i18n/translate";
@@ -63,7 +63,7 @@ export class BackupRestoreService {
 
   constructor(
     private readonly dataSource: DataSource,
-    private readonly aiEncryption: AiEncryptionService,
+    private readonly encryption: EncryptionService,
     private readonly oidcReauth: OidcReauthService,
     private readonly attachments: BackupAttachmentTransferService,
     private readonly db: BackupRestoreDatabaseService,
@@ -202,7 +202,7 @@ export class BackupRestoreService {
             await this.attachments.collectExternalAttachmentKeys(userId);
 
           // Re-encrypt every AI provider key the artifact carries in plaintext
-          // under *this* instance's AI_ENCRYPTION_KEY, before the transaction: the
+          // under *this* instance's ENCRYPTION_KEY, before the transaction: the
           // work is scrypt-bound (tens of milliseconds per key) and does not
           // belong inside the transaction that holds every one of this user's
           // rows. Rows an older artifact carries as foreign ciphertext are left
@@ -347,7 +347,7 @@ export class BackupRestoreService {
     if (input.password) candidates.push(input.password);
     const stored = resolveStoredBackupPassword(
       user,
-      this.aiEncryption,
+      this.encryption,
       this.logger,
     );
     if (stored) candidates.push(stored);
@@ -533,12 +533,12 @@ export class BackupRestoreService {
 
     let unusable = 0;
     tables.ai_provider_configs = rows.map((row) => {
-      const result = restoreAiProviderKey(row, this.aiEncryption);
+      const result = restoreAiProviderKey(row, this.encryption);
       if (result.outcome === "dropped-unencryptable") {
         unusable += 1;
       } else if (
         result.outcome === "kept-foreign-ciphertext" &&
-        !this.aiEncryption.canDecrypt(result.row.api_key_enc as string)
+        !this.encryption.canDecrypt(result.row.api_key_enc as string)
       ) {
         // An older artifact, written before keys travelled in plaintext. It only
         // restores onto the instance that produced it; anywhere else the column
@@ -553,7 +553,7 @@ export class BackupRestoreService {
       this.logger.warn(
         `Restoring ${unusable} AI provider configuration(s) for user ${userId} without a ` +
           "usable API key: the artifact carried instance-key ciphertext this server " +
-          "cannot read, or AI_ENCRYPTION_KEY is unset here. The rows are restored; " +
+          "cannot read, or ENCRYPTION_KEY is unset here. The rows are restored; " +
           "the keys must be re-entered.",
       );
     }

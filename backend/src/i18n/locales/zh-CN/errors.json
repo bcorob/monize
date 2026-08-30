@@ -38,7 +38,8 @@
     "ambiguousBrokerage": "\"{{ query }}\" 匹配多个经纪账户：{{ list }}。请使用准确的账户名称。",
     "unknownInvestmentAccount": "未知账户：{{ name }}。请使用用户账户列表中的准确名称。",
     "notACreditCard": "账单周期仅适用于信用卡账户",
-    "noStatementSettlementDay": "此信用卡未配置账单结算日"
+    "noStatementSettlementDay": "此信用卡未配置账单结算日",
+    "loanLedgerUnreadable": "无法读取此贷款的余额。请重试。"
   },
   "actionHistory": {
     "nothingToUndo": "没有可撤销的操作",
@@ -76,8 +77,8 @@
     "crossOwnerTransferUnsupported": "此转账涉及其他用户的账户，助手目前无法编辑或删除。请改用交易页面。",
     "providerConfigNotFound": "未找到 AI 提供商配置",
     "maxProvidersExceeded": "每位用户最多可配置 {{ maxProvidersPerUser }} 个 AI 提供商",
-    "encryptionKeyNotConfigured": "未配置 AI_ENCRYPTION_KEY。无法安全存储 API 密钥。",
-    "apiKeyUndecryptable": "此服务器无法读取已保存的 API 密钥。将备份还原到其他实例后，或 AI_ENCRYPTION_KEY 更改后，都会出现这种情况。请重新输入 API 密钥以解决。",
+    "encryptionKeyNotConfigured": "未配置 ENCRYPTION_KEY。无法安全存储 API 密钥。",
+    "apiKeyUndecryptable": "此服务器无法读取已保存的 API 密钥。将备份还原到其他实例后，或 ENCRYPTION_KEY 更改后，都会出现这种情况。请重新输入 API 密钥以解决。",
     "noActiveProviders": "未配置活跃的 AI 提供商。请在 AI 设置中配置提供商。",
     "allProvidersFailed": "所有 AI 提供商均失败。请检查您的提供商配置后重试。",
     "noToolUseProvider": "未配置支持工具使用的 AI 提供商。自然语言查询需要 Anthropic、OpenAI 或 Ollama。请在 AI 设置中配置。",
@@ -187,8 +188,10 @@
     "unsupportedBackupVersion": "不支持的备份版本：{{ version }}。预期版本：{{ expected }}",
     "missingExportedAt": "无效的备份格式：缺少 exportedAt",
     "tableNotAllowed": "表 {{ table }} 不允许在备份恢复中使用",
-    "encryptionNotConfigured": "服务器未配置加密（缺少 AI_ENCRYPTION_KEY）",
+    "encryptionNotConfigured": "服务器未配置加密（缺少 JWT_SECRET 或长度不足）",
     "backupPasswordOidcOnly": "备份密码仅适用于 OIDC 用户；本地用户使用登录密码",
+    "backupPasswordLocalOnly": "此账户没有可用于加密备份的登录密码；请改为设置备份密码",
+    "loginPasswordIncorrect": "这不是您当前的登录密码",
     "backupPasswordTooShort": "备份密码至少需要 {{ minLength }} 个字符",
     "backupPasswordBreached": "此密码已在数据泄露中被发现。请选择其他密码。",
     "restoreBodyMustBeFile": "请求正文必须是备份文件",
@@ -282,8 +285,8 @@
   },
   "emergencyAccess": {
     "smtpNotConfigured": "邮件未配置。在设置 SMTP 之前，无法启用紧急访问。",
-    "encryptionNotConfigured": "加密密钥未配置。在设置 AI_ENCRYPTION_KEY 之前，无法安全存储自由格式留言。",
-    "encryptionRequiredToEnable": "凭据加密未配置。在设置 AI_ENCRYPTION_KEY 之前，无法启用紧急访问，因为授予访问权限时必须安全地存储每位联系人的访问链接。",
+    "encryptionNotConfigured": "加密密钥未配置。在设置 ENCRYPTION_KEY 之前，无法安全存储自由格式留言。",
+    "encryptionRequiredToEnable": "凭据加密未配置。在设置 ENCRYPTION_KEY 之前，无法启用紧急访问，因为授予访问权限时必须安全地存储每位联系人的访问链接。",
     "contactEmailExists": "此邮箱已存在紧急联系人。",
     "contactNotFound": "未找到联系人",
     "notConfigured": "紧急访问未配置",
@@ -384,7 +387,8 @@
     "splitOverrideRequiresAmount": "创建拆分覆盖时需要金额",
     "overrideNotFound": "未找到 ID 为 {{ overrideId }} 的覆盖",
     "updateSplitOverrideRequiresAmount": "拆分覆盖需要金额",
-    "dateMustBeYMD": "date 必须为 YYYY-MM-DD 格式"
+    "dateMustBeYMD": "date 必须为 YYYY-MM-DD 格式",
+    "loanLedgerUnreadable": "无法计算此贷款还款，因为无法读取其账簿余额。请重试。"
   },
   "securities": {
     "exchangeRateUnavailable": "无法确定交易日 {{ from }} -> {{ to }} 的汇率。请提供明确的 exchangeRate，以便现金账户的记账正确。",

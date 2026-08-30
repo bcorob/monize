@@ -38,7 +38,8 @@
     "ambiguousBrokerage": "\"{{ query }}\" corresponde a várias contas de corretagem: {{ list }}. Use o nome exato da conta.",
     "unknownInvestmentAccount": "Conta desconhecida: {{ name }}. Use um nome exato da lista de contas do usuário.",
     "notACreditCard": "Os ciclos de fatura só estão disponíveis para contas de cartão de crédito",
-    "noStatementSettlementDay": "Este cartão de crédito não tem um dia de liquidação da fatura configurado"
+    "noStatementSettlementDay": "Este cartão de crédito não tem um dia de liquidação da fatura configurado",
+    "loanLedgerUnreadable": "Não foi possível ler o saldo deste empréstimo. Tente novamente."
   },
   "actionHistory": {
     "nothingToUndo": "Nada para desfazer",
@@ -76,8 +77,8 @@
     "crossOwnerTransferUnsupported": "Esta transferência envolve a conta de outro usuário, que o assistente ainda não pode editar ou excluir. Use a tela Transações.",
     "providerConfigNotFound": "Configuração do provedor de IA não encontrada",
     "maxProvidersExceeded": "Máximo de {{ maxProvidersPerUser }} configurações de provedor de IA por usuário",
-    "encryptionKeyNotConfigured": "AI_ENCRYPTION_KEY não está configurado. Não é possível armazenar chaves de API de forma segura.",
-    "apiKeyUndecryptable": "Este servidor não consegue ler a chave de API armazenada. Isso acontece quando um backup é restaurado em outra instância ou depois que a AI_ENCRYPTION_KEY muda. Digite a chave de API novamente para resolver.",
+    "encryptionKeyNotConfigured": "ENCRYPTION_KEY não está configurado. Não é possível armazenar chaves de API de forma segura.",
+    "apiKeyUndecryptable": "Este servidor não consegue ler a chave de API armazenada. Isso acontece quando um backup é restaurado em outra instância ou depois que a ENCRYPTION_KEY muda. Digite a chave de API novamente para resolver.",
     "noActiveProviders": "Não há provedores de IA ativos configurados. Configure um provedor nas Configurações de IA.",
     "allProvidersFailed": "Todos os provedores de IA falharam. Verifique a configuração do seu provedor e tente novamente.",
     "noToolUseProvider": "Nenhum provedor de IA com suporte a ferramentas configurado. As consultas em linguagem natural requerem Anthropic, OpenAI ou Ollama. Configure um nas Configurações de IA.",
@@ -187,8 +188,10 @@
     "unsupportedBackupVersion": "Versão de backup não suportada: {{ version }}. Esperada {{ expected }}",
     "missingExportedAt": "Formato de backup inválido: exportedAt ausente",
     "tableNotAllowed": "A tabela {{ table }} não é permitida na restauração de backup",
-    "encryptionNotConfigured": "O servidor não está configurado para criptografia (AI_ENCRYPTION_KEY ausente)",
+    "encryptionNotConfigured": "O servidor não está configurado para criptografia (JWT_SECRET ausente ou muito curto)",
     "backupPasswordOidcOnly": "A senha de backup só é configurável para usuários OIDC; os usuários locais utilizam a senha de login",
+    "backupPasswordLocalOnly": "Esta conta não tem senha de login para criptografar os backups; defina uma senha de backup em vez disso",
+    "loginPasswordIncorrect": "Essa não é a sua senha de login atual",
     "backupPasswordTooShort": "A senha de backup deve ter pelo menos {{ minLength }} caracteres",
     "backupPasswordBreached": "Esta senha foi encontrada em uma violação de dados. Escolha uma senha diferente.",
     "restoreBodyMustBeFile": "O corpo da requisição deve ser um arquivo de backup",
@@ -282,8 +285,8 @@
   },
   "emergencyAccess": {
     "smtpNotConfigured": "O e-mail não está configurado. O acesso de emergência não pode ser ativado até que o SMTP seja configurado.",
-    "encryptionNotConfigured": "A chave de criptografia não está configurada. A mensagem de texto livre não pode ser armazenada de forma segura até que AI_ENCRYPTION_KEY seja definida.",
-    "encryptionRequiredToEnable": "A criptografia de credenciais não está configurada. O acesso de emergência não pode ser ativado até que AI_ENCRYPTION_KEY seja definida, porque uma concessão precisa armazenar com segurança o link de acesso de cada contato.",
+    "encryptionNotConfigured": "A chave de criptografia não está configurada. A mensagem de texto livre não pode ser armazenada de forma segura até que ENCRYPTION_KEY seja definida.",
+    "encryptionRequiredToEnable": "A criptografia de credenciais não está configurada. O acesso de emergência não pode ser ativado até que ENCRYPTION_KEY seja definida, porque uma concessão precisa armazenar com segurança o link de acesso de cada contato.",
     "contactEmailExists": "Já existe um contato de emergência com este e-mail.",
     "contactNotFound": "Contato não encontrado",
     "notConfigured": "Acesso de emergência não configurado",
@@ -384,7 +387,8 @@
     "splitOverrideRequiresAmount": "O valor é obrigatório ao criar uma substituição de divisão",
     "overrideNotFound": "Substituição com ID {{ overrideId }} não encontrada",
     "updateSplitOverrideRequiresAmount": "O valor é obrigatório para substituição de divisão",
-    "dateMustBeYMD": "date deve estar no formato YYYY-MM-DD"
+    "dateMustBeYMD": "date deve estar no formato YYYY-MM-DD",
+    "loanLedgerUnreadable": "Não foi possível calcular este pagamento do empréstimo porque não foi possível ler o saldo do seu livro-razão. Tente novamente."
   },
   "securities": {
     "exchangeRateUnavailable": "Não foi possível determinar uma taxa de câmbio para {{ from }} -> {{ to }} na data da transação. Informe um exchangeRate explícito para que o lançamento na conta de caixa fique correto.",

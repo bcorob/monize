@@ -97,11 +97,14 @@ implied.
 | INV-RECONCILE-001 | While the strict lock is on, a reconciled transaction is not altered | enforced |
 | INV-FX-001 | An unavailable rate never becomes 1:1 | enforced |
 | INV-REPORT-001 | A report's account scope is investment linkage, not account type | enforced |
+| INV-REPORT-002 | A chart's down-sampling never reaches a count, a total or an export | enforced |
 | INV-LOAN-001 | A recurring overpayment's cadence is a calendar, not a payment interval | enforced |
 | INV-LOAN-002 | A schedule truncated by the projection horizon yields no lifetime total | enforced |
 | INV-LOAN-003 | One named compounding convention, from preview to projection to displayed EAR | enforced |
 | INV-LOAN-004 | The final payment is the residual payoff, not another installment | enforced |
 | INV-LOAN-005 | The first payment date is payment number 1 | enforced |
+| INV-LOAN-006 | A scheduled loan installment prices the ledger debt, and the rate, through its own due date | enforced |
+| INV-LOAN-HISTORY-001 | Historical loan interest counted as paid is ledger-backed | partial |
 | INV-OCCURRENCE-001 | One scheduled occurrence has at most one financial effect | enforced |
 | INV-OCCURRENCE-002 | A stored override price survives reopening | enforced |
 | INV-OCCURRENCE-003 | Every surface reports the effective occurrence: its current amount and currency, its direction, on the date it falls | enforced |
@@ -117,6 +120,7 @@ implied.
 | INV-ATTACHMENT-001 | Available metadata resolves to committed bytes | enforced |
 | INV-BACKUP-001 | A backup file is complete, verified and owner-namespaced | enforced |
 | INV-CRON-001 | One logical cron effect per schedule tick, across replicas | partial |
+| INV-PROVIDER-001 | An unreachable provider stops being called, and produces at most one alert pair per outage | enforced |
 | INV-RLS-001 | Enforced mode refuses to run on a role that can bypass RLS | enforced |
 | INV-CACHE-001 | A money-moving write invalidates every derived cache | enforced |
 | INV-RELEASE-001 | The tested, imaged and tagged revisions are one revision | partial |
@@ -638,6 +642,173 @@ was hiding too much exposes every row it was also hiding *correctly*. The
 account-type predicate had been doing two jobs, and only one of them was wrong.
 Five of the cases above fail on the first fix and pass on the second.
 
+### INV-REPORT-002 -- a chart reduction never reaches a figure
+
+```text
+Statement           Reducing a series so it fits a chart axis is a RENDERING
+                    decision and reaches nothing else. No count, total, average,
+                    percentage, summary card or export may be derived from a
+                    down-sampled or lossily bucketed series; each is derived from
+                    the full data the reduction was made from. Two reductions,
+                    because a series is one of two kinds: a STOCK (a balance, a
+                    running total) has a value at a point in time, so showing
+                    every Nth point drops resolution while every point still
+                    drawn means what it meant; a FLOW (what a period paid) only
+                    means anything over an interval, so dropping a point deletes
+                    the interval it stood for and the chart shows a subset
+                    presented as the whole. A flow is reduced by SUMMING
+                    contiguous groups.
+                    What the ban names is a reduction that CHANGES a figure's
+                    meaning or provenance, not the word "aggregate": a rollup
+                    that preserves both is not one. The Debt Payoff Timeline's
+                    summary reads the full monthly series precisely because a
+                    month's end-of-month balance and cumulative totals are the
+                    same facts the events carry, exactly. A count is the case
+                    that is never preserved -- a month is not a payment. Weekly
+                    and biweekly schedules, extra principal payments and two
+                    payments in one month all collapse into one bucket, so a
+                    count taken after aggregation is wrong before any sampling
+                    happens.
+                    Provenance is the other thing an aggregation must preserve,
+                    and it survives only by being part of the group's IDENTITY.
+                    Which side of the history/projection line a row is on is
+                    grouped ON, never computed from the group's members
+                    afterwards: a weekly, biweekly or semi-monthly loan routinely
+                    has a real payment and a projected one in the same calendar
+                    month, so a month keyed on its label alone is a bucket that
+                    is neither measured nor predicted. One bar cannot honestly be
+                    half measured and half predicted, and neither can the row a
+                    bar is built from.
+                    A label is therefore not an identity. Two chart rows share
+                    one -- the month either side of the line, and a bucketed flow
+                    row labelled as the span it covers -- while recharts keys its
+                    category axis, its tooltip lookup and every ReferenceLine on
+                    the datum's own value, so two rows under one label collapse
+                    onto one category and a marker drawn there lands on whichever
+                    came first.
+Source of truth     The unreduced series -- for a loan, the payment events
+                    frontend/src/lib/loan-history.ts derives from the ledger.
+Enforcement         One module: frontend/src/lib/chart-sampling.ts
+                    (sampleStockSeries for a stock, bucketFlowSeries for a flow,
+                    CHART_MAX_POINTS the shared budget, axisKeyFor/axisTickLabel
+                    the row identity a category axis is keyed on). The reduced
+                    series is bound to its OWN name and handed to a chart; the
+                    full series keeps the name every figure reads. The payment
+                    count is historicalPaymentCount (loan-history.ts), read by
+                    both the Debt Payoff Timeline and the Loan Amortization
+                    report so one loan cannot have two answers.
+                    Monthly aggregation in DebtPayoffTimelineReport groups
+                    contiguous runs over a DATE-ORDERED series keyed on the month
+                    AND the row's side of the line, so the group's provenance is
+                    its key rather than a property derived from its members, and
+                    a future-dated posted payment landing among the projected rows
+                    opens its own run instead of being folded back into a month
+                    it no longer sits beside. Each resulting row carries an
+                    axisKey (its position, then its label) and the charts pass
+                    axisTickLabel as their tickFormatter, so the two rows of a
+                    shared month are two categories and the tick still reads the
+                    month. Whether a projection EXISTS is read from the
+                    projection's own rows, never from whether aggregation left an
+                    all-projected row: a loan paying off inside the month of its
+                    last real payment has a projection whose every row shares that
+                    month, and asking the aggregate erased the "Today" divider and
+                    the Est. Payoff card together with the forecast principal.
+                    frontend/src/lib/chart-reduction.guard.test.ts holds four
+                    scans: no count taken by filtering a schedule on isProjected
+                    anywhere in src/, no group's provenance derived from its
+                    members (`.every(... isProjected ...)`, the exact shape that
+                    called a mixed month historical -- `.some` and `.filter` are
+                    left alone, being ordinary questions about rows nothing has
+                    merged), both loan reports reading the shared count, and no
+                    reduced series measured (.length, .reduce, .filter, .some,
+                    .every, .forEach, .flatMap) -- a lookup such as .find, which a
+                    tooltip needs, is allowed because it cannot aggregate. A fifth
+                    pins the Debt Payoff Timeline's three category axes to
+                    dataKey="axisKey" and axisTickLabel, since keying one back on
+                    the month is how two rows collapse into one. The
+                    measurement scan reads one file at a time, so it can only
+                    see what a reduced series is CALLED: any name a
+                    reduced binding is ALIASED to in the same file
+                    (`return { points: chartPoints }`) is banned under the same
+                    rule, and a reduced series crossing a module boundary keeps
+                    its name so the consuming file is scanned for the name it
+                    uses. The binding scan is pinned to an exact list, so a
+                    rename cannot silently make the measurement scan scan
+                    nothing, and both the alias rule and the measurement scan
+                    carry planted-violation controls.
+                    A marker drawn ON a reduced series is keyed to that series,
+                    not to the full one: a recharts ReferenceLine whose value
+                    matches no axis category is silently not drawn, so the
+                    Payment Distribution chart's "Today" divider comes from the
+                    first projected BUCKET's own axis key -- the balance chart's
+                    key addresses a row of a different series, and a bare month
+                    matches no bucketed range.
+Concurrency scope   -- (render path)
+Retry semantics     -- (render path)
+Crash semantics     -- (render path)
+Failure response    -- a chart draws; it does not refuse.
+Required tests      Present: the source scans above; the unit matrix in
+                    frontend/src/lib/chart-sampling.test.ts (a stock sample keeps
+                    the endpoints and every kept row and emits each index once; a
+                    flow bucket conserves the total, stays within the budget,
+                    hands each bucket its own position and never merges across a
+                    boundary -- split 101/99 rather than 100/100, so the
+                    transition falls INSIDE a group and the flush is what saves
+                    it, since an even split passes with the boundary mechanism
+                    deleted; and an axis key is unique per row, prints its label
+                    back including a label holding the separator, and passes a
+                    non-key value through); and the behavioural cases in
+                    frontend/src/components/reports/DebtPayoffTimelineReport
+                    .test.tsx, which assert Payments Made against a 300-payment
+                    history while the chart is sampled, two payments in one month
+                    counted as two, 26 biweekly payments counted as 26 rather
+                    than 12, the distribution chart conserving every month's
+                    principal, the distribution chart's "Today" marker naming a
+                    key its own axis has, and the history/projection transition
+                    surviving the stride. Each fails on the pre-fix component
+                    with the figures issue #1244 reports (61, 1, 12, half the
+                    money, a marker on a month no bucket is called).
+                    Four more hold the provenance rule, on a 0% weekly loan whose
+                    one real payment (100 on 3 Aug) and two projected payments
+                    (100 each, 17 and 24 Aug) all fall in August, with the clock
+                    pinned to 2026-08-10: August's historical principal is 100 and
+                    its projected principal 200 rather than 300 of history; the
+                    historical balance is the measured 200 rather than the
+                    projection's end-of-month 0; the report still knows it has a
+                    projection when the loan pays off inside that month, so the
+                    Est. Payoff card and the "Today" divider are both drawn and
+                    the two August rows are two axis keys under one label; and a
+                    future-dated posted payment interleaved with the projected
+                    rows stays in its own run, leaving the chart date-ordered with
+                    October carrying both a historical and a projected row. All
+                    four fail on the merged #1280 component.
+                    Each case waits on the COUNT rather than on the chart
+                    mounting: a loan carrying terms projects from its current
+                    balance alone, so the chart appears on a projection-only
+                    schedule one render before the transactions are adopted, and
+                    a test barrier that resolves there measures the wrong render.
+                    The recharts test mock serializes each chart's `data` and
+                    each ReferenceLine's `x`, since a mock that discards either
+                    cannot tell a sampled series from a full one, nor see a
+                    marker vanish.
+Status              enforced
+```
+
+The reduction was written for the balance curve, where it is correct, and then
+inherited by the count, the totals and the Payment Distribution chart because
+all four read one array. That is the shape to look for: a variable that is
+assigned its own reduced form (`points = points.filter(...)`) leaves nothing
+downstream able to tell which of the two it holds.
+
+The first fix stopped the reduction reaching a figure and left the step BEFORE
+it -- monthly aggregation -- grouping on the label alone, so the boundary-aware
+reducer that #1244 added was handed rows whose provenance had already been
+merged away (PR #1280 audit, F-1280-01). That is the second shape to look for:
+a property recomputed from a group's members (`group.every(...)`) is a property
+that was not part of what made the group, and the answer is only as good as the
+grouping. Make it part of the key, and a mixed bucket becomes unrepresentable
+rather than mislabelled.
+
 ### INV-LOAN-001 -- a recurring overpayment's cadence is a calendar
 
 ```text
@@ -943,6 +1114,275 @@ Required tests      Present: the calculateEndDate and calculateMortgageEndDate
                     processes and scans the three helpers for a local accessor.
 Status              enforced
 ```
+### INV-LOAN-006 -- a scheduled loan installment prices the ledger debt, and the rate, through its own due date
+
+```text
+Statement           The interest of a scheduled loan installment is
+                    roundMoney(debt x periodic rate), where BOTH inputs are
+                    measured at that installment's due date: debt is the opening
+                    balance plus every non-void, top-level transaction dated on
+                    or before it, and the rate is the latest loan_rate_changes
+                    row effective on or before it (else the account's scalar).
+                    Never a value advanced from the previously stored
+                    (4dp-rounded) split; never accounts.current_balance, a
+                    through-today read model that excludes future-dated rows;
+                    and never accounts.interest_rate alone, which a recorded
+                    rate change deliberately does not write. The next
+                    scheduled bill, the amounts an occurrence actually posts,
+                    and the amortization report's first projected row all price
+                    that one balance (issue #1253).
+Source of truth     The transactions ledger plus accounts.opening_balance
+                    (INV-BALANCE-001's source) for the debt, and
+                    loan_rate_changes for the rate, both bounded by the
+                    installment's own date.
+Enforcement         ScheduledTransactionLoanService.resolveInstallment is the
+                    one pricing path: datedLoanDebt runs the canonical as-of
+                    ledger sum, the periodic-rate rules (Canadian semi-annual
+                    compounding included) are unchanged, and allocateLoanPayment
+                    stays the shared waterfall. recalculateLoanPaymentSplits
+                    (template advancement after a posting) and
+                    resolvePostingAllocation (called by the posting path inside
+                    its transaction, under the parent lock, immediately before
+                    the financial write) both resolve through it -- the stored
+                    split is a template/read model, so a principal movement
+                    committed between occurrences reaches the amounts actually
+                    posted without any mutation path having to invalidate it.
+                    The amortization report anchors its projection on
+                    GET /scheduled-transactions/loan-anchor/:accountId (the same
+                    due-date-bounded debt) through buildLoanProjectionInput's
+                    anchor parameter, and
+                    frontend/src/lib/loan-projection-anchor.guard.test.ts
+                    enumerates every projection call site so a surface either
+                    passes the anchor or is listed as deliberately
+                    today-anchored -- an omitted optional argument is otherwise
+                    indistinguishable from a decision.
+                    An OVERDUE anchor is refused (its debt predates ledger
+                    activity already on screen), and "overdue" is a question
+                    about the USER's calendar day: the projection is passed
+                    todayYmd from financialTodayYmd
+                    (frontend/src/lib/financial-today.ts, reached through the
+                    useFinancialToday hook), which resolves the stored timezone
+                    preference and falls back to the browser zone -- term for
+                    term the order RequestContextInterceptor uses to answer
+                    todayYMD() for the request that priced the bill. A UTC
+                    instant sliced into a day is a third calendar agreeing with
+                    neither layer, and inside its window (two hours after local
+                    midnight at UTC+2, fourteen at UTC+14, the mirror before
+                    midnight west of Greenwich) the report accepted a stale
+                    anchor or refused a live one.
+                    frontend/src/lib/loan-projection-today.guard.test.ts fails a
+                    projection call that does not state its day, one that
+                    derives it other than from the user's timezone, and any
+                    toISOString() day-slice in the module or its call sites.
+                    The rate rule is one truth table
+                    (backend/src/accounts/loan-rate-timeline-cases.json)
+                    asserted by BOTH layers, since they cannot import each
+                    other: effectiveAnnualRateOn here,
+                    resolveEffectiveLoanTerms there.
+                    The ledger's own inclusion predicate is
+                    LEDGER_MOVEMENT_PREDICATE (common/ledger-balance.sql.ts),
+                    shared by every balance reader so the bill's debt and the
+                    report's balance cannot disagree about which rows count.
+Failure response    A template shape the resolver cannot account for (an
+                    escrow line, no identifiable interest line) declines: the
+                    posting proceeds on the persisted amounts and the
+                    recalculation writes nothing, as before. A loan with no
+                    active scheduled payment has no anchor, and the report's
+                    projection falls back to today's balance one period ahead.
+Required tests      Present: scheduled-transaction-loan.service.spec.ts (prior
+                    rounded splits deliberately a cent off the balance; the
+                    dated query bounded by next_due_date; posting-boundary
+                    resolution including idempotence and the decline cases);
+                    scheduled-transactions.service.spec.ts (post() writes the
+                    ledger-derived allocation, honours an override amount);
+                    frontend loan-history.test.ts and
+                    LoanAmortizationReport.test.tsx (anchored first projected
+                    row equals the bill's interest; anchorless fallback; an
+                    anchor overdue in the user's zone refused while UTC still
+                    reads yesterday, and one due today kept while UTC already
+                    reads tomorrow) and financial-today.test.ts (the day at
+                    pinned instants in named zones, so a boundary case does not
+                    depend on the runner's TZ).
+                    A LINE OF CREDIT is exempt from the paid-off deactivation:
+                    it is revolving, so owing nothing this period does not
+                    finish it.
+                    A retired debt posts NO money -- LoanPostingDecision keeps
+                    "nothing to price here" and "the price is zero" apart,
+                    because collapsing both into null is how a paid-off loan
+                    went on charging its whole stale installment. The debt
+                    check runs after the template shape is resolved so a bill
+                    carrying a line the payoff does not settle (escrow, tax,
+                    insurance) still posts.
+Concurrency scope   The scheduled transaction's pessimistic parent lock for the
+                    template and the occurrence claim; and, for the debt
+                    itself, lockAccountsForBalanceWrite on the source and loan
+                    accounts, taken before the ledger read and held to commit
+                    (CONC-001 -- the schedule row lock serializes no ledger
+                    writer, so it cannot protect an aggregate over
+                    transactions). Proven by
+                    scheduled-loan-pricing-concurrency.integration.spec.ts
+                    (two real connections) plus pricing-lock.guard.spec.ts,
+                    which is what ties the protocol to the posting path the
+                    integration harness cannot construct.
+Scope               MANAGED templates: a principal transfer, one identifiable
+                    interest line, optionally an extra-principal transfer. Any
+                    other line and the resolver declines rather than rewriting
+                    what it cannot account for, so such a bill keeps last
+                    period's split. That is a deliberate fail-safe, not
+                    coverage -- an escrow/tax/insurance template is outside
+                    this invariant until the parent total's non-P/I lines have
+                    a defined share.
+Known gaps          The PAYMENT is not part of this invariant: a rate change
+                    reaches the schedule's payment through
+                    LoanRateChangesService.syncScheduledTransaction, which the
+                    user is asked to approve, so a declined sync leaves the
+                    bill at the old installment by the user's own decision.
+                    Interest is unaffected -- it is debt x rate.
+Status              enforced
+```
+### INV-LOAN-HISTORY-001 -- historical loan interest counted as paid is ledger-backed
+
+```text
+Statement           Interest attributed to a historical loan payment is a
+                    recorded interest split of that payment, or the separate
+                    interest expense paired to its date. Absent both, after a
+                    SUCCESSFUL read, the interest is a measured zero -- never a
+                    figure derived from the balance and the account's rate. A
+                    FAILED read is unknown, not zero, and must not be rendered
+                    as a schedule.
+                    "Ledger-backed" is not enough on its own: the row has to be
+                    an INTEREST row. Escrow, property tax, insurance and fees are
+                    all ledger-backed and none of them is interest, so the line
+                    is identified by provenance -- the loan's configured interest
+                    category -- and never by "the split that is not the principal
+                    transfer". Changing the order of a payment's split lines must
+                    not change Interest Paid.
+                    The rate is a separate fact from the interest and does not
+                    fall with it: a fixed-rate loan with no recorded rate
+                    history keeps its configured rate on a zero-interest row,
+                    while a variable-rate loan's rate for that date stays null
+                    rather than inheriting today's scalar.
+                    And 0% is a rate, distinct from "no rate recorded", at every
+                    step: a fixed interest-free loan carries 0 on every row
+                    (`Number(null)` is also 0, so the test is `!= null`, never
+                    `> 0`), its `principal + 0` installment is COMPLETE rather
+                    than partial because the interest is known to be zero, and
+                    every surface renders it as `0%` rather than "Not set".
+                    A forward PROJECTION may estimate -- that is its job, and
+                    its rows are labelled projected. The prohibition is on a
+                    historical row.
+Source of truth     transaction_splits (the payment's recorded interest leg,
+                    identified by accounts.interest_category_id) and the
+                    interest-category expenses on the loan's configured source
+                    account. Not accounts.interest_rate, which describes the loan
+                    and not what any payment settled -- and, for the projection
+                    that reads this history, not accounts.interest_rate as the
+                    CURRENT rate either: recording a rate change never writes it,
+                    so loan_rate_changes at or before today is the current rate.
+Enforcement         One producer: frontend/src/lib/loan-history.ts
+                    deriveLoanPaymentHistory / classifyPayment, which takes
+                    neither the running balance nor the rate timeline as an
+                    argument, so there is nothing for an estimate to be computed
+                    from. analyticInterest is deleted. The backend computes only
+                    forward schedules (accounts/mortgage-amortization.util.ts,
+                    for previews and scheduled-payment setup), so no second
+                    producer of the historical figure exists.
+                    frontend/src/lib/loan-history.guard.test.ts holds two source
+                    scans: no catch anywhere in the module, since a swallowed
+                    lookup failure resolves to [] and [] is read as "no interest
+                    was booked"; and no truthiness read of a resolved annual rate
+                    anywhere in frontend/src, since `0` is a rate and five sites
+                    rendered a recorded 0% as "Not set". The second carries a
+                    self-test over known good and bad lines, because a scanning
+                    pattern that quietly matches nothing is worse than no scan.
+                    frontend/src/lib/loan-rate-changes.contract.test.ts holds the
+                    rate-history endpoint's precondition as one list -- against
+                    the backend constant that decides the 400, the two frontend
+                    lists that coincide with it, and every caller of
+                    loanRateChangesApi.getAll.
+Concurrency scope   -- (read path)
+Failure response    The rejection propagates to the caller's error-and-retry
+                    state: useReportData in the three loan reports, the
+                    failedAccountId branch of hooks/useLoanProjection.ts, the
+                    page error on the account detail route. A success retires
+                    the same account's earlier failure, or the figures stay
+                    unavailable after recovery.
+Required tests      Present: the principal-only matrix in
+                    frontend/src/lib/loan-history.test.ts (every account type x
+                    Canadian/variable flag x frequency x rate-timeline
+                    presence -- each was a separate door into the estimate), the
+                    fixed-rate and variable-rate Rate-column cases, the
+                    reconstruction paths re-pinned against RECORDED interest so
+                    the Canadian semi-annual and day-count annualizations stay
+                    covered, the split-provenance group (escrow before interest
+                    and interest before escrow yielding the same figure, the
+                    refusal to guess between two uncategorized lines, a transfer
+                    leg never counting), the rate-authority group (a stale scalar
+                    losing to the timeline, a future-dated row being a step and
+                    not the current state), the interest-free group (0% carried
+                    on every row while an unconfigured rate stays null, the
+                    COMPLETE `principal + 0` installment at 0% against the
+                    incomplete one at 6%, and 0% rendering as 0%), the rejection
+                    test, the two source scans and the endpoint contract test
+                    above, the report's error-and-retry and rate-history-wiring
+                    tests in
+                    frontend/src/components/reports/LoanAmortizationReport.test.tsx,
+                    the failed-rate-history refusal in
+                    frontend/src/app/accounts/[id]/page.test.tsx, and the
+                    failure-then-refresh-then-success recovery test in
+                    frontend/src/hooks/useLoanProjection.test.tsx.
+Known gap           **Standalone interest is attributed by `(interest category,
+                    source account)`, which is not per-loan.** A loan's separate
+                    interest expenses are fetched with exactly that pair
+                    (`fetchLoanInterestTransactions`) and nothing on those rows
+                    names the loan they belong to. Two loans paid from one
+                    account and sharing one interest category therefore merge:
+                    each one's history absorbs the other's interest, and
+                    `pairSeparateInterestByDate` sums both onto whichever
+                    payment date matches. The source comment has always said to
+                    give each loan its own category; what makes the state normal
+                    rather than exceptional is the DEFAULT --
+                    `LoanPaymentSetupService` falls back to
+                    `CategoriesService.findLoanCategories`, which resolves one
+                    user-level `Loan -> Loan Interest` category for every loan.
+                    Worked example: Loan A pays 800 principal + 200 interest and
+                    Loan B pays 500 + 100 on the same date from the same
+                    chequing account; A's history reports 300 of interest and an
+                    1,100 installment instead of 200 and 1,000.
+                    Closing it needs a durable provenance link (the loan account
+                    id, or the principal payment / scheduled occurrence, recorded
+                    on the interest transaction) plus a decision about existing
+                    data and about the setup default. Both are schema/product
+                    decisions, so the status is `partial` and says so rather than
+                    the catalogue claiming a guarantee the code does not give.
+                    A second, smaller gap: `accounts.interest_booking_mode`
+                    (`AUTO | SPLIT | SEPARATE`) is persisted, offered in the
+                    account form and written by the MNY importer, but no reader
+                    branches on it -- so it constrains nothing here, and a
+                    `SPLIT` loan can still consume a standalone expense. Its
+                    cross-layer meaning is undefined and needs a truth table
+                    before any reader starts honouring it.
+Status              partial -- the estimate is gone and the provenance of a
+                    SPLIT-recorded interest line is enforced; the provenance of
+                    a STANDALONE interest expense is not.
+```
+
+Issue #1255: a $450 principal-only transfer on a $10,000 loan at 6% rendered as
+Payment $500 / Principal $450 / Interest $50. The $50 was never paid, and it
+reached Interest Paid, every cumulative total, the CSV and PDF exports, and the
+installment the forward projection was seeded with.
+
+Two things the estimate was quietly holding up, and both are the interesting
+half of the fix. The Rate column was reconstructed *from* the interest charged,
+so removing the interest removed the rate as well -- for a fixed-rate loan that
+is a known fact being discarded, not an unknown being reported. And
+`observedInstallment` returns `principal + interest`, which for a loan
+booking its interest outside the app is now under one period's interest, so
+`generateLoanSchedule` refuses the seed: `buildLoanProjectionInput` falls back
+to the stored contractual payment, and where the rate timeline records the
+payment in effect that value is authoritative even when it does not amortize
+(`INV-LOAN-HISTORY-001` covers the interest; the payment's authority ordering is
+documented in `frontend/CLAUDE.md`).
 
 ## Scheduled occurrences
 
@@ -1501,6 +1941,22 @@ unconditionally encrypted because it exists to leave the user's machine, and an
 automatic backup whose stored password cannot be decrypted is *refused* rather
 than written in clear.
 
+What was *not* settled, and is the one thing this invariant does not claim: that
+an automatic backup is encrypted at all. It is encrypted whenever the server
+holds a usable copy of the user's password, and until issue #1269 that copy was
+keyed on `AI_ENCRYPTION_KEY` while that variable was optional -- so a deployment
+that configured no AI provider wrote plaintext indefinitely, and nothing said so.
+The key is `ENCRYPTION_KEY` (`common/encryption/encryption-key.ts`); the former
+name is still read. It is not enforced at startup yet -- a deployment without one
+boots and is warned, on every start, that backups are unencrypted and that a
+future release will refuse to serve -- so the enforcement today is entirely
+*visibility*: the boot warning, a warning on every unencrypted automatic backup,
+and `getStatus` reporting "this server cannot encrypt" separately from "this user
+has not enabled it". Plaintext remains a legitimate outcome for an account with
+no captured password, which is why the boot check announces rather than refuses;
+when the requirement lands, the unkeyed branch of `logEncryptionKeyStatus`
+becomes a throw and this paragraph becomes one sentence.
+
 ### INV-CRON-001 -- one logical effect per tick
 
 ```text
@@ -1532,6 +1988,69 @@ Status              partial
 two replicas from producing the same effect.
 
 ## Platform
+
+### INV-PROVIDER-001 -- an unreachable provider stops being called, and is reported once
+
+```text
+Statement           A provider that stops answering stops being called: after
+                    five transport failures inside a five-minute window no
+                    request leaves the process until a single timed probe is
+                    admitted. One outage
+                    episode produces at most one alert email and one all-clear,
+                    across replicas and across restarts.
+Source of truth     The per-process ProviderCircuit decides whether to call out;
+                    provider_health decides what has been said about it.
+Enforcement         Not calling: ProviderCircuit's threshold over a sliding
+                    time window (a consecutive run is not countable against a
+                    provider that answers headers and stalls bodies), plus an
+                    exclusive
+                    half-open probe slot (bounded by PROBE_TIMEOUT_MS so a caller
+                    that never reports cannot hold it for the life of the
+                    process); assertAvailable runs before the concurrency gate,
+                    so a refusal costs no socket. Reporting once: a single
+                    conditional UPDATE on provider_health claims the notice
+                    (state = 'down' AND outage_notified_at IS NULL AND
+                    outage_started_at <= now() - 15min AND (last_notified_at IS
+                    NULL OR last_notified_at <= now() - 6h) RETURNING), so the
+                    claim is the serialization point rather than a read followed
+                    by a write. The upsert preserves outage_started_at while the
+                    stored state is 'down', which is what makes the 15-minute
+                    gate survive the restart loop an outage provokes. Log volume:
+                    ProviderHealthService.logFailure is rate-limited per provider
+                    and silent for a refused call.
+Concurrency scope   provider key (breaker: per process; notification: global)
+Retry semantics     Refusals and successes are idempotent. A recovery clears the
+                    episode marker, and last_notified_at is never cleared, so a
+                    flapping provider cannot mail a pair per flap.
+Crash semantics     The alert is at most once: the claim commits before SMTP is
+                    called, so a process killed in between loses that notice --
+                    deliberate for a monitoring email (the duplicate is the
+                    failure mode being designed against), and the provider
+                    becomes notifiable again once the 6-hour floor elapses. The
+                    breaker's own state is process-local by design and resets on
+                    restart; the durable episode start is what stops that reset
+                    from re-arming the alert.
+Failure response    ProviderUnavailableError to the caller, which every provider
+                    client turns into its usual null/empty result -- an outage
+                    leaves data unpriced, never a failed user request.
+Required tests      Present: provider-circuit.spec.ts, provider-health.service
+                    .spec.ts, provider-outage-alert.service.spec.ts,
+                    provider-call.guard.spec.ts, the end-to-end pair in
+                    yahoo-finance.service.spec.ts, and -- for the two properties
+                    that live in SQL rather than in TypeScript --
+                    test/integration/provider-health.integration.spec.ts against
+                    a real PostgreSQL: the upsert's CASE preserving
+                    `outage_started_at` across a restart, and three concurrent
+                    sweeps producing exactly one email. That spec is what caught
+                    the claim being read as `result[0]` when the driver returns
+                    `[rows, rowCount]` for an UPDATE -- every unit test passed
+                    against a mock that returned the flat shape, and in
+                    production the send threw with the claim already committed.
+                    Owed: nothing exercises two *processes*, so the exclusion is
+                    proven across concurrent transactions rather than across
+                    replicas.
+Status              enforced
+```
 
 ### INV-RLS-001 -- enforced mode refuses a privileged role
 

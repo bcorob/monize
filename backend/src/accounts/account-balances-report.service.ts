@@ -20,6 +20,7 @@ import { UserPreference } from "../users/entities/user-preference.entity";
 import { ExchangeRateService } from "../currencies/exchange-rate.service";
 import { SecurityPriceService } from "../securities/security-price.service";
 import { preferredCurrency } from "../common/default-currency.util";
+import { LEDGER_MOVEMENT_PREDICATE } from "../common/ledger-balance.sql";
 
 /**
  * One account's worth at the end of a single day.
@@ -450,8 +451,7 @@ export class AccountBalancesReportService {
                 COALESCE(a.opening_balance, 0) + COALESCE(SUM(t.amount), 0) AS balance
            FROM accounts a
            LEFT JOIN transactions t ON t.account_id = a.id
-            AND (t.status IS NULL OR t.status != 'VOID')
-            AND t.parent_transaction_id IS NULL
+            AND ${LEDGER_MOVEMENT_PREDICATE}
             AND t.transaction_date <= $2
           WHERE (a.user_id = $1 OR a.id = ANY($3::UUID[]))
             AND ($4::UUID[] IS NULL OR a.id = ANY($4::UUID[]))
@@ -484,8 +484,7 @@ export class AccountBalancesReportService {
                   (SELECT MIN(t.transaction_date)
                      FROM transactions t
                     WHERE t.account_id = a.id
-                      AND (t.status IS NULL OR t.status != 'VOID')
-                      AND t.parent_transaction_id IS NULL),
+                      AND ${LEDGER_MOVEMENT_PREDICATE}),
                   (SELECT MIN(it.transaction_date)
                      FROM investment_transactions it
                     WHERE it.account_id = a.id

@@ -24,7 +24,12 @@ import { BackupService } from "./backup.service";
 import { BackupEncryptionService } from "./backup-encryption.service";
 import { SupportBackupService } from "./support-backup/support-backup.service";
 import { CreateSupportBackupDto } from "./support-backup/dto/create-support-backup.dto";
-import { SetBackupPasswordDto } from "./dto/backup-encryption.dto";
+import { Throttle } from "@nestjs/throttler";
+import { rateLimit } from "../common/throttle.util";
+import {
+  ConfirmLoginPasswordDto,
+  SetBackupPasswordDto,
+} from "./dto/backup-encryption.dto";
 import { DemoRestricted } from "../common/decorators/demo-restricted.decorator";
 import { tr } from "../i18n/translate";
 import { releaseRestoreReservation } from "./restore-upload-admission";
@@ -313,6 +318,29 @@ export class BackupController {
   @ApiResponse({ status: 200, description: "Encryption status returned" })
   async getEncryptionStatus(@Request() req) {
     return this.backupEncryption.getStatus(req.user.id);
+  }
+
+  @Post("encryption/login-password")
+  @DemoRestricted()
+  @HttpCode(HttpStatus.OK)
+  // A password check, so it is throttled like one. Same window and count as the
+  // auth controller's credential endpoints: this verifies `password_hash`, and
+  // an unthrottled verifier is an oracle whatever screen it is reached from.
+  @Throttle({ default: { ttl: 900000, limit: rateLimit(5) } })
+  @ApiOperation({
+    summary:
+      "Turn on encrypted backups for a local account by confirming its login password",
+  })
+  @ApiResponse({ status: 200, description: "Encryption enabled" })
+  async enableWithLoginPassword(
+    @Request() req,
+    @Body() dto: ConfirmLoginPasswordDto,
+  ) {
+    await this.backupEncryption.enableWithLoginPassword(
+      req.user.id,
+      dto.loginPassword,
+    );
+    return { enabled: true };
   }
 
   @Post("encryption/backup-password")

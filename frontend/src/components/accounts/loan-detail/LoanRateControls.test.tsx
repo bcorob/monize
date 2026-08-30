@@ -5,7 +5,8 @@ import { LoanRateControls } from './LoanRateControls';
 import { Account } from '@/types/account';
 import { loanRateChangesApi } from '@/lib/loan-rate-changes';
 
-vi.mock('@/lib/loan-rate-changes', () => ({
+vi.mock('@/lib/loan-rate-changes', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/loan-rate-changes')>()),
   loanRateChangesApi: {
     create: vi.fn(),
     update: vi.fn(),

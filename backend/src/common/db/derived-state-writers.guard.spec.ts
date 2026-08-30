@@ -193,6 +193,14 @@ describe("derived financial state has one set of writers", () => {
           "no row",
       ],
       [
+        "notifications/provider-outage-alert.service.ts",
+        "noRecipientsReported suppresses a repeated *log line* and gates no " +
+          "work at all: whether an alert is sent is decided entirely by the " +
+          "conditional UPDATE on provider_health, which is the claim. A replica " +
+          "that has not seen the condition logs the warning once more, which " +
+          "costs one line and sends nothing",
+      ],
+      [
         "securities/security-price.service.ts",
         "emptyPriceWindows is the same negative cache as exchange-rate's, for " +
           "the security prices an as-of report could not find: the same " +

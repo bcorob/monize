@@ -1,11 +1,16 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { DataSource } from "typeorm";
-import { BadRequestException, NotFoundException } from "@nestjs/common";
+import {
+  BadRequestException,
+  NotFoundException,
+  UnauthorizedException,
+} from "@nestjs/common";
 import * as bcrypt from "bcryptjs";
 import { BackupEncryptionService } from "./backup-encryption.service";
 import { User } from "../users/entities/user.entity";
-import { AiEncryptionService } from "../ai/ai-encryption.service";
+import { EncryptionService } from "../common/encryption/encryption.service";
 import { PasswordBreachService } from "../auth/password-breach.service";
+import { ConfigService } from "@nestjs/config";
 import { createScopedDbMocks } from "../test-helpers/scoped-db-testing";
 
 jest.mock("../common/db/scoped-db", () =>
@@ -17,7 +22,7 @@ jest.mock("bcryptjs");
 describe("BackupEncryptionService", () => {
   let service: BackupEncryptionService;
   let usersRepo: Record<string, jest.Mock>;
-  let aiEncryption: Record<string, jest.Mock>;
+  let encryption: Record<string, jest.Mock>;
   let passwordBreach: Record<string, jest.Mock>;
   let scopedDataSource: { transaction: jest.Mock };
 
@@ -40,7 +45,7 @@ describe("BackupEncryptionService", () => {
       save: jest.fn().mockImplementation((u) => Promise.resolve(u)),
       update: jest.fn().mockResolvedValue({ affected: 1 }),
     };
-    aiEncryption = {
+    encryption = {
       isConfigured: jest.fn().mockReturnValue(true),
       encrypt: jest.fn((s: string) => `enc:${s}`),
       decrypt: jest.fn((s: string) => s.replace(/^enc:/, "")),
@@ -59,7 +64,7 @@ describe("BackupEncryptionService", () => {
           useValue: scopedDataSource,
         },
         BackupEncryptionService,
-        { provide: AiEncryptionService, useValue: aiEncryption },
+        { provide: EncryptionService, useValue: encryption },
         { provide: PasswordBreachService, useValue: passwordBreach },
       ],
     }).compile();
@@ -79,6 +84,8 @@ describe("BackupEncryptionService", () => {
       expect(await service.getStatus(userId)).toEqual({
         enabled: true,
         manageable: false,
+        method: "login-password",
+        available: true,
       });
     });
 
@@ -89,6 +96,8 @@ describe("BackupEncryptionService", () => {
       expect(await service.getStatus(userId)).toEqual({
         enabled: false,
         manageable: true,
+        method: "backup-password",
+        available: true,
       });
     });
 
@@ -98,6 +107,94 @@ describe("BackupEncryptionService", () => {
         NotFoundException,
       );
     });
+
+    it("reports a server that cannot encrypt at all as unavailable", async () => {
+      // "Off because this server holds no key" and "off because this user has
+      // not turned it on" are two different facts with two different fixes, and
+      // a screen that shows only `enabled` cannot tell them apart -- which is
+      // how issue #1269 stayed invisible on the Settings page.
+      encryption.isConfigured.mockReturnValue(false);
+      usersRepo.findOne.mockResolvedValue(makeUser());
+
+      expect(await service.getStatus(userId)).toEqual({
+        enabled: false,
+        manageable: false,
+        method: "login-password",
+        available: false,
+      });
+    });
+  });
+
+  describe("enableWithLoginPassword", () => {
+    it("stores the confirmed login password and turns encryption on", async () => {
+      // The path that rescues a session older than the deploy which shipped the
+      // capture: nothing else would ask this user for their password again, so
+      // their backups would stay plaintext for the life of the session.
+      usersRepo.findOne.mockResolvedValue(makeUser());
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+
+      await service.enableWithLoginPassword(userId, "hunter2hunter2");
+
+      expect(bcrypt.compare).toHaveBeenCalledWith(
+        "hunter2hunter2",
+        "bcrypt-hash",
+      );
+      expect(usersRepo.save).not.toHaveBeenCalled();
+      expect(usersRepo.update).toHaveBeenCalledWith(
+        { id: userId },
+        {
+          backupPasswordEnc: "enc:hunter2hunter2",
+          backupEncryptionEnabled: true,
+        },
+      );
+    });
+
+    it("refuses a password that is not the account's, and writes nothing", async () => {
+      // Storing an unverified string would encrypt every future backup under a
+      // password the user only thinks they know -- a file that looks like a
+      // backup and never opens.
+      usersRepo.findOne.mockResolvedValue(makeUser());
+      (bcrypt.compare as jest.Mock).mockResolvedValue(false);
+
+      await expect(
+        service.enableWithLoginPassword(userId, "not-my-password"),
+      ).rejects.toThrow(UnauthorizedException);
+
+      expect(usersRepo.update).not.toHaveBeenCalled();
+      expect(encryption.encrypt).not.toHaveBeenCalled();
+    });
+
+    it("refuses an OIDC account, which has no login password of ours", async () => {
+      usersRepo.findOne.mockResolvedValue(
+        makeUser({ authProvider: "oidc", passwordHash: null }),
+      );
+
+      await expect(
+        service.enableWithLoginPassword(userId, "hunter2hunter2"),
+      ).rejects.toThrow(BadRequestException);
+
+      expect(bcrypt.compare).not.toHaveBeenCalled();
+      expect(usersRepo.update).not.toHaveBeenCalled();
+    });
+
+    it("refuses when the server holds no key, rather than storing something unreadable", async () => {
+      encryption.isConfigured.mockReturnValue(false);
+      usersRepo.findOne.mockResolvedValue(makeUser());
+
+      await expect(
+        service.enableWithLoginPassword(userId, "hunter2hunter2"),
+      ).rejects.toThrow(BadRequestException);
+
+      expect(usersRepo.update).not.toHaveBeenCalled();
+    });
+
+    it("throws when the user no longer exists", async () => {
+      usersRepo.findOne.mockResolvedValue(null);
+
+      await expect(
+        service.enableWithLoginPassword(userId, "hunter2hunter2"),
+      ).rejects.toThrow(NotFoundException);
+    });
   });
 
   describe("rememberLoginPassword", () => {
@@ -106,7 +203,7 @@ describe("BackupEncryptionService", () => {
 
       await service.rememberLoginPassword(userId, "hunter2hunter2");
 
-      expect(aiEncryption.encrypt).toHaveBeenCalledWith("hunter2hunter2");
+      expect(encryption.encrypt).toHaveBeenCalledWith("hunter2hunter2");
       // A targeted update, not a full-entity save. `save` on a loaded entity
       // writes every column from the snapshot, so it silently reverted any
       // concurrent change to the users row -- `last_activity_at`, a lockout
@@ -161,7 +258,7 @@ describe("BackupEncryptionService", () => {
         { id: userId },
         expect.objectContaining({ backupPasswordEnc: "enc:hunter2hunter2" }),
       );
-      expect(aiEncryption.decrypt).not.toHaveBeenCalled();
+      expect(encryption.decrypt).not.toHaveBeenCalled();
     });
 
     it("stores nothing for an OIDC account", async () => {
@@ -176,7 +273,7 @@ describe("BackupEncryptionService", () => {
     });
 
     it("stores nothing when the server has no encryption key", async () => {
-      aiEncryption.isConfigured.mockReturnValue(false);
+      encryption.isConfigured.mockReturnValue(false);
       usersRepo.findOne.mockResolvedValue(makeUser());
 
       await service.rememberLoginPassword(userId, "hunter2hunter2");
@@ -255,7 +352,7 @@ describe("BackupEncryptionService", () => {
     });
 
     it("reports 'unrecoverable' when the stored copy cannot be decrypted", async () => {
-      aiEncryption.decrypt.mockImplementation(() => {
+      encryption.decrypt.mockImplementation(() => {
         throw new Error("bad key");
       });
 
@@ -364,11 +461,11 @@ describe("BackupEncryptionService", () => {
 
     it("refuses when the server has no encryption key", async () => {
       usersRepo.findOne.mockResolvedValue(oidcUser());
-      aiEncryption.isConfigured.mockReturnValue(false);
+      encryption.isConfigured.mockReturnValue(false);
 
       await expect(
         service.setBackupPasswordForOidcUser(userId, "a-strong-password"),
-      ).rejects.toThrow(/AI_ENCRYPTION_KEY/);
+      ).rejects.toThrow(/JWT_SECRET/);
       expect(usersRepo.save).not.toHaveBeenCalled();
       expect(usersRepo.update).not.toHaveBeenCalled();
     });
@@ -498,5 +595,106 @@ describe("BackupEncryptionService", () => {
       expect(usersRepo.update).toHaveBeenCalledTimes(1);
       expect(usersRepo.save).not.toHaveBeenCalled();
     });
+  });
+});
+
+/**
+ * The defect issue #1269 was reported from, held against the real
+ * `EncryptionService` rather than a double.
+ *
+ * Every test above provides a mock whose `isConfigured()` returns true, so none
+ * of them can see what actually broke: the key was `AI_ENCRYPTION_KEY`, an
+ * optional variable documented as being for cloud AI providers, and on a
+ * deployment that configured none the capture returned early every time. The
+ * suite stayed green while automatic backups were written in plaintext.
+ *
+ * Both variable names are exercised, because both are live: a new deployment
+ * sets `ENCRYPTION_KEY`, and one that predates the rename keeps its
+ * `AI_ENCRYPTION_KEY` and must go on capturing without re-keying a column.
+ */
+describe.each([
+  ["ENCRYPTION_KEY", "e".repeat(40)],
+  ["AI_ENCRYPTION_KEY", "a".repeat(40)],
+])("BackupEncryptionService keyed by %s", (envVar, keyValue) => {
+  const userId = "user-1";
+  let service: BackupEncryptionService;
+  let usersRepo: Record<string, jest.Mock>;
+
+  beforeEach(async () => {
+    usersRepo = {
+      findOne: jest.fn(),
+      save: jest.fn(),
+      update: jest.fn().mockResolvedValue({ affected: 1 }),
+    };
+    const scopedDataSource = createScopedDbMocks([[User, usersRepo as never]])
+      .dataSource as unknown as DataSource;
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        { provide: DataSource, useValue: scopedDataSource },
+        BackupEncryptionService,
+        // The real service, over an environment holding only this one variable.
+        EncryptionService,
+        {
+          provide: ConfigService,
+          useValue: {
+            get: jest.fn((key: string, fallback?: string) =>
+              key === envVar ? keyValue : (fallback ?? ""),
+            ),
+          },
+        },
+        {
+          provide: PasswordBreachService,
+          useValue: { isBreached: jest.fn().mockResolvedValue(false) },
+        },
+      ],
+    }).compile();
+
+    service = module.get(BackupEncryptionService);
+  });
+
+  it("captures the login password, and resolves it back for the cron", async () => {
+    usersRepo.findOne.mockResolvedValue({
+      id: userId,
+      authProvider: "local",
+      passwordHash: "bcrypt-hash",
+      backupEncryptionEnabled: false,
+      backupPasswordEnc: null,
+    } as User);
+
+    await service.rememberLoginPassword(userId, "hunter2hunter2");
+
+    expect(usersRepo.update).toHaveBeenCalledTimes(1);
+    const stored = usersRepo.update.mock.calls[0][1] as {
+      backupPasswordEnc: string;
+      backupEncryptionEnabled: boolean;
+    };
+    expect(stored.backupEncryptionEnabled).toBe(true);
+    // Ciphertext, not the password -- and it opens again on the way to the cron,
+    // which is the half that decides whether the backup is encrypted.
+    expect(stored.backupPasswordEnc).not.toContain("hunter2hunter2");
+
+    (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+    await expect(
+      service.resolveBackupPassword({
+        id: userId,
+        authProvider: "local",
+        passwordHash: "bcrypt-hash",
+        backupEncryptionEnabled: true,
+        backupPasswordEnc: stored.backupPasswordEnc,
+      } as User),
+    ).resolves.toEqual({ status: "password", password: "hunter2hunter2" });
+  });
+
+  it("reports encryption as available in the status the screen renders", async () => {
+    usersRepo.findOne.mockResolvedValue({
+      id: userId,
+      authProvider: "local",
+      passwordHash: "bcrypt-hash",
+      backupEncryptionEnabled: false,
+      backupPasswordEnc: null,
+    } as User);
+
+    expect(await service.getStatus(userId)).toMatchObject({ available: true });
   });
 });

@@ -15,7 +15,7 @@ import * as crypto from "crypto";
 import { I18nService } from "nestjs-i18n";
 import { EmergencyAccessSettings } from "./entities/emergency-access-settings.entity";
 import { EmergencyAccessContact } from "./entities/emergency-access-contact.entity";
-import { AiEncryptionService } from "../ai/ai-encryption.service";
+import { EncryptionService } from "../common/encryption/encryption.service";
 import { EmailService } from "../notifications/email.service";
 import {
   emergencyAccessGrantTemplate,
@@ -67,7 +67,7 @@ export class EmergencyAccessMonitorService {
   constructor(
     private readonly dataSource: DataSource,
     private readonly emailService: EmailService,
-    private readonly encryption: AiEncryptionService,
+    private readonly encryption: EncryptionService,
     private readonly configService: ConfigService,
     private readonly i18n: I18nService,
     private readonly jobClaims: JobClaimService,
@@ -208,7 +208,7 @@ export class EmergencyAccessMonitorService {
     // the owner. The feature is inert here, not silently firing and failing.
     if (!this.encryption.isConfigured()) {
       this.logger.warn(
-        "AI_ENCRYPTION_KEY not configured; emergency access cannot issue grant " +
+        "ENCRYPTION_KEY not configured; emergency access cannot issue grant " +
           "links, so the daily check is skipped. Any enabled owner is inert until " +
           "the key is set. Owners can still disable the feature in Settings.",
       );

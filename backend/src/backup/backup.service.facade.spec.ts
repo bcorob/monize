@@ -1,9 +1,9 @@
 import { Test, TestingModule } from "@nestjs/testing";
-import { AiEncryptionService } from "../ai/ai-encryption.service";
 import { BackupService } from "./backup.service";
 import { BackupExportService } from "./backup-export.service";
 import { BackupRestoreService } from "./backup-restore.service";
 import { User } from "../users/entities/user.entity";
+import { EncryptionService } from "../common/encryption/encryption.service";
 
 /**
  * `BackupService` forwards, and forwards *verbatim*.
@@ -36,7 +36,7 @@ describe("BackupService (facade)", () => {
   let restoreService: jest.Mocked<Pick<BackupRestoreService, "restoreData">> & {
     restoreExpandedLimitBytes: number;
   };
-  let aiEncryption: { decrypt: jest.Mock };
+  let passwordCipher: { decrypt: jest.Mock };
 
   const userId = "11111111-1111-4111-8111-111111111111";
   const report = {
@@ -69,12 +69,12 @@ describe("BackupService (facade)", () => {
       }),
       restoreExpandedLimitBytes: 5678,
     };
-    aiEncryption = { decrypt: jest.fn(() => "stored-password") };
+    passwordCipher = { decrypt: jest.fn(() => "stored-password") };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         BackupService,
-        { provide: AiEncryptionService, useValue: aiEncryption },
+        { provide: EncryptionService, useValue: passwordCipher },
         { provide: BackupExportService, useValue: exportService },
         { provide: BackupRestoreService, useValue: restoreService },
       ],
@@ -174,7 +174,7 @@ describe("BackupService (facade)", () => {
     } as unknown as User;
 
     expect(service.resolveStoredBackupPassword(user)).toBe("stored-password");
-    expect(aiEncryption.decrypt).toHaveBeenCalledWith("enc:stored");
+    expect(passwordCipher.decrypt).toHaveBeenCalledWith("enc:stored");
   });
 
   it("returns null when the user has no stored backup password", () => {
@@ -185,6 +185,6 @@ describe("BackupService (facade)", () => {
     } as unknown as User;
 
     expect(service.resolveStoredBackupPassword(user)).toBeNull();
-    expect(aiEncryption.decrypt).not.toHaveBeenCalled();
+    expect(passwordCipher.decrypt).not.toHaveBeenCalled();
   });
 });

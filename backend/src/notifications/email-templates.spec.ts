@@ -13,6 +13,8 @@ import {
   emergencyAccessReminderTemplate,
   emergencyAccessGrantTemplate,
   emergencyAccessGrantRevokedTemplate,
+  providerOutageTemplate,
+  providerRecoveryTemplate,
 } from "./email-templates";
 
 describe("Email Templates", () => {
@@ -1166,6 +1168,137 @@ describe("Email Templates", () => {
       });
       expect(html).not.toContain("<img src=x onerror=alert(1)>");
       expect(html).toContain("&lt;img");
+    });
+  });
+  describe("providerOutageTemplate()", () => {
+    const data = {
+      provider: "Yahoo Finance",
+      since: "2026-08-26 19:03 UTC",
+      duration: "2 h 15 min",
+      recentFailures: 137,
+      lastFailureReason:
+        "TypeError: fetch failed <- getaddrinfo EAI_AGAIN query1.finance.yahoo.com [code=EAI_AGAIN]",
+      lastSuccessAt: "2026-08-26 17:10 UTC",
+      quietPeriodHours: 6,
+    };
+
+    it("tells the operator what is down, since when, and why", () => {
+      const html = providerOutageTemplate("Ada", data);
+      expect(html).toContain("Hi Ada");
+      expect(html).toContain("Yahoo Finance");
+      expect(html).toContain("2026-08-26 19:03 UTC");
+      expect(html).toContain("2 h 15 min");
+      expect(html).toContain("137");
+      // The whole point of the alert: the cause, not `fetch failed` alone.
+      expect(html).toContain("EAI_AGAIN");
+      expect(html).toContain("2026-08-26 17:10 UTC");
+    });
+
+    it("says a recovery email is coming and that alerts are throttled", () => {
+      const html = providerOutageTemplate("Ada", data);
+      expect(html).toContain("6 hours");
+      expect(html).toContain("recovers");
+    });
+
+    it("escapes the provider's own error text", () => {
+      // `lastFailureReason` comes from an error chain that can carry a hostname
+      // an attacker-controlled DNS answer put there.
+      const html = providerOutageTemplate("Ada", {
+        ...data,
+        lastFailureReason: '<img src=x onerror="alert(1)">',
+      });
+      expect(html).not.toContain('<img src=x onerror="alert(1)">');
+      expect(html).toContain("&lt;img");
+    });
+
+    it("escapes a provider label and timestamps too", () => {
+      const html = providerOutageTemplate("Ada", {
+        ...data,
+        provider: "<script>x</script>",
+        since: "<b>now</b>",
+        duration: "<i>ages</i>",
+        lastSuccessAt: "<u>then</u>",
+      });
+      expect(html).not.toContain("<script>x</script>");
+      expect(html).not.toContain("<b>now</b>");
+      expect(html).not.toContain("<i>ages</i>");
+      expect(html).not.toContain("<u>then</u>");
+    });
+
+    it('says "never" rather than blank when there has never been a success', () => {
+      const html = providerOutageTemplate("Ada", {
+        ...data,
+        lastSuccessAt: null,
+      });
+      expect(html).toContain("never");
+    });
+
+    it('says "unknown" rather than blank when no cause was recorded', () => {
+      const html = providerOutageTemplate("Ada", {
+        ...data,
+        lastFailureReason: null,
+      });
+      expect(html).toContain("unknown");
+    });
+
+    it('falls back to "there" for a blank name', () => {
+      expect(providerOutageTemplate("", data)).toContain("Hi there");
+    });
+
+    it("escapes HTML in the recipient name", () => {
+      const html = providerOutageTemplate("<img src=x onerror=alert(1)>", data);
+      expect(html).not.toContain("<img src=x onerror=alert(1)>");
+    });
+
+    it("renders through the supplied translator", () => {
+      const t = jest.fn((_key: string, fallback: string) => fallback);
+      providerOutageTemplate("Ada", data, t);
+      const keys = t.mock.calls.map((call) => call[0]);
+      expect(keys).toContain("emails.providerOutage.heading");
+      expect(keys).toContain("emails.providerOutage.impact");
+      expect(keys).toContain("emails.providerOutage.throttleNote");
+    });
+  });
+
+  describe("providerRecoveryTemplate()", () => {
+    const data = {
+      provider: "Yahoo Finance",
+      restoredAt: "2026-08-26 21:35 UTC",
+      duration: "2 h 32 min",
+    };
+
+    it("says what came back, when, and how long it was gone", () => {
+      const html = providerRecoveryTemplate("Ada", data);
+      expect(html).toContain("Hi Ada");
+      expect(html).toContain("Yahoo Finance");
+      expect(html).toContain("2026-08-26 21:35 UTC");
+      expect(html).toContain("2 h 32 min");
+    });
+
+    it("tells the operator no action is needed", () => {
+      expect(providerRecoveryTemplate("Ada", data)).toContain(
+        "no action is needed",
+      );
+    });
+
+    it("escapes every interpolated value", () => {
+      const html = providerRecoveryTemplate("<b>Ada</b>", {
+        provider: "<script>x</script>",
+        restoredAt: "<i>now</i>",
+        duration: "<u>ages</u>",
+      });
+      expect(html).not.toContain("<b>Ada</b>");
+      expect(html).not.toContain("<script>x</script>");
+      expect(html).not.toContain("<i>now</i>");
+      expect(html).not.toContain("<u>ages</u>");
+    });
+
+    it("renders through the supplied translator", () => {
+      const t = jest.fn((_key: string, fallback: string) => fallback);
+      providerRecoveryTemplate("Ada", data, t);
+      expect(t.mock.calls.map((call) => call[0])).toContain(
+        "emails.providerRecovery.backfill",
+      );
     });
   });
 });

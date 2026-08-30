@@ -27,7 +27,6 @@
     "manualTitle": "需要手动过账",
     "negativeBalanceWarning": "此交易将导致账户余额低于零",
     "viewAll": "查看所有账单与存款",
-    "totalIncoming": "应收总额",
     "moreItems": "+{count} 条",
     "overdue": "已逾期",
     "today": "今天",

@@ -12,7 +12,7 @@ import { EmergencyAccessSettings } from "./entities/emergency-access-settings.en
 import { EmergencyAccessContact } from "./entities/emergency-access-contact.entity";
 import { UpsertSettingsDto } from "./dto/upsert-settings.dto";
 import { UpsertContactDto } from "./dto/upsert-contact.dto";
-import { AiEncryptionService } from "../ai/ai-encryption.service";
+import { EncryptionService } from "../common/encryption/encryption.service";
 import { EmailService } from "../notifications/email.service";
 import { User } from "../users/entities/user.entity";
 
@@ -58,7 +58,7 @@ export class EmergencyAccessService {
   private readonly logger = new Logger(EmergencyAccessService.name);
 
   constructor(
-    private readonly encryption: AiEncryptionService,
+    private readonly encryption: EncryptionService,
     private readonly emailService: EmailService,
     private readonly dataSource: DataSource,
   ) {}
@@ -191,7 +191,7 @@ export class EmergencyAccessService {
       throw new ServiceUnavailableException(
         tr(
           "errors.emergencyAccess.encryptionRequiredToEnable",
-          "Credential encryption is not configured. Emergency access cannot be enabled until AI_ENCRYPTION_KEY is set, because a grant has to store each contact's access link securely.",
+          "Credential encryption is not configured. Emergency access cannot be enabled until ENCRYPTION_KEY is set, because a grant has to store each contact's access link securely.",
         ),
       );
     }
@@ -265,7 +265,7 @@ export class EmergencyAccessService {
       throw new ServiceUnavailableException(
         tr(
           "errors.emergencyAccess.encryptionNotConfigured",
-          "Encryption key is not configured. The free-form message cannot be stored securely until AI_ENCRYPTION_KEY is set.",
+          "Encryption key is not configured. The free-form message cannot be stored securely until ENCRYPTION_KEY is set.",
         ),
       );
     }

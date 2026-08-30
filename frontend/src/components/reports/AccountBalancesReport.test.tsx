@@ -77,6 +77,10 @@ vi.mock("@/hooks/useDateFormat", () => ({
 
 vi.mock("@/lib/chart-colours", () => ({
   CHART_COLOURS: ["#3b82f6", "#ef4444", "#22c55e"],
+  // Pinned so the tests can tell an asset slice's colour from a liability's
+  // without depending on the real palettes.
+  CHART_COLOURS_ASSETS: ["#111111", "#222222"],
+  CHART_COLOURS_LIABILITIES: ["#999999", "#888888"],
 }));
 
 vi.mock("recharts", () => ({
@@ -766,6 +770,182 @@ describe("AccountBalancesReport", () => {
     await act(async () => { fireEvent.click(tableViewButton()); });
     await waitFor(() => {
       expect(screen.queryByTestId("pie-chart")).not.toBeInTheDocument();
+    });
+  });
+
+  /**
+   * The pie used to Math.abs() every balance, so a $30,000 mortgage became a
+   * $30,000 asset-looking slice and the footer summed assets plus debt under
+   * "Total" (issue #1243). The chart now keeps the sign beside the magnitude:
+   * liability slices are identified by palette and by a signed amount, mixed
+   * groups net the way the table does, and the footer of a mixed chart is the
+   * signed net worth.
+   */
+  describe("pie chart with assets and liabilities", () => {
+    function legendItems(): string[] {
+      return screen
+        .getAllByTestId("chart-legend-item")
+        .map((item) => item.textContent ?? "");
+    }
+
+    it("shows liabilities signed and labels the footer Net Worth, not Total", async () => {
+      mockGetAll.mockResolvedValue([
+        acc({ currentBalance: 100000 }),
+        acc({ id: "acc-2", name: "Home Loan", accountType: "MORTGAGE" }),
+      ]);
+      mockGetBalancesAsOf.mockResolvedValue(
+        balancesFor([balance("acc-1", 100000), balance("acc-2", -30000)]),
+      );
+      render(<AccountBalancesReport />);
+      await waitFor(() => {
+        expect(screen.getByText("Total Assets")).toBeInTheDocument();
+      });
+      await act(async () => { fireEvent.click(chartViewButton()); });
+      await waitFor(() => {
+        expect(screen.getByTestId("pie-chart")).toBeInTheDocument();
+      });
+
+      // The liability slice keeps its sign; percentages are shares of the pie.
+      const legend = legendItems();
+      expect(legend.find((item) => item.includes("Chequing"))).toContain(
+        "$100000.00 (76.9%)",
+      );
+      expect(legend.find((item) => item.includes("Mortgage"))).toContain(
+        "$-30000.00 (23.1%)",
+      );
+
+      // The footer is the signed net worth, matching the summary card -- never
+      // assets plus debt presented as "Total".
+      expect(screen.getByTestId("chart-net-worth")).toHaveTextContent("$70000.00");
+      expect(screen.queryByTestId("chart-total")).not.toBeInTheDocument();
+      expect(screen.queryByText("$130000.00")).not.toBeInTheDocument();
+    });
+
+    it("colours liability slices from the liability palette", async () => {
+      mockGetAll.mockResolvedValue([
+        acc(),
+        acc({ id: "acc-2", name: "Visa", accountType: "CREDIT_CARD" }),
+      ]);
+      mockGetBalancesAsOf.mockResolvedValue(
+        balancesFor([balance("acc-1", 5000), balance("acc-2", -1200)]),
+      );
+      render(<AccountBalancesReport />);
+      await waitFor(() => {
+        expect(screen.getByText("Total Assets")).toBeInTheDocument();
+      });
+      await act(async () => { fireEvent.click(chartViewButton()); });
+      await waitFor(() => {
+        expect(screen.getByTestId("pie-chart")).toBeInTheDocument();
+      });
+
+      const items = screen.getAllByTestId("chart-legend-item");
+      const dotColour = (name: string) =>
+        items
+          .find((item) => item.textContent?.includes(name))!
+          .querySelector("div")!.style.backgroundColor;
+      // The mocked palettes: assets #111111..., liabilities #999999...
+      expect(dotColour("Chequing")).toBe("rgb(17, 17, 17)");
+      expect(dotColour("Credit Card")).toBe("rgb(153, 153, 153)");
+    });
+
+    it("nets assets against liabilities within an institution group, as the table does", async () => {
+      mockGetInstitutions.mockResolvedValue([{ id: "inst-1", name: "Big Bank" }]);
+      mockGetAll.mockResolvedValue([
+        acc({ institutionId: "inst-1" }),
+        acc({
+          id: "acc-2",
+          name: "Home Loan",
+          accountType: "MORTGAGE",
+          institutionId: "inst-1",
+        }),
+        acc({ id: "acc-3", name: "Car Loan", accountType: "LOAN" }),
+      ]);
+      mockGetBalancesAsOf.mockResolvedValue(
+        balancesFor([
+          balance("acc-1", 100000),
+          balance("acc-2", -30000),
+          balance("acc-3", -50000),
+        ]),
+      );
+      render(<AccountBalancesReport />);
+      await waitFor(() => {
+        expect(screen.getByText("Total Assets")).toBeInTheDocument();
+      });
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText("Group by"), {
+          target: { value: "institution" },
+        });
+      });
+      await act(async () => { fireEvent.click(chartViewButton()); });
+      await waitFor(() => {
+        expect(screen.getByTestId("pie-chart")).toBeInTheDocument();
+      });
+
+      // Big Bank's slice is its net, never |100000| + |-30000| = 130000; the
+      // no-institution group is a pure liability and stays signed. The pie's
+      // denominator is 70000 + 50000.
+      const legend = legendItems();
+      expect(legend.find((item) => item.includes("Big Bank"))).toContain(
+        "$70000.00 (58.3%)",
+      );
+      expect(legend.find((item) => item.includes("No institution"))).toContain(
+        "$-50000.00 (41.7%)",
+      );
+      expect(screen.queryByText(/130000\.00/)).not.toBeInTheDocument();
+
+      // Footer: 100000 - 30000 - 50000, not a sum of magnitudes.
+      expect(screen.getByTestId("chart-net-worth")).toHaveTextContent("$20000.00");
+    });
+
+    it("keeps the Total footer for a chart holding only assets", async () => {
+      mockGetAll.mockResolvedValue([
+        acc({ currentBalance: 3000 }),
+        acc({ id: "acc-2", name: "Rainy Day", accountType: "SAVINGS" }),
+      ]);
+      mockGetBalancesAsOf.mockResolvedValue(
+        balancesFor([balance("acc-1", 3000), balance("acc-2", 7000)]),
+      );
+      render(<AccountBalancesReport />);
+      await waitFor(() => {
+        expect(screen.getByText("Total Assets")).toBeInTheDocument();
+      });
+      await act(async () => { fireEvent.click(chartViewButton()); });
+      await waitFor(() => {
+        expect(screen.getByTestId("pie-chart")).toBeInTheDocument();
+      });
+      expect(screen.getByTestId("chart-total")).toHaveTextContent("$10000.00");
+      expect(screen.queryByTestId("chart-net-worth")).not.toBeInTheDocument();
+    });
+
+    it("draws each ungrouped account signed, liabilities on their own palette", async () => {
+      mockGetAll.mockResolvedValue([
+        acc(),
+        acc({ id: "acc-2", name: "Visa", accountType: "CREDIT_CARD" }),
+      ]);
+      mockGetBalancesAsOf.mockResolvedValue(
+        balancesFor([balance("acc-1", 5000), balance("acc-2", -1200)]),
+      );
+      render(<AccountBalancesReport />);
+      await waitFor(() => {
+        expect(screen.getByText("Total Assets")).toBeInTheDocument();
+      });
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText("Group by"), {
+          target: { value: "none" },
+        });
+      });
+      await act(async () => { fireEvent.click(chartViewButton()); });
+      await waitFor(() => {
+        expect(screen.getByTestId("pie-chart")).toBeInTheDocument();
+      });
+
+      const items = screen.getAllByTestId("chart-legend-item");
+      const visa = items.find((item) => item.textContent?.includes("Visa"))!;
+      expect(visa).toHaveTextContent("$-1200.00");
+      expect(visa.querySelector("div")!.style.backgroundColor).toBe(
+        "rgb(153, 153, 153)",
+      );
+      expect(screen.getByTestId("chart-net-worth")).toHaveTextContent("$3800.00");
     });
   });
 

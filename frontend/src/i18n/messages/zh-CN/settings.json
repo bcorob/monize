@@ -514,15 +514,24 @@
     "encryption": {
       "heading": "备份加密",
       "descriptionOidc": "使用您在此处设置的专用备份密码加密手动和自动备份。恢复时需要此密码。",
-      "loading": "加载中...",
+      "descriptionLocal": "您的备份使用登录密码加密。无需另外记住其他密码：用同一个密码即可恢复。",
+      "unavailable": "此服务器未配置备份加密，因此备份以未加密方式写入。",
       "enabledBadge": "已启用",
+      "disabledBadge": "未启用",
+      "enabledLocalNote": "备份使用您的登录密码加密。",
+      "disabledLocalNote": "在您确认登录密码之前，备份将以未加密方式写入。",
+      "enableWithLoginPasswordButton": "使用我的登录密码启用",
+      "loading": "加载中...",
       "changePasswordButton": "更改备份密码",
       "disableButton": "禁用",
       "setPasswordButton": "设置备份密码",
       "setupModal": {
         "titleOidc": "设置备份密码",
+        "titleLocal": "启用加密备份",
         "descriptionOidc": "选择用于加密备份的密码。请妥善保存——恢复时需要此密码。",
+        "descriptionLocal": "确认您的登录密码以启用加密备份。备份将使用该密码加密，恢复时也需要它。",
         "placeholderOidc": "新备份密码（至少 12 位）",
+        "placeholderLocal": "您的登录密码",
         "savingButton": "保存中...",
         "confirmButton": "确认"
       },
@@ -768,7 +777,7 @@
     },
     "encryptionNotConfigured": {
       "heading": "需要加密密钥",
-      "body": "紧急访问需要在服务器上设置 AI_ENCRYPTION_KEY。授予访问权限时会加密存储每位联系人的访问链接，以便重试时能重新发送同一链接；没有该密钥，任何链接都无法发送。"
+      "body": "紧急访问需要在服务器上设置 ENCRYPTION_KEY。授予访问权限时会加密存储每位联系人的访问链接，以便重试时能重新发送同一链接；没有该密钥，任何链接都无法发送。"
     },
     "alreadyGranted": {
       "heading": "紧急访问已授权",
@@ -874,7 +883,7 @@
   "aiProviders": {
     "heading": "AI 提供商",
     "addButton": "添加提供商",
-    "encryptionWarning": "未配置 AI_ENCRYPTION_KEY。您可以使用 Ollama（本地，无需 API 密钥），但云提供商需要加密来安全存储 API 密钥。",
+    "encryptionWarning": "未配置 ENCRYPTION_KEY。您可以使用 Ollama（本地，无需 API 密钥），但云提供商需要加密来安全存储 API 密钥。",
     "systemDefault": {
       "heading": "系统默认 AI 提供商可用",
       "description": "您的管理员已配置中央 AI 提供商",

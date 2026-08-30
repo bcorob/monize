@@ -1,11 +1,17 @@
+import { Logger } from "@nestjs/common";
 import { YahooFinanceService, YahooQuoteResult } from "./yahoo-finance.service";
+import { OPEN_WINDOW_MS } from "../provider-health/provider-circuit";
+import { ProviderHealthService } from "../provider-health/provider-health.service";
+import { createTestProviderHealth } from "../test-helpers/provider-health-testing";
 
 describe("YahooFinanceService", () => {
   let service: YahooFinanceService;
+  let health: ProviderHealthService;
   let originalFetch: typeof global.fetch;
 
   beforeEach(() => {
-    service = new YahooFinanceService();
+    health = createTestProviderHealth();
+    service = new YahooFinanceService(health);
     originalFetch = global.fetch;
   });
 
@@ -632,14 +638,54 @@ describe("YahooFinanceService", () => {
       expect(result).toBeNull();
     });
 
-    it("should return null when timestamps are missing", async () => {
+    it("returns an empty series when the window has no bars", async () => {
+      // A result object with no timestamps is Yahoo answering "nothing traded
+      // in that window" -- a year before the instrument existed, typically.
+      // It is deliberately not `null`: null means no usable answer, and the
+      // market-index chunking has to tell the two apart or it reads a refused
+      // window as an empty year and stores a stub as the whole history.
       mockFetchResponse({
         chart: { result: [{ indicators: { quote: [{ close: [100] }] } }] },
       });
 
       const result = await service.fetchHistorical("AAPL");
 
-      expect(result).toBeNull();
+      expect(result).toEqual([]);
+    });
+
+    it("still returns null for a result it cannot parse", async () => {
+      // Timestamps with no quote series is malformed, not empty: the caller's
+      // alternate-symbol fallback should still get its turn.
+      mockFetchResponse({
+        chart: { result: [{ timestamp: [1700000000], indicators: {} }] },
+      });
+
+      expect(await service.fetchHistorical("AAPL")).toBeNull();
+    });
+
+    it("treats a delisted-symbol error as an answer, not a failure", async () => {
+      // "No data found, symbol may be delisted" is the provider telling us
+      // about the symbol. A caller may remember that; it may not remember a
+      // 429 or a 5xx, which says nothing about the symbol at all.
+      mockFetchResponse({
+        chart: { result: null, error: { code: "Not Found" } },
+      });
+
+      expect(await service.fetchHistorical("NOPE")).toEqual([]);
+    });
+
+    it("returns null for a body it does not understand", async () => {
+      mockFetchResponse({ unexpected: true });
+
+      expect(await service.fetchHistorical("AAPL")).toBeNull();
+    });
+
+    it("reads a 404 as an answer and a 503 as none", async () => {
+      mockFetchResponse({}, false, 404);
+      expect(await service.fetchHistorical("NOPE")).toEqual([]);
+
+      mockFetchResponse({}, false, 503);
+      expect(await service.fetchHistorical("AAPL")).toBeNull();
     });
 
     it("should return null when indicators are missing", async () => {
@@ -2211,6 +2257,432 @@ describe("YahooFinanceService", () => {
     it("tolerates a response with no news key", async () => {
       mockFetchResponse({ quotes: [] });
       expect(await service.fetchNews("AAPL")).toEqual([]);
+    });
+  });
+  describe("provider availability (issue #1265)", () => {
+    /**
+     * Rejects with a *fresh* error each call, as undici does.
+     *
+     * One throw is one piece of evidence -- the health service counts an error
+     * object once however many layers hand it on -- so a mock that rejects with
+     * the same instance every time reports five failures as one and the breaker
+     * never opens. `A mock must return what the real collaborator returns`
+     * (backend/CLAUDE.md).
+     */
+    const rejectEveryFetch = (make: () => Error) => {
+      global.fetch = jest.fn(() => Promise.reject(make()));
+    };
+
+    /** The error undici raises when the container cannot resolve the host. */
+    const dnsFailure = () => {
+      const error = new TypeError("fetch failed");
+      Object.assign(error, {
+        cause: Object.assign(
+          new Error("getaddrinfo EAI_AGAIN query1.finance.yahoo.com"),
+          {
+            code: "EAI_AGAIN",
+            syscall: "getaddrinfo",
+            hostname: "query1.finance.yahoo.com",
+          },
+        ),
+      });
+      return error;
+    };
+
+    it("stops calling an unreachable provider instead of retrying forever", async () => {
+      // The bug: every chart render, every index chunk and every quote kept
+      // calling out, so the log filled and the event loop carried hundreds of
+      // doomed sockets. Five failures is enough evidence.
+      rejectEveryFetch(dnsFailure);
+      const fetchMock = global.fetch as jest.Mock;
+
+      for (let i = 0; i < 5; i++) {
+        expect(await service.fetchHistorical("^RUT", null, "1y")).toBeNull();
+      }
+      const callsWhenOpened = fetchMock.mock.calls.length;
+
+      for (let i = 0; i < 50; i++) {
+        expect(await service.fetchHistorical("^RUT", null, "1y")).toBeNull();
+      }
+      expect(fetchMock.mock.calls.length).toBe(callsWhenOpened);
+    });
+
+    it("refuses quotes, lookups and intraday from the same breaker", async () => {
+      rejectEveryFetch(dnsFailure);
+      const fetchMock = global.fetch as jest.Mock;
+      for (let i = 0; i < 5; i++) {
+        await service.fetchQuote("AAPL");
+      }
+      const callsWhenOpened = fetchMock.mock.calls.length;
+
+      expect(await service.fetchQuote("MSFT")).toBeNull();
+      expect(await service.lookupSecurityMany("micro")).toEqual([]);
+      expect(
+        await service.fetchIntradaySeries("MSFT", null, {
+          interval: "5m",
+          range: "1d",
+        }),
+      ).toBeNull();
+      expect(fetchMock.mock.calls.length).toBe(callsWhenOpened);
+    });
+
+    it("opens on a provider that answers headers and then stalls the body", async () => {
+      // `recordSuccess` fires when the response headers arrive, and the body is
+      // read by the caller -- so a provider that accepts the connection and then
+      // stalls used to reset the failure run on every request, and the breaker
+      // never opened. Counting happens at the log door as well for exactly this.
+      const bodyStall = () =>
+        Object.assign(new TypeError("terminated"), {
+          cause: Object.assign(new Error("body timeout"), {
+            code: "UND_ERR_BODY_TIMEOUT",
+          }),
+        });
+      global.fetch = jest.fn(() =>
+        Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.reject(bodyStall()),
+          text: () => Promise.reject(bodyStall()),
+        } as never),
+      );
+      const fetchMock = global.fetch as jest.Mock;
+
+      for (let i = 0; i < 5; i++) {
+        expect(await service.fetchHistorical("^RUT", null, "1y")).toBeNull();
+      }
+      const callsWhenOpened = fetchMock.mock.calls.length;
+
+      for (let i = 0; i < 20; i++) {
+        expect(await service.fetchHistorical("^RUT", null, "1y")).toBeNull();
+      }
+      expect(fetchMock.mock.calls.length).toBe(callsWhenOpened);
+    });
+
+    it("does not treat a stalled body as a recovered probe", async () => {
+      // The flap this prevents: the probe got headers, the breaker called that a
+      // recovery, the body then stalled, and four more requests went out before
+      // it opened again -- once a window, forever. Each fresh episode also reset
+      // the alert's fifteen-minute clock, so no alert was ever sent.
+      let clock = 1_700_000_000_000;
+      const timedHealth = createTestProviderHealth(() => clock);
+      const timedService = new YahooFinanceService(timedHealth);
+      const bodyStall = () =>
+        Object.assign(new TypeError("terminated"), {
+          cause: Object.assign(new Error("body timeout"), {
+            code: "UND_ERR_BODY_TIMEOUT",
+          }),
+        });
+      global.fetch = jest.fn(() =>
+        Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.reject(bodyStall()),
+          text: () => Promise.reject(bodyStall()),
+        } as never),
+      );
+
+      for (let i = 0; i < 5; i++) {
+        await timedService.fetchHistorical("^RUT", null, "1y");
+      }
+      expect(timedHealth.snapshot("yahoo_finance").state).toBe("open");
+      const startedAt = timedHealth.snapshot("yahoo_finance").failingSince;
+
+      // The window elapses, the probe goes out, and its body stalls too.
+      clock += OPEN_WINDOW_MS + 1;
+      await timedService.fetchHistorical("^RUT", null, "1y");
+
+      const after = timedHealth.snapshot("yahoo_finance");
+      expect(after.state).toBe("open");
+      // Same episode, and the next window is longer rather than reset.
+      expect(after.failingSince).toBe(startedAt);
+      expect(timedHealth.wouldRefuse("yahoo_finance")).toBe(true);
+    });
+
+    it("closes on a probe whose body actually arrives", async () => {
+      // The other half: a completed request has to close it, or an outage never
+      // ends.
+      let clock = 1_700_000_000_000;
+      const timedHealth = createTestProviderHealth(() => clock);
+      const timedService = new YahooFinanceService(timedHealth);
+
+      global.fetch = jest.fn(() => Promise.reject(dnsFailure()));
+      for (let i = 0; i < 5; i++) {
+        await timedService.fetchHistorical("^RUT", null, "1y");
+      }
+      expect(timedHealth.snapshot("yahoo_finance").state).toBe("open");
+
+      clock += OPEN_WINDOW_MS + 1;
+      global.fetch = jest.fn(() =>
+        Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve({
+              chart: {
+                result: [
+                  {
+                    meta: { currency: "USD" },
+                    timestamp: [1700000000],
+                    indicators: { quote: [{ close: [10] }] },
+                  },
+                ],
+              },
+            }),
+        } as never),
+      );
+
+      expect(
+        await timedService.fetchHistorical("^RUT", null, "1y"),
+      ).not.toBeNull();
+      expect(timedHealth.snapshot("yahoo_finance").state).toBe("closed");
+    });
+
+    it("frees the probe on a routine 404, on every path that can get one", async () => {
+      // Nine branches used to record this for themselves and two forgot, each
+      // leaving the exclusive probe slot held for two minutes against a
+      // provider that had just answered. The rule now lives in one place, so
+      // this walks the paths rather than the branches.
+      let clock = 1_700_000_000_000;
+      const timedHealth = createTestProviderHealth(() => clock);
+      const timedService = new YahooFinanceService(timedHealth);
+      // The crumb cache is checked against the real clock, not the breaker's.
+      const seeded = timedService as unknown as {
+        crumb: string;
+        cookie: string;
+        crumbExpiresAt: number;
+      };
+      seeded.crumb = "test-crumb";
+      seeded.cookie = "test-cookie";
+      seeded.crumbExpiresAt = Date.now() + 3_600_000;
+
+      global.fetch = jest.fn(() => Promise.reject(dnsFailure()));
+      for (let i = 0; i < 5; i++) {
+        await timedService.fetchHistorical("^RUT", null, "1y");
+      }
+      expect(timedHealth.snapshot("yahoo_finance").state).toBe("open");
+
+      clock += OPEN_WINDOW_MS + 1;
+      global.fetch = jest.fn(() =>
+        Promise.resolve({
+          ok: false,
+          status: 404,
+          json: () => Promise.resolve({}),
+          text: () => Promise.resolve(""),
+        } as never),
+      );
+
+      // The probe is spent on an ETF-breakdown call, one of the two paths that
+      // used to forget.
+      await timedService.fetchEtfBreakdowns("SPY");
+
+      expect(timedHealth.snapshot("yahoo_finance").state).toBe("closed");
+      expect(timedHealth.wouldRefuse("yahoo_finance")).toBe(false);
+    });
+
+    it("counts one throw once, however many layers report it", async () => {
+      // The fetch helper counts what it catches and rethrows; the caller's catch
+      // hands the same object to the log door. Counting it twice would open the
+      // breaker on three failures while the constant says five.
+      rejectEveryFetch(dnsFailure);
+
+      await service.fetchHistorical("SYM", null, "1y");
+
+      // One count per request that failed, not one per layer that reported it.
+      const fetchMock = global.fetch as jest.Mock;
+      expect(health.snapshot("yahoo_finance").recentFailures).toBe(
+        fetchMock.mock.calls.length,
+      );
+    });
+
+    it("logs what actually failed, not `TypeError: fetch failed`", async () => {
+      const warn = jest.spyOn(Logger.prototype, "warn").mockImplementation();
+      try {
+        rejectEveryFetch(dnsFailure);
+        await service.fetchHistorical("^RUT", null, "1y");
+
+        const lines = warn.mock.calls.map((call) => String(call[0]));
+        const line = lines.find((text) => text.includes("^RUT"));
+        expect(line).toBeDefined();
+        expect(line).toContain("EAI_AGAIN");
+        expect(line).toContain("hostname=query1.finance.yahoo.com");
+      } finally {
+        warn.mockRestore();
+      }
+    });
+
+    it("logs one line for a flood of identical failures", async () => {
+      const warn = jest.spyOn(Logger.prototype, "warn").mockImplementation();
+      try {
+        rejectEveryFetch(dnsFailure);
+        for (let i = 0; i < 40; i++) {
+          await service.fetchHistorical(`SYM${i}`, null, "1y");
+        }
+        const symbolLines = warn.mock.calls
+          .map((call) => String(call[0]))
+          .filter((text) => text.includes("historical prices for"));
+        expect(symbolLines).toHaveLength(1);
+      } finally {
+        warn.mockRestore();
+      }
+    });
+
+    it("does not leave the probe slot held by a successful crumb handshake", async () => {
+      // The crumb handshake takes the exclusive half-open probe slot. Reporting
+      // no outcome on success held it for two minutes, during which every
+      // Yahoo call in the process was refused -- with the provider healthy.
+      let clock = 1_700_000_000_000;
+      const timedHealth = createTestProviderHealth(() => clock);
+      const timedService = new YahooFinanceService(timedHealth);
+
+      rejectEveryFetch(dnsFailure);
+      for (let i = 0; i < 5; i++) {
+        await timedService.fetchHistorical("^RUT", null, "1y");
+      }
+      expect(timedHealth.snapshot("yahoo_finance").state).toBe("open");
+
+      clock += OPEN_WINDOW_MS + 1;
+      // The handshake is the probe: cookies from https.get, crumb over fetch.
+      (
+        timedService as unknown as { fetchYahooCookie: () => Promise<string> }
+      ).fetchYahooCookie = jest.fn().mockResolvedValue("A1=cookie");
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        text: () => Promise.resolve("abc123"),
+      });
+
+      const gotCrumb = await (
+        timedService as unknown as { fetchCrumb: () => Promise<boolean> }
+      ).fetchCrumb();
+
+      expect(gotCrumb).toBe(true);
+      expect(timedHealth.snapshot("yahoo_finance").state).toBe("closed");
+      // And the next ordinary request is allowed, rather than refused for the
+      // probe timeout.
+      expect(() => timedHealth.assertAvailable("yahoo_finance")).not.toThrow();
+    });
+
+    it("frees the probe slot even when the handshake is refused a crumb", async () => {
+      // A 401 or a cookie-less response still proves the host answered.
+      let clock = 1_700_000_000_000;
+      const timedHealth = createTestProviderHealth(() => clock);
+      const timedService = new YahooFinanceService(timedHealth);
+
+      rejectEveryFetch(dnsFailure);
+      for (let i = 0; i < 5; i++) {
+        await timedService.fetchHistorical("^RUT", null, "1y");
+      }
+      clock += OPEN_WINDOW_MS + 1;
+      (
+        timedService as unknown as { fetchYahooCookie: () => Promise<string> }
+      ).fetchYahooCookie = jest.fn().mockResolvedValue("A1=cookie");
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: false,
+        status: 401,
+        text: () => Promise.resolve(""),
+      });
+
+      expect(
+        await (
+          timedService as unknown as { fetchCrumb: () => Promise<boolean> }
+        ).fetchCrumb(),
+      ).toBe(false);
+      expect(timedHealth.snapshot("yahoo_finance").state).toBe("closed");
+    });
+
+    it("does not let a cookie host's answer stand in for the API host", async () => {
+      // The cookie sources are fc.yahoo.com and finance.yahoo.com; everything
+      // else talks to query1.finance.yahoo.com. Counting a cookie response as
+      // "the provider answered" kept the failure run oscillating between 0 and
+      // 1 while the API host was down, so the breaker never opened.
+      const clock = 1_700_000_000_000;
+      const timedHealth = createTestProviderHealth(() => clock);
+      const timedService = new YahooFinanceService(timedHealth);
+      (
+        timedService as unknown as { fetchYahooCookie: () => Promise<string> }
+      ).fetchYahooCookie = jest.fn().mockResolvedValue("A1=cookie");
+
+      // The API host refuses every connection; the cookie host is fine.
+      rejectEveryFetch(dnsFailure);
+      for (let i = 0; i < 5; i++) {
+        await (
+          timedService as unknown as { fetchCrumb: () => Promise<boolean> }
+        ).fetchCrumb();
+      }
+
+      expect(timedHealth.snapshot("yahoo_finance").state).toBe("open");
+    });
+
+    it("gives the probe back when the API host was never reached", async () => {
+      // Every cookie source answers, none with a cookie: the handshake gives up
+      // before calling the API host, so there is nothing to record -- but the
+      // slot still has to go back, or two minutes of Yahoo calls are refused
+      // for a provider nothing has shown to be down.
+      let clock = 1_700_000_000_000;
+      const timedHealth = createTestProviderHealth(() => clock);
+      const timedService = new YahooFinanceService(timedHealth);
+
+      rejectEveryFetch(dnsFailure);
+      for (let i = 0; i < 5; i++) {
+        await timedService.fetchHistorical("^RUT", null, "1y");
+      }
+      clock += OPEN_WINDOW_MS + 1;
+      (
+        timedService as unknown as { fetchYahooCookie: () => Promise<string> }
+      ).fetchYahooCookie = jest.fn().mockResolvedValue("");
+
+      expect(
+        await (
+          timedService as unknown as { fetchCrumb: () => Promise<boolean> }
+        ).fetchCrumb(),
+      ).toBe(false);
+
+      // Nothing was learned, so the failure run stands -- but the next caller
+      // may probe rather than waiting out the probe timeout.
+      expect(timedHealth.snapshot("yahoo_finance").recentFailures).toBe(5);
+      expect(timedHealth.wouldRefuse("yahoo_finance")).toBe(false);
+      expect(timedHealth.tryRequest("yahoo_finance")).toBe("probe");
+    });
+
+    it("resumes once the provider answers again", async () => {
+      let clock = 1_700_000_000_000;
+      const timedHealth = createTestProviderHealth(() => clock);
+      const timedService = new YahooFinanceService(timedHealth);
+
+      rejectEveryFetch(dnsFailure);
+      for (let i = 0; i < 5; i++) {
+        await timedService.fetchHistorical("^RUT", null, "1y");
+      }
+      const fetchMock = global.fetch as jest.Mock;
+      const callsWhenOpened = fetchMock.mock.calls.length;
+
+      // Inside the window: nothing leaves the process.
+      await timedService.fetchHistorical("^RUT", null, "1y");
+      expect(fetchMock.mock.calls.length).toBe(callsWhenOpened);
+
+      // Window elapsed: one probe, and a good answer re-opens the gates.
+      clock += OPEN_WINDOW_MS + 1;
+      mockFetchResponse({
+        chart: {
+          result: [
+            {
+              meta: {
+                currency: "USD",
+                exchangeTimezoneName: "America/New_York",
+              },
+              timestamp: [1700000000],
+              indicators: {
+                quote: [
+                  { close: [10], open: [9], high: [11], low: [8], volume: [1] },
+                ],
+              },
+            },
+          ],
+        },
+      });
+      const recovered = await timedService.fetchHistorical("^RUT", null, "1y");
+      expect(recovered).not.toBeNull();
+      expect(await timedService.fetchQuote("AAPL")).not.toBeNull();
     });
   });
 });

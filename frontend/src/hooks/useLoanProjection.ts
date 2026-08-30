@@ -6,23 +6,36 @@ import {
   deriveLoanPaymentHistory,
   fetchAllAccountTransactions,
   fetchLoanInterestTransactions,
-  resolveCurrentInstallment,
+  resolveCurrentLoanTerms,
 } from '@/lib/loan-history';
-import { loanRateChangesApi } from '@/lib/loan-rate-changes';
+import {
+  loanRateChangesApi,
+  RATE_CHANGE_ACCOUNT_TYPES,
+} from '@/lib/loan-rate-changes';
 import { generateLoanSchedule } from '@/lib/loan-schedule';
 import { deriveLoanFigures, type LoanFigures } from '@/lib/loan-figures';
 import { createLogger } from '@/lib/logger';
+import { useFinancialToday } from '@/hooks/useFinancialToday';
 import type { Account } from '@/types/account';
 import type { Transaction } from '@/types/transaction';
 import type { LoanRateChange } from '@/types/loan-rate-change';
 
 const logger = createLogger('useLoanProjection');
 
-/** The account types this projection describes: amortizing debt. */
-const AMORTIZING_DEBT_TYPES: ReadonlySet<Account['accountType']> = new Set([
-  'LOAN',
-  'MORTGAGE',
-]);
+/**
+ * The account types this projection describes: amortizing debt.
+ *
+ * Derived from the rate-changes precondition rather than spelled again -- and
+ * this hook is why the derivation matters, not merely why it is tidy. It
+ * fetches `loanRateChangesApi.getAll` unconditionally for every type in here,
+ * so a type present in this set but absent from `RATE_CHANGE_ACCOUNT_TYPES`
+ * would take a **400** on every load and report the projection as `error`. The
+ * two lists coincide for one reason: a revolving line does not amortize, which
+ * is the same fact that leaves it no contractual rate to change.
+ */
+const AMORTIZING_DEBT_TYPES: ReadonlySet<Account['accountType']> = new Set(
+  RATE_CHANGE_ACCOUNT_TYPES,
+);
 
 export type LoanProjectionStatus =
   /** Not an amortizing debt account -- there is nothing to project. */
@@ -35,6 +48,13 @@ export type LoanProjectionStatus =
 
 export interface LoanProjectionResult extends LoanFigures {
   status: LoanProjectionStatus;
+  /**
+   * The annual rate in effect, from the same resolution the payoff is projected
+   * at -- `account.interestRate` is the OLD rate on any loan whose rate was
+   * changed through the rate-history UI. Null while loading or unknown, so a
+   * consumer keeps its own fallback for those states.
+   */
+  currentAnnualRate: number | null;
 }
 
 /** The raw history one account's projection is derived from, with its own key. */
@@ -66,6 +86,10 @@ export function useLoanProjection(account: Account, refreshKey = 0): LoanProject
   // left over from the previously selected account reads as "still loading"
   // rather than as this account's answer. Nothing is cleared on switching --
   // the key comparison below is what decides, not the order of two setStates.
+  // Switching is not the only way a failure stops being true, though: a later
+  // load of the *same* account succeeding retires it (see the load below), or
+  // one transient outage would leave the figures unavailable for the rest of the
+  // page's life.
   const [data, setData] = useState<LoanSourceData | null>(null);
   const [failedAccountId, setFailedAccountId] = useState<string | null>(null);
 
@@ -83,6 +107,14 @@ export function useLoanProjection(account: Account, refreshKey = 0): LoanProject
         ]);
         if (cancelled) return;
         setData({ accountId, transactions, interestTransactions, rateChanges });
+        // A success retires this account's earlier failure, and only this
+        // account's: the failure describes a request that has now been answered,
+        // so leaving it set outranks fresh data with a stale error and no
+        // in-page refresh can recover the figures. Compared inside the updater
+        // rather than against the render's `failedAccountId`, so a failure
+        // recorded for a *different* account while this load was in flight
+        // survives.
+        setFailedAccountId((failed) => (failed === accountId ? null : failed));
       } catch (error) {
         if (cancelled) return;
         // A rate-history or payment-history failure changes what the projection
@@ -103,6 +135,12 @@ export function useLoanProjection(account: Account, refreshKey = 0): LoanProject
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accountId, isAmortizingDebt, refreshKey]);
 
+  // Today-anchored (see `loan-projection-anchor.guard.test.ts`) still has to
+  // say WHICH today: the rate in effect and the date row 1 falls on are both
+  // calendar-day answers, and this hook's payoff date is quoted beside the
+  // amortization report's schedule.
+  const todayYmd = useFinancialToday();
+
   return useMemo<LoanProjectionResult>(() => {
     const unknown: LoanFigures = {
       isSettled: false,
@@ -110,12 +148,13 @@ export function useLoanProjection(account: Account, refreshKey = 0): LoanProject
       payoffDate: null,
       remainingInterest: null,
     };
-    if (!isAmortizingDebt) return { status: 'idle', ...unknown };
+    if (!isAmortizingDebt) return { status: 'idle', currentAnnualRate: null, ...unknown };
     if (failedAccountId === accountId) {
       // The balance is the account's own, so a settled debt still reads as
       // settled even when its history could not be loaded.
       return {
         status: 'error',
+        currentAnnualRate: null,
         ...unknown,
         ...deriveLoanFigures({
           currentBalance: account.currentBalance,
@@ -124,7 +163,8 @@ export function useLoanProjection(account: Account, refreshKey = 0): LoanProject
         }),
       };
     }
-    if (!data || data.accountId !== accountId) return { status: 'loading', ...unknown };
+    if (!data || data.accountId !== accountId)
+      return { status: 'loading', currentAnnualRate: null, ...unknown };
 
     const history = deriveLoanPaymentHistory(
       account,
@@ -132,17 +172,30 @@ export function useLoanProjection(account: Account, refreshKey = 0): LoanProject
       data.rateChanges,
       data.interestTransactions,
     );
-    const currentInstallment = resolveCurrentInstallment(history, account.paymentAmount);
-    const projectionInput = buildLoanProjectionInput(account, history, data.rateChanges);
+    const currentTerms = resolveCurrentLoanTerms(
+      account,
+      history,
+      data.rateChanges,
+      null,
+      todayYmd,
+    );
+    const projectionInput = buildLoanProjectionInput(
+      account,
+      history,
+      data.rateChanges,
+      null,
+      todayYmd,
+    );
     const baseline = projectionInput ? generateLoanSchedule(projectionInput) : null;
 
     return {
       status: 'ready',
+      currentAnnualRate: currentTerms.annualRate,
       ...deriveLoanFigures({
         currentBalance: account.currentBalance,
-        currentInstallment,
+        currentInstallment: currentTerms.payment,
         baseline,
       }),
     };
-  }, [account, accountId, data, failedAccountId, isAmortizingDebt]);
+  }, [account, accountId, data, failedAccountId, isAmortizingDebt, todayYmd]);
 }

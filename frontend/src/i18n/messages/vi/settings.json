@@ -514,15 +514,24 @@
     "encryption": {
       "heading": "Mã hóa sao lưu",
       "descriptionOidc": "Mã hóa các bản sao lưu thủ công và tự động bằng mật khẩu sao lưu chuyên dụng bạn đặt ở đây. Mật khẩu được yêu cầu để khôi phục.",
-      "loading": "Đang tải...",
+      "descriptionLocal": "Bản sao lưu của bạn được mã hóa bằng mật khẩu đăng nhập. Không cần nhớ gì thêm: cùng mật khẩu đó sẽ khôi phục chúng.",
+      "unavailable": "Máy chủ này chưa được cấu hình để mã hóa bản sao lưu, nên chúng được ghi ở dạng không mã hóa.",
       "enabledBadge": "Đã bật",
+      "disabledBadge": "Chưa bật",
+      "enabledLocalNote": "Bản sao lưu được mã hóa bằng mật khẩu đăng nhập của bạn.",
+      "disabledLocalNote": "Bản sao lưu đang được ghi ở dạng không mã hóa cho đến khi bạn xác nhận mật khẩu đăng nhập.",
+      "enableWithLoginPasswordButton": "Bật bằng mật khẩu đăng nhập của tôi",
+      "loading": "Đang tải...",
       "changePasswordButton": "Thay đổi mật khẩu sao lưu",
       "disableButton": "Tắt",
       "setPasswordButton": "Đặt mật khẩu sao lưu",
       "setupModal": {
         "titleOidc": "Đặt mật khẩu sao lưu",
+        "titleLocal": "Bật sao lưu được mã hóa",
         "descriptionOidc": "Chọn mật khẩu sẽ được dùng để mã hóa các bản sao lưu. Lưu nó ở nơi an toàn -- bạn sẽ cần nó để khôi phục.",
+        "descriptionLocal": "Xác nhận mật khẩu đăng nhập để bật sao lưu được mã hóa. Đó là mật khẩu dùng để mã hóa bản sao lưu và cũng là mật khẩu bạn cần để khôi phục.",
         "placeholderOidc": "Mật khẩu sao lưu mới (12+ ký tự)",
+        "placeholderLocal": "Mật khẩu đăng nhập của bạn",
         "savingButton": "Đang lưu...",
         "confirmButton": "Xác nhận"
       },
@@ -768,7 +777,7 @@
     },
     "encryptionNotConfigured": {
       "heading": "Cần khóa mã hóa",
-      "body": "Truy cập khẩn cấp cần AI_ENCRYPTION_KEY được thiết lập trên máy chủ. Việc cấp quyền lưu liên kết truy cập của từng liên hệ ở dạng mã hóa để lần thử lại có thể gửi lại đúng liên kết đó; không có khóa này thì hoàn toàn không thể gửi liên kết nào."
+      "body": "Truy cập khẩn cấp cần ENCRYPTION_KEY được thiết lập trên máy chủ. Việc cấp quyền lưu liên kết truy cập của từng liên hệ ở dạng mã hóa để lần thử lại có thể gửi lại đúng liên kết đó; không có khóa này thì hoàn toàn không thể gửi liên kết nào."
     },
     "alreadyGranted": {
       "heading": "Quyền truy cập khẩn cấp đã được cấp",
@@ -874,7 +883,7 @@
   "aiProviders": {
     "heading": "Nhà cung cấp AI",
     "addButton": "Thêm nhà cung cấp",
-    "encryptionWarning": "AI_ENCRYPTION_KEY chưa được cấu hình. Bạn có thể sử dụng Ollama (cục bộ, không cần khóa API) nhưng các nhà cung cấp đám mây yêu cầu mã hóa để lưu trữ khóa API an toàn.",
+    "encryptionWarning": "ENCRYPTION_KEY chưa được cấu hình. Bạn có thể sử dụng Ollama (cục bộ, không cần khóa API) nhưng các nhà cung cấp đám mây yêu cầu mã hóa để lưu trữ khóa API an toàn.",
     "systemDefault": {
       "heading": "Nhà cung cấp AI mặc định của hệ thống có sẵn",
       "description": "Một nhà cung cấp AI trung tâm đã được quản trị viên cấu hình",

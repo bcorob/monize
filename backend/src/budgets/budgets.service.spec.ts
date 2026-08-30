@@ -27,7 +27,7 @@ import { ScheduledTransaction } from "../scheduled-transactions/entities/schedul
 import { ScheduledTransactionOverride } from "../scheduled-transactions/entities/scheduled-transaction-override.entity";
 import { ActionHistoryService } from "../action-history/action-history.service";
 import { ExchangeRateService } from "../currencies/exchange-rate.service";
-import { addDaysYMD, todayYMD } from "../common/date-utils";
+import { addDaysYMD, getMonthEndYMD, todayYMD } from "../common/date-utils";
 import {
   createScopedDbMocks,
   DataSourceMock,
@@ -1151,7 +1151,19 @@ describe("BudgetsService", () => {
      */
     it("honours an override that also moved the occurrence, and reports the moved date", async () => {
       const slot = todayYMD();
-      const movedTo = addDaysYMD(slot, 3);
+      // The period getVelocity reports on is the CURRENT month, and a move
+      // past its end is the next test's case (the occurrence is dropped) --
+      // so three days out is clamped to the month's last day, or this test
+      // failed on the last three days of every month with nothing changed
+      // ("a test that reads the wall clock is a test about today's date").
+      // On the month's own last day the clamp lands back on the slot, which
+      // still exercises the override lookup keyed on originalDate.
+      const monthEnd = getMonthEndYMD(
+        Number(slot.slice(0, 4)),
+        Number(slot.slice(5, 7)),
+      );
+      const threeDaysOut = addDaysYMD(slot, 3);
+      const movedTo = threeDaysOut < monthEnd ? threeDaysOut : monthEnd;
       stubVelocityBudget([
         {
           id: "st-rent",

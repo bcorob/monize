@@ -56,7 +56,7 @@ CREATE TABLE users (
     pending_oidc_subject VARCHAR(255),
     is_delegate_only BOOLEAN NOT NULL DEFAULT false, -- true when the row exists solely as an owner-managed delegate identity (created via Shared Access, never claimed via /register)
     backup_encryption_enabled BOOLEAN NOT NULL DEFAULT false,
-    backup_password_enc TEXT -- backup password (login password for local, dedicated password for OIDC) encrypted with AI_ENCRYPTION_KEY for auto-backup use
+    backup_password_enc TEXT -- backup password (login password for local, dedicated password for OIDC) encrypted with ENCRYPTION_KEY for auto-backup use
 );
 
 CREATE INDEX IF NOT EXISTS idx_users_reset_token ON users(reset_token) WHERE reset_token IS NOT NULL;
@@ -1066,7 +1066,7 @@ CREATE INDEX idx_delegate_net_worth_exclusions_user
 -- Emergency Access. Lets the owner pre-designate one or more contacts who
 -- receive a magic link to take over the account after a configurable
 -- period of inactivity. The free-form message body is stored as
--- AES-256-GCM ciphertext (AiEncryptionService, keyed by AI_ENCRYPTION_KEY)
+-- AES-256-GCM ciphertext (EncryptionService, keyed by ENCRYPTION_KEY)
 -- so a database dump cannot leak it; the running app decrypts on demand.
 CREATE TABLE emergency_access_settings (
     owner_user_id         UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,

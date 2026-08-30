@@ -34,7 +34,7 @@ const UNIQUE_VIOLATION = "23505";
 
 /**
  * The constraint that names an occurrence: one override per recurrence slot
- * (migration 166). Matched by name, so a violation of some OTHER unique
+ * (migration 168). Matched by name, so a violation of some OTHER unique
  * constraint on this table is not reported as "you already have an override for
  * that occurrence" -- a message about the wrong thing sends the caller to fix
  * something that is not broken.
@@ -111,7 +111,7 @@ export class ScheduledTransactionOverrideService {
       // override per occurrence true: a SELECT is not a lock, so two concurrent
       // creates for one slot both read no existing row and both proceed. The
       // database's `uq_sched_txn_overrides_occurrence` is the mechanism
-      // (migration 166); this read exists so the common case gets a 400 naming
+      // (migration 168); this read exists so the common case gets a 400 naming
       // the date instead of a driver error, and the catch below turns the
       // constraint's own refusal into the same message.
       const existing = await repo

@@ -37,6 +37,7 @@ describe("BackupController", () => {
     mockBackupEncryption = {
       getStatus: jest.fn(),
       setBackupPasswordForOidcUser: jest.fn(),
+      enableWithLoginPassword: jest.fn(),
       disableForOidcUser: jest.fn(),
     };
 
@@ -578,6 +579,20 @@ describe("BackupController", () => {
       expect(
         mockBackupEncryption.setBackupPasswordForOidcUser,
       ).toHaveBeenCalledWith(userId, "long-good-password");
+    });
+
+    it("enableWithLoginPassword delegates the confirmed login password", async () => {
+      const result = await controller.enableWithLoginPassword(
+        { user: { id: userId } },
+        { loginPassword: "hunter2hunter2" },
+      );
+      // The caller's own id, never one from the body: this endpoint verifies a
+      // password against an account's hash.
+      expect(mockBackupEncryption.enableWithLoginPassword).toHaveBeenCalledWith(
+        userId,
+        "hunter2hunter2",
+      );
+      expect(result).toEqual({ enabled: true });
     });
 
     it("disableEncryption delegates", async () => {

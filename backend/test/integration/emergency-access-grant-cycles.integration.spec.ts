@@ -2,7 +2,7 @@ import { ConfigService } from "@nestjs/config";
 import { I18nService } from "nestjs-i18n";
 import { DataSource } from "typeorm";
 
-import { AiEncryptionService } from "@/ai/ai-encryption.service";
+import { EncryptionService } from "../../src/common/encryption/encryption.service";
 import { hashToken } from "@/auth/crypto.util";
 import { affectedRowCount, returnedRows } from "@/common/db/query-result";
 import { withUserContext } from "@/common/db/with-context";
@@ -69,9 +69,9 @@ describe("emergency access across grant cycles", () => {
   } as unknown as I18nService;
 
   /** A real encryption service, so the stored credential really round-trips. */
-  const encryption = new AiEncryptionService({
+  const encryption = new EncryptionService({
     get: (key: string, fallback?: string) =>
-      key === "AI_ENCRYPTION_KEY"
+      key === "ENCRYPTION_KEY"
         ? "integration-test-key-of-at-least-32-chars"
         : fallback,
   } as unknown as ConfigService);
@@ -377,7 +377,7 @@ describe("emergency access across grant cycles", () => {
     // the grant delivers nothing, releases itself, and repeats forever -- while the
     // settings page reports the safeguard as armed.
     const keyless = new EmergencyAccessService(
-      new AiEncryptionService({
+      new EncryptionService({
         get: (_key: string, fallback?: string) => fallback ?? "",
       } as unknown as ConfigService),
       emailDouble,
@@ -391,7 +391,10 @@ describe("emergency access across grant cycles", () => {
           grantAfterDays: 14,
           reminderAfterDays: 7,
         }),
-      ).rejects.toThrow(/AI_ENCRYPTION_KEY/);
+        // Names the variable an operator has to set, under its current name --
+        // `AI_ENCRYPTION_KEY` is still read, but telling somebody to set the
+        // deprecated one is how a rename never finishes.
+      ).rejects.toThrow(/until ENCRYPTION_KEY is set/);
       const view = await keyless.getView(owner);
       expect(view.credentialEncryptionConfigured).toBe(false);
     });
@@ -403,7 +406,7 @@ describe("emergency access across grant cycles", () => {
     // switch it off -- which voids the outstanding links.
     await runInactivityGrant();
     const brokenService = new EmergencyAccessService(
-      new AiEncryptionService({
+      new EncryptionService({
         get: (_key: string, fallback?: string) => fallback ?? "",
       } as unknown as ConfigService),
       {
@@ -442,7 +445,7 @@ describe("emergency access across grant cycles", () => {
           throw new Error("SMTP is down");
         },
       } as unknown as EmailService,
-      new AiEncryptionService({
+      new EncryptionService({
         get: (_key: string, fallback?: string) => fallback ?? "",
       } as unknown as ConfigService),
       configDouble,

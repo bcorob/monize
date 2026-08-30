@@ -661,3 +661,93 @@ export function emergencyAccessGrantRevokedTemplate(
     </div>
   `;
 }
+
+/**
+ * What an operator is told about a provider outage.
+ *
+ * Every field here is either a provider-supplied string (`lastFailureReason`
+ * comes out of undici's error chain) or a formatted timestamp, so all of it goes
+ * through `escapeHtml` -- the reason is the one an attacker-controlled DNS
+ * response could reach, and it lands in an email body.
+ */
+export interface ProviderOutageEmailData {
+  /** Human provider name, e.g. "Yahoo Finance". */
+  provider: string;
+  /** When the outage began, already formatted for display. */
+  since: string;
+  /** How long it has been down, already localized. */
+  duration: string;
+  recentFailures: number;
+  lastFailureReason: string | null;
+  /** Last successful response, formatted, or null when there has never been one. */
+  lastSuccessAt: string | null;
+  /** The floor between two alerts about one provider, in hours. */
+  quietPeriodHours: number;
+}
+
+export function providerOutageTemplate(
+  firstName: string,
+  data: ProviderOutageEmailData,
+  t: EmailT = englishEmailT,
+): string {
+  const safeName = escapeHtml(firstName || "there");
+  const provider = escapeHtml(data.provider);
+  const since = escapeHtml(data.since);
+  const duration = escapeHtml(data.duration);
+  const reason = escapeHtml(
+    data.lastFailureReason ??
+      t("emails.providerOutage.valueUnknown", "unknown"),
+  );
+  const lastSuccess = data.lastSuccessAt
+    ? escapeHtml(data.lastSuccessAt)
+    : t("emails.providerOutage.valueNever", "never");
+  const cell =
+    "padding: 10px 12px; border-bottom: 1px solid #e5e7eb; color: #374151;";
+  const label = `${cell} font-weight: 600; white-space: nowrap;`;
+  return `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+      <h2 style="color: #b45309;">${t("emails.providerOutage.heading", "Market data provider unavailable")}</h2>
+      <p style="color: #374151;">${t("emails.providerOutage.greeting", `Hi ${safeName},`, { name: safeName })}</p>
+      <p style="color: #374151;">${t("emails.providerOutage.intro", `Monize has not been able to reach <strong>${provider}</strong> since ${since} (${duration}). Requests to it are suspended for now and retried at widening intervals.`, { provider, since, duration })}</p>
+      <table style="width: 100%; border-collapse: collapse; margin: 16px 0; border: 1px solid #e5e7eb; border-radius: 8px;">
+        <tbody>
+          <tr><td style="${label}">${t("emails.providerOutage.labelFailures", "Failed attempts")}</td><td style="${cell}">${data.recentFailures}</td></tr>
+          <tr><td style="${label}">${t("emails.providerOutage.labelLastError", "Last error")}</td><td style="${cell}"><code>${reason}</code></td></tr>
+          <tr><td style="${label}">${t("emails.providerOutage.labelLastSuccess", "Last successful response")}</td><td style="${cell}">${lastSuccess}</td></tr>
+        </tbody>
+      </table>
+      <p style="color: #374151;">${t("emails.providerOutage.impact", "Prices, charts and index comparisons that depend on this provider may be missing or out of date until it answers again. Nothing recorded in Monize has been lost.")}</p>
+      <p style="color: #374151;">${t("emails.providerOutage.whatToCheck", "If the provider itself is up, check this server's outbound network access and DNS -- a container that cannot resolve or reach the provider fails exactly this way.")}</p>
+      <p style="color: #6b7280; font-size: 14px;">${t("emails.providerOutage.throttleNote", `You will get one more email when it recovers. Alerts about the same provider are sent at most once every ${data.quietPeriodHours} hours, so a provider that keeps flapping cannot fill your inbox.`, { hours: data.quietPeriodHours })}</p>
+      <p style="color: #6b7280; font-size: 14px; margin-top: 24px;">-- Monize</p>
+    </div>
+  `;
+}
+
+export interface ProviderRecoveryEmailData {
+  provider: string;
+  /** When it started answering again, already formatted. */
+  restoredAt: string;
+  /** How long the outage lasted, already localized. */
+  duration: string;
+}
+
+export function providerRecoveryTemplate(
+  firstName: string,
+  data: ProviderRecoveryEmailData,
+  t: EmailT = englishEmailT,
+): string {
+  const safeName = escapeHtml(firstName || "there");
+  const provider = escapeHtml(data.provider);
+  const restoredAt = escapeHtml(data.restoredAt);
+  const duration = escapeHtml(data.duration);
+  return `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+      <h2 style="color: #059669;">${t("emails.providerRecovery.heading", "Market data provider is answering again")}</h2>
+      <p style="color: #374151;">${t("emails.providerRecovery.greeting", `Hi ${safeName},`, { name: safeName })}</p>
+      <p style="color: #374151;">${t("emails.providerRecovery.intro", `<strong>${provider}</strong> answered again at ${restoredAt}. The outage lasted ${duration}.`, { provider, restoredAt, duration })}</p>
+      <p style="color: #374151;">${t("emails.providerRecovery.backfill", "Prices and index history missed during the outage are picked up by the next scheduled refresh; no action is needed.")}</p>
+      <p style="color: #6b7280; font-size: 14px; margin-top: 24px;">-- Monize</p>
+    </div>
+  `;
+}

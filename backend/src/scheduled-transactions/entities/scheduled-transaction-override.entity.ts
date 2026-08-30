@@ -19,7 +19,7 @@ import { Category } from "../../categories/entities/category.entity";
 @Entity("scheduled_transaction_overrides")
 /**
  * One override per recurrence slot, declared HERE as well as in `schema.sql` and
- * migration 166.
+ * migration 168.
  *
  * Not redundancy: the two build paths are different. Production runs
  * `schema.sql` then the migrations, but `synchronize: true` -- which the

@@ -66,6 +66,7 @@ ran in `npm run test:unit` and nothing failed.
 | `market_index_prices` | Global market reference data. A market index has no owner and nobody holds units of it, so one S&P 500 close serves every user. The alternative -- a per-user securities row per index -- would put a fake instrument in every holdings list and multiply provider traffic by the number of accounts. |
 | `market_index_sync` | Sync bookkeeping for that refresh; same ownership story. |
 | `oauth_payloads` | See section 3. |
+| `provider_health` | Deployment-wide availability of an outbound market-data provider, plus the bookkeeping that keeps one outage to one alert. One Yahoo outage is every user's Yahoo outage: there is no owner column, and a per-user copy would multiply both the alert and the provider traffic by the number of accounts. Written under system context on transitions only, and read only by the alert sweep -- nothing user-identifiable is stored, and `last_failure_reason` is a network diagnostic, bounded on write. |
 | `schema_migrations` | Migration infrastructure, written only by `db-migrate` running as the owner. `INSERT`/`UPDATE`/`DELETE` are revoked from the runtime role (DR-02). |
 
 ## 3. `oauth_payloads` and the OAuth adapter

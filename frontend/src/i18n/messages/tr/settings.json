@@ -514,15 +514,24 @@
     "encryption": {
       "heading": "Yedekleme Şifreleme",
       "descriptionOidc": "Manuel ve otomatik yedeklemeleri burada ayarladığınız özel bir yedekleme şifresiyle şifreleyin. Geri yükleme için şifre gereklidir.",
-      "loading": "Yükleniyor...",
+      "descriptionLocal": "Yedekleriniz oturum açma parolanızla şifrelenir. Başka bir şey hatırlamanız gerekmez: aynı parola onları geri yükler.",
+      "unavailable": "Bu sunucu yedekleri şifrelemek üzere yapılandırılmamış, bu yüzden yedekler şifrelenmeden yazılıyor.",
       "enabledBadge": "Etkin",
+      "disabledBadge": "Etkin değil",
+      "enabledLocalNote": "Yedekler oturum açma parolanızla şifreleniyor.",
+      "disabledLocalNote": "Oturum açma parolanızı onaylayana kadar yedekler şifrelenmeden yazılıyor.",
+      "enableWithLoginPasswordButton": "Oturum açma parolamla etkinleştir",
+      "loading": "Yükleniyor...",
       "changePasswordButton": "Yedekleme Şifresini Değiştir",
       "disableButton": "Devre Dışı Bırak",
       "setPasswordButton": "Yedekleme Şifresi Ayarla",
       "setupModal": {
         "titleOidc": "Yedekleme Şifresi Ayarla",
+        "titleLocal": "Şifreli yedeklemeyi etkinleştir",
         "descriptionOidc": "Yedeklemelerinizi şifrelemek için kullanılacak şifreyi seçin. Güvenli bir yere kaydedin -- geri yükleme için ihtiyacınız olacak.",
+        "descriptionLocal": "Şifreli yedeklemeyi açmak için oturum açma parolanızı onaylayın. Yedekleriniz bu parolayla şifrelenir ve geri yüklemek için de bu parola gerekir.",
         "placeholderOidc": "Yeni yedekleme şifresi (en az 12 karakter)",
+        "placeholderLocal": "Oturum açma parolanız",
         "savingButton": "Kaydediliyor...",
         "confirmButton": "Onayla"
       },
@@ -768,7 +777,7 @@
     },
     "encryptionNotConfigured": {
       "heading": "Şifreleme anahtarı gerekli",
-      "body": "Acil durum erişimi, sunucuda AI_ENCRYPTION_KEY ayarlanmış olmasını gerektirir. Erişim verme işlemi her kişinin erişim bağlantısını şifreli olarak saklar; böylece yeniden deneme aynı bağlantıyı tekrar gönderebilir. Bu anahtar olmadan hiçbir bağlantı gönderilemez."
+      "body": "Acil durum erişimi, sunucuda ENCRYPTION_KEY ayarlanmış olmasını gerektirir. Erişim verme işlemi her kişinin erişim bağlantısını şifreli olarak saklar; böylece yeniden deneme aynı bağlantıyı tekrar gönderebilir. Bu anahtar olmadan hiçbir bağlantı gönderilemez."
     },
     "alreadyGranted": {
       "heading": "Acil durum erişimi zaten verildi",
@@ -874,7 +883,7 @@
   "aiProviders": {
     "heading": "AI Sağlayıcıları",
     "addButton": "Sağlayıcı Ekle",
-    "encryptionWarning": "AI_ENCRYPTION_KEY yapılandırılmamış. Ollama'yı (yerel, API anahtarı gerekmez) kullanabilirsiniz, ancak bulut sağlayıcıları API anahtarlarını güvenle depolamak için şifreleme gerektirir.",
+    "encryptionWarning": "ENCRYPTION_KEY yapılandırılmamış. Ollama'yı (yerel, API anahtarı gerekmez) kullanabilirsiniz, ancak bulut sağlayıcıları API anahtarlarını güvenle depolamak için şifreleme gerektirir.",
     "systemDefault": {
       "heading": "Sistem Varsayılan AI Sağlayıcısı Mevcut",
       "description": "Yöneticiniz tarafından merkezi bir AI sağlayıcısı yapılandırıldı",

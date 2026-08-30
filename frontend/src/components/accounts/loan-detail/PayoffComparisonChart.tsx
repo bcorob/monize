@@ -23,8 +23,7 @@ import { ChartTooltip } from '@/components/reports/ChartTooltip';
 import { ExportIconButton } from '@/components/ui/ExportIconButton';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
 import { useChartDateFormat } from '@/hooks/useChartDateFormat';
-
-const MAX_CHART_POINTS = 60;
+import { CHART_MAX_POINTS, sampleStockSeries } from '@/lib/chart-sampling';
 
 export interface PayoffChartPoint {
   /** Month key (yyyy-MM), formatted for display by the chart */
@@ -51,7 +50,7 @@ export function buildPayoffComparisonSeries(
   baseline: LoanScheduleResult | null,
   scenario: LoanScheduleResult | null,
   original: LoanScheduleResult | null = null,
-): { points: PayoffChartPoint[]; projectionStartKey: string | null } {
+): { chartPoints: PayoffChartPoint[]; projectionStartKey: string | null } {
   const byMonth = new Map<string, PayoffChartPoint>();
 
   const setValue = (
@@ -149,23 +148,31 @@ export function buildPayoffComparisonSeries(
   // Sample long series down to a readable number of points. Always keep the
   // endpoints and the history->projection transition (last historical point
   // and the first projected point), so uniform sampling can't drop them and
-  // leave a visual gap at "today".
-  if (points.length > MAX_CHART_POINTS) {
-    const step = Math.ceil(points.length / MAX_CHART_POINTS);
-    const keep = new Set<number>([0, points.length - 1]);
-    if (lastHistoricalIndex >= 0) {
-      keep.add(lastHistoricalIndex);
-      if (lastHistoricalIndex + 1 < points.length) keep.add(lastHistoricalIndex + 1);
-    }
-    // Never sample away a month that had a real overpayment -- its tooltip flag
-    // is the whole point of the marker.
-    points.forEach((p, index) => {
-      if (p.overpayment) keep.add(index);
-    });
-    points = points.filter((_, index) => index % step === 0 || keep.has(index));
-  }
+  // leave a visual gap at "today". A balance is a STOCK -- every point still
+  // drawn means exactly what it meant -- which is why sampling is the right
+  // reduction here and summing is the right one for a flow (chart-sampling.ts).
+  //
+  // The reduced series gets its own name. Assigning it back over `points` is
+  // how the Debt Payoff Timeline came to count chart samples as payments
+  // (issue #1244): once the two are one variable, nothing downstream can tell
+  // which it holds.
+  const chartPoints = sampleStockSeries(points, {
+    maxPoints: CHART_MAX_POINTS,
+    keep: (point, index) =>
+      // `lastHistoricalIndex` is -1 with no history, which makes the second
+      // test `index === 0` -- an endpoint the sampler keeps anyway.
+      index === lastHistoricalIndex ||
+      index === lastHistoricalIndex + 1 ||
+      // Never sample away a month that had a real overpayment -- its tooltip
+      // flag is the whole point of the marker.
+      Boolean(point.overpayment),
+  });
 
-  return { points, projectionStartKey };
+  // Returned under the name it was BOUND to. Renaming it back to `points` on
+  // the way out is how a reduced series reaches a caller that cannot tell it
+  // from the full one -- and it puts the alias beyond the reach of the scan in
+  // chart-reduction.guard.test.ts, which reads one file at a time.
+  return { chartPoints, projectionStartKey };
 }
 
 interface PayoffComparisonChartProps {
@@ -196,18 +203,18 @@ export function PayoffComparisonChart({
   const { formatCurrencyCompact, formatCurrencyAxis } = useNumberFormat();
   const chartRef = useRef<HTMLDivElement>(null);
 
-  const { points, projectionStartKey } = useMemo(
+  const { chartPoints, projectionStartKey } = useMemo(
     () => buildPayoffComparisonSeries(historyEvents, baseline, scenario, original),
     [historyEvents, baseline, scenario, original],
   );
 
   const chartData = useMemo(
     () =>
-      points.map((point) => ({
+      chartPoints.map((point) => ({
         ...point,
         label: formatChartDate(`${point.monthKey}-01`, 'MMM yyyy'),
       })),
-    [points, formatChartDate],
+    [chartPoints, formatChartDate],
   );
 
   const projectionStartLabel = projectionStartKey

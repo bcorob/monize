@@ -1082,7 +1082,7 @@ export class AutoBackupService {
     const resolution = await this.backupEncryption.resolveBackupPassword(user);
     if (resolution.status === "unrecoverable") {
       // A password is stored but cannot be decrypted (typically
-      // AI_ENCRYPTION_KEY was rotated). Their previous backups are encrypted,
+      // ENCRYPTION_KEY was rotated). Their previous backups are encrypted,
       // so quietly writing this one in plaintext would be a downgrade nobody
       // sees. Fail loud instead.
       throw new BadRequestException(
@@ -1090,6 +1090,20 @@ export class AutoBackupService {
           "errors.backup.encryptedPasswordDecryptFailed",
           "Encrypted backups are enabled but the stored password could not be decrypted. Re-enable encryption in Security settings.",
         ),
+      );
+    }
+    if (resolution.status === "none") {
+      // Plaintext is a legitimate outcome -- an OIDC account that set no backup
+      // password, or a local account whose password has not been captured yet --
+      // but it is never a silent one. Issue #1269 was a deployment writing
+      // plaintext for months while every surface said backups were encrypted by
+      // default, and a line per backup is what makes that answerable from the
+      // logs instead of from the file extension.
+      this.logger.warn(
+        `Backup for user ${userId} is being written unencrypted: no backup password is stored` +
+          (user.authProvider === "local"
+            ? " (it is captured when they next sign in, or from Settings -> Backup & Restore)"
+            : " (set one in Settings -> Backup & Restore)"),
       );
     }
     const encryptionPassword =

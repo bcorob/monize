@@ -9,6 +9,7 @@ import {
   UpdateScheduledTransactionOverrideData,
   OverrideCheckResult,
   PostScheduledTransactionData,
+  LoanProjectionAnchor,
 } from '@/types/scheduled-transaction';
 import { dedupe, invalidateBalanceCaches, invalidateCache } from './apiCache';
 
@@ -63,6 +64,24 @@ export const scheduledTransactionsApi = {
     const response = await apiClient.get<ScheduledOccurrence[]>(
       '/scheduled-transactions/occurrences',
       { params },
+    );
+    return response.data;
+  },
+
+  /**
+   * The next-installment projection anchor for a loan account: the next
+   * scheduled installment's due date and the debt measured from the ledger
+   * through that date -- the same balance boundary the scheduled bill's
+   * interest is calculated from, so an amortization projection anchored here
+   * agrees with the next bill (issue #1253). Both fields are null when the
+   * loan has no active scheduled payment; the caller then keeps its
+   * today-anchored fallback.
+   */
+  getLoanProjectionAnchor: async (
+    accountId: string,
+  ): Promise<LoanProjectionAnchor> => {
+    const response = await apiClient.get<LoanProjectionAnchor>(
+      `/scheduled-transactions/loan-anchor/${accountId}`,
     );
     return response.data;
   },

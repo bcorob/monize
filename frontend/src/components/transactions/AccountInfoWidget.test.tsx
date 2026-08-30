@@ -23,7 +23,8 @@ vi.mock('@/lib/transactions', () => ({
 }));
 
 const getRateChanges = vi.fn();
-vi.mock('@/lib/loan-rate-changes', () => ({
+vi.mock('@/lib/loan-rate-changes', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/loan-rate-changes')>()),
   loanRateChangesApi: {
     getAll: (...args: unknown[]) => getRateChanges(...args),
   },
@@ -474,6 +475,34 @@ describe('AccountInfoWidget', () => {
     /** The value rendered beside a details-list label. */
     const detailValue = (label: string) =>
       screen.getByText(label).closest('div')?.querySelector('dd')?.textContent;
+
+    it('shows the rate from the rate history, including when the scalar is unset', async () => {
+      // Recording a rate change never writes account.interestRate, so the scalar
+      // is the OLD rate -- and on a loan configured only through the rate
+      // history it is null. Gating the row on the scalar hid Interest Rate
+      // entirely while the payoff beside it was projected at that very rate.
+      getAllTransactions.mockResolvedValue({
+        data: [
+          { id: 't1', transactionDate: '2026-06-15', amount: 600 } as Transaction,
+        ],
+        pagination: { hasMore: false },
+      });
+      getRateChanges.mockResolvedValue([
+        {
+          id: 'r1',
+          effectiveDate: '2026-01-01',
+          annualRate: 12,
+          newPaymentAmount: 2000,
+          source: 'manual',
+        },
+      ]);
+
+      await renderMortgage(
+        makeMortgage({ interestRate: null as unknown as number }),
+      );
+
+      await waitFor(() => expect(detailValue('Interest Rate')).toBe('12%'));
+    });
 
     it('shows rate, payment, payoff date and remaining interest for a mortgage', async () => {
       getAllTransactions.mockResolvedValue({

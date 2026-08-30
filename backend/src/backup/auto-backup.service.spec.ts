@@ -1,7 +1,7 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { DataSource } from "typeorm";
 import { ConfigService } from "@nestjs/config";
-import { BadRequestException, ConflictException } from "@nestjs/common";
+import { BadRequestException, ConflictException, Logger } from "@nestjs/common";
 import {
   promises as fs,
   mkdtempSync,
@@ -1248,6 +1248,39 @@ describe("AutoBackupService", () => {
       expect(await listBackups(folderFor())).toEqual([
         expect.stringMatching(/\.mzbe$/),
       ]);
+    });
+
+    it("warns on every unencrypted backup rather than writing one silently", async () => {
+      // Plaintext is a legitimate outcome, never a silent one. Issue #1269 was a
+      // deployment writing plaintext for months while the docs, the release
+      // notes and the Settings screen all said backups were encrypted by
+      // default; the only evidence was the file extension.
+      mockSettingsRepo.findOne.mockResolvedValue(
+        createSettings({ enabled: true, folderPath: root }),
+      );
+      mockUsersRepo.findOne.mockResolvedValue({
+        id: userId,
+        authProvider: "local",
+        backupEncryptionEnabled: false,
+        backupPasswordEnc: null,
+      });
+      mockBackupEncryption.resolveBackupPassword.mockResolvedValue({
+        status: "none",
+      });
+      const warn = jest
+        .spyOn(Logger.prototype, "warn")
+        .mockImplementation(() => undefined);
+
+      try {
+        const result = await service.runManualBackup(userId);
+
+        expect(result.filename).toMatch(/\.json\.gz$/);
+        expect(warn).toHaveBeenCalledWith(
+          expect.stringContaining("unencrypted"),
+        );
+      } finally {
+        warn.mockRestore();
+      }
     });
 
     it("throws when encryption is enabled but the stored password cannot be decrypted", async () => {

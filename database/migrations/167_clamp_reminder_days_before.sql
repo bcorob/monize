@@ -1,3 +1,14 @@
+-- Renumbered from prefix 165 to 167. Two merged pull requests each claimed 165,
+-- and a duplicate prefix leaves apply order to alphabetical tie-breaking rather
+-- than to the number that is supposed to decide it.
+--
+-- `schema_migrations` keys on filename, so a rename makes this file run once
+-- more on any database that already applied it. That is safe here, and it is why
+-- this is the half of the pair that moved: both statements below exclude their
+-- own result, and the constraint is dropped before it is added. Its former pair,
+-- `165_heal_semimonthly_scheduled_frequency.sql`, keeps the number because its
+-- heal is dated against the day it runs.
+--
 -- Issue #1247 review: `reminder_days_before` accepted any non-negative number,
 -- and a value past JavaScript's `Date` range made the reminder window's upper
 -- bound serialize as the literal string "NaN-NaN-NaN". The occurrence expander

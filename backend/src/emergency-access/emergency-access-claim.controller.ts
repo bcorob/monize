@@ -28,7 +28,7 @@ import { hashToken } from "../auth/crypto.util";
 import { TokenService } from "../auth/token.service";
 import { PasswordBreachService } from "../auth/password-breach.service";
 import { AuthService } from "../auth/auth.service";
-import { AiEncryptionService } from "../ai/ai-encryption.service";
+import { EncryptionService } from "../common/encryption/encryption.service";
 import { generateCsrfToken, getCsrfCookieOptions } from "../common/csrf.util";
 import { withSystemContext } from "../common/db/with-context";
 import { ClaimCompleteDto, ClaimPreviewDto } from "./dto/claim.dto";
@@ -44,7 +44,7 @@ export class EmergencyAccessClaimController {
     private readonly tokenService: TokenService,
     private readonly authService: AuthService,
     private readonly passwordBreachService: PasswordBreachService,
-    private readonly encryption: AiEncryptionService,
+    private readonly encryption: EncryptionService,
     private readonly configService: ConfigService,
   ) {
     const disableHttpsHeaders =

@@ -9,7 +9,7 @@ import { ConfigService } from "@nestjs/config";
 import { DataSource } from "typeorm";
 import { withScopedDb } from "../common/db/scoped-db";
 import { AiProviderConfig } from "./entities/ai-provider-config.entity";
-import { AiEncryptionService } from "./ai-encryption.service";
+import { EncryptionService } from "../common/encryption/encryption.service";
 import { AiProviderFactory } from "./ai-provider.factory";
 import { AiUsageService } from "./ai-usage.service";
 import {
@@ -60,7 +60,7 @@ export class AiService {
 
   constructor(
     private readonly dataSource: DataSource,
-    private readonly encryptionService: AiEncryptionService,
+    private readonly encryptionService: EncryptionService,
     private readonly providerFactory: AiProviderFactory,
     private readonly usageService: AiUsageService,
     private readonly configService: ConfigService,
@@ -201,7 +201,7 @@ export class AiService {
           throw new BadRequestException(
             tr(
               "errors.ai.encryptionKeyNotConfigured",
-              "AI_ENCRYPTION_KEY is not configured. Cannot store API keys securely.",
+              "ENCRYPTION_KEY is not configured. Cannot store API keys securely.",
             ),
           );
         }
@@ -257,7 +257,7 @@ export class AiService {
           throw new BadRequestException(
             tr(
               "errors.ai.encryptionKeyNotConfigured",
-              "AI_ENCRYPTION_KEY is not configured. Cannot store API keys securely.",
+              "ENCRYPTION_KEY is not configured. Cannot store API keys securely.",
             ),
           );
         }
@@ -348,7 +348,7 @@ export class AiService {
 
     // A stored key this instance cannot decrypt is its own diagnosis, and it is
     // one the generic message below actively hides. It happens when a backup is
-    // restored onto an instance with a different AI_ENCRYPTION_KEY, or after
+    // restored onto an instance with a different ENCRYPTION_KEY, or after
     // that variable is rotated: the column is populated, so the provider row
     // shows a masked key and every "is a key configured?" check says yes, while
     // `createProvider` throws an AES-GCM authentication failure that reads as
@@ -359,13 +359,13 @@ export class AiService {
       !this.encryptionService.canDecrypt(config.apiKeyEnc)
     ) {
       this.logger.warn(
-        `Stored API key for ${logLabel} cannot be decrypted with this instance's AI_ENCRYPTION_KEY`,
+        `Stored API key for ${logLabel} cannot be decrypted with this instance's ENCRYPTION_KEY`,
       );
       return {
         available: false,
         error: tr(
           "errors.ai.apiKeyUndecryptable",
-          "The stored API key cannot be read by this server. This happens when a backup is restored onto a different instance, or after AI_ENCRYPTION_KEY changes. Enter the API key again to fix it.",
+          "The stored API key cannot be read by this server. This happens when a backup is restored onto a different instance, or after ENCRYPTION_KEY changes. Enter the API key again to fix it.",
         ),
       };
     }

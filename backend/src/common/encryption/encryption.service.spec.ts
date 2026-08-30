@@ -1,9 +1,9 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { ConfigService } from "@nestjs/config";
-import { AiEncryptionService } from "./ai-encryption.service";
+import { EncryptionService } from "./encryption.service";
 
-describe("AiEncryptionService", () => {
-  let service: AiEncryptionService;
+describe("EncryptionService", () => {
+  let service: EncryptionService;
   let mockConfigService: Partial<Record<keyof ConfigService, jest.Mock>>;
 
   const VALID_KEY = "a".repeat(32);
@@ -13,19 +13,19 @@ describe("AiEncryptionService", () => {
       get: jest
         .fn()
         .mockImplementation((key: string, defaultValue?: string) => {
-          if (key === "AI_ENCRYPTION_KEY") return VALID_KEY;
+          if (key === "ENCRYPTION_KEY") return VALID_KEY;
           return defaultValue;
         }),
     };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
-        AiEncryptionService,
+        EncryptionService,
         { provide: ConfigService, useValue: mockConfigService },
       ],
     }).compile();
 
-    service = module.get<AiEncryptionService>(AiEncryptionService);
+    service = module.get<EncryptionService>(EncryptionService);
   });
 
   describe("isConfigured()", () => {
@@ -38,13 +38,12 @@ describe("AiEncryptionService", () => {
 
       const module = await Test.createTestingModule({
         providers: [
-          AiEncryptionService,
+          EncryptionService,
           { provide: ConfigService, useValue: mockConfigService },
         ],
       }).compile();
 
-      const shortKeyService =
-        module.get<AiEncryptionService>(AiEncryptionService);
+      const shortKeyService = module.get<EncryptionService>(EncryptionService);
       expect(shortKeyService.isConfigured()).toBe(false);
     });
 
@@ -53,12 +52,12 @@ describe("AiEncryptionService", () => {
 
       const module = await Test.createTestingModule({
         providers: [
-          AiEncryptionService,
+          EncryptionService,
           { provide: ConfigService, useValue: mockConfigService },
         ],
       }).compile();
 
-      const emptyService = module.get<AiEncryptionService>(AiEncryptionService);
+      const emptyService = module.get<EncryptionService>(EncryptionService);
       expect(emptyService.isConfigured()).toBe(false);
     });
   });
@@ -81,46 +80,49 @@ describe("AiEncryptionService", () => {
       expect(enc1).not.toBe(enc2);
     });
 
+    // Reachable: this release starts without a key (it warns instead), so a
+    // deployment that has not set one meets the refusal here -- on the request
+    // that tried to store a secret -- rather than at boot.
     it("throws when encryption key is not configured", async () => {
       mockConfigService.get = jest.fn().mockReturnValue("");
 
       const module = await Test.createTestingModule({
         providers: [
-          AiEncryptionService,
+          EncryptionService,
           { provide: ConfigService, useValue: mockConfigService },
         ],
       }).compile();
 
       const unconfiguredService =
-        module.get<AiEncryptionService>(AiEncryptionService);
+        module.get<EncryptionService>(EncryptionService);
       expect(() => unconfiguredService.encrypt("test")).toThrow(
-        "AI_ENCRYPTION_KEY is not configured",
+        /ENCRYPTION_KEY is not configured/,
       );
       expect(() => unconfiguredService.decrypt("test")).toThrow(
-        "AI_ENCRYPTION_KEY is not configured",
+        /ENCRYPTION_KEY is not configured/,
       );
     });
   });
 
   describe("canDecrypt()", () => {
     /** A service holding a different master key, as another instance would. */
-    async function serviceWithKey(key: string): Promise<AiEncryptionService> {
+    async function serviceWithKey(key: string): Promise<EncryptionService> {
       const module = await Test.createTestingModule({
         providers: [
-          AiEncryptionService,
+          EncryptionService,
           {
             provide: ConfigService,
             useValue: {
               get: jest
                 .fn()
                 .mockImplementation((name: string, fallback?: string) =>
-                  name === "AI_ENCRYPTION_KEY" ? key : fallback,
+                  name === "ENCRYPTION_KEY" ? key : fallback,
                 ),
             },
           },
         ],
       }).compile();
-      return module.get<AiEncryptionService>(AiEncryptionService);
+      return module.get<EncryptionService>(EncryptionService);
     }
 
     it("reads back what it encrypted", () => {

@@ -28,13 +28,29 @@ const dateTransformer = {
 export type LoanRateChangeSource = "manual" | "inferred" | "initial";
 
 /**
- * A point on a loan/mortgage account's interest-rate timeline. The account's
- * scalar interestRate/paymentAmount stay denormalized to the latest row whose
- * effectiveDate is not in the future; the rows are the historical record.
+ * A point on a loan/mortgage account's interest-rate timeline. These rows are
+ * the record of what the loan's terms ARE: the rate in effect on any date is the
+ * latest row not dated in the future (`resolveCurrentTimeline`).
+ *
+ * The account's scalar `interestRate` / `paymentAmount` are **not** denormalized
+ * from them and never written by this module -- they stay user-owned, settable
+ * only from the account edit form, so that recording a rate change or running
+ * detection cannot clobber a manually set value. The two therefore diverge
+ * routinely: after any change entered through the rate-history UI the scalars
+ * hold the OLD terms. Anything projecting a loan forward reads the timeline, not
+ * the scalars (frontend `buildLoanProjectionInput`); the scalars are the
+ * fallback for a loan with no recorded history.
  *
  * 'initial' rows snapshot the origination rate the first time a change is
  * recorded; 'inferred' rows are produced by detection from payment history.
  * A null newPaymentAmount means the payment did not change with the rate.
+ *
+ * One asymmetry matters to consumers: an 'initial' row's `newPaymentAmount` is a
+ * verbatim copy of `account.paymentAmount` at the time it was written
+ * (`insertInitialRowIfFirst`), so it is a snapshot of that field rather than an
+ * independent statement about what is being paid. 'manual' and 'inferred'
+ * payments do state it -- detection writes null outright when interest is booked
+ * separately, precisely so a principal-only observation never becomes one.
  */
 @Entity("loan_rate_changes")
 export class LoanRateChange {

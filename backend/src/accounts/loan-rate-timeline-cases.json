@@ -1,0 +1,70 @@
+{
+  "comment": "Shared truth table for the effective-rate-on-a-date rule. Read by backend/src/accounts/effective-loan-rate.util.spec.ts and by frontend/src/lib/loan-rate-timeline.contract.test.ts, because the two layers cannot import each other and the scheduled loan bill must price at the same rate the amortization report projects (INV-LOAN-006).",
+  "cases": [
+    {
+      "name": "no rows falls back to the account scalar",
+      "rows": [],
+      "asOfDate": "2026-08-01",
+      "fallback": 6,
+      "expected": 6
+    },
+    {
+      "name": "the latest row on or before the date wins",
+      "rows": [
+        { "effectiveDate": "2025-01-01", "annualRate": 5 },
+        { "effectiveDate": "2026-06-01", "annualRate": 7 }
+      ],
+      "asOfDate": "2026-08-01",
+      "fallback": 6,
+      "expected": 7
+    },
+    {
+      "name": "a row dated after the date is not yet in effect",
+      "rows": [
+        { "effectiveDate": "2025-01-01", "annualRate": 5 },
+        { "effectiveDate": "2026-09-01", "annualRate": 9 }
+      ],
+      "asOfDate": "2026-08-01",
+      "fallback": 6,
+      "expected": 5
+    },
+    {
+      "name": "a row dated exactly on the date is in effect",
+      "rows": [{ "effectiveDate": "2026-08-01", "annualRate": 7.25 }],
+      "asOfDate": "2026-08-01",
+      "fallback": 6,
+      "expected": 7.25
+    },
+    {
+      "name": "every row still in the future falls back to the scalar",
+      "rows": [{ "effectiveDate": "2027-01-01", "annualRate": 9 }],
+      "asOfDate": "2026-08-01",
+      "fallback": 6,
+      "expected": 6
+    },
+    {
+      "name": "a recorded 0% is a rate, not an absent one",
+      "rows": [{ "effectiveDate": "2026-01-01", "annualRate": 0 }],
+      "asOfDate": "2026-08-01",
+      "fallback": 6,
+      "expected": 0
+    },
+    {
+      "name": "unordered rows resolve the same as ordered ones",
+      "rows": [
+        { "effectiveDate": "2026-06-01", "annualRate": 7 },
+        { "effectiveDate": "2025-01-01", "annualRate": 5 }
+      ],
+      "asOfDate": "2026-08-01",
+      "fallback": 6,
+      "expected": 7
+    },
+    {
+      "name": "no rows and no scalar is unknown, not zero",
+      "rows": [],
+      "asOfDate": "2026-08-01",
+      "fallback": null,
+      "expected": null
+    }
+  ]
+}

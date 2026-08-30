@@ -163,5 +163,28 @@
     "body1": "アカウントが非アクティブだったため、指定した緊急連絡先にアカウントを引き継ぐリンクが送信されました。あなたが再度サインインしたため、<strong>それらのリンクは無効化されました</strong>。セーフガードは再設定されました。",
     "body2": "これが予期されていた場合は、何もする必要はありません。心当たりがない場合は、サインインアクティビティと緊急アクセス設定を確認してください。",
     "button": "緊急アクセスを確認する"
+  },
+  "providerOutage": {
+    "subject": "Monize: {{ provider }} が応答していません",
+    "heading": "市場データプロバイダーに接続できません",
+    "greeting": "{{ name }} 様、",
+    "intro": "Monize は {{ since }} から（{{ duration }}）<strong>{{ provider }}</strong> に接続できていません。このプロバイダーへのリクエストは現在停止しており、間隔を広げながら再試行します。",
+    "labelFailures": "失敗した試行回数",
+    "labelLastError": "最後のエラー",
+    "labelLastSuccess": "最後に成功した応答",
+    "valueNever": "なし",
+    "valueUnknown": "不明",
+    "impact": "このプロバイダーに依存する価格・チャート・指数比較は、復旧するまで欠落または古い値になる可能性があります。Monize に記録されたデータは失われていません。",
+    "whatToCheck": "プロバイダー側が稼働している場合は、このサーバーの外向き通信と DNS を確認してください。プロバイダーの名前を解決できない、または到達できないコンテナーは、まさにこの形で失敗します。",
+    "throttleNote": "復旧時にもう 1 通メールが届きます。同じプロバイダーに関する通知は最大でも {{ hours }} 時間に 1 回しか送信しないため、不安定なプロバイダーで受信トレイが埋まることはありません。",
+    "durationMinutes": "{{ minutes }} 分",
+    "durationHoursMinutes": "{{ hours }} 時間 {{ minutes }} 分"
+  },
+  "providerRecovery": {
+    "subject": "Monize: {{ provider }} が再び応答しています",
+    "heading": "市場データプロバイダーが復旧しました",
+    "greeting": "{{ name }} 様、",
+    "intro": "<strong>{{ provider }}</strong> は {{ restoredAt }} に再び応答しました。障害は {{ duration }} 続きました。",
+    "backfill": "障害中に取得できなかった価格と指数の履歴は、次回の定期更新で補完されます。対応は不要です。"
   }
 }

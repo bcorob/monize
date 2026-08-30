@@ -16,6 +16,18 @@ import {
 } from "./providers/quote-provider.interface";
 import { getTradingDateFromQuote } from "./providers/trading-date.util";
 import { barDate } from "./providers/market-session.util";
+import { describeFetchFailure } from "../common/http/fetch-failure.util";
+import { ProviderHealthService } from "../provider-health/provider-health.service";
+import { TrackedProviderId } from "../provider-health/providers";
+
+/**
+ * This client's id in `provider_health` and in the circuit breaker.
+ *
+ * Distinct from `QuoteProviderName` ("yahoo"), which names the *quote provider*
+ * a security is priced by. This one names the *host we call*, is the primary key
+ * of the durable alert state, and must therefore stay stable.
+ */
+const HEALTH_PROVIDER_ID: TrackedProviderId = "yahoo_finance";
 
 // Back-compat re-exports so existing imports keep compiling during the migration.
 export type YahooQuoteResult = QuoteResult;
@@ -72,6 +84,27 @@ export interface SecurityNewsItem {
   relatedTickers: string[];
 }
 
+/**
+ * Statuses that mean "there is no such series", as opposed to "not now".
+ *
+ * Only these may be reported to a caller as an empty answer: a 429, a 5xx or a
+ * 401 (a stale crumb) says nothing about whether the symbol has history, and
+ * caching one as "no history" is how a throttled minute becomes half an hour of
+ * a report rendering unpriced.
+ */
+const SYMBOL_ABSENT_STATUSES: ReadonlySet<number> = new Set([404, 422]);
+
+/**
+ * `chart.error.code` values that mean the same thing in a 200 body.
+ *
+ * Yahoo reports throttling, auth and its own faults through this field too, so
+ * the set is an allowlist rather than "an error is present".
+ */
+const SYMBOL_ABSENT_ERROR_CODES: ReadonlySet<string> = new Set([
+  "Not Found",
+  "Bad Request",
+]);
+
 const YAHOO_SECTOR_NAMES: Record<string, string> = {
   realestate: "Real Estate",
   consumer_cyclical: "Consumer Cyclical",
@@ -91,6 +124,8 @@ export class YahooFinanceService implements QuoteProvider {
   readonly name: QuoteProviderName = "yahoo";
 
   private readonly logger = new Logger(YahooFinanceService.name);
+
+  constructor(private readonly health: ProviderHealthService) {}
 
   private static readonly FETCH_TIMEOUT_MS = 10000;
   private static readonly USER_AGENT =
@@ -149,6 +184,12 @@ export class YahooFinanceService implements QuoteProvider {
    * Non-throttled HTTP errors (4xx other than 429, 5xx other than 503) are
    * returned to the caller untouched -- the helper only handles the
    * "upstream is asking us to slow down" case. Network errors propagate.
+   *
+   * It is also the single door the circuit breaker sits on: every Yahoo request
+   * except the crumb handshake goes through here, so refusing here refuses all
+   * of them. A `ProviderUnavailableError` is raised *before* the concurrency
+   * gate, because a refusal that first queues behind five in-flight 60-second
+   * timeouts costs precisely what the breaker exists to save (issue #1265).
    */
   private async throttledFetch(
     url: string,
@@ -157,14 +198,46 @@ export class YahooFinanceService implements QuoteProvider {
   ): Promise<Response> {
     const maxRetries = opts.maxRetries ?? YahooFinanceService.MAX_RETRIES;
     const timeoutMs = opts.timeoutMs ?? YahooFinanceService.FETCH_TIMEOUT_MS;
+    const admission = this.health.assertAvailable(HEALTH_PROVIDER_ID);
     await this.acquireSlot();
     try {
       let lastResponse: Response | null = null;
       for (let attempt = 0; attempt <= maxRetries; attempt++) {
-        const response = await fetch(url, {
-          ...init,
-          signal: AbortSignal.timeout(timeoutMs),
-        });
+        let response: Response;
+        try {
+          response = await fetch(url, {
+            ...init,
+            signal: AbortSignal.timeout(timeoutMs),
+          });
+        } catch (error) {
+          // No response at all: the availability signal the breaker counts.
+          // An error it does not count (a bad URL, an aborted body read) is not
+          // an outcome either, so the probe slot this request may be holding
+          // goes back rather than being held against a healthy provider.
+          // Only the probe holder may hand the slot back: a straggler admitted
+          // through a closed breaker owns nothing, and releasing then would
+          // free somebody else's probe and let a second one out beside it.
+          const counted = this.health.recordFailure(HEALTH_PROVIDER_ID, error);
+          if (!counted && admission === "probe") {
+            this.health.releaseProbe(HEALTH_PROVIDER_ID);
+          }
+          throw error;
+        }
+        // A 2xx is *not* recorded as a success here. Headers are not a
+        // completed request: a provider that accepts the connection and then
+        // stalls the body answers them every time, and recording that closed
+        // the breaker on every probe -- so it flapped once a window, the
+        // escalation never grew, and each fresh episode reset the alert's
+        // fifteen-minute clock so no alert was ever sent. A 2xx is recorded by
+        // `readBody`, where the body actually arrives.
+        //
+        // Anything else *is* recorded, right here. A non-2xx is a complete
+        // answer with nothing left for the caller to read, and every branch
+        // that handles one used to record it for itself -- which meant nine
+        // places to remember and two that did not, each leaving the probe slot
+        // held for two minutes against a provider that had just answered a
+        // routine 404.
+        if (!response.ok) this.health.recordSuccess(HEALTH_PROVIDER_ID);
         lastResponse = response;
         if (!YahooFinanceService.THROTTLED_STATUSES.has(response.status)) {
           return response;
@@ -200,6 +273,25 @@ export class YahooFinanceService implements QuoteProvider {
         YahooFinanceService.INTER_REQUEST_GAP_MS,
       );
     }
+  }
+
+  /**
+   * Read a response body, and record the request as *completed* if it arrives.
+   *
+   * This is where a Yahoo request becomes a success as far as the breaker is
+   * concerned. Headers alone are not enough (see `throttledFetch`), and a body
+   * that stalls rejects here with `UND_ERR_BODY_TIMEOUT` -- counted by the
+   * caller's catch through `logFailure`, which is the single door for that.
+   */
+  private async readBody<T>(
+    response: Response,
+    as: "json" | "text" = "json",
+  ): Promise<T> {
+    const value = (await (as === "json"
+      ? response.json()
+      : response.text())) as T;
+    this.health.recordSuccess(HEALTH_PROVIDER_ID);
+    return value;
   }
 
   private async ensureCrumb(forceRefresh = false): Promise<boolean> {
@@ -240,7 +332,17 @@ export class YahooFinanceService implements QuoteProvider {
   private fetchYahooCookie(url: string): Promise<string> {
     return new Promise<string>((resolve, reject) => {
       const timer = setTimeout(
-        () => reject(new Error("Cookie request timeout")),
+        () =>
+          // Carries a code, so `isTransportFailure` counts it: a timeout is the
+          // most common shape of "this host is unreachable", and an Error with
+          // only a message would have been read as a logic error and ignored by
+          // the breaker.
+          reject(
+            Object.assign(new Error("Cookie request timeout"), {
+              code: "ETIMEDOUT",
+              hostname: new URL(url).hostname,
+            }),
+          ),
         YahooFinanceService.FETCH_TIMEOUT_MS,
       );
       https
@@ -273,10 +375,28 @@ export class YahooFinanceService implements QuoteProvider {
   }
 
   private async fetchCrumb(): Promise<boolean> {
+    // The handshake does not go through throttledFetch, and a failed crumb is
+    // not cached -- so while Yahoo is unreachable every v10 caller used to pay
+    // two cookie timeouts plus a getcrumb timeout before failing. Refuse it
+    // with the same breaker the rest of the client uses.
+    const admission = this.health.tryRequest(HEALTH_PROVIDER_ID);
+    if (admission === "refused") return false;
     let lastStatus: number | string = "no cookies";
+    let lastError: unknown = null;
+    // Whether anything here produced evidence about the API host. The slot
+    // `tryRequest` just took is exclusive, so it has to be given back one way
+    // or another before this returns.
+    let reported = false;
     for (const source of YahooFinanceService.COOKIE_SOURCES) {
       try {
         const cookieStr = await this.fetchYahooCookie(source);
+        // Deliberately *not* a recorded success. The cookie sources are
+        // fc.yahoo.com and finance.yahoo.com; everything else in this client
+        // talks to query1.finance.yahoo.com. Counting a cookie response as
+        // "the provider answered" kept the failure count oscillating
+        // between 0 and 1 while the API host was down, so the breaker never
+        // opened -- and it closed a half-open probe on evidence about a
+        // different host, resetting the escalation.
         if (!cookieStr) {
           lastStatus = "no cookies";
           continue;
@@ -294,12 +414,18 @@ export class YahooFinanceService implements QuoteProvider {
         );
 
         if (!crumbResp.ok) {
+          // This request does not go through `throttledFetch`, so the non-2xx
+          // rule has to be applied here: the API host answered in full, and
+          // there is no body left to stall on.
+          this.health.recordSuccess(HEALTH_PROVIDER_ID);
+          reported = true;
           lastStatus = crumbResp.status;
           await crumbResp.text().catch(() => undefined);
           continue;
         }
 
-        const crumbText = await crumbResp.text();
+        const crumbText = await this.readBody<string>(crumbResp, "text");
+        reported = true;
         if (!crumbText || crumbText.length > 50 || crumbText.startsWith("{")) {
           lastStatus = "invalid crumb";
           continue;
@@ -310,13 +436,41 @@ export class YahooFinanceService implements QuoteProvider {
         this.crumbExpiresAt = Date.now() + 60 * 60 * 1000;
         return true;
       } catch (error) {
-        lastStatus =
-          error instanceof Error ? error.message : "cookie/crumb error";
+        // A cookie host that will not answer is weaker evidence than an API
+        // host that will not, but it is evidence in the safe direction: both
+        // are Yahoo, and over-counting a failure at worst opens the breaker on
+        // a provider that is broadly unreachable. Under-counting was the defect.
+        // Only a counted failure is an outcome: an error the breaker ignores
+        // leaves the slot to be handed back below.
+        reported =
+          this.health.recordFailure(HEALTH_PROVIDER_ID, error) || reported;
+        lastStatus = describeFetchFailure(error);
+        lastError = error;
+        // That failure may have re-armed the window. Trying the second cookie
+        // source anyway would put a second ungated socket on a provider the
+        // breaker has just refused -- two per window, where the whole point of
+        // half-open is one.
+        if (this.health.wouldRefuse(HEALTH_PROVIDER_ID)) break;
       }
     }
 
-    this.logger.warn(
-      `Yahoo Finance: could not obtain a crumb (last: ${lastStatus})`,
+    // Every cookie source answered, none with a cookie: the API host was never
+    // called, so there is nothing to record -- but the probe slot still has to
+    // go back, or the next two minutes of Yahoo calls are refused for a
+    // provider nothing has shown to be down.
+    if (!reported && admission === "probe") {
+      this.health.releaseProbe(HEALTH_PROVIDER_ID);
+    }
+
+    // Through the rate-limited door like every other provider failure: the
+    // handshake is attempted per v10 caller, so a bare warn here is one line
+    // per symbol -- the flood, one layer down. A status-only failure carries no
+    // error to describe, so it is given one.
+    this.health.logFailure(
+      this.logger,
+      HEALTH_PROVIDER_ID,
+      "crumb handshake",
+      lastError ?? new Error(`could not obtain a crumb (last: ${lastStatus})`),
     );
     return false;
   }
@@ -338,7 +492,12 @@ export class YahooFinanceService implements QuoteProvider {
           },
         });
       } catch (err) {
-        this.logger.error(`Yahoo Finance v10 fetch error: ${err}`);
+        this.health.logFailure(
+          this.logger,
+          HEALTH_PROVIDER_ID,
+          "v10 request",
+          err,
+        );
         return null;
       }
 
@@ -391,7 +550,7 @@ export class YahooFinanceService implements QuoteProvider {
         return null;
       }
 
-      const data = await response.json();
+      const data = await this.readBody<any>(response);
 
       if (data.chart?.result?.[0]?.meta) {
         const result = data.chart.result[0];
@@ -440,9 +599,11 @@ export class YahooFinanceService implements QuoteProvider {
 
       return null;
     } catch (error) {
-      this.logger.error(
-        `Failed to fetch Yahoo Finance quote for ${yahooSymbol}`,
-        error instanceof Error ? error.stack : undefined,
+      this.health.logFailure(
+        this.logger,
+        HEALTH_PROVIDER_ID,
+        `quote for ${yahooSymbol}`,
+        error,
       );
       return null;
     }
@@ -509,15 +670,23 @@ export class YahooFinanceService implements QuoteProvider {
   ): Promise<HistoricalPrice[] | null> {
     const primary = this.getYahooSymbol(symbol, exchange);
     const prices = await this.fetchHistoricalRaw(primary, query);
-    if (prices) return prices;
+    if (prices?.length) return prices;
 
+    // Bars, not merely an answer. An empty answer used to be `null` and so fell
+    // through to the alternates by accident; now that it is `[]` -- which is
+    // truthy -- returning on it would silently retire the alternate-symbol
+    // fallback for every windowed fetch (a `.TO` listing asked for a window
+    // before it listed on the primary exchange, say).
     if (primary === symbol) {
       for (const altSymbol of this.getAlternateSymbols(symbol)) {
         const alt = await this.fetchHistoricalRaw(altSymbol, query);
-        if (alt) return alt;
+        if (alt?.length) return alt;
       }
     }
-    return null;
+
+    // No alternate had bars either. The primary's own answer decides what this
+    // was: `[]` if it answered with an empty window, `null` if nothing did.
+    return prices;
   }
 
   private async fetchHistoricalRaw(
@@ -542,14 +711,38 @@ export class YahooFinanceService implements QuoteProvider {
         this.logger.warn(
           `Yahoo Finance API returned ${response.status} for historical ${yahooSymbol}`,
         );
-        return null;
+        // A 404 or 422 is the provider answering *about this symbol*: it has no
+        // such series. A 429, a 5xx or a 401 is not an answer -- it is the
+        // provider declining to give one -- and the difference decides whether
+        // a caller may remember the window as empty. Collapsing both into
+        // `null` meant a symbol nobody carries was re-asked on every report
+        // render, because the negative cache could never be written for it.
+        return SYMBOL_ABSENT_STATUSES.has(response.status) ? [] : null;
       }
 
-      const data = await response.json();
+      const data = await this.readBody<any>(response);
       const result = data.chart?.result?.[0];
-      if (!result?.timestamp || !result?.indicators?.quote?.[0]) {
-        return null;
+      // No result object. A `chart.error` beside it is an answer about the
+      // symbol only when it says the symbol is the problem -- Yahoo puts
+      // "Unauthorized", "Too Many Requests" and "Internal Server Error" in the
+      // same field, and reading one of those as "no such series" writes the
+      // negative cache the status allowlist above exists to protect. Anything
+      // else is a body this client does not understand, which is also not an
+      // answer. Either way the caller's alternate-symbol fallback still gets
+      // its turn, because that turns on bars rather than on an answer.
+      if (!result) {
+        const code = String(data.chart?.error?.code ?? "");
+        return SYMBOL_ABSENT_ERROR_CODES.has(code) ? [] : null;
       }
+      // A result with no timestamps *is* an answer: the window predates the
+      // instrument, or it did not trade in it. Returning `null` for that made
+      // "answered with nothing" and "no usable answer" indistinguishable, and
+      // the market-index chunking read every refused window as "the index did
+      // not exist yet" -- storing one year as if it were the whole history.
+      if (!result.timestamp) return [];
+      // Timestamps but no quote series is a malformed answer, not an empty
+      // window: null, so the caller can try an alternate symbol.
+      if (!result.indicators?.quote?.[0]) return null;
 
       const gbx = isGbxCurrency(result.meta?.currency);
       const convertPrice = (v: number | null | undefined): number | null => {
@@ -599,9 +792,11 @@ export class YahooFinanceService implements QuoteProvider {
 
       return prices;
     } catch (error) {
-      this.logger.error(
-        `Failed to fetch historical prices for ${yahooSymbol}`,
-        error instanceof Error ? error.stack : undefined,
+      this.health.logFailure(
+        this.logger,
+        HEALTH_PROVIDER_ID,
+        `historical prices for ${yahooSymbol}`,
+        error,
       );
       return null;
     }
@@ -666,7 +861,7 @@ export class YahooFinanceService implements QuoteProvider {
         return null;
       }
 
-      const data = await response.json();
+      const data = await this.readBody<any>(response);
       const result = data.chart?.result?.[0];
       if (!result?.timestamp || !result.indicators?.quote?.[0]) {
         return null;
@@ -704,9 +899,11 @@ export class YahooFinanceService implements QuoteProvider {
 
       return points;
     } catch (error) {
-      this.logger.error(
-        `Failed to fetch intraday series for ${yahooSymbol}`,
-        error instanceof Error ? error.stack : undefined,
+      this.health.logFailure(
+        this.logger,
+        HEALTH_PROVIDER_ID,
+        `intraday series for ${yahooSymbol}`,
+        error,
       );
       return null;
     }
@@ -741,7 +938,7 @@ export class YahooFinanceService implements QuoteProvider {
         return [];
       }
 
-      const data = await response.json();
+      const data = await this.readBody<any>(response);
       const quotes: YahooSearchResult[] = data.quotes || [];
 
       if (quotes.length === 0) {
@@ -789,9 +986,11 @@ export class YahooFinanceService implements QuoteProvider {
         };
       });
     } catch (error) {
-      this.logger.error(
-        "Failed to lookup security",
-        error instanceof Error ? error.stack : undefined,
+      this.health.logFailure(
+        this.logger,
+        HEALTH_PROVIDER_ID,
+        "security lookup",
+        error,
       );
       return [];
     }
@@ -1061,7 +1260,7 @@ export class YahooFinanceService implements QuoteProvider {
         return null;
       }
 
-      const data = await response.json();
+      const data = await this.readBody<any>(response);
       const quotes = data.quotes || [];
 
       const match = quotes.find(
@@ -1078,9 +1277,11 @@ export class YahooFinanceService implements QuoteProvider {
         industry: match.industry || match.industryDisp || null,
       };
     } catch (error) {
-      this.logger.error(
-        `Failed to fetch sector info for ${yahooSymbol}`,
-        error instanceof Error ? error.stack : undefined,
+      this.health.logFailure(
+        this.logger,
+        HEALTH_PROVIDER_ID,
+        `sector info for ${yahooSymbol}`,
+        error,
       );
       return null;
     }
@@ -1149,7 +1350,7 @@ export class YahooFinanceService implements QuoteProvider {
         return { sectors: null, assets: null };
       }
 
-      const data = await response.json();
+      const data = await this.readBody<any>(response);
       const topHoldings = data.quoteSummary?.result?.[0]?.topHoldings;
       if (!topHoldings) return { sectors: [], assets: [] };
 
@@ -1158,9 +1359,11 @@ export class YahooFinanceService implements QuoteProvider {
         assets: this.parseAssetPositions(topHoldings),
       };
     } catch (error) {
-      this.logger.error(
-        `Failed to fetch ETF breakdowns for ${yahooSymbol}`,
-        error instanceof Error ? error.stack : undefined,
+      this.health.logFailure(
+        this.logger,
+        HEALTH_PROVIDER_ID,
+        `ETF breakdowns for ${yahooSymbol}`,
+        error,
       );
       return { sectors: null, assets: null };
     }
@@ -1250,7 +1453,7 @@ export class YahooFinanceService implements QuoteProvider {
         return { description: null, website: null };
       }
 
-      const data = await response.json();
+      const data = await this.readBody<any>(response);
       const result = data.quoteSummary?.result?.[0];
       if (!result) return { description: null, website: null };
 
@@ -1263,9 +1466,11 @@ export class YahooFinanceService implements QuoteProvider {
 
       return { description, website: this.pickWebsite(result) };
     } catch (error) {
-      this.logger.error(
-        `Failed to fetch profile for ${yahooSymbol}`,
-        error instanceof Error ? error.stack : undefined,
+      this.health.logFailure(
+        this.logger,
+        HEALTH_PROVIDER_ID,
+        `profile for ${yahooSymbol}`,
+        error,
       );
       return { description: null, website: null };
     }
@@ -1377,14 +1582,17 @@ export class YahooFinanceService implements QuoteProvider {
         return [];
       }
 
-      const data = await response.json();
+      const data = await this.readBody<any>(response);
       const items: YahooNewsItem[] = data.news || [];
       return items.flatMap((item) => this.toNewsItem(item));
     } catch (error) {
       // News is decoration on a page that works without it, so a failure here
       // is logged and swallowed rather than shown as a broken page.
-      this.logger.warn(
-        `Yahoo news lookup failed for ${symbol}: ${error instanceof Error ? error.message : error}`,
+      this.health.logFailure(
+        this.logger,
+        HEALTH_PROVIDER_ID,
+        `news lookup for ${symbol}`,
+        error,
       );
       return [];
     }

@@ -59,6 +59,7 @@ import {
 import { ActionHistoryService } from "../action-history/action-history.service";
 import { getUsersByEffectiveTimezone } from "../common/users-by-timezone.util";
 import { withSystemContext, withUserContext } from "../common/db/with-context";
+import { lockAccountsForBalanceWrite } from "../common/db/locks";
 import { withScopedDb } from "../common/db/scoped-db";
 import { affectedRowCount } from "../common/db/query-result";
 import { validateSplitAmountSum } from "../common/split-amount.util";
@@ -2940,6 +2941,11 @@ export class ScheduledTransactionsService {
     // a correctness bug -- rollback still unwinds cleanly -- and is tracked as a
     // follow-up rather than reshaped here.
     let writtenTransfer: { savedFromId: string; savedToId: string } | undefined;
+    // A managed loan bill whose debt is already retired posts NO money. The
+    // occurrence is still claimed and the schedule still advances, so nothing
+    // retries it; the post-commit recalculation then deactivates the schedule
+    // (a revolving line of credit stays active, since it can be drawn again).
+    let skipFinancialWrite = false;
     const removedAfterOnce = await withScopedDb(this.dataSource, async (m) => {
       // Lock the schedule and confirm this occurrence is still the due one. A
       // poster that lost the race finds next_due_date already advanced.
@@ -3053,6 +3059,161 @@ export class ScheduledTransactionsService {
             ),
           );
         }
+
+        // A loan template's stored P/I split is derived state, computed when
+        // the PREVIOUS occurrence posted; a principal movement committed since
+        // (a standalone overpayment, a void, an import) leaves it stale, and no
+        // mutation path recalculates it. So the occurrence being posted
+        // re-resolves its allocation from the ledger through its own due date,
+        // here at the consumption boundary -- under the parent lock, inside
+        // this transaction (issue #1253, finding PR-1254-01). When nothing
+        // moved in between this resolves to the persisted amounts exactly.
+        //
+        // Only the plain base-split path resolves: an inline or override
+        // amount is the user's explicit statement for this occurrence, an FX
+        // schedule prices in another currency, and investments/transfers do
+        // not carry the loan template shape. The resolver itself returns null
+        // for anything that is not a managed loan template.
+        if (
+          !current.isInvestment &&
+          !preparedTransfer &&
+          !fx &&
+          !hasInlineAmount &&
+          storedOverride?.amount == null
+        ) {
+          // The boundary is the date this occurrence's money actually moves --
+          // `postDate`, which an override can move off the recurrence slot --
+          // because that is the date the interest accrues to.
+          // Held from here until commit, so the debt this prices cannot move
+          // underneath it.
+          await this.lockLoanLedgerForPricing(
+            m,
+            userId,
+            current.accountId,
+            currentSplits,
+          );
+          const loanAllocation =
+            await this.loanService.resolvePostingAllocation(
+              current,
+              currentSplits,
+              postDate,
+            );
+          if (loanAllocation.kind === "retired") {
+            // Nothing is owed through this occurrence's boundary, and every
+            // line of this bill is one the payoff settles. Consume the
+            // occurrence without moving money: charging the stale installment
+            // would record interest against a debt that no longer exists and
+            // push the loan into credit.
+            skipFinancialWrite = true;
+          } else if (loanAllocation.kind === "allocation") {
+            // The payload rows were mapped 1:1 (in order) from the pre-lock
+            // scheduled.splits, which the basis guard above just proved
+            // identical to the locked set -- so the source split id addresses
+            // each payload row.
+            transactionPayload.splits = transactionPayload.splits.map(
+              (payloadSplit: any, index: number) => {
+                const sourceId = scheduled.splits?.[index]?.id;
+                const resolvedAmount = sourceId
+                  ? loanAllocation.amountsBySplitId.get(sourceId)
+                  : undefined;
+                return resolvedAmount !== undefined
+                  ? { ...payloadSplit, amount: resolvedAmount }
+                  : payloadSplit;
+              },
+            );
+            // A re-resolved child moves the parent with it, or the split
+            // validator's exact-4dp equality refuses the whole post.
+            transactionPayload.amount = sumMoney(
+              transactionPayload.splits.map((s: any) => Number(s.amount)),
+            );
+          }
+        }
+      }
+
+      // The same re-resolution for the manual Post dialog, which is the path
+      // users actually take and which does NOT reach the block above: the
+      // dialog echoes the stored template back as INLINE splits, so
+      // `usesScheduledSplits` is false and the occurrence would post the stale
+      // allocation the auto-post path just learned to avoid -- the same
+      // occurrence posting two different amounts depending on which button was
+      // pressed.
+      //
+      // An echo is not an instruction. Each inline line names its source split
+      // (`sourceSplitId`), so an UNCHANGED echo re-resolves while a figure the
+      // user actually typed is honoured -- the distinction the FX path above
+      // already draws for a rate the dialog round-trips (issue #1167 F5-1).
+      if (
+        useSplits &&
+        hasInlineSplits &&
+        !current.isInvestment &&
+        !preparedTransfer &&
+        !fx
+      ) {
+        const lockedSplits = await m
+          .getRepository(ScheduledTransactionSplit)
+          .find({ where: { scheduledTransactionId: id } });
+        const storedById = new Map(
+          lockedSplits.map((split) => [
+            split.id,
+            roundMoney(Number(split.amount)),
+          ]),
+        );
+        const rows = transactionPayload.splits as any[];
+        // The dialog sends the parent `amount` on EVERY non-foreign post -- it
+        // is the same echo the lines are, not a typed instruction -- so gating
+        // this on `!hasInlineAmount` made the whole block unreachable from the
+        // only surface that produces inline splits. The amount is an echo when
+        // it still equals what the locked template holds; a figure the user
+        // actually changed is their statement and posts as given.
+        const amountIsEcho =
+          !hasInlineAmount ||
+          roundMoney(Number(postDto?.amount)) ===
+            roundMoney(Number(current.amount));
+        // Every line must echo a stored line at its stored amount; one typed
+        // figure (or one line that names no source) makes the whole set the
+        // user's own statement, which posts as given.
+        const isUnchangedEcho =
+          amountIsEcho &&
+          Array.isArray(rows) &&
+          rows.length === lockedSplits.length &&
+          rows.every((row, index) => {
+            const sourceId = postDto?.splits?.[index]?.sourceSplitId;
+            return (
+              !!sourceId &&
+              storedById.has(sourceId) &&
+              storedById.get(sourceId) === roundMoney(Number(row.amount))
+            );
+          });
+        if (isUnchangedEcho) {
+          await this.lockLoanLedgerForPricing(
+            m,
+            userId,
+            current.accountId,
+            lockedSplits,
+          );
+          const loanAllocation =
+            await this.loanService.resolvePostingAllocation(
+              current,
+              lockedSplits,
+              postDate,
+            );
+          if (loanAllocation.kind === "retired") {
+            skipFinancialWrite = true;
+          } else if (loanAllocation.kind === "allocation") {
+            transactionPayload.splits = rows.map((row, index) => {
+              const sourceId = postDto?.splits?.[index]?.sourceSplitId;
+              const resolved = sourceId
+                ? loanAllocation.amountsBySplitId.get(sourceId)
+                : undefined;
+              return resolved !== undefined
+                ? { ...row, amount: resolved }
+                : row;
+            });
+            transactionPayload.amount = sumMoney(
+              transactionPayload.splits.map((s: any) => Number(s.amount)),
+            );
+          }
+        }
       }
 
       // Claim the occurrence. The unique key on
@@ -3098,8 +3259,14 @@ export class ScheduledTransactionsService {
           preparedTransfer,
           m,
         );
-      } else {
+      } else if (!skipFinancialWrite) {
         await this.transactionsService.create(userId, transactionPayload);
+      } else {
+        this.logger.log(
+          `Scheduled loan payment ${id} posted no money: the loan owes nothing ` +
+            `through ${postDate}. The occurrence is consumed so it is not retried; ` +
+            `the schedule deactivates unless it is a revolving line of credit.`,
+        );
       }
 
       if (lockedOverride) {
@@ -3185,6 +3352,44 @@ export class ScheduledTransactionsService {
     }
 
     return this.findOne(userId, id);
+  }
+
+  /**
+   * Serialize this posting against anyone else moving the loan's ledger.
+   *
+   * The occurrence's interest is `debt(d) x rate`, and that debt is read from
+   * the `transactions` table. The schedule row lock does not protect it: no
+   * ledger writer takes that lock, so under READ COMMITTED a principal payment
+   * can commit between this posting's debt `SELECT` and its own write, and the
+   * split would be priced from a balance that was already stale when it was
+   * written (`CONC-001`: a financial input is read under the lock that
+   * authorizes the write, not merely inside the same transaction).
+   *
+   * `lockAccountsForBalanceWrite` is the existing primitive for exactly this --
+   * every balance writer already takes it, so holding it from before the read
+   * until commit forces a concurrent ledger write to queue behind this posting
+   * rather than slip inside it. Both accounts are locked because both move:
+   * the source pays and the loan receives. The primitive sorts, which is what
+   * keeps two postings over the same pair deadlock-free.
+   *
+   * Returns the loan account id when there is one, so the caller can tell a
+   * loan template from an ordinary split without asking again.
+   */
+  private async lockLoanLedgerForPricing(
+    m: EntityManager,
+    userId: string,
+    sourceAccountId: string,
+    splits: ScheduledTransactionSplit[],
+  ): Promise<string | null> {
+    const loanAccountId =
+      await this.loanService.findLoanAccountFromSplits(splits);
+    if (!loanAccountId) return null;
+    await lockAccountsForBalanceWrite(
+      m,
+      [sourceAccountId, loanAccountId],
+      userId,
+    );
+    return loanAccountId;
   }
 
   private async postInvestment(
@@ -3550,6 +3755,13 @@ export class ScheduledTransactionsService {
     return this.loanService.recalculateLoanPaymentSplits(
       scheduledTransactionId,
     );
+  }
+
+  async getLoanProjectionAnchor(
+    userId: string,
+    loanAccountId: string,
+  ): Promise<{ nextDueDate: string | null; debt: number | null }> {
+    return this.loanService.getLoanProjectionAnchor(userId, loanAccountId);
   }
 }
 

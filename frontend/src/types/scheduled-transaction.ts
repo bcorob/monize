@@ -307,6 +307,18 @@ export interface OverrideCheckResult {
   count: number;
 }
 
+/**
+ * The next-installment projection anchor for a loan account (issue #1253):
+ * the next scheduled installment's due date and the debt measured from the
+ * server's ledger through that date -- the same balance boundary the
+ * scheduled bill's interest is calculated from. Both fields are null when
+ * the loan has no active scheduled payment.
+ */
+export interface LoanProjectionAnchor {
+  nextDueDate: string | null;
+  debt: number | null;
+}
+
 export interface PostScheduledTransactionData {
   transactionDate?: string;
   amount?: number | null;

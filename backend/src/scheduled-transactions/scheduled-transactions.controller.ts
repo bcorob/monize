@@ -42,6 +42,7 @@ import {
 } from "../delegation/decorators/delegate-access.decorator";
 import { DelegateScheduledTransferMaskInterceptor } from "../delegation/interceptors/delegate-scheduled-transfer-mask.interceptor";
 import { DelegationService } from "../delegation/delegation.service";
+import { JointAccountsService } from "../delegation/joint-accounts.service";
 import { tr } from "../i18n/translate";
 
 @ApiTags("Scheduled Transactions")
@@ -53,6 +54,7 @@ export class ScheduledTransactionsController {
   constructor(
     private readonly scheduledTransactionsService: ScheduledTransactionsService,
     private readonly delegationService: DelegationService,
+    private readonly jointAccounts: JointAccountsService,
   ) {}
 
   /**
@@ -182,6 +184,64 @@ export class ScheduledTransactionsController {
         { through: query.through, maxPerSchedule: query.maxPerSchedule },
       );
     return this.filterForDelegate(req, rows);
+  }
+
+  // Also before `:id`: "loan-anchor" is a literal path segment.
+  @Get("loan-anchor/:accountId")
+  @ApiOperation({
+    summary: "Get the next-installment projection anchor for a loan account",
+    description:
+      "The next scheduled installment's due date and the loan's debt measured " +
+      "from the ledger through that date -- the same balance boundary the " +
+      "scheduled bill's interest is calculated from, so an amortization " +
+      "projection anchored here agrees with the next bill (issue #1253). " +
+      "Both fields are null when the account has no active scheduled payment.",
+  })
+  @ApiParam({ name: "accountId", description: "Loan account UUID" })
+  @ApiResponse({ status: 200, description: "Projection anchor retrieved" })
+  @ApiResponse({ status: 401, description: "Unauthorized" })
+  // The amortization report is a `reports` surface a delegate can hold, and it
+  // fetches this anchor in the same request as the loan's history. Without the
+  // annotation `AccountDelegateGuard` fails an acting session closed, the
+  // report's Promise.all rejects, and the WHOLE report is replaced by its error
+  // state -- for a report that rendered before this endpoint existed. Its
+  // sibling, GET /accounts/:accountId/rate-changes, is annotated for exactly
+  // the same reason.
+  @AllowDelegate()
+  @DelegateRequiresSection("reports")
+  async getLoanProjectionAnchor(
+    @Request() req,
+    @Param("accountId", ParseUUIDPipe) accountId: string,
+  ) {
+    const anchor =
+      await this.scheduledTransactionsService.getLoanProjectionAnchor(
+        req.user.id,
+        accountId,
+      );
+    if (anchor.nextDueDate !== null || req.user.isActing) {
+      return anchor;
+    }
+    // Joint fallback, as on `GET /accounts/:id/balance`: the report's account
+    // list is a union of owned and jointly shared accounts, so a shared loan
+    // resolves to nothing under the caller's own scope. Authorize first, then
+    // read with the owner's -- otherwise "not shared with me" and "this loan
+    // has no scheduled payment" come back as the same answer, and the report
+    // silently falls back to projecting from today.
+    const jointIds = await this.jointAccounts.jointAccountIdSetFor(
+      req.user.realUserId ?? req.user.id,
+    );
+    if (!jointIds.has(accountId)) {
+      return anchor;
+    }
+    const access = await this.jointAccounts.jointAccessFor(
+      req.user.realUserId ?? req.user.id,
+      accountId,
+      "read",
+    );
+    return this.scheduledTransactionsService.getLoanProjectionAnchor(
+      access.ownerUserId,
+      accountId,
+    );
   }
 
   @Get(":id")

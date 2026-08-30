@@ -12,6 +12,7 @@ import { ScheduledTransaction } from "./entities/scheduled-transaction.entity";
 import { ScheduledTransactionSplit } from "./entities/scheduled-transaction-split.entity";
 import { ScheduledTransactionOverride } from "./entities/scheduled-transaction-override.entity";
 import { Account } from "../accounts/entities/account.entity";
+import { LoanRateChange } from "../loan-rate-changes/entities/loan-rate-change.entity";
 import { Tag } from "../tags/entities/tag.entity";
 import { UserPreference } from "../users/entities/user-preference.entity";
 import { FALLBACK_DEFAULT_CURRENCY } from "../common/default-currency.util";
@@ -220,6 +221,10 @@ describe("ScheduledTransactionsService", () => {
       [ScheduledTransactionSplit, splitsRepo],
       [ScheduledTransactionOverride, overridesRepo],
       [Account, accountsRepo],
+      // The loan bill prices at the rate in effect on its due date, so the
+      // loan service reads the rate timeline; no fixture here records one, so
+      // every loan falls back to its account scalar (INV-LOAN-006).
+      [LoanRateChange, { find: jest.fn().mockResolvedValue([]) }],
       [Tag, tagRepo],
       [UserPreference, preferencesRepo],
     ]);
@@ -269,6 +274,15 @@ describe("ScheduledTransactionsService", () => {
     mockDataSource.query.mockImplementation(async (sql: string) => {
       if (String(sql).includes("scheduled_transaction_postings")) {
         return postingClaimWins ? [[{ id: "posting-1" }], 1] : [[], 0];
+      }
+      // The loan recalculation's dated as-of ledger balance (issue #1253):
+      // answer with the mocked loan account's stored balance so tests about
+      // other behavior read the figure the old currentBalance read gave them.
+      if (String(sql).includes("opening_balance")) {
+        const account = await accountsRepo.findOne();
+        return account != null
+          ? [{ balance: String(Number(account.currentBalance)) }]
+          : [];
       }
       return [
         { user_id: "11111111-1111-1111-1111-111111111111", timezone: "UTC" },
@@ -3173,10 +3187,12 @@ describe("ScheduledTransactionsService", () => {
       overrideQb.getOne.mockResolvedValue(null);
       overridesRepo.createQueryBuilder.mockReturnValue(overrideQb);
 
-      // For findLoanAccountFromSplits
-      accountsRepo.findOne.mockResolvedValueOnce(loanAccount);
-      // For recalculateLoanPaymentSplits - the loan account lookup
-      accountsRepo.findOne.mockResolvedValueOnce(loanAccount);
+      // The loan account answers every lookup on this path: the pricing lock's
+      // resolution, the posting-boundary resolver and the post-commit
+      // recalculation. A `mockResolvedValueOnce` chain pinned the exact number
+      // of lookups, so adding one shifted every later answer by one and the
+      // failure surfaced as an unrelated "ledger could not be read".
+      accountsRepo.findOne.mockResolvedValue(loanAccount);
       // For recalculateLoanPaymentSplits - the scheduled transaction lookup
       scheduledRepo.findOne.mockResolvedValueOnce(scheduled); // findOne in post return
       scheduledRepo.findOne.mockResolvedValueOnce(scheduled); // recalculate internal find
@@ -5293,6 +5309,485 @@ describe("ScheduledTransactionsService", () => {
 
       // Both splits should have been saved with updated amounts
       expect(splitsRepo.save).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe("getLoanProjectionAnchor", () => {
+    it("returns the schedule's due date and the ledger debt through it", async () => {
+      accountsRepo.findOne.mockResolvedValue({
+        id: "loan-1",
+        userId,
+        accountType: "LOAN",
+        currentBalance: -200000,
+      });
+      mockDataSource.query.mockImplementation(async (sql: string) => {
+        const text = String(sql);
+        if (text.includes("scheduled_transactions")) {
+          return [{ next_due_date: "2026-08-01" }];
+        }
+        if (text.includes("opening_balance")) {
+          return [{ balance: "-198500" }];
+        }
+        return [];
+      });
+
+      await expect(
+        service.getLoanProjectionAnchor(userId, "loan-1"),
+      ).resolves.toEqual({ nextDueDate: "2026-08-01", debt: 198500 });
+    });
+  });
+
+  // ==================== loan splits resolve at the posting boundary ====================
+  describe("post() resolves a loan template's splits at the posting boundary", () => {
+    const loanTemplateSplits = (): any[] => [
+      {
+        id: "ss-principal",
+        kind: "transfer",
+        transferAccountId: "loan-1",
+        categoryId: null,
+        amount: -500,
+        memo: "Principal",
+        tags: [],
+      },
+      {
+        id: "ss-interest",
+        kind: "category",
+        transferAccountId: null,
+        categoryId: "cat-interest",
+        amount: -1000,
+        memo: "Interest",
+        tags: [],
+      },
+    ];
+
+    const loanAccount = () => ({
+      id: "loan-1",
+      userId,
+      accountType: "LOAN",
+      currentBalance: -200000,
+      interestRate: 6,
+      paymentFrequency: "MONTHLY",
+      paymentAmount: 1500,
+    });
+
+    const arrangeLoanPost = (scheduled: any) => {
+      scheduledRepo.findOne.mockResolvedValue(scheduled);
+      splitsRepo.find.mockResolvedValue(scheduled.splits);
+      accountsRepo.findOne.mockResolvedValue(loanAccount());
+      overridesRepo.createQueryBuilder = jest.fn().mockReturnValue({
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        getOne: jest.fn().mockResolvedValue(null),
+      });
+      mockQueryRunner.manager.delete = jest
+        .fn()
+        .mockResolvedValue({ affected: 1 });
+      transactionsService.create.mockResolvedValue({ id: "tx-new" });
+    };
+
+    it("posts the ledger-derived allocation, not the stale stored split (issue #1253)", async () => {
+      // The template was prepared when the previous occurrence posted: 1,000
+      // interest on a 200,000 debt at 6% monthly. A standalone 1,500
+      // principal-only payment landed afterwards, dated on or before this
+      // occurrence's due date, and nothing recalculates the stored split on
+      // that mutation -- so the posting itself must re-resolve from the
+      // ledger: 198,500 * 0.005 = 992.50 of interest, 507.50 of principal.
+      const scheduled = makeScheduled({
+        amount: -1500,
+        isSplit: true,
+        splits: loanTemplateSplits(),
+        frequency: "ONCE",
+      });
+      arrangeLoanPost(scheduled);
+      mockDataSource.query.mockImplementation(async (sql: string) => {
+        const text = String(sql);
+        if (text.includes("scheduled_transaction_postings")) {
+          return [[{ id: "posting-1" }], 1];
+        }
+        if (text.includes("opening_balance")) {
+          return [{ balance: "-198500" }];
+        }
+        return [
+          { user_id: "11111111-1111-1111-1111-111111111111", timezone: "UTC" },
+        ];
+      });
+
+      await service.post(userId, stId);
+
+      expect(transactionsService.create).toHaveBeenCalledTimes(1);
+      const payload = transactionsService.create.mock.calls[0][1];
+      const interest = payload.splits.find(
+        (s: any) => s.categoryId === "cat-interest",
+      );
+      const principal = payload.splits.find(
+        (s: any) => s.transferAccountId === "loan-1",
+      );
+      expect(interest.amount).toBe(-992.5);
+      expect(principal.amount).toBe(-507.5);
+      // The parent moved with its children, or the split validator's exact-4dp
+      // equality would refuse the post.
+      expect(payload.amount).toBe(-1500);
+      // The ledger was measured through THIS occurrence's due date.
+      expect(mockDataSource.query).toHaveBeenCalledWith(
+        expect.stringContaining("t.transaction_date <= $3"),
+        ["loan-1", userId, "2025-02-15"],
+      );
+    });
+
+    it("posts the persisted amounts unchanged when the ledger did not move", async () => {
+      // Idempotence: with no intervening principal mutation the resolution
+      // reproduces the template exactly (same balance, same rate, same
+      // waterfall), so posting is byte-identical to today's behavior.
+      const scheduled = makeScheduled({
+        amount: -1500,
+        isSplit: true,
+        splits: loanTemplateSplits(),
+        frequency: "ONCE",
+      });
+      arrangeLoanPost(scheduled);
+      // Default beforeEach query mock answers the balance query with the
+      // account's stored -200,000, the balance the template was priced at.
+
+      await service.post(userId, stId);
+
+      const payload = transactionsService.create.mock.calls[0][1];
+      const interest = payload.splits.find(
+        (s: any) => s.categoryId === "cat-interest",
+      );
+      const principal = payload.splits.find(
+        (s: any) => s.transferAccountId === "loan-1",
+      );
+      expect(interest.amount).toBe(-1000);
+      expect(principal.amount).toBe(-500);
+      expect(payload.amount).toBe(-1500);
+    });
+
+    it("re-resolves for the manual Post dialog, which echoes the template as inline splits", async () => {
+      // The dialog always sends `isSplit` + `splits`, so this occurrence does
+      // NOT take the base-split path. Without its own re-resolution the same
+      // occurrence posted 992.50 from the list's quick-post button and a stale
+      // 1,000.00 from the dialog -- the path users actually take.
+      const scheduled = makeScheduled({
+        amount: -1500,
+        isSplit: true,
+        splits: loanTemplateSplits(),
+        frequency: "ONCE",
+      });
+      arrangeLoanPost(scheduled);
+      mockDataSource.query.mockImplementation(async (sql: string) => {
+        const text = String(sql);
+        if (text.includes("scheduled_transaction_postings")) {
+          return [[{ id: "posting-1" }], 1];
+        }
+        if (text.includes("opening_balance")) return [{ balance: "-198500" }];
+        return [
+          { user_id: "11111111-1111-1111-1111-111111111111", timezone: "UTC" },
+        ];
+      });
+
+      // Exactly what PostTransactionDialog sends: the echoed parent amount
+      // alongside the echoed lines. A fixture omitting `amount` is a payload
+      // no client produces -- and gating on its absence made this whole path
+      // unreachable in production while the test passed.
+      await service.post(userId, stId, {
+        amount: -1500,
+        isSplit: true,
+        splits: [
+          {
+            sourceSplitId: "ss-principal",
+            transferAccountId: "loan-1",
+            amount: -500,
+          },
+          {
+            sourceSplitId: "ss-interest",
+            categoryId: "cat-interest",
+            amount: -1000,
+          },
+        ],
+      } as any);
+
+      const payload = transactionsService.create.mock.calls[0][1];
+      const interest = payload.splits.find(
+        (sp: any) => sp.categoryId === "cat-interest",
+      );
+      expect(interest.amount).toBe(-992.5);
+      expect(payload.amount).toBe(-1500);
+    });
+
+    it("honours a split amount the user actually typed in the dialog", async () => {
+      // An echo is not an instruction, but a figure the user changed is: it
+      // differs from its source split, so it posts as given.
+      const scheduled = makeScheduled({
+        amount: -1500,
+        isSplit: true,
+        splits: loanTemplateSplits(),
+        frequency: "ONCE",
+      });
+      arrangeLoanPost(scheduled);
+
+      await service.post(userId, stId, {
+        amount: -1500,
+        isSplit: true,
+        splits: [
+          {
+            sourceSplitId: "ss-principal",
+            transferAccountId: "loan-1",
+            amount: -400,
+          },
+          {
+            sourceSplitId: "ss-interest",
+            categoryId: "cat-interest",
+            amount: -1100,
+          },
+        ],
+      } as any);
+
+      const payload = transactionsService.create.mock.calls[0][1];
+      const interest = payload.splits.find(
+        (sp: any) => sp.categoryId === "cat-interest",
+      );
+      expect(interest.amount).toBe(-1100);
+    });
+
+    it("prices the occurrence at the date its money moves, not the abandoned slot", async () => {
+      // An override moved this occurrence off its recurrence slot. Interest
+      // accrues to the date the payment is actually made, so the boundary is
+      // the posting date.
+      const scheduled = makeScheduled({
+        amount: -1500,
+        isSplit: true,
+        splits: loanTemplateSplits(),
+        nextDueDate: "2025-02-15",
+        frequency: "ONCE",
+      });
+      arrangeLoanPost(scheduled);
+      const movedOverride = {
+        overrideDate: "2025-03-05",
+        amount: null,
+        categoryId: null,
+        description: null,
+        isSplit: null,
+        splits: null,
+        updatedAt: new Date(0),
+      };
+      overridesRepo.createQueryBuilder = jest.fn().mockReturnValue({
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        getOne: jest.fn().mockResolvedValue(movedOverride),
+      });
+      overridesRepo.findOne.mockResolvedValue(movedOverride);
+      mockQueryRunner.manager.remove = jest.fn().mockResolvedValue(undefined);
+
+      await service.post(userId, stId);
+
+      expect(mockDataSource.query).toHaveBeenCalledWith(
+        expect.stringContaining("t.transaction_date <= $3"),
+        ["loan-1", userId, "2025-03-05"],
+      );
+    });
+
+    it("honours a parent amount the user retyped in the dialog", async () => {
+      // The amount is an echo only while it still matches the template. A
+      // figure the user changed is their statement for this occurrence, so it
+      // posts as sent rather than being re-divided against a total they did
+      // not ask for.
+      const scheduled = makeScheduled({
+        amount: -1500,
+        isSplit: true,
+        splits: loanTemplateSplits(),
+        frequency: "ONCE",
+      });
+      arrangeLoanPost(scheduled);
+      mockDataSource.query.mockImplementation(async (sql: string) => {
+        const text = String(sql);
+        if (text.includes("scheduled_transaction_postings")) {
+          return [[{ id: "posting-1" }], 1];
+        }
+        if (text.includes("opening_balance")) return [{ balance: "-198500" }];
+        return [
+          { user_id: "11111111-1111-1111-1111-111111111111", timezone: "UTC" },
+        ];
+      });
+
+      await service.post(userId, stId, {
+        amount: -1600,
+        isSplit: true,
+        splits: [
+          {
+            sourceSplitId: "ss-principal",
+            transferAccountId: "loan-1",
+            amount: -600,
+          },
+          {
+            sourceSplitId: "ss-interest",
+            categoryId: "cat-interest",
+            amount: -1000,
+          },
+        ],
+      } as any);
+
+      const payload = transactionsService.create.mock.calls[0][1];
+      const interest = payload.splits.find(
+        (sp: any) => sp.categoryId === "cat-interest",
+      );
+      expect(interest.amount).toBe(-1000);
+      expect(payload.amount).toBe(-1600);
+    });
+
+    it("shrinks the installment to the debt that is actually left", async () => {
+      // The other direction of "re-divides, never resizes upward": a payment
+      // made since the template was written can leave less owing than the bill
+      // charges, and the waterfall clamps principal to the remaining debt. The
+      // occurrence must retire the debt rather than overpay it into credit.
+      const scheduled = makeScheduled({
+        amount: -1500,
+        isSplit: true,
+        splits: loanTemplateSplits(),
+        frequency: "ONCE",
+      });
+      arrangeLoanPost(scheduled);
+      mockDataSource.query.mockImplementation(async (sql: string) => {
+        const text = String(sql);
+        if (text.includes("scheduled_transaction_postings")) {
+          return [[{ id: "posting-1" }], 1];
+        }
+        // Only 200 of debt is left through this occurrence's date.
+        if (text.includes("opening_balance")) return [{ balance: "-200" }];
+        return [
+          { user_id: "11111111-1111-1111-1111-111111111111", timezone: "UTC" },
+        ];
+      });
+
+      await service.post(userId, stId);
+
+      const payload = transactionsService.create.mock.calls[0][1];
+      const principal = payload.splits.find(
+        (sp: any) => sp.transferAccountId === "loan-1",
+      );
+      // 200 x 0.005 = 1.00 of interest, and principal cannot exceed the debt.
+      expect(principal.amount).toBe(-200);
+      expect(payload.amount).toBe(-201);
+    });
+
+    it("posts no money when the loan is already paid off, and still consumes the occurrence", async () => {
+      // The payoff lands between occurrences, so nothing has recalculated the
+      // template: it still says -1,500 (-1,000 interest, -500 principal).
+      // Posting it would record interest against a debt that no longer exists
+      // and push the loan 500 into credit. The occurrence is still claimed and
+      // the schedule still advances, so cron does not retry it forever.
+      const scheduled = makeScheduled({
+        amount: -1500,
+        isSplit: true,
+        splits: loanTemplateSplits(),
+        frequency: "MONTHLY",
+      });
+      arrangeLoanPost(scheduled);
+      mockDataSource.query.mockImplementation(async (sql: string) => {
+        const text = String(sql);
+        if (text.includes("scheduled_transaction_postings")) {
+          return [[{ id: "posting-1" }], 1];
+        }
+        // The debt through this occurrence's boundary is retired.
+        if (text.includes("opening_balance")) return [{ balance: "0" }];
+        return [
+          { user_id: "11111111-1111-1111-1111-111111111111", timezone: "UTC" },
+        ];
+      });
+
+      await service.post(userId, stId);
+
+      expect(transactionsService.create).not.toHaveBeenCalled();
+      // The occurrence was claimed...
+      expect(mockDataSource.query).toHaveBeenCalledWith(
+        expect.stringContaining("scheduled_transaction_postings"),
+        expect.arrayContaining([stId]),
+      );
+      // ...and the schedule advanced past it.
+      const advanced = mockQueryRunner.manager.update.mock.calls.find(
+        (call: any[]) => call[2]?.nextDueDate !== undefined,
+      );
+      expect(advanced).toBeDefined();
+    });
+
+    it("still posts a paid-off template that carries a line the payoff does not settle", async () => {
+      // The mortgage principal is retired; the escrow line is not. Withholding
+      // the whole bill would stop paying the property tax.
+      const scheduled = makeScheduled({
+        amount: -1700,
+        isSplit: true,
+        splits: [
+          ...loanTemplateSplits(),
+          {
+            id: "ss-escrow",
+            kind: "category",
+            transferAccountId: null,
+            categoryId: "cat-escrow",
+            amount: -200,
+            memo: "Property tax",
+            tags: [],
+          },
+        ] as any[],
+        frequency: "ONCE",
+      });
+      arrangeLoanPost(scheduled);
+      accountsRepo.findOne.mockResolvedValue({
+        ...loanAccount(),
+        interestCategoryId: "cat-interest",
+      });
+      mockDataSource.query.mockImplementation(async (sql: string) => {
+        const text = String(sql);
+        if (text.includes("scheduled_transaction_postings")) {
+          return [[{ id: "posting-1" }], 1];
+        }
+        if (text.includes("opening_balance")) return [{ balance: "0" }];
+        return [
+          { user_id: "11111111-1111-1111-1111-111111111111", timezone: "UTC" },
+        ];
+      });
+
+      await service.post(userId, stId);
+
+      expect(transactionsService.create).toHaveBeenCalledTimes(1);
+      const payload = transactionsService.create.mock.calls[0][1];
+      expect(payload.amount).toBe(-1700);
+    });
+
+    it("honours an override amount instead of re-resolving", async () => {
+      // A stored per-occurrence amount is the user's explicit statement for
+      // that occurrence; re-pricing the splits against it would make parent
+      // and children disagree and refuse the post.
+      const scheduled = makeScheduled({
+        amount: -1500,
+        isSplit: true,
+        splits: loanTemplateSplits(),
+        frequency: "ONCE",
+      });
+      arrangeLoanPost(scheduled);
+      const storedOverride = {
+        overrideDate: null,
+        amount: -1400,
+        categoryId: null,
+        description: null,
+        isSplit: null,
+        splits: null,
+        updatedAt: new Date(0),
+      };
+      overridesRepo.createQueryBuilder = jest.fn().mockReturnValue({
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        getOne: jest.fn().mockResolvedValue(storedOverride),
+      });
+      overridesRepo.findOne.mockResolvedValue(storedOverride);
+      mockQueryRunner.manager.remove = jest.fn().mockResolvedValue(undefined);
+
+      await service.post(userId, stId);
+
+      const payload = transactionsService.create.mock.calls[0][1];
+      const interest = payload.splits.find(
+        (s: any) => s.categoryId === "cat-interest",
+      );
+      expect(interest.amount).toBe(-1000);
+      expect(payload.amount).toBe(-1400);
     });
   });
 

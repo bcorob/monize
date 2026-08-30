@@ -1,6 +1,6 @@
 import { BadRequestException } from "@nestjs/common";
 import { AiProviderFactory } from "./ai-provider.factory";
-import { AiEncryptionService } from "./ai-encryption.service";
+import { EncryptionService } from "../common/encryption/encryption.service";
 import { AiProviderConfig } from "./entities/ai-provider-config.entity";
 import { AnthropicProvider } from "./providers/anthropic.provider";
 import { OpenAiProvider } from "./providers/openai.provider";
@@ -11,7 +11,7 @@ import { OpenAiCompatibleProvider } from "./providers/openai-compatible.provider
 describe("AiProviderFactory", () => {
   let factory: AiProviderFactory;
   let mockEncryptionService: Partial<
-    Record<keyof AiEncryptionService, jest.Mock>
+    Record<keyof EncryptionService, jest.Mock>
   >;
 
   beforeEach(() => {
@@ -23,7 +23,7 @@ describe("AiProviderFactory", () => {
     };
 
     factory = new AiProviderFactory(
-      mockEncryptionService as unknown as AiEncryptionService,
+      mockEncryptionService as unknown as EncryptionService,
     );
   });
 

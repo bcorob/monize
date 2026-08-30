@@ -664,13 +664,13 @@ describe("SupportBackupService.generate", () => {
     expect(() => gunzipSync(buffer)).toThrow();
   });
 
-  it("encrypts without AI_ENCRYPTION_KEY (file encryption derives its key from the password, not the AI key)", async () => {
-    // The service takes no AiEncryptionService dependency and encryptBackup
+  it("encrypts without ENCRYPTION_KEY (file encryption derives its key from the password, not the AI key)", async () => {
+    // The service takes no EncryptionService dependency and encryptBackup
     // derives its AES key from the user's password via scrypt, so an unset
-    // AI_ENCRYPTION_KEY cannot affect a support backup. Prove the encrypted
+    // ENCRYPTION_KEY cannot affect a support backup. Prove the encrypted
     // path works with no AI key present in the environment.
-    const previous = process.env.AI_ENCRYPTION_KEY;
-    delete process.env.AI_ENCRYPTION_KEY;
+    const previous = process.env.ENCRYPTION_KEY;
+    delete process.env.ENCRYPTION_KEY;
     try {
       const { encrypted } = await makeService().generate(USER, {
         multiplier: 2.5,
@@ -678,7 +678,7 @@ describe("SupportBackupService.generate", () => {
       });
       expect(encrypted).toBe(true);
     } finally {
-      if (previous !== undefined) process.env.AI_ENCRYPTION_KEY = previous;
+      if (previous !== undefined) process.env.ENCRYPTION_KEY = previous;
     }
   });
 });

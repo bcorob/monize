@@ -514,15 +514,24 @@
     "encryption": {
       "heading": "備份加密",
       "descriptionOidc": "使用您在此設定的專用備份密碼加密手動和自動備份。還原時需要此密碼。",
-      "loading": "載入中...",
+      "descriptionLocal": "您的備份會使用登入密碼加密。不必另外記住其他密碼：用同一組密碼即可還原。",
+      "unavailable": "此伺服器未設定備份加密，因此備份會以未加密的方式寫入。",
       "enabledBadge": "已啟用",
+      "disabledBadge": "未啟用",
+      "enabledLocalNote": "備份會使用您的登入密碼加密。",
+      "disabledLocalNote": "在您確認登入密碼之前，備份會以未加密的方式寫入。",
+      "enableWithLoginPasswordButton": "使用我的登入密碼啟用",
+      "loading": "載入中...",
       "changePasswordButton": "更改備份密碼",
       "disableButton": "停用",
       "setPasswordButton": "設定備份密碼",
       "setupModal": {
         "titleOidc": "設定備份密碼",
+        "titleLocal": "啟用加密備份",
         "descriptionOidc": "選擇用於加密備份的密碼。請妥善保存，還原時需要此密碼。",
+        "descriptionLocal": "確認您的登入密碼以啟用加密備份。備份會以該密碼加密，還原時也需要這組密碼。",
         "placeholderOidc": "新備份密碼（12+ 個字元）",
+        "placeholderLocal": "您的登入密碼",
         "savingButton": "儲存中...",
         "confirmButton": "確認"
       },
@@ -768,7 +777,7 @@
     },
     "encryptionNotConfigured": {
       "heading": "需要加密金鑰",
-      "body": "緊急存取需要在伺服器上設定 AI_ENCRYPTION_KEY。授予存取權時會加密儲存每位聯絡人的存取連結，讓重試能重新傳送同一個連結；沒有該金鑰，就完全無法傳送任何連結。"
+      "body": "緊急存取需要在伺服器上設定 ENCRYPTION_KEY。授予存取權時會加密儲存每位聯絡人的存取連結，讓重試能重新傳送同一個連結；沒有該金鑰，就完全無法傳送任何連結。"
     },
     "alreadyGranted": {
       "heading": "緊急存取已授予",
@@ -874,7 +883,7 @@
   "aiProviders": {
     "heading": "AI 提供者",
     "addButton": "新增提供者",
-    "encryptionWarning": "未設定 AI_ENCRYPTION_KEY。您可以使用 Ollama（本機，無需 API 金鑰），但雲端提供者需要加密以安全儲存 API 金鑰。",
+    "encryptionWarning": "未設定 ENCRYPTION_KEY。您可以使用 Ollama（本機，無需 API 金鑰），但雲端提供者需要加密以安全儲存 API 金鑰。",
     "systemDefault": {
       "heading": "可使用系統預設 AI 提供者",
       "description": "管理員已設定中央 AI 提供者",

@@ -3,7 +3,7 @@ import { ConfigService } from "@nestjs/config";
 import { Logger } from "@nestjs/common";
 import { AiStartupValidator } from "./ai-startup.validator";
 import { AiProviderFactory } from "./ai-provider.factory";
-import { AiEncryptionService } from "./ai-encryption.service";
+import { EncryptionService } from "../common/encryption/encryption.service";
 
 describe("AiStartupValidator", () => {
   let validator: AiStartupValidator;
@@ -34,7 +34,7 @@ describe("AiStartupValidator", () => {
       providers: [
         AiStartupValidator,
         { provide: AiProviderFactory, useValue: mockProviderFactory },
-        { provide: AiEncryptionService, useValue: mockEncryptionService },
+        { provide: EncryptionService, useValue: mockEncryptionService },
         { provide: ConfigService, useValue: mockConfigService },
       ],
     }).compile();

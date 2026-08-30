@@ -514,15 +514,24 @@
     "encryption": {
       "heading": "Criptografia de Backup",
       "descriptionOidc": "Criptografe backups manuais e automáticos com uma senha de backup dedicada que você define aqui. A senha é necessária para a restauração.",
-      "loading": "Carregando...",
+      "descriptionLocal": "Seus backups são criptografados com sua senha de login. Não há mais nada para lembrar: a mesma senha os restaura.",
+      "unavailable": "Este servidor não está configurado para criptografar backups, então eles são gravados sem criptografia.",
       "enabledBadge": "Ativada",
+      "disabledBadge": "Não ativado",
+      "enabledLocalNote": "Os backups são criptografados com sua senha de login.",
+      "disabledLocalNote": "Os backups estão sendo gravados sem criptografia até você confirmar sua senha de login.",
+      "enableWithLoginPasswordButton": "Ativar com minha senha de login",
+      "loading": "Carregando...",
       "changePasswordButton": "Alterar Senha de Backup",
       "disableButton": "Desativar",
       "setPasswordButton": "Definir Senha de Backup",
       "setupModal": {
         "titleOidc": "Definir Senha de Backup",
+        "titleLocal": "Ativar backups criptografados",
         "descriptionOidc": "Escolha uma senha que será usada para criptografar seus backups. Guarde-a em local seguro -- você precisará dela para a restauração.",
+        "descriptionLocal": "Confirme sua senha de login para ativar os backups criptografados. É a senha com que eles serão criptografados e a que você precisará para restaurá-los.",
         "placeholderOidc": "Nova senha de backup (12+ caracteres)",
+        "placeholderLocal": "Sua senha de login",
         "savingButton": "Salvando...",
         "confirmButton": "Confirmar"
       },
@@ -768,7 +777,7 @@
     },
     "encryptionNotConfigured": {
       "heading": "Chave de criptografia necessária",
-      "body": "O acesso de emergência precisa de AI_ENCRYPTION_KEY definida no servidor. Uma concessão armazena criptografado o link de acesso de cada contato para que uma nova tentativa possa reenviar o mesmo link; sem essa chave nenhum link pode ser enviado."
+      "body": "O acesso de emergência precisa de ENCRYPTION_KEY definida no servidor. Uma concessão armazena criptografado o link de acesso de cada contato para que uma nova tentativa possa reenviar o mesmo link; sem essa chave nenhum link pode ser enviado."
     },
     "alreadyGranted": {
       "heading": "Acesso de emergência já concedido",
@@ -874,7 +883,7 @@
   "aiProviders": {
     "heading": "Provedores de IA",
     "addButton": "Adicionar Provedor",
-    "encryptionWarning": "AI_ENCRYPTION_KEY não está configurada. Você pode usar o Ollama (local, sem necessidade de chave de API), mas os provedores na nuvem requerem criptografia para armazenar chaves de API de forma segura.",
+    "encryptionWarning": "ENCRYPTION_KEY não está configurada. Você pode usar o Ollama (local, sem necessidade de chave de API), mas os provedores na nuvem requerem criptografia para armazenar chaves de API de forma segura.",
     "systemDefault": {
       "heading": "Provedor de IA Padrão do Sistema Disponível",
       "description": "Um provedor de IA central foi configurado pelo seu administrador",

@@ -218,7 +218,7 @@ describe('EmergencyAccessPage', () => {
 
   /**
    * The two configuration halves fail independently, and the second fails
-   * silently: without AI_ENCRYPTION_KEY a grant cannot store the claim link it
+   * silently: without ENCRYPTION_KEY a grant cannot store the claim link it
    * would resend, so it delivers nothing, releases itself, and repeats every day
    * -- while this page reported the safeguard as armed because it only knew about
    * SMTP (audit RRV4-003).

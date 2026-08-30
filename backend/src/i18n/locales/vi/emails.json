@@ -163,5 +163,28 @@
     "body1": "Do tài khoản của bạn không hoạt động, các liên hệ khẩn cấp được chỉ định của bạn đã được gửi liên kết để tiếp quản tài khoản của bạn. Bạn hiện đã đăng nhập lại, vì vậy <strong>các liên kết đó đã bị thu hồi</strong> và biện pháp bảo vệ đã được tái kích hoạt.",
     "body2": "Nếu điều này là mong đợi, không cần thực hiện thêm hành động nào. Nếu bạn không mong đợi điều này, hãy xem lại hoạt động đăng nhập và cài đặt truy cập khẩn cấp của bạn.",
     "button": "Xem lại truy cập khẩn cấp"
+  },
+  "providerOutage": {
+    "subject": "Monize: {{ provider }} không phản hồi",
+    "heading": "Nhà cung cấp dữ liệu thị trường không khả dụng",
+    "greeting": "Xin chào {{ name }},",
+    "intro": "Monize không thể kết nối tới <strong>{{ provider }}</strong> kể từ {{ since }} ({{ duration }}). Các yêu cầu tới nhà cung cấp này tạm dừng và sẽ được thử lại với khoảng cách ngày càng dài.",
+    "labelFailures": "Số lần thất bại",
+    "labelLastError": "Lỗi gần nhất",
+    "labelLastSuccess": "Phản hồi thành công gần nhất",
+    "valueNever": "chưa bao giờ",
+    "valueUnknown": "không rõ",
+    "impact": "Giá, biểu đồ và so sánh chỉ số phụ thuộc vào nhà cung cấp này có thể bị thiếu hoặc lỗi thời cho đến khi nhà cung cấp phản hồi lại. Không có dữ liệu nào đã lưu trong Monize bị mất.",
+    "whatToCheck": "Nếu nhà cung cấp vẫn hoạt động, hãy kiểm tra quyền truy cập mạng đi ra và DNS của máy chủ này -- một container không phân giải hoặc không kết nối được tới nhà cung cấp sẽ lỗi đúng theo cách này.",
+    "throttleNote": "Bạn sẽ nhận thêm một email nữa khi nhà cung cấp hoạt động lại. Cảnh báo về cùng một nhà cung cấp được gửi nhiều nhất {{ hours }} giờ một lần, để một nhà cung cấp không ổn định không làm đầy hộp thư của bạn.",
+    "durationMinutes": "{{ minutes }} phút",
+    "durationHoursMinutes": "{{ hours }} giờ {{ minutes }} phút"
+  },
+  "providerRecovery": {
+    "subject": "Monize: {{ provider }} đã phản hồi lại",
+    "heading": "Nhà cung cấp dữ liệu thị trường đã phản hồi lại",
+    "greeting": "Xin chào {{ name }},",
+    "intro": "<strong>{{ provider }}</strong> đã phản hồi lại vào {{ restoredAt }}. Sự cố kéo dài {{ duration }}.",
+    "backfill": "Giá và lịch sử chỉ số bị thiếu trong thời gian sự cố sẽ được lấy ở lần làm mới định kỳ tiếp theo; bạn không cần làm gì."
   }
 }

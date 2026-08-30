@@ -68,6 +68,7 @@ describe("scheduled-transactions module RLS context smoke (real withScopedDb)", 
           useValue: {
             findLoanAccountFromSplits: jest.fn().mockResolvedValue(null),
             recalculateLoanPaymentSplits: jest.fn(),
+            resolvePostingAllocation: jest.fn().mockResolvedValue(null),
           },
         },
         { provide: ActionHistoryService, useValue: { record: jest.fn() } },

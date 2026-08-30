@@ -17,12 +17,6 @@ vi.mock('@/hooks/useNumberFormat', () => ({
   }),
 }));
 
-vi.mock('@/hooks/useExchangeRates', () => ({
-  useExchangeRates: () => ({
-    convertToDefault: (n: number) => n,
-  }),
-}));
-
 vi.mock('@/lib/utils', () => ({
   parseLocalDate: (d: string) => new Date(d + 'T00:00:00'),
 }));
@@ -96,32 +90,35 @@ describe('UpcomingBills', () => {
     expect(screen.getByText('5 days')).toBeInTheDocument();
   });
 
-  // The widget lists what is due; the summed "Total due" row was removed
-  // deliberately, so bills contribute no total line of their own.
-  it('shows no total row for bills', () => {
+  // The widget lists occurrences and nothing else: the summed "Total due" row
+  // went in #1264 and "Total incoming" followed it, so no row here stands for
+  // more than the one occurrence printed beside it.
+  it('shows no summary rows for bills, deposits or unknown occurrences', () => {
     const dateStr = futureDateStr(1);
     const transactions = [
       { id: '1', name: 'Netflix', amount: -15.99, currencyCode: 'CAD', nextDueDate: dateStr, isActive: true, autoPost: true },
       { id: '2', name: 'Spotify', amount: -9.99, currencyCode: 'CAD', nextDueDate: dateStr, isActive: true, autoPost: true },
+      { id: '3', name: 'Payroll', amount: 3000, currencyCode: 'CAD', nextDueDate: dateStr, isActive: true, autoPost: true },
+      { id: '4', name: 'Dividend', amount: 250, currencyCode: 'CAD', nextDueDate: dateStr, isActive: true, autoPost: true },
     ] as any[];
 
     render(<UpcomingBills accounts={[]} scheduledTransactions={transactions} isLoading={false} maxItems={defaultMaxItems} />);
-    expect(screen.getByText('Netflix')).toBeInTheDocument();
-    expect(screen.queryByText(/Total due/i)).not.toBeInTheDocument();
-    // The per-item amounts stay; only the summary line goes.
+
+    // The per-item amounts stay; every summary line goes.
     expect(screen.getByText('-$15.99')).toBeInTheDocument();
+    expect(screen.getByText('+$3000.00')).toBeInTheDocument();
+    expect(screen.queryByText(/Total/i)).not.toBeInTheDocument();
+    // Neither summed bucket is drawn, in whole or in part.
     expect(screen.queryByText('-$25.98')).not.toBeInTheDocument();
+    expect(screen.queryByText('+$3250.00')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('partial-total')).not.toBeInTheDocument();
   });
 
-  it('withholds the total for an occurrence whose direction is unknown', () => {
-    // A mixed-sign split whose investment line cannot be priced could be a
-    // deposit, so it withholds the incoming figure rather than being filtered
-    // out of it -- dropping it left the total rendering as a settled sum beside a
-    // row saying its own amount is unknown (issue #1247 re-audit).
-    //
-    // This case asserted BOTH totals until the "Total due" row was removed
-    // upstream (#1264). The property is the same one, on the total that is left:
-    // an occurrence that MIGHT belong to a bucket is never silently outside it.
+  it('renders an occurrence of unknown direction as unknown, with no total beside it', () => {
+    // A mixed-sign split whose investment line cannot be priced could be a bill
+    // or a deposit, so the row says so rather than being painted red or green
+    // (issue #1247 re-audit). With the totals gone there is no bucket left for
+    // it to be silently excluded from either.
     const dateStr = futureDateStr(1);
     const transactions = [
       { id: '1', name: 'Netflix', amount: -15.99, currencyCode: 'CAD', nextDueDate: dateStr, isActive: true, autoPost: true },
@@ -136,15 +133,12 @@ describe('UpcomingBills', () => {
 
     render(<UpcomingBills accounts={[]} scheduledTransactions={transactions} isLoading={false} maxItems={defaultMaxItems} />);
 
-    expect(screen.getByText('Total incoming')).toBeInTheDocument();
-    // Marked partial rather than printed as a settled sum, and the 3000 payroll
-    // is NOT published as the whole story.
-    expect(screen.getAllByTestId('partial-total').length).toBe(1);
-    // And the row itself is neither red nor green.
     expect(screen.getByText('Unknown')).toBeInTheDocument();
+    expect(screen.queryByTestId('partial-total')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Total/i)).not.toBeInTheDocument();
   });
 
-  it('shows total incoming for deposits', () => {
+  it('shows a Deposit badge for incoming schedules', () => {
     const dateStr = futureDateStr(1);
     const transactions = [
       { id: '1', name: 'Salary', amount: 5000, currencyCode: 'CAD', nextDueDate: dateStr, isActive: true, autoPost: true, isTransfer: false },
@@ -152,7 +146,6 @@ describe('UpcomingBills', () => {
 
     render(<UpcomingBills accounts={[]} scheduledTransactions={transactions} isLoading={false} maxItems={defaultMaxItems} />);
     expect(screen.getByText('Deposit')).toBeInTheDocument();
-    expect(screen.getByText('Total incoming')).toBeInTheDocument();
   });
 
   it('shows Transfer badge for transfer transactions', () => {
@@ -176,7 +169,6 @@ describe('UpcomingBills', () => {
     render(<UpcomingBills accounts={[]} scheduledTransactions={transactions} isLoading={false} maxItems={defaultMaxItems} />);
     expect(screen.getByText('Reminder')).toBeInTheDocument();
     expect(screen.queryByText('Deposit')).not.toBeInTheDocument();
-    expect(screen.queryByText('Total incoming')).not.toBeInTheDocument();
     // No sign, and not painted as money arriving.
     const amount = screen.getByText('$0.00');
     expect(amount.className).toContain('text-gray-500');
@@ -293,10 +285,9 @@ describe('UpcomingBills', () => {
     ] as any[];
 
     render(<UpcomingBills accounts={[]} scheduledTransactions={transactions} isLoading={false} maxItems={defaultMaxItems} />);
-    // The amount appears in both the item row and the total section
-    const amountEls = screen.getAllByText('-$15.99');
-    expect(amountEls.length).toBeGreaterThanOrEqual(1);
-    expect(amountEls[0].className).toContain('text-red');
+    // The item row is the only place the amount appears -- no total section.
+    const amountEl = screen.getByText('-$15.99');
+    expect(amountEl.className).toContain('text-red');
   });
 
   it('shows deposit amount with plus sign and green color', () => {
@@ -306,10 +297,9 @@ describe('UpcomingBills', () => {
     ] as any[];
 
     render(<UpcomingBills accounts={[]} scheduledTransactions={transactions} isLoading={false} maxItems={defaultMaxItems} />);
-    // The amount appears in both the item row and the total section
-    const amountEls = screen.getAllByText('+$5000.00');
-    expect(amountEls.length).toBeGreaterThanOrEqual(1);
-    expect(amountEls[0].className).toContain('text-green');
+    // The item row is the only place the amount appears -- no total section.
+    const amountEl = screen.getByText('+$5000.00');
+    expect(amountEl.className).toContain('text-green');
   });
 
   it('sorts items by due date ascending', () => {
@@ -446,9 +436,10 @@ describe('UpcomingBills', () => {
     // in the brokerage's cash currency. The occurrence is priced at today's
     // rate, not the one pinned when the row was written.
     //
-    // Deliberately the DEPOSIT side: the property is that the row and the total
-    // read the same effective figure, and the "Total due" row was removed
-    // upstream (#1264), so the bills side no longer has a total to compare.
+    // The row is now the only figure the widget prints for this occurrence, so
+    // it is the one that has to be re-priced: with the summary rows gone
+    // (#1264 removed "Total due", and "Total incoming" followed) a stale
+    // snapshot here has nothing left to disagree with, only the user.
     const transactions = [
       {
         id: '1',
@@ -469,16 +460,16 @@ describe('UpcomingBills', () => {
 
     render(<UpcomingBills accounts={[]} scheduledTransactions={transactions} isLoading={false} maxItems={defaultMaxItems} />);
 
-    // The row and the Total incoming line both read 1,350.
-    expect(screen.getAllByText('+$1350.00')).toHaveLength(2);
+    // Exactly one figure, and it reads 1,350.
+    expect(screen.getAllByText('+$1350.00')).toHaveLength(1);
     // Neither the pre-FX impact nor the stale 1.50 figure.
     expect(screen.queryByText('+$1000.00')).not.toBeInTheDocument();
     expect(screen.queryByText('+$1500.00')).not.toBeInTheDocument();
   });
 
-  it('marks an unresolvable occurrence unavailable and its total partial', () => {
-    // Again the deposit side, because that is the bucket with a total left after
-    // #1264 removed the "Total due" row.
+  it('marks an unresolvable occurrence unavailable without touching its neighbours', () => {
+    // The unpriceable row renders as unavailable; the resolvable one beside it
+    // still prints its own figure. No total is drawn for either.
     const transactions = [
       {
         id: '1',
@@ -513,10 +504,10 @@ describe('UpcomingBills', () => {
     expect(screen.getAllByTestId('unknown-amount').length).toBeGreaterThan(0);
     expect(screen.queryByText('+$1000.00')).not.toBeInTheDocument();
     expect(screen.queryByText('+$1500.00')).not.toBeInTheDocument();
-    // The Total incoming row shows the part that resolved, marked as a subtotal.
-    expect(screen.getByTestId('partial-total')).toBeInTheDocument();
-    // The row and the subtotal, both 15.99: nothing invented the missing item.
-    expect(screen.getAllByText('+$15.99')).toHaveLength(2);
+    // No summary row survives to fold the missing item into a figure.
+    expect(screen.queryByTestId('partial-total')).not.toBeInTheDocument();
+    // The resolvable row, once: nothing invented a total from the half it knew.
+    expect(screen.getAllByText('+$15.99')).toHaveLength(1);
   });
 
   it('does not let an unknown amount move an account into the negative-balance warning', () => {

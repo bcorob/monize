@@ -514,15 +514,24 @@
     "encryption": {
       "heading": "Backup Encryption",
       "descriptionOidc": "Encrypt manual and automatic backups with a dedicated backup password you set here. The password is required to restore.",
-      "loading": "Loading...",
+      "descriptionLocal": "Your backups are encrypted with your login password. Nothing else to remember: the same password restores them.",
+      "unavailable": "This server is not configured to encrypt backups, so they are written unencrypted.",
       "enabledBadge": "Enabled",
+      "disabledBadge": "Not enabled",
+      "enabledLocalNote": "Backups are encrypted with your login password.",
+      "disabledLocalNote": "Backups are being written unencrypted until you confirm your login password.",
+      "enableWithLoginPasswordButton": "Enable with My Login Password",
+      "loading": "Loading...",
       "changePasswordButton": "Change Backup Password",
       "disableButton": "Disable",
       "setPasswordButton": "Set Backup Password",
       "setupModal": {
         "titleOidc": "Set Backup Password",
+        "titleLocal": "Enable Encrypted Backups",
         "descriptionOidc": "Choose a password that will be used to encrypt your backups. Save it somewhere safe, because you will need it to restore.",
+        "descriptionLocal": "Confirm your login password to turn on encrypted backups. It is the password your backups will be encrypted with, and the one you will need to restore them.",
         "placeholderOidc": "New backup password (12+ chars)",
+        "placeholderLocal": "Your login password",
         "savingButton": "Saving...",
         "confirmButton": "Confirm"
       },
@@ -768,7 +777,7 @@
     },
     "encryptionNotConfigured": {
       "heading": "Encryption key required",
-      "body": "Emergency access needs AI_ENCRYPTION_KEY set on the server. A grant stores each contact's access link encrypted so a retry can resend the same link, and without that key no link can be sent at all."
+      "body": "Emergency access needs ENCRYPTION_KEY set on the server. A grant stores each contact's access link encrypted so a retry can resend the same link, and without that key no link can be sent at all."
     },
     "alreadyGranted": {
       "heading": "Emergency access already granted",
@@ -874,7 +883,7 @@
   "aiProviders": {
     "heading": "AI Providers",
     "addButton": "Add Provider",
-    "encryptionWarning": "AI_ENCRYPTION_KEY is not configured. You can use Ollama (local, no API key needed) but cloud providers require encryption to store API keys securely.",
+    "encryptionWarning": "ENCRYPTION_KEY is not configured. You can use Ollama (local, no API key needed) but cloud providers require encryption to store API keys securely.",
     "systemDefault": {
       "heading": "System Default AI Provider Available",
       "description": "A central AI provider has been configured by your administrator",

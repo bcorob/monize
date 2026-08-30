@@ -16,6 +16,8 @@ import {
   ReferenceLine,
 } from 'recharts';
 import { accountsApi } from '@/lib/accounts';
+import { loanRateChangesApi, supportsRateChanges } from '@/lib/loan-rate-changes';
+import type { LoanRateChange } from '@/types/loan-rate-change';
 import { Transaction } from '@/types/transaction';
 import { generateLoanSchedule } from '@/lib/loan-schedule';
 import {
@@ -23,7 +25,15 @@ import {
   deriveLoanPaymentHistory,
   fetchAllAccountTransactions,
   fetchLoanInterestTransactions,
+  historicalPaymentCount,
+  resolveCurrentLoanTerms,
 } from '@/lib/loan-history';
+import {
+  axisKeyFor,
+  axisTickLabel,
+  bucketFlowSeries,
+  sampleStockSeries,
+} from '@/lib/chart-sampling';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
 import { useReportData } from '@/hooks/useReportData';
 import { usePersistedAccountId } from '@/hooks/usePersistedAccountFilter';
@@ -31,11 +41,25 @@ import { ExportDropdown } from '@/components/ui/ExportDropdown';
 import { ReportError } from '@/components/reports/ReportError';
 import { chartColors } from '@/lib/chart-colors';
 import { useChartDateFormat } from '@/hooks/useChartDateFormat';
+import { useFinancialToday } from '@/hooks/useFinancialToday';
 import { useTranslations } from 'next-intl';
 
 interface PayoffScheduleItem {
   date: string;
   label: string;
+  /**
+   * What the category axis, the tooltip lookup and every ReferenceLine key on.
+   *
+   * Not the label: a month is no longer unique. A weekly, biweekly or
+   * semi-monthly loan routinely has a real payment and a projected one in the
+   * same calendar month, and that month is one row on each side of the
+   * history/projection line -- two rows, one label. Recharts keys a category
+   * axis on the datum's own value, so two rows sharing a label collapse onto
+   * one category and the "Today" divider lands on whichever came first.
+   * `axisKeyFor` prefixes the row's position; `axisTickLabel` prints the label
+   * back, so the tick still reads "Aug 2026".
+   */
+  axisKey: string;
   balance: number;
   historicalBalance?: number;
   projectedBalance?: number;
@@ -46,6 +70,12 @@ interface PayoffScheduleItem {
   isProjected: boolean;
 }
 
+/**
+ * A payment before month aggregation: no axis identity yet, because a chart row
+ * is what gets one and these are the events a chart row is built FROM.
+ */
+type SchedulePoint = Omit<PayoffScheduleItem, 'axisKey'>;
+
 const ACCOUNT_STORAGE_KEY = 'monize-reports-debt-payoff-timeline-account';
 
 export function DebtPayoffTimelineReport() {
@@ -53,6 +83,10 @@ export function DebtPayoffTimelineReport() {
   const formatChartDate = useChartDateFormat();
   const { formatCurrencyCompact: formatCurrency, formatCurrencyAxis } = useNumberFormat();
   const chartRef = useRef<HTMLDivElement>(null);
+  // Today-anchored (see `loan-projection-anchor.guard.test.ts`), but still the
+  // USER's today: the payoff date this report draws per account is the one the
+  // loan detail page prints, and two calendars would separate them by a period.
+  const todayYmd = useFinancialToday();
   const [viewType, setViewType] = useState<'balance' | 'breakdown' | 'distribution'>('balance');
 
   const {
@@ -90,6 +124,7 @@ export function DebtPayoffTimelineReport() {
   // (API limit is 200 per page).
   const {
     data: transactionsData,
+    dataKey: transactionsKey,
     isLoading: transactionsLoading,
     error: transactionsError,
     reload: reloadTransactions,
@@ -99,16 +134,28 @@ export function DebtPayoffTimelineReport() {
       return fetchAllAccountTransactions(selectedAccountId);
     },
     [selectedAccountId],
+    { requestKey: selectedAccountId },
   );
 
-  const transactions = useMemo<Transaction[]>(() => transactionsData ?? [], [transactionsData]);
+  // Each payload carries the account it answers for. Without that, the one
+  // render between a selection change and the effect that refetches draws the
+  // previous loan's rows -- and for the rate history that means projecting one
+  // loan's rate onto another. The sibling LoanAmortizationReport guards the same
+  // way.
+  const transactions = useMemo<Transaction[]>(
+    () => (transactionsKey === selectedAccountId ? (transactionsData ?? []) : []),
+    [transactionsData, transactionsKey, selectedAccountId],
+  );
 
   // The loan's separately-booked interest expenses, so derived interest matches
   // the loan detail page (see #893). Folded into the combined isLoading/error/
-  // reload below like the other loaders, so the schedule never paints with the
-  // analytic interest estimate and then snaps to the booked interest.
+  // reload below like the other loaders: an interest list that has not arrived
+  // is indistinguishable from one that is genuinely empty, so the schedule must
+  // not paint at zero interest and then snap to the booked figures -- and a
+  // failed fetch must reach the error state rather than settle at that zero.
   const {
     data: interestData,
+    dataKey: interestKey,
     isLoading: interestLoading,
     error: interestError,
     reload: reloadInterest,
@@ -119,32 +166,113 @@ export function DebtPayoffTimelineReport() {
       return fetchLoanInterestTransactions(account);
     },
     [selectedAccountId, accounts],
+    { requestKey: selectedAccountId },
   );
-  const interestTransactions = useMemo<Transaction[]>(() => interestData ?? [], [interestData]);
+  const interestTransactions = useMemo<Transaction[]>(
+    () => (interestKey === selectedAccountId ? (interestData ?? []) : []),
+    [interestData, interestKey, selectedAccountId],
+  );
 
-  const isLoading = accountsLoading || transactionsLoading || interestLoading;
-  const error = accountsError || transactionsError || interestError;
+  // The recorded rate history. Load-bearing for the projection, not decoration:
+  // recording a rate change never writes the account's own interestRate, so
+  // without these rows this report projects at whatever stale scalar the account
+  // still holds while the loan detail page projects at the real one -- the same
+  // loan, two payoff dates. Folded into the shared error/retry state for the
+  // same reason as the interest list: [] is a claim, not a neutral default.
+  const {
+    data: rateChangeData,
+    dataKey: rateChangesKey,
+    isLoading: rateChangesLoading,
+    error: rateChangesError,
+    reload: reloadRateChanges,
+  } = useReportData(
+    async () => {
+      // A line of credit has no rate history and the endpoint answers 400 for
+      // one, which would replace this whole report with its error state.
+      const account = accounts.find((a) => a.id === selectedAccountId);
+      if (!selectedAccountId || !supportsRateChanges(account)) {
+        return [] as LoanRateChange[];
+      }
+      return loanRateChangesApi.getAll(selectedAccountId);
+    },
+    [selectedAccountId, accounts],
+    { requestKey: selectedAccountId },
+  );
+  const rateChanges = useMemo<LoanRateChange[]>(
+    () => (rateChangesKey === selectedAccountId ? (rateChangeData ?? []) : []),
+    [rateChangeData, rateChangesKey, selectedAccountId],
+  );
+
+  const isLoading =
+    accountsLoading || transactionsLoading || interestLoading || rateChangesLoading;
+  const error = accountsError || transactionsError || interestError || rateChangesError;
   const reload = () => {
     reloadAccounts();
     reloadTransactions();
     reloadInterest();
+    reloadRateChanges();
   };
 
-  // Build payment timeline from actual transactions + projected future payments
-  const { payoffSchedule, projectionStartLabel, projectionPaidOff } = useMemo((): {
+  // One derivation for both readers below. Replaying the register twice per
+  // render is not merely wasted work: the curve and the terms strip beside it
+  // would be two independent answers, so a change to how history is derived
+  // could move one and leave the other.
+  const history = useMemo(
+    () =>
+      selectedAccount
+        ? deriveLoanPaymentHistory(
+            selectedAccount,
+            transactions,
+            rateChanges,
+            interestTransactions,
+          )
+        : null,
+    [selectedAccount, transactions, rateChanges, interestTransactions],
+  );
+
+  // The count of payments the borrower actually made. Derived from the payment
+  // events themselves, never from a chart series: a month is not a payment (a
+  // biweekly loan makes 26 a year), and a chart series has additionally been
+  // reduced to fit an axis (issue #1244).
+  const paymentsMade = history ? historicalPaymentCount(history) : 0;
+
+  // Build payment timeline from actual transactions + projected future payments.
+  //
+  // Two series, deliberately separate: `payoffSchedule` holds every month the
+  // loan has and is what any figure is read from, while `chartSchedule` is that
+  // series reduced to fit the axis and is read by nothing but a chart. They were
+  // one array, so every total and count downstream described the reduction.
+  const { payoffSchedule, chartSchedule, projectionStartAxisKey, hasProjection, projectionPaidOff } = useMemo((): {
+    /** Every month, historical and projected. The series figures come from. */
     payoffSchedule: PayoffScheduleItem[];
+    /** `payoffSchedule` reduced to fit the axis. Rendering only. */
+    chartSchedule: PayoffScheduleItem[];
+    /** Whether a forward projection was produced at all. Read from the
+     *  projection itself, never from whether monthly aggregation happened to
+     *  leave an all-projected row: a loan paying off inside the month of its
+     *  last real payment has a projection whose every row shares that month. */
+    hasProjection: boolean;
     /** Whether the forward projection reached payoff, or stopped at the
      *  projection horizon. False also when there is no projection at all --
      *  the flag only ever gates a figure derived from one. */
     projectionPaidOff: boolean;
-    projectionStartLabel: string | null;
+    /** The axis key of the first projected row -- what the "Today" divider is
+     *  drawn at. An axis key, not a month: see `PayoffScheduleItem.axisKey`. */
+    projectionStartAxisKey: string | null;
   } => {
-    if (!selectedAccount)
-      return { payoffSchedule: [], projectionStartLabel: null, projectionPaidOff: false };
+    // Both guards: upstream's `projectionPaidOff` must be in every return, and
+    // `history` is now a hoisted memo that is null until an account is selected.
+    if (!selectedAccount || !history)
+      return {
+        payoffSchedule: [],
+        chartSchedule: [],
+        projectionStartAxisKey: null,
+        hasProjection: false,
+        projectionPaidOff: false,
+      };
 
     // --- Historical payments from actual transactions ---
-    const history = deriveLoanPaymentHistory(selectedAccount, transactions, [], interestTransactions);
-    const schedule: PayoffScheduleItem[] = history.events.map((event) => ({
+    const schedule: SchedulePoint[] = history.events.map((event) => ({
       date: event.date,
       label: formatChartDate(event.date, 'MMM yyyy'),
       balance: event.balance,
@@ -157,7 +285,18 @@ export function DebtPayoffTimelineReport() {
 
     // --- Project future payments ---
     let projectionPaidOff = false;
-    const projectionInput = buildLoanProjectionInput(selectedAccount, history);
+    let hasProjection = false;
+    // `rateChanges` is this branch's addition and is not optional decoration:
+    // without it the projection runs at whatever stale scalar the account still
+    // holds, so this report and the loan detail page gave the same loan two
+    // different payoff dates.
+    const projectionInput = buildLoanProjectionInput(
+      selectedAccount,
+      history,
+      rateChanges,
+      null,
+      todayYmd,
+    );
     if (projectionInput) {
       const projection = generateLoanSchedule({
         ...projectionInput,
@@ -168,6 +307,10 @@ export function DebtPayoffTimelineReport() {
       // interest is a subtotal, so the summary below cannot report either as a
       // lifetime figure (INV-LOAN-002).
       projectionPaidOff = projection.paidOff;
+      // Asked of the projection, not of the aggregated series it feeds: the
+      // rows are the fact, and whether any of them survives into a month of its
+      // own is a question about buckets.
+      hasProjection = projection.rows.length > 0;
 
       for (const row of projection.rows) {
         schedule.push({
@@ -183,76 +326,118 @@ export function DebtPayoffTimelineReport() {
       }
     }
 
-    // --- Aggregate by month ---
-    const monthMap = new Map<string, PayoffScheduleItem>();
-    for (const item of schedule) {
-      const key = item.label;
-      const existing = monthMap.get(key);
-      if (existing) {
-        existing.principalPaid += item.principalPaid;
-        existing.interestPaid += item.interestPaid;
-        existing.balance = item.balance;
-        existing.cumulativePrincipal = item.cumulativePrincipal;
-        existing.cumulativeInterest = item.cumulativeInterest;
-        // A month is projected only if all its entries are projected
-        if (!item.isProjected) existing.isProjected = false;
-      } else {
-        monthMap.set(key, { ...item });
+    // --- Aggregate by month AND provenance (a chart granularity, never a count) ---
+    // Every event in a month folds into one row: the flows sum, the stocks take
+    // the month's last value. Nothing counts these rows -- two payments in one
+    // month are one row here and two payments in `paymentsMade`.
+    //
+    // Which side of the history/projection line a row is on is part of the
+    // GROUP'S IDENTITY, not a property computed from its members. A weekly,
+    // biweekly or semi-monthly loan routinely has a real payment and a projected
+    // one in the same calendar month -- an ordinary state, not malformed input.
+    // Keyed on the month alone the two merged, and the merged row was called
+    // historical whenever it held any historical entry: August's forecast
+    // principal was drawn as measured history, the projection's end-of-month
+    // balance was published as the historical one, and a loan that pays off
+    // inside that month left no projected row at all, so the "Today" divider and
+    // the Est. Payoff card both vanished. `bucketFlowSeries`'s boundary cannot
+    // recover any of that -- by the time it runs the provenance is already gone.
+    //
+    // Groups are contiguous RUNS over a date-ordered series rather than a lookup
+    // by key, so a future-dated posted payment landing among the projected rows
+    // opens its own run instead of being folded back into a month it no longer
+    // sits beside.
+    const chronological = [...schedule].sort((a, b) =>
+      a.date.slice(0, 10).localeCompare(b.date.slice(0, 10)),
+    );
+    const monthGroups: SchedulePoint[][] = [];
+    let currentGroupKey: string | null = null;
+    for (const item of chronological) {
+      const key = `${item.isProjected ? 'projected' : 'historical'}\u0000${item.label}`;
+      if (key !== currentGroupKey) {
+        monthGroups.push([]);
+        currentGroupKey = key;
       }
+      monthGroups[monthGroups.length - 1].push(item);
     }
-    let monthlySchedule = Array.from(monthMap.values());
-
-    // --- Sample if too many data points ---
-    if (monthlySchedule.length > 60) {
-      const sampledSchedule: PayoffScheduleItem[] = [];
-      const step = Math.ceil(monthlySchedule.length / 60);
-      for (let i = 0; i < monthlySchedule.length; i += step) {
-        sampledSchedule.push(monthlySchedule[i]);
-      }
-      if (sampledSchedule[sampledSchedule.length - 1] !== monthlySchedule[monthlySchedule.length - 1]) {
-        sampledSchedule.push(monthlySchedule[monthlySchedule.length - 1]);
-      }
-      monthlySchedule = sampledSchedule;
-    }
+    const monthlySchedule: SchedulePoint[] = monthGroups.map((group) => {
+      // Spread the month's LAST entry: `balance` and the cumulative totals are
+      // end-of-month values, and `date` travels with them so every field on the
+      // row describes the same moment. `isProjected` comes with it and is the
+      // whole group's, since the group is keyed on it.
+      const last = group[group.length - 1];
+      return {
+        ...last,
+        principalPaid: group.reduce((sum, item) => sum + item.principalPaid, 0),
+        interestPaid: group.reduce((sum, item) => sum + item.interestPaid, 0),
+      };
+    });
 
     // --- Post-process: set historicalBalance / projectedBalance for chart ---
     const firstProjectedIdx = monthlySchedule.findIndex((item) => item.isProjected);
-    let startLabel: string | null = null;
+    const lastHistoricalIdx =
+      firstProjectedIdx === -1 ? monthlySchedule.length - 1 : firstProjectedIdx - 1;
+    const decorated: PayoffScheduleItem[] = monthlySchedule.map((item, index) => ({
+      ...item,
+      // The month is no longer an identity now that it can appear on both sides
+      // of the line, so the position supplies one. The tick still prints the
+      // month (`axisTickLabel`).
+      axisKey: axisKeyFor(index, item.label),
+      historicalBalance: item.isProjected ? undefined : item.balance,
+      // The last historical point also carries a projected value, so the two
+      // areas meet instead of leaving a gap at the transition.
+      projectedBalance:
+        item.isProjected || (firstProjectedIdx > 0 && index === lastHistoricalIdx)
+          ? item.balance
+          : undefined,
+    }));
+    const startKey = firstProjectedIdx === -1 ? null : decorated[firstProjectedIdx].axisKey;
 
-    for (let i = 0; i < monthlySchedule.length; i++) {
-      const item = monthlySchedule[i];
-      if (!item.isProjected) {
-        item.historicalBalance = item.balance;
-      }
-      if (item.isProjected) {
-        item.projectedBalance = item.balance;
-      }
-    }
-
-    // Connect the two areas at the transition point
-    if (firstProjectedIdx > 0) {
-      // Last historical point also gets projectedBalance to connect the areas
-      monthlySchedule[firstProjectedIdx - 1].projectedBalance = monthlySchedule[firstProjectedIdx - 1].balance;
-      startLabel = monthlySchedule[firstProjectedIdx].label;
-    } else if (firstProjectedIdx === 0 && monthlySchedule.length > 0) {
-      startLabel = monthlySchedule[0].label;
-    }
+    // --- Reduce for rendering only ---
+    // The two transition rows are kept whatever the stride: the "Today" line is
+    // drawn at `projectionStartAxisKey` and the areas join on the row before it,
+    // so sampling either away moves a semantic marker onto whichever month the
+    // stride happened to retain -- on a 30-year mortgage, years off.
+    const chartSchedule = sampleStockSeries(decorated, {
+      keep: (_row, index) => index === firstProjectedIdx || index === lastHistoricalIdx,
+    });
 
     return {
-      payoffSchedule: monthlySchedule,
-      projectionStartLabel: startLabel,
+      payoffSchedule: decorated,
+      chartSchedule,
+      projectionStartAxisKey: startKey,
+      hasProjection,
       projectionPaidOff,
     };
-  }, [selectedAccount, transactions, interestTransactions, formatChartDate]);
+    // `history` replaces the raw `transactions`/`interestTransactions` deps: the
+    // register is now replayed once in a hoisted memo that both this schedule and
+    // the terms strip below read, so a change to how history is derived cannot
+    // move one and leave the other. `rateChanges` is a dep because the projection
+    // above is built from it.
+  }, [selectedAccount, history, rateChanges, formatChartDate, todayYmd]);
+
+  // The terms in effect, from the same history the curve is projected from.
+  const currentTerms = useMemo(() => {
+    if (!selectedAccount || !history) return { annualRate: null, payment: null };
+    return resolveCurrentLoanTerms(
+      selectedAccount,
+      history,
+      rateChanges,
+      null,
+      todayYmd,
+    );
+  }, [selectedAccount, history, rateChanges, todayYmd]);
 
   const summary = useMemo(() => {
     if (payoffSchedule.length === 0 || !selectedAccount) return null;
+    // `payoffSchedule` here is the full monthly series, so the last row is the
+    // loan's real last month rather than the last month sampling happened to
+    // keep, and every cumulative figure below is the loan's own.
     const lastItem = payoffSchedule[payoffSchedule.length - 1];
     const currentBalance = Math.abs(selectedAccount.currentBalance);
     const totalPrincipalPaid = lastItem.cumulativePrincipal;
     // Use openingBalance if set, otherwise derive from principal paid + remaining balance
     const originalBalance = Math.abs(selectedAccount.openingBalance) || (totalPrincipalPaid + currentBalance);
-    const hasProjection = payoffSchedule.some((item) => item.isProjected);
     // A projected figure is only a payoff, or a lifetime interest total, when the
     // projection actually reached payoff. Truncated at the horizon, the last
     // row's date is 50 years out with a balance still owing and its cumulative
@@ -261,7 +446,6 @@ export function DebtPayoffTimelineReport() {
     const projectedPayoffDate = projectionComplete ? lastItem.label : null;
     return {
       lastPaymentDate: lastItem.label,
-      totalPayments: payoffSchedule.length,
       // Interest over the rows shown: a lifetime total only when the projection
       // completed, which is why the headline reads it through `hasLifetimeTotal`.
       totalInterest: lastItem.cumulativeInterest,
@@ -273,7 +457,7 @@ export function DebtPayoffTimelineReport() {
       hasProjection,
       projectedPayoffDate,
     };
-  }, [payoffSchedule, selectedAccount, projectionPaidOff]);
+  }, [payoffSchedule, selectedAccount, hasProjection, projectionPaidOff]);
 
   // The interest figure's caption has to match what the figure is: history alone,
   // a lifetime estimate, or -- when the projection stopped at the horizon -- the
@@ -286,29 +470,70 @@ export function DebtPayoffTimelineReport() {
         ? t('debtPayoff.estTotalInterest')
         : t('debtPayoff.interestOverProjection');
 
-  const distributionData = useMemo(() => {
-    return payoffSchedule
-      .filter((item) => {
-        const total = item.principalPaid + item.interestPaid;
-        return total > 0;
-      })
-      .map((item) => {
-        const total = item.principalPaid + item.interestPaid;
-        return {
-          label: item.label,
-          principalPercent: (item.principalPaid / total) * 100,
-          interestPercent: (item.interestPaid / total) * 100,
-          principalPaid: item.principalPaid,
-          interestPaid: item.interestPaid,
-          isProjected: item.isProjected,
-        };
-      });
-  }, [payoffSchedule]);
+  // Every month that moved money, unsampled.
+  const distributionMonths = useMemo(
+    () => payoffSchedule.filter((item) => item.principalPaid + item.interestPaid > 0),
+    [payoffSchedule],
+  );
+
+  // Principal vs interest is a FLOW: each bar is what a period paid, so a bar
+  // dropped to fit the axis deletes the months it stood for and the chart shows
+  // a subset labelled as the whole. Contiguous months are summed into one bar
+  // instead, so every month reaches the chart -- `bucketFlowSeries` is a no-op
+  // while the series fits. A bucket never straddles the history/projection line:
+  // one bar cannot honestly be half measured and half predicted.
+  const distributionData = useMemo(
+    () =>
+      bucketFlowSeries(
+        distributionMonths,
+        (group, index) => {
+          const principalPaid = group.reduce((sum, item) => sum + item.principalPaid, 0);
+          const interestPaid = group.reduce((sum, item) => sum + item.interestPaid, 0);
+          const total = principalPaid + interestPaid;
+          const first = group[0];
+          const last = group[group.length - 1];
+          const label =
+            group.length === 1
+              ? first.label
+              : t('debtPayoff.periodRange', { start: first.label, end: last.label });
+          return {
+            label,
+            // Two buckets can share a label: the month a real payment and a
+            // projected one both fall in is one bucket on each side of the
+            // boundary. The bucket's position is what makes it addressable.
+            axisKey: axisKeyFor(index, label),
+            principalPercent: (principalPaid / total) * 100,
+            interestPercent: (interestPaid / total) * 100,
+            principalPaid,
+            interestPaid,
+            months: group.length,
+            // The boundary below keeps a group on one side of the line, so the
+            // first row speaks for the whole bar.
+            isProjected: first.isProjected,
+          };
+        },
+        { boundary: (item) => item.isProjected },
+      ),
+    [distributionMonths, t],
+  );
+
+  // The distribution chart's "Today" divider. It cannot reuse
+  // `projectionStartAxisKey`: that addresses a row of the BALANCE series, and
+  // these are different rows -- a bucket spans a range of months and carries a
+  // position among the buckets. A ReferenceLine whose value matches no category
+  // on its own axis is silently not drawn, exactly on the long loans bucketing
+  // exists for. A bucket never straddles the boundary, so the first projected
+  // bucket is the transition.
+  const distributionProjectionStartAxisKey = useMemo(
+    () => distributionData.find((bucket) => bucket.isProjected)?.axisKey ?? null,
+    [distributionData],
+  );
 
   const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ name: string; value: number; color: string; dataKey: string }>; label?: string }) => {
     if (active && payload && payload.length) {
-      // Check if this point is projected
-      const chartData = payoffSchedule.find((item) => item.label === label);
+      // Check if this point is projected. `label` is the axis KEY recharts was
+      // given, so the lookup is on that; the heading prints the month back.
+      const chartData = payoffSchedule.find((item) => item.axisKey === label);
       const isProjected = chartData?.isProjected ?? false;
       // Deduplicate entries that overlap at the transition point
       const seen = new Set<string>();
@@ -322,7 +547,8 @@ export function DebtPayoffTimelineReport() {
       return (
         <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3">
           <p className="font-medium text-gray-900 dark:text-gray-100 mb-1">
-            {label} {isProjected && <span className="text-xs text-blue-500 dark:text-blue-400">{t('debtPayoff.projected')}</span>}
+            {label === undefined ? '' : axisTickLabel(label)}{' '}
+            {isProjected && <span className="text-xs text-blue-500 dark:text-blue-400">{t('debtPayoff.projected')}</span>}
           </p>
           {deduped.map((entry, index) => (
             <p key={index} className="text-sm" style={{ color: entry.color }}>
@@ -337,15 +563,28 @@ export function DebtPayoffTimelineReport() {
 
   const handleExportPdf = async () => {
     const { exportToPdf } = await import('@/lib/pdf-export');
-    const headers = [t('debtPayoff.colAccountType'), t('debtPayoff.colAccountType'), t('debtPayoff.currentBalance'), t('debtPayoff.colInterestRate'), t('debtPayoff.colPaymentsMade')];
+    // The table's fifth column held the installment amount under a "Payments
+    // Made" heading, and its first two columns shared one heading -- so the
+    // export named neither the account nor the count it claimed to carry.
+    const headers = [
+      t('debtPayoff.colAccount'),
+      t('debtPayoff.colAccountType'),
+      t('debtPayoff.currentBalance'),
+      t('debtPayoff.colInterestRate'),
+      t('debtPayoff.colPayment'),
+      t('debtPayoff.colPaymentsMade'),
+    ];
     const rows = selectedAccount ? [[
       selectedAccount.name,
       selectedAccount.accountType === 'LINE_OF_CREDIT'
         ? t('accountBalances.accountTypes.LINE_OF_CREDIT' as Parameters<typeof t>[0])
         : selectedAccount.accountType.charAt(0) + selectedAccount.accountType.slice(1).toLowerCase(),
       formatCurrency(Math.abs(selectedAccount.currentBalance)),
-      selectedAccount.interestRate ? `${selectedAccount.interestRate}%` : t('debtPayoff.notSet'),
-      selectedAccount.paymentAmount ? formatCurrency(selectedAccount.paymentAmount) : t('debtPayoff.notSet'),
+      currentTerms.annualRate != null
+        ? `${currentTerms.annualRate}%`
+        : t('debtPayoff.notSet'),
+      currentTerms.payment ? formatCurrency(currentTerms.payment) : t('debtPayoff.notSet'),
+      String(paymentsMade),
     ]] : [];
     await exportToPdf({
       title: t('page.names.debt-payoff-timeline' as Parameters<typeof t>[0]),
@@ -504,10 +743,11 @@ export function DebtPayoffTimelineReport() {
             {viewType === 'balance' && (
               <div className="h-80">
                 <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-                  <AreaChart data={payoffSchedule}>
+                  <AreaChart data={chartSchedule}>
                     <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} />
                     <XAxis
-                      dataKey="label"
+                      dataKey="axisKey"
+                      tickFormatter={axisTickLabel}
                       tick={{ fontSize: 11 }}
                       interval="preserveStartEnd"
                     />
@@ -526,7 +766,7 @@ export function DebtPayoffTimelineReport() {
                       strokeWidth={2}
                       connectNulls={false}
                     />
-                    {projectionStartLabel && (
+                    {projectionStartAxisKey && (
                       <Area
                         type="monotone"
                         dataKey="projectedBalance"
@@ -539,9 +779,9 @@ export function DebtPayoffTimelineReport() {
                         connectNulls={false}
                       />
                     )}
-                    {projectionStartLabel && (
+                    {projectionStartAxisKey && (
                       <ReferenceLine
-                        x={projectionStartLabel}
+                        x={projectionStartAxisKey}
                         stroke={chartColors.axis}
                         strokeDasharray="4 4"
                         strokeWidth={2}
@@ -561,10 +801,11 @@ export function DebtPayoffTimelineReport() {
             {viewType === 'breakdown' && (
               <div className="h-80">
                 <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-                  <BarChart data={payoffSchedule}>
+                  <BarChart data={chartSchedule}>
                     <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} />
                     <XAxis
-                      dataKey="label"
+                      dataKey="axisKey"
+                      tickFormatter={axisTickLabel}
                       tick={{ fontSize: 11 }}
                       interval="preserveStartEnd"
                     />
@@ -586,9 +827,9 @@ export function DebtPayoffTimelineReport() {
                       fill={chartColors.warning}
                       name={t('debtPayoff.seriesInterestPaid')}
                     />
-                    {projectionStartLabel && (
+                    {projectionStartAxisKey && (
                       <ReferenceLine
-                        x={projectionStartLabel}
+                        x={projectionStartAxisKey}
                         stroke={chartColors.axis}
                         strokeDasharray="4 4"
                         strokeWidth={2}
@@ -611,7 +852,8 @@ export function DebtPayoffTimelineReport() {
                   <BarChart data={distributionData}>
                     <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} />
                     <XAxis
-                      dataKey="label"
+                      dataKey="axisKey"
+                      tickFormatter={axisTickLabel}
                       tick={{ fontSize: 11 }}
                       interval="preserveStartEnd"
                     />
@@ -623,11 +865,11 @@ export function DebtPayoffTimelineReport() {
                     <Tooltip
                       content={({ active, payload, label: tooltipLabel }) => {
                         if (active && payload && payload.length) {
-                          const data = distributionData.find((d) => d.label === tooltipLabel);
+                          const data = distributionData.find((d) => d.axisKey === tooltipLabel);
                           return (
                             <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3">
                               <p className="font-medium text-gray-900 dark:text-gray-100 mb-1">
-                                {tooltipLabel}{' '}
+                                {data?.label ?? tooltipLabel}{' '}
                                 {data?.isProjected && (
                                   <span className="text-xs text-blue-500 dark:text-blue-400">{t('debtPayoff.projected')}</span>
                                 )}
@@ -657,9 +899,9 @@ export function DebtPayoffTimelineReport() {
                       fill={chartColors.warning}
                       name={t('debtPayoff.seriesInterest')}
                     />
-                    {projectionStartLabel && (
+                    {distributionProjectionStartAxisKey && (
                       <ReferenceLine
-                        x={projectionStartLabel}
+                        x={distributionProjectionStartAxisKey}
                         stroke={chartColors.axis}
                         strokeDasharray="4 4"
                         strokeWidth={2}
@@ -676,7 +918,7 @@ export function DebtPayoffTimelineReport() {
                 </ResponsiveContainer>
               </div>
             )}
-            {projectionStartLabel && (
+            {projectionStartAxisKey && (
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 text-center">
                 {t('debtPayoff.projectionNote')}
               </p>
@@ -709,13 +951,15 @@ export function DebtPayoffTimelineReport() {
             <div>
               <span className="text-gray-500 dark:text-gray-400">{t('debtPayoff.colInterestRate')}</span>
               <p className="font-medium text-gray-900 dark:text-gray-100">
-                {selectedAccount.interestRate ? `${selectedAccount.interestRate}%` : t('debtPayoff.notSet')}
+                {currentTerms.annualRate != null
+                  ? `${currentTerms.annualRate}%`
+                  : t('debtPayoff.notSet')}
               </p>
             </div>
             <div>
               <span className="text-gray-500 dark:text-gray-400">{t('debtPayoff.colPaymentsMade')}</span>
               <p className="font-medium text-gray-900 dark:text-gray-100">
-                {payoffSchedule.filter((p) => !p.isProjected).length}
+                {paymentsMade}
               </p>
             </div>
           </div>

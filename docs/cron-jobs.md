@@ -20,6 +20,7 @@ One row per `@Cron` handler. The Cron column is the decorator's expression verba
 | `net-worth.service` | `0 */30 * * * *` | Every 30 minutes | Recompute current-month net-worth snapshots for accounts whose balance moved since the snapshot was taken (owner-scoped, idempotent across replicas) |
 | `mortgage-reminder.service` | `0 08 * * *` | Daily 8 AM | Mortgage payment reminders |
 | `bill-reminder.service` | `0 08 * * *` | Daily 8 AM | Bill payment reminders |
+| `provider-outage-alert.service` | `*/10 * * * *` | Every 10 minutes | Email the administrators when a market-data provider has been unreachable for 15 minutes, and once more when it recovers; claimed per episode with a 6-hour floor between alerts |
 | `budget-period-cron.service` | `0 0 1 * *` | 1st of month, midnight | Create new budget periods |
 | `budget-alert.service` | `0 7 * * *` | Daily 7 AM | Budget threshold alerts |
 | `budget-alert.service` | `0 7 * * 1` | Mondays 7 AM | Weekly budget digest |
@@ -41,7 +42,7 @@ One row per `@Cron` handler. The Cron column is the decorator's expression verba
 The 9 AM sweep does three separable things, and the order matters. **Revocation runs
 first**, ahead of both delivery gates: voiding a returned owner's outstanding links needs
 only the database, and an install whose SMTP or encryption key has gone away must still be
-able to kill a link it already delivered. The SMTP and `AI_ENCRYPTION_KEY` gates then stop
+able to kill a link it already delivered. The SMTP and `ENCRYPTION_KEY` gates then stop
 the *delivery* sweep, which is inert rather than failing per contact.
 
 **Delivery is derived, not scheduled.** A grant advances the owner's

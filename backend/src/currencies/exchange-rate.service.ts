@@ -746,16 +746,23 @@ export class ExchangeRateService implements OnModuleInit {
       FX_FETCH_CONCURRENCY,
       async ([key, pair]) => {
         try {
-          const stored = await this.fillRateWindow(
+          const { stored, answered } = await this.fillRateWindow(
             pair.from,
             pair.to,
             start,
             end,
           );
-          if (stored === 0) {
+          if (stored === 0 && answered) {
             // Nothing exists for this pair in this era -- a currency that
             // predates the provider's history, or one it does not carry. Note
             // it, so a report reloaded on the same date does not re-ask.
+            //
+            // Only when the provider actually answered: a refusal and a
+            // transport failure produce the same zero, and this memory holds
+            // for 30 minutes -- long enough for a two-minute outage to leave
+            // every foreign-currency total in the report null well after the
+            // provider came back. The fill reports it, because it is the one
+            // that saw the response.
             this.emptyRateWindows.remember(key, month);
             this.logger.warn(
               `No historical rates available for ${pair.from}/${pair.to} over ${start} to ${end}`,
@@ -784,12 +791,19 @@ export class ExchangeRateService implements OnModuleInit {
    * `persistRateSeries` writes the inverse row regardless -- so `CADUSD=X`
    * answers a `USD->CAD` question just as well.
    */
+  /**
+   * @returns the number of observations persisted, and whether the provider
+   *   *answered* at all -- `[]` (no rates for this pair in this window) rather
+   *   than `null` (a transport failure, or a call the breaker refused). Only an
+   *   answer may be remembered as an empty window: the two produce the same
+   *   zero, and the memory holds for 30 minutes.
+   */
   private async fillRateWindow(
     from: string,
     to: string,
     start: string,
     end: string,
-  ): Promise<number> {
+  ): Promise<{ stored: number; answered: boolean }> {
     const startDate = new Date(`${start}T00:00:00.000Z`);
     const endDate = new Date(`${end}T23:59:59.999Z`);
 
@@ -800,7 +814,10 @@ export class ExchangeRateService implements OnModuleInit {
       endDate,
     );
     if (direct && direct.length > 0) {
-      return this.persistRateSeries(from, to, direct);
+      return {
+        stored: await this.persistRateSeries(from, to, direct),
+        answered: true,
+      };
     }
 
     const reverse = await this.fetchYahooHistoricalRatesWindow(
@@ -810,10 +827,17 @@ export class ExchangeRateService implements OnModuleInit {
       endDate,
     );
     if (reverse && reverse.length > 0) {
-      return this.persistRateSeries(to, from, reverse);
+      return {
+        stored: await this.persistRateSeries(to, from, reverse),
+        answered: true,
+      };
     }
 
-    return 0;
+    // Both directions, not either: "this pair has no rates in this window" is
+    // only known when both symbols answered. One of them answering `[]` while
+    // the other failed or was refused is exactly the half-knowledge that used
+    // to be cached for thirty minutes.
+    return { stored: 0, answered: direct !== null && reverse !== null };
   }
 
   /**

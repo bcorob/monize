@@ -5,6 +5,9 @@ import {
 import { YahooFinanceService } from "./yahoo-finance.service";
 import { HistoricalPrice } from "./providers/quote-provider.interface";
 import { MARKET_INDEXES } from "./market-indexes";
+import { ProviderHealthService } from "../provider-health/provider-health.service";
+import { OPEN_WINDOW_MS } from "../provider-health/provider-circuit";
+import { createTestProviderHealth } from "../test-helpers/provider-health-testing";
 import {
   createScopedDbMocks,
   DataSourceMock,
@@ -61,6 +64,15 @@ function routeQueries(
   });
 }
 
+/** The error undici raises when the container cannot resolve the provider. */
+function transportFailure(): Error {
+  return Object.assign(new TypeError("fetch failed"), {
+    cause: Object.assign(new Error("getaddrinfo EAI_AGAIN"), {
+      code: "EAI_AGAIN",
+    }),
+  });
+}
+
 /** A provider bar, typed so the fixture cannot claim a shape Yahoo never sends. */
 function bar(
   date: string,
@@ -85,6 +97,9 @@ describe("MarketIndexService", () => {
   let yahoo: jest.Mocked<
     Pick<YahooFinanceService, "fetchHistorical" | "fetchHistoricalWindow">
   >;
+  let health: ProviderHealthService;
+  /** The breaker's clock, so its windows can be moved without waiting. */
+  let breakerClock: number;
 
   /** SQL statements the service issued, in order. */
   const statements = (): string[] =>
@@ -100,7 +115,13 @@ describe("MarketIndexService", () => {
       fetchHistorical: jest.fn().mockResolvedValue(null),
       fetchHistoricalWindow: jest.fn().mockResolvedValue(null),
     };
-    service = new MarketIndexService(dataSource as never, yahoo as never);
+    breakerClock = Date.now();
+    health = createTestProviderHealth(() => breakerClock);
+    service = new MarketIndexService(
+      dataSource as never,
+      yahoo as never,
+      health,
+    );
   });
 
   // --- catalog -------------------------------------------------------------
@@ -525,10 +546,11 @@ describe("MarketIndexService", () => {
     });
 
     it("drops bars the provider could not price, rather than storing a zero", async () => {
-      // Only the first chunk answers; the rest are years the provider has
-      // nothing for.
+      // Only the first chunk carries bars; the rest are years the provider
+      // answered for and had nothing in. That answer is `[]`, not `null` --
+      // `null` means no usable answer, which refuses the whole fetch.
       yahoo.fetchHistoricalWindow
-        .mockResolvedValue(null)
+        .mockResolvedValue([])
         .mockResolvedValueOnce([
           bar("2025-01-02", 5900),
           bar("2025-01-03", 0),
@@ -570,6 +592,234 @@ describe("MarketIndexService", () => {
     });
   });
 
+  // --- what an operator reads when an index has no history -----------------
+
+  describe("recorded failure reason", () => {
+    /** The reason string the service stored, from the recordFailure call. */
+    const storedReason = (): string | undefined => {
+      const call = manager.query.mock.calls.find((entry) =>
+        String(entry[0]).includes("last_error = $2"),
+      );
+      return call ? String((call[1] as unknown[])[1]) : undefined;
+    };
+
+    it("names the window and the cause when a fetch simply failed", async () => {
+      // A failure that does not trip the breaker: the request went out, so this
+      // index really was attempted and the reason belongs in its sync row.
+      manager.query.mockResolvedValue([]);
+      yahoo.fetchHistoricalWindow.mockImplementation(() => {
+        health.recordFailure("yahoo_finance", transportFailure());
+        return Promise.resolve(null);
+      });
+
+      await service.refreshAll();
+
+      expect(storedReason()).toContain("no answer");
+      expect(storedReason()).toContain("no usable response");
+    });
+
+    it("records nothing at all when the breaker trips mid-refresh", async () => {
+      // Now the same failure opens the breaker. The refusal and the failure are
+      // the same `null` from here, so this counts as the request that never
+      // left: no attempt stamped, and therefore no six-hour cooldown for an
+      // index that will be wanted again the moment the provider answers.
+      manager.query.mockResolvedValue([]);
+      yahoo.fetchHistoricalWindow.mockImplementation(() => {
+        for (let i = 0; i < 5; i++) {
+          health.recordFailure("yahoo_finance", transportFailure());
+        }
+        return Promise.resolve(null);
+      });
+
+      await service.refreshAll();
+
+      expect(
+        statements().filter((sql) => sql.includes("market_index_sync")),
+      ).toHaveLength(0);
+    });
+
+    it("distinguishes a window the provider answered as empty", async () => {
+      manager.query.mockResolvedValue([]);
+      yahoo.fetchHistoricalWindow.mockResolvedValue([]);
+
+      await service.refreshAll();
+
+      expect(storedReason()).toContain("no history returned");
+    });
+
+    it("names the failing window, and stops asking for the rest", async () => {
+      // Stopping matters as much as the wording: a provider that has stopped
+      // answering costs one request per index rather than eleven -- the first
+      // window goes alone precisely so the other ten are never attempted.
+      manager.query.mockResolvedValue([]);
+      yahoo.fetchHistoricalWindow.mockResolvedValue(null);
+
+      await service.refreshAll();
+
+      expect(yahoo.fetchHistoricalWindow).toHaveBeenCalledTimes(
+        MARKET_INDEXES.length,
+      );
+      expect(storedReason()).toMatch(
+        /over \d{4}-\d{2}-\d{2}\.\.\d{4}-\d{2}-\d{2}/,
+      );
+    });
+
+    it("does not stamp an attempt when the call is refused after the check", async () => {
+      // The breaker can open in the gap between the check and the request, and
+      // the client swallows the refusal into the same `null` a failure gives.
+      manager.query.mockResolvedValue([]);
+      yahoo.fetchHistoricalWindow.mockImplementation(() => {
+        for (let i = 0; i < 5; i++) {
+          health.recordFailure("yahoo_finance", transportFailure());
+        }
+        return Promise.resolve(null);
+      });
+
+      await service.refreshAll();
+
+      expect(
+        statements().filter((sql) =>
+          sql.includes("INSERT INTO market_index_sync"),
+        ),
+      ).toHaveLength(0);
+    });
+
+    it("does not stamp an attempt when the breaker is already refusing", async () => {
+      // The window can close in the gap: the check said "go", another caller's
+      // failures opened the breaker, and the first chunk was refused. That is
+      // still a call that never left the process, so it must not cost the index
+      // its six-hour cooldown.
+      manager.query.mockResolvedValue([]);
+      yahoo.fetchHistoricalWindow.mockImplementation(() => {
+        throw new Error("the provider should not have been called");
+      });
+      // Open the breaker after `refreshAll` has begun by opening it right
+      // before: the per-window check is what has to catch it.
+      for (let i = 0; i < 5; i++) {
+        health.recordFailure("yahoo_finance", transportFailure());
+      }
+
+      await service.refreshAll();
+
+      expect(
+        statements().filter((sql) =>
+          sql.includes("INSERT INTO market_index_sync"),
+        ),
+      ).toHaveLength(0);
+    });
+
+    it("does not stamp an attempt for a call that never left the process", async () => {
+      // `last_attempt_at` drives a six-hour cooldown. Stamping it for a request
+      // the breaker refused meant a two-minute outage cost every index six
+      // hours of no history -- long after the provider was answering again.
+      manager.query.mockResolvedValue([]);
+      for (let i = 0; i < 5; i++) {
+        health.recordFailure("yahoo_finance", transportFailure());
+      }
+
+      await service.refreshAll();
+
+      expect(yahoo.fetchHistoricalWindow).not.toHaveBeenCalled();
+      expect(
+        statements().filter((sql) =>
+          sql.includes("INSERT INTO market_index_sync"),
+        ),
+      ).toHaveLength(0);
+    });
+
+    it("still fetches once the open window has elapsed", async () => {
+      // The alternative -- skipping whenever the breaker is open -- locks out a
+      // deployment holding no securities, where nothing else ever calls the
+      // provider and so nothing would discover that it is back. That is the
+      // deployment in issue #1265: the reporter had no investments recorded.
+      manager.query.mockResolvedValue([]);
+      for (let i = 0; i < 5; i++) {
+        health.recordFailure("yahoo_finance", transportFailure());
+      }
+      breakerClock += OPEN_WINDOW_MS + 1_000;
+
+      yahoo.fetchHistoricalWindow.mockResolvedValue([bar("2026-08-25", 1400)]);
+      await service.refreshAll();
+
+      expect(yahoo.fetchHistoricalWindow).toHaveBeenCalled();
+    });
+  });
+
+  // --- a partly-answered fetch is not a series -----------------------------
+
+  describe("a window with no answer", () => {
+    /** The reason string the service stored, from the recordFailure call. */
+    const failureReason = (): string | undefined => {
+      const call = manager.query.mock.calls.find((entry) =>
+        String(entry[0]).includes("last_error = $2"),
+      );
+      return call ? String((call[1] as unknown[])[1]) : undefined;
+    };
+
+    it("refuses the whole fetch rather than storing a stub", async () => {
+      // The yearly chunks go out together, so when the breaker opens partway
+      // through, exactly one can hold the half-open probe and the rest are
+      // refused. Read as empty years, that stored a single year as the index's
+      // whole history, recorded a success, and locked the index behind its
+      // six-hour cooldown.
+      manager.query.mockResolvedValue([]);
+      yahoo.fetchHistoricalWindow
+        .mockResolvedValue(null)
+        .mockResolvedValueOnce([bar("2025-01-02", 5900)]);
+
+      await service.refreshAll();
+
+      expect(
+        statements().some((sql) =>
+          sql.includes("INSERT INTO market_index_prices"),
+        ),
+      ).toBe(false);
+      expect(failureReason()).toContain("no answer");
+    });
+
+    it("asks the remaining windows together once the first answered", async () => {
+      // Strictly sequential would be safe but slow: `ensureHistory` is awaited
+      // inside a chart request, and a cold index would go from the slowest of
+      // eleven round trips to their sum.
+      manager.query.mockResolvedValue([]);
+      let pending = 0;
+      let mostAtOnce = 0;
+      yahoo.fetchHistoricalWindow.mockImplementation(() => {
+        pending++;
+        mostAtOnce = Math.max(mostAtOnce, pending);
+        return new Promise((resolve) =>
+          setImmediate(() => {
+            pending--;
+            resolve([]);
+          }),
+        );
+      });
+
+      await service.ensureHistory(["SP500"], "2015-01-01");
+
+      // More than one window outstanding at once, which a sequential loop could
+      // never produce -- and the first one alone, which is what makes the
+      // breaker's answer known before the rest are attempted.
+      expect(yahoo.fetchHistoricalWindow.mock.calls.length).toBeGreaterThan(2);
+      expect(mostAtOnce).toBeGreaterThan(1);
+    });
+
+    it("stores a series whose empty years the provider answered for", async () => {
+      manager.query.mockResolvedValue([]);
+      yahoo.fetchHistoricalWindow
+        .mockResolvedValue([])
+        .mockResolvedValueOnce([bar("2025-01-02", 5900)]);
+
+      await service.refreshAll();
+
+      expect(
+        statements().some((sql) =>
+          sql.includes("INSERT INTO market_index_prices"),
+        ),
+      ).toBe(true);
+    });
+  });
+
   // --- start-up ------------------------------------------------------------
 
   describe("onApplicationBootstrap", () => {
@@ -602,6 +852,46 @@ describe("MarketIndexService", () => {
         new Promise((resolve) => setImmediate(resolve)),
       ).resolves.toBeUndefined();
     });
+
+    /**
+     * Issue #1265: an unreachable provider made every restart a fresh storm of
+     * 24 indexes x up to 11 yearly chunks -- and the flood of failures was
+     * itself why the container was being restarted. A restart is not new
+     * information, so the warm-up honours the same cooldown the on-demand path
+     * does.
+     */
+    it("skips indexes attempted within the cooldown", async () => {
+      routeQueries(manager, {
+        attempts: MARKET_INDEXES.map((index) => ({
+          index_code: index.code,
+          last_attempt_at: new Date(Date.now() - 60_000),
+        })),
+      });
+
+      service.onApplicationBootstrap();
+      await new Promise((resolve) => setImmediate(resolve));
+
+      expect(yahoo.fetchHistoricalWindow).not.toHaveBeenCalled();
+    });
+
+    it("still warms an index whose cooldown has expired", async () => {
+      routeQueries(manager, {
+        attempts: [
+          {
+            index_code: MARKET_INDEXES[0].code,
+            last_attempt_at: new Date(
+              Date.now() - INDEX_FETCH_COOLDOWN_MS - 60_000,
+            ),
+          },
+        ],
+      });
+      yahoo.fetchHistoricalWindow.mockResolvedValue([bar("2001-01-03", 1400)]);
+
+      service.onApplicationBootstrap();
+      await new Promise((resolve) => setImmediate(resolve));
+
+      expect(yahoo.fetchHistoricalWindow).toHaveBeenCalled();
+    });
   });
 
   // --- scheduled refresh ---------------------------------------------------
@@ -610,6 +900,22 @@ describe("MarketIndexService", () => {
     it("seeds its own system context, since no request is behind it", async () => {
       await service.scheduledRefresh();
       expect(systemContext).toHaveBeenCalled();
+    });
+
+    it("ignores the cooldown: a daily schedule is the request", async () => {
+      // The asymmetry with the start-up warm-up is the point. A cron that
+      // skipped its own last attempt would never refresh anything.
+      routeQueries(manager, {
+        attempts: MARKET_INDEXES.map((index) => ({
+          index_code: index.code,
+          last_attempt_at: new Date(Date.now() - 60_000),
+        })),
+      });
+      yahoo.fetchHistoricalWindow.mockResolvedValue([bar("2026-08-25", 1400)]);
+
+      await service.scheduledRefresh();
+
+      expect(yahoo.fetchHistoricalWindow).toHaveBeenCalled();
     });
 
     it("asks for a short recent window where history exists", async () => {

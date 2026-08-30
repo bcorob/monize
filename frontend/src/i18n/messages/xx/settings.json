@@ -514,15 +514,24 @@
     "encryption": {
       "heading": "[XX-Backup Encryption-XX]",
       "descriptionOidc": "[XX-Encrypt manual and automatic backups with a dedicated backup password you set here. The password is required to restore.-XX]",
-      "loading": "[XX-Loading...-XX]",
+      "descriptionLocal": "[XX-Your backups are encrypted with your login password. Nothing else to remember: the same password restores them.-XX]",
+      "unavailable": "[XX-This server is not configured to encrypt backups, so they are written unencrypted.-XX]",
       "enabledBadge": "[XX-Enabled-XX]",
+      "disabledBadge": "[XX-Not enabled-XX]",
+      "enabledLocalNote": "[XX-Backups are encrypted with your login password.-XX]",
+      "disabledLocalNote": "[XX-Backups are being written unencrypted until you confirm your login password.-XX]",
+      "enableWithLoginPasswordButton": "[XX-Enable with My Login Password-XX]",
+      "loading": "[XX-Loading...-XX]",
       "changePasswordButton": "[XX-Change Backup Password-XX]",
       "disableButton": "[XX-Disable-XX]",
       "setPasswordButton": "[XX-Set Backup Password-XX]",
       "setupModal": {
         "titleOidc": "[XX-Set Backup Password-XX]",
+        "titleLocal": "[XX-Enable Encrypted Backups-XX]",
         "descriptionOidc": "[XX-Choose a password that will be used to encrypt your backups. Save it somewhere safe, because you will need it to restore.-XX]",
+        "descriptionLocal": "[XX-Confirm your login password to turn on encrypted backups. It is the password your backups will be encrypted with, and the one you will need to restore them.-XX]",
         "placeholderOidc": "[XX-New backup password (12+ chars)-XX]",
+        "placeholderLocal": "[XX-Your login password-XX]",
         "savingButton": "[XX-Saving...-XX]",
         "confirmButton": "[XX-Confirm-XX]"
       },
@@ -768,7 +777,7 @@
     },
     "encryptionNotConfigured": {
       "heading": "[XX-Encryption key required-XX]",
-      "body": "[XX-Emergency access needs AI_ENCRYPTION_KEY set on the server. A grant stores each contact's access link encrypted so a retry can resend the same link, and without that key no link can be sent at all.-XX]"
+      "body": "[XX-Emergency access needs ENCRYPTION_KEY set on the server. A grant stores each contact's access link encrypted so a retry can resend the same link, and without that key no link can be sent at all.-XX]"
     },
     "alreadyGranted": {
       "heading": "[XX-Emergency access already granted-XX]",
@@ -874,7 +883,7 @@
   "aiProviders": {
     "heading": "[XX-AI Providers-XX]",
     "addButton": "[XX-Add Provider-XX]",
-    "encryptionWarning": "[XX-AI_ENCRYPTION_KEY is not configured. You can use Ollama (local, no API key needed) but cloud providers require encryption to store API keys securely.-XX]",
+    "encryptionWarning": "[XX-ENCRYPTION_KEY is not configured. You can use Ollama (local, no API key needed) but cloud providers require encryption to store API keys securely.-XX]",
     "systemDefault": {
       "heading": "[XX-System Default AI Provider Available-XX]",
       "description": "[XX-A central AI provider has been configured by your administrator-XX]",

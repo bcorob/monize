@@ -21,6 +21,7 @@ import { useChartDateFormat } from '@/hooks/useChartDateFormat';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
 import type { OverpaymentFrequency } from '@/lib/loan-schedule';
 import { frequencyLabelKey } from '@/components/accounts/loan-detail/loan-scenario-labels';
+import { CHART_MAX_POINTS, sampleStockSeries } from '@/lib/chart-sampling';
 
 export interface ScenarioOutcome {
   id: string;
@@ -67,7 +68,6 @@ interface ScenarioComparisonChartProps {
   currencyCode: string;
 }
 
-const MAX_CHART_POINTS = 60;
 
 /**
  * Compares saved overpayment scenarios as parabolic arcs on a shared monthly
@@ -222,11 +222,13 @@ export function ScenarioComparisonChart({
       keep.add(payoff);
       keep.add(mid);
     }
-    const step = Math.ceil(lastIndex / MAX_CHART_POINTS);
-    const indices: number[] = [];
-    for (let i = 0; i <= lastIndex; i++) {
-      if (i % step === 0 || keep.has(i)) indices.push(i);
-    }
+    // A month index stands for a balance at a point in time, so this is a stock
+    // sample: the shared reduction (chart-sampling.ts), never a second
+    // hand-rolled stride.
+    const indices = sampleStockSeries(
+      Array.from({ length: lastIndex + 1 }, (_, i) => i),
+      { maxPoints: CHART_MAX_POINTS, keep: (i) => keep.has(i) },
+    );
 
     // The parabola through (start, 0), (mid, saved) and (payoff, 0):
     // value(i) = saved * 4 * f * (1 - f) with f = (i - start) / (payoff - start).

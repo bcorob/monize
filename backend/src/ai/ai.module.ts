@@ -2,7 +2,7 @@ import { Module, forwardRef } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
 import { AiService } from "./ai.service";
 import { AiUsageService } from "./ai-usage.service";
-import { AiEncryptionService } from "./ai-encryption.service";
+import { EncryptionModule } from "../common/encryption/encryption.module";
 import { AiProviderFactory } from "./ai-provider.factory";
 import { AiStartupValidator } from "./ai-startup.validator";
 import { AiController } from "./ai.controller";
@@ -35,6 +35,7 @@ import { AiRelayModule } from "./relay/ai-relay.module";
 @Module({
   imports: [
     ConfigModule,
+    EncryptionModule,
     forwardRef(() => AccountsModule),
     forwardRef(() => CategoriesModule),
     forwardRef(() => TransactionsModule),
@@ -56,7 +57,6 @@ import { AiRelayModule } from "./relay/ai-relay.module";
   providers: [
     AiService,
     AiUsageService,
-    AiEncryptionService,
     AiProviderFactory,
     AiStartupValidator,
     FinancialContextBuilder,
@@ -76,6 +76,6 @@ import { AiRelayModule } from "./relay/ai-relay.module";
     AiForecastController,
     AiActionsController,
   ],
-  exports: [AiService, AiUsageService, AiEncryptionService],
+  exports: [AiService, AiUsageService, EncryptionModule],
 })
 export class AiModule {}

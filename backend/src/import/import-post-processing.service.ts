@@ -6,6 +6,7 @@ import { NetWorthService } from "../net-worth/net-worth.service";
 import { SecurityPriceService } from "../securities/security-price.service";
 import { ExchangeRateService } from "../currencies/exchange-rate.service";
 import { roundMoney } from "../common/round.util";
+import { LEDGER_MOVEMENT_PREDICATE } from "../common/ledger-balance.sql";
 
 /**
  * The work every import pipeline does once its rows are written: recompute
@@ -71,8 +72,7 @@ export class ImportPostProcessingService {
                     COALESCE(a.opening_balance, 0) + COALESCE(SUM(t.amount), 0) as balance
                FROM accounts a
                LEFT JOIN transactions t ON t.account_id = a.id
-                 AND (t.status IS NULL OR t.status != 'VOID')
-                 AND t.parent_transaction_id IS NULL
+                 AND ${LEDGER_MOVEMENT_PREDICATE}
                  AND t.transaction_date <= CURRENT_DATE
               WHERE a.id = ANY($1)
               GROUP BY a.id, a.opening_balance`,

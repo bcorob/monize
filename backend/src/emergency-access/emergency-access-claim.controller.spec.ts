@@ -9,7 +9,7 @@ import { User } from "../users/entities/user.entity";
 import { TokenService } from "../auth/token.service";
 import { AuthService } from "../auth/auth.service";
 import { PasswordBreachService } from "../auth/password-breach.service";
-import { AiEncryptionService } from "../ai/ai-encryption.service";
+import { EncryptionService } from "../common/encryption/encryption.service";
 import { hashToken } from "../auth/crypto.util";
 import { getRequestContext } from "../common/request-context";
 import { createScopedDbMocks } from "../test-helpers/scoped-db-testing";
@@ -128,7 +128,7 @@ describe("EmergencyAccessClaimController", () => {
         { provide: TokenService, useValue: tokenService },
         { provide: AuthService, useValue: authService },
         { provide: PasswordBreachService, useValue: passwordBreach },
-        { provide: AiEncryptionService, useValue: encryption },
+        { provide: EncryptionService, useValue: encryption },
         { provide: ConfigService, useValue: configService },
       ],
     }).compile();
@@ -528,7 +528,7 @@ describe("EmergencyAccessClaimController", () => {
           { provide: TokenService, useValue: tokenService },
           { provide: AuthService, useValue: authService },
           { provide: PasswordBreachService, useValue: passwordBreach },
-          { provide: AiEncryptionService, useValue: encryption },
+          { provide: EncryptionService, useValue: encryption },
           { provide: ConfigService, useValue: configService },
         ],
       }).compile();

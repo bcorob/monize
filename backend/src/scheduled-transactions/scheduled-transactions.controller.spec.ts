@@ -2,11 +2,13 @@ import { Test, TestingModule } from "@nestjs/testing";
 import { ScheduledTransactionsController } from "./scheduled-transactions.controller";
 import { ScheduledTransactionsService } from "./scheduled-transactions.service";
 import { DelegationService } from "../delegation/delegation.service";
+import { JointAccountsService } from "../delegation/joint-accounts.service";
 
 describe("ScheduledTransactionsController", () => {
   let controller: ScheduledTransactionsController;
   let mockService: Record<string, jest.Mock>;
   let delegationMock: Record<string, jest.Mock>;
+  let jointMock: Record<string, jest.Mock>;
   const mockReq = { user: { id: "user-1" } };
 
   beforeEach(async () => {
@@ -21,6 +23,7 @@ describe("ScheduledTransactionsController", () => {
       remove: jest.fn(),
       post: jest.fn(),
       skip: jest.fn(),
+      getLoanProjectionAnchor: jest.fn(),
       findOverrides: jest.fn(),
       hasOverrides: jest.fn(),
       findOverrideByDate: jest.fn(),
@@ -37,6 +40,18 @@ describe("ScheduledTransactionsController", () => {
         {
           provide: ScheduledTransactionsService,
           useValue: mockService,
+        },
+        {
+          // The anchor route falls back to joint access, as GET
+          // /accounts/:id/balance does, so a jointly shared loan is not
+          // reported as "has no scheduled payment".
+          provide: JointAccountsService,
+          useValue: (jointMock = {
+            jointAccountIdSetFor: jest
+              .fn()
+              .mockResolvedValue(new Set<string>()),
+            jointAccessFor: jest.fn(),
+          }),
         },
         {
           provide: DelegationService,
@@ -281,6 +296,78 @@ describe("ScheduledTransactionsController", () => {
 
       expect(result).toEqual(expected);
       expect(mockService.post).toHaveBeenCalledWith("user-1", "st-1", dto);
+    });
+  });
+
+  describe("getLoanProjectionAnchor()", () => {
+    it("delegates to service.getLoanProjectionAnchor with userId and accountId", async () => {
+      const expected = { nextDueDate: "2026-08-01", debt: 198500 };
+      mockService.getLoanProjectionAnchor.mockResolvedValue(expected);
+
+      const result = await controller.getLoanProjectionAnchor(
+        mockReq,
+        "acc-loan",
+      );
+
+      expect(result).toEqual(expected);
+      expect(mockService.getLoanProjectionAnchor).toHaveBeenCalledWith(
+        "user-1",
+        "acc-loan",
+      );
+    });
+  });
+
+  describe("getLoanProjectionAnchor() joint fallback", () => {
+    it("re-reads with the owner's scope for a jointly shared loan", async () => {
+      // The report's account list is a union of owned and jointly shared
+      // accounts. Under the caller's own scope a shared loan resolves to
+      // nothing, and {null, null} means "no scheduled payment" -- which the
+      // report reads as licence to project from today. Authorize, then read as
+      // the owner, exactly as GET /accounts/:id/balance does.
+      mockService.getLoanProjectionAnchor
+        .mockResolvedValueOnce({ nextDueDate: null, debt: null })
+        .mockResolvedValueOnce({ nextDueDate: "2026-08-01", debt: 198500 });
+      jointMock.jointAccountIdSetFor.mockResolvedValue(new Set(["acc-loan"]));
+      jointMock.jointAccessFor.mockResolvedValue({ ownerUserId: "owner-9" });
+
+      const result = await controller.getLoanProjectionAnchor(
+        mockReq,
+        "acc-loan",
+      );
+
+      expect(result).toEqual({ nextDueDate: "2026-08-01", debt: 198500 });
+      expect(mockService.getLoanProjectionAnchor).toHaveBeenLastCalledWith(
+        "owner-9",
+        "acc-loan",
+      );
+    });
+
+    it("does not reach for the owner's scope on an account nobody shared", async () => {
+      mockService.getLoanProjectionAnchor.mockResolvedValue({
+        nextDueDate: null,
+        debt: null,
+      });
+      jointMock.jointAccountIdSetFor.mockResolvedValue(new Set<string>());
+
+      const result = await controller.getLoanProjectionAnchor(
+        mockReq,
+        "acc-loan",
+      );
+
+      expect(result).toEqual({ nextDueDate: null, debt: null });
+      expect(jointMock.jointAccessFor).not.toHaveBeenCalled();
+    });
+
+    it("leaves an owned loan's answer alone", async () => {
+      mockService.getLoanProjectionAnchor.mockResolvedValue({
+        nextDueDate: "2026-08-01",
+        debt: 198500,
+      });
+
+      await controller.getLoanProjectionAnchor(mockReq, "acc-loan");
+
+      expect(jointMock.jointAccountIdSetFor).not.toHaveBeenCalled();
+      expect(mockService.getLoanProjectionAnchor).toHaveBeenCalledTimes(1);
     });
   });
 

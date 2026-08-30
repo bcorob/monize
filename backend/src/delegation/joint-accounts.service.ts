@@ -22,6 +22,7 @@ import {
   CrossOwnerAccessService,
 } from "./cross-owner-access.service";
 import { DelegateOperation } from "./decorators/delegate-access.decorator";
+import { LEDGER_MOVEMENT_PREDICATE } from "../common/ledger-balance.sql";
 
 /**
  * The single definition of which account types a joint grantee may WRITE to
@@ -208,8 +209,7 @@ export class JointAccountsService {
              FROM transactions t
              WHERE t.account_id = ANY($1)
                AND t.transaction_date > $2
-               AND (t.status IS NULL OR t.status != 'VOID')
-               AND t.parent_transaction_id IS NULL
+               AND ${LEDGER_MOVEMENT_PREDICATE}
              GROUP BY t.account_id`,
             [accountIds, today],
           ) as Promise<Array<{ accountId: string; futureSum: string }>>,
@@ -218,8 +218,7 @@ export class JointAccountsService {
                 COALESCE(a.opening_balance, 0) + COALESCE(SUM(t.amount), 0) as "currentBalance"
              FROM accounts a
              LEFT JOIN transactions t ON t.account_id = a.id
-               AND (t.status IS NULL OR t.status != 'VOID')
-               AND t.parent_transaction_id IS NULL
+               AND ${LEDGER_MOVEMENT_PREDICATE}
                AND t.transaction_date <= $2
              WHERE a.id = ANY($1)
              GROUP BY a.id, a.opening_balance`,

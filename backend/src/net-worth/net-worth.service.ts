@@ -27,6 +27,10 @@ import { applyActionToQuantity } from "../securities/investment-replay.util";
 import { formatDateYMDLocal } from "../common/date-utils";
 import { positionCloseAsOf, PricePoint } from "./position-price.util";
 import { preferredCurrency } from "../common/default-currency.util";
+import {
+  LEDGER_MOVEMENT_PREDICATE,
+  ledgerMovementPredicate,
+} from "../common/ledger-balance.sql";
 
 const LIABILITY_TYPES: AccountType[] = [
   AccountType.CREDIT_CARD,
@@ -1198,8 +1202,7 @@ export class NetWorthService {
             SELECT t.account_id, SUM(t.amount) as total
             FROM transactions t
             JOIN target_accounts ta ON ta.id = t.account_id
-            WHERE (t.status IS NULL OR t.status != 'VOID')
-              AND t.parent_transaction_id IS NULL
+            WHERE ${LEDGER_MOVEMENT_PREDICATE}
               AND t.transaction_date < $2
             GROUP BY t.account_id
           ),
@@ -1207,8 +1210,7 @@ export class NetWorthService {
             SELECT t.account_id, t.transaction_date::DATE as tx_date, SUM(t.amount) as total
             FROM transactions t
             JOIN target_accounts ta ON ta.id = t.account_id
-            WHERE (t.status IS NULL OR t.status != 'VOID')
-              AND t.parent_transaction_id IS NULL
+            WHERE ${LEDGER_MOVEMENT_PREDICATE}
               AND t.transaction_date >= $2
               AND t.transaction_date <= $3
             GROUP BY t.account_id, t.transaction_date::DATE
@@ -1737,8 +1739,7 @@ export class NetWorthService {
             SELECT t.account_id, MIN(t.transaction_date) AS d
               FROM transactions t
              WHERE t.account_id = ANY($1::UUID[])
-               AND (t.status IS NULL OR t.status != 'VOID')
-               AND t.parent_transaction_id IS NULL
+               AND ${LEDGER_MOVEMENT_PREDICATE}
              GROUP BY t.account_id
           ),
           first_inv AS (
@@ -1808,8 +1809,7 @@ export class NetWorthService {
           SELECT t.account_id, SUM(t.amount) as total
           FROM transactions t
           JOIN target_accounts ta ON ta.id = t.account_id
-          WHERE (t.status IS NULL OR t.status != 'VOID')
-            AND t.parent_transaction_id IS NULL
+          WHERE ${LEDGER_MOVEMENT_PREDICATE}
             AND t.transaction_date < $2
           GROUP BY t.account_id
         ),
@@ -1817,8 +1817,7 @@ export class NetWorthService {
           SELECT t.account_id, t.transaction_date::DATE as tx_date, SUM(t.amount) as total
           FROM transactions t
           JOIN target_accounts ta ON ta.id = t.account_id
-          WHERE (t.status IS NULL OR t.status != 'VOID')
-            AND t.parent_transaction_id IS NULL
+          WHERE ${LEDGER_MOVEMENT_PREDICATE}
             AND t.transaction_date >= $2
             AND t.transaction_date <= $3
           GROUP BY t.account_id, t.transaction_date::DATE
@@ -1859,8 +1858,7 @@ export class NetWorthService {
           FROM transactions t
           JOIN target_accounts ta ON ta.id = t.account_id
           CROSS JOIN bounds b
-          WHERE (t.status IS NULL OR t.status != 'VOID')
-            AND t.parent_transaction_id IS NULL
+          WHERE ${LEDGER_MOVEMENT_PREDICATE}
             AND t.transaction_date < b.start_m
           GROUP BY t.account_id
         ),
@@ -1870,8 +1868,7 @@ export class NetWorthService {
           FROM transactions t
           JOIN target_accounts ta ON ta.id = t.account_id
           CROSS JOIN bounds b
-          WHERE (t.status IS NULL OR t.status != 'VOID')
-            AND t.parent_transaction_id IS NULL
+          WHERE ${LEDGER_MOVEMENT_PREDICATE}
             AND t.transaction_date >= b.start_m
             AND t.transaction_date <= $3
           GROUP BY t.account_id, date_trunc('month', t.transaction_date)
@@ -1989,8 +1986,7 @@ export class NetWorthService {
       `SELECT MIN(transaction_date) as earliest
        FROM transactions
        WHERE account_id = $1
-         AND (status IS NULL OR status != 'VOID')
-         AND parent_transaction_id IS NULL`,
+         AND ${ledgerMovementPredicate("")}`,
       [account.id],
     );
 
@@ -2008,8 +2004,7 @@ export class NetWorthService {
                SUM(amount) as total
         FROM transactions
         WHERE account_id = $1
-          AND (status IS NULL OR status != 'VOID')
-          AND parent_transaction_id IS NULL
+          AND ${ledgerMovementPredicate("")}
           AND transaction_date <= CURRENT_DATE
         GROUP BY 1
       )
@@ -2070,8 +2065,7 @@ export class NetWorthService {
       `SELECT MIN(transaction_date) as earliest
        FROM transactions
        WHERE account_id = $1
-         AND (status IS NULL OR status != 'VOID')
-         AND parent_transaction_id IS NULL`,
+         AND ${ledgerMovementPredicate("")}`,
       [account.id],
     );
 
@@ -2098,8 +2092,7 @@ export class NetWorthService {
                SUM(amount) as total
         FROM transactions
         WHERE account_id = $1
-          AND (status IS NULL OR status != 'VOID')
-          AND parent_transaction_id IS NULL
+          AND ${ledgerMovementPredicate("")}
           AND transaction_date <= CURRENT_DATE
         GROUP BY 1
       )

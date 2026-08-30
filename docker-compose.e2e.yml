@@ -54,7 +54,10 @@ services:
       REGISTRATION_ENABLED: "true"
       FORCE_2FA: "false"
       DEMO_MODE: "false"
-      AI_ENCRYPTION_KEY: ""
+      # A real key, so the suite exercises the configuration every deployment
+      # should have: an E2E run that could not store a backup password would be
+      # testing the unencrypted fallback instead of the default path.
+      ENCRYPTION_KEY: test-encryption-key-for-ci-minimum-32-characters
       # Raise rate limits so a full suite of registrations/logins from one IP
       # doesn't trip the brute-force throttles. E2E-only; prod keeps defaults.
       RATE_LIMIT_MAX: "100000"

@@ -75,6 +75,13 @@ services:
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       EMAIL_FROM: ${EMAIL_FROM:-}
       # AI Integration (optional)
+      # Set one of these: everything stored encrypted at rest (AI provider keys,
+      # emergency-access credentials, the password automatic backups are
+      # encrypted with) needs it, and without it backups go out unencrypted. The
+      # backend warns on every boot while it is missing and a future release
+      # will require it. AI_ENCRYPTION_KEY is the former name and is still
+      # accepted, so an existing .env keeps working untouched.
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-}
       AI_ENCRYPTION_KEY: ${AI_ENCRYPTION_KEY:-}
       AI_DEFAULT_PROVIDER: ${AI_DEFAULT_PROVIDER:-}
       AI_DEFAULT_MODEL: ${AI_DEFAULT_MODEL:-}

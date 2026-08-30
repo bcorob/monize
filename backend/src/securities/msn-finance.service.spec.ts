@@ -1,9 +1,12 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { ConfigService } from "@nestjs/config";
 import { MsnFinanceService, msnInternals } from "./msn-finance.service";
+import { ProviderHealthService } from "../provider-health/provider-health.service";
+import { createTestProviderHealth } from "../test-helpers/provider-health-testing";
 
 describe("MsnFinanceService", () => {
   let service: MsnFinanceService;
+  let module: TestingModule;
   let originalFetch: typeof global.fetch;
 
   const createResponse = (body: unknown, ok = true, status = 200) =>
@@ -16,9 +19,15 @@ describe("MsnFinanceService", () => {
 
   beforeEach(async () => {
     originalFetch = global.fetch;
-    const module: TestingModule = await Test.createTestingModule({
+    module = await Test.createTestingModule({
       providers: [
         MsnFinanceService,
+        {
+          // The real breaker, so a test that drives this client to failure sees
+          // the same refusals production does.
+          provide: ProviderHealthService,
+          useValue: createTestProviderHealth(),
+        },
         {
           provide: ConfigService,
           useValue: {
@@ -114,6 +123,101 @@ describe("MsnFinanceService", () => {
       const second = await service.resolveInstrumentId("AAPL", "NASDAQ");
       expect(second).toBe("a1u3p2");
       expect((global.fetch as jest.Mock).mock.calls.length).toBe(1);
+    });
+
+    it("does not cache a null the breaker produced", async () => {
+      // A refusal and an empty answer are the same `null` from httpGetJson, and
+      // this cache holds for 24 hours: caching a refusal would let one price
+      // sweep during a two-minute outage poison every symbol for a day. Before
+      // the breaker each poisoning at least cost a real 10-second timeout, so
+      // it could not fan out.
+      const dnsFailure = () => {
+        const error = new TypeError("fetch failed");
+        Object.assign(error, {
+          cause: Object.assign(new Error("getaddrinfo EAI_AGAIN"), {
+            code: "EAI_AGAIN",
+          }),
+        });
+        return error;
+      };
+      // A fresh error per call, as undici produces: the health service counts
+      // one error object once, so a shared instance would report five failures
+      // as one and the breaker would never open.
+      global.fetch = jest.fn(() => Promise.reject(dnsFailure()));
+
+      // Drive the breaker open through this client's own door.
+      for (let i = 0; i < 6; i++) {
+        expect(
+          await service.resolveInstrumentId(`SYM${i}`, "NASDAQ"),
+        ).toBeNull();
+      }
+      expect(await service.resolveInstrumentId("AAPL", "NASDAQ")).toBeNull();
+
+      // The provider comes back; the symbol must be resolvable again, not
+      // remembered as absent.
+      global.fetch = jest.fn().mockReturnValue(
+        createResponse({
+          data: {
+            stocks: [{ Symbol: "AAPL", SecId: "a1u3p2", Exchange: "XNAS" }],
+          },
+        }),
+      );
+      const health = module.get(ProviderHealthService);
+      health.recordSuccess("msn_finance");
+
+      expect(await service.resolveInstrumentId("AAPL", "NASDAQ")).toBe(
+        "a1u3p2",
+      );
+    });
+
+    it("does not cache a null a transport failure produced, below the threshold", async () => {
+      // The breaker opens after five consecutive failures; the four before it
+      // produce exactly the same uninformative `null`, and caching those for 24
+      // hours is the same poisoning one step earlier.
+      const dnsFailure = () => {
+        const error = new TypeError("fetch failed");
+        Object.assign(error, {
+          cause: Object.assign(new Error("getaddrinfo EAI_AGAIN"), {
+            code: "EAI_AGAIN",
+          }),
+        });
+        return error;
+      };
+      // A fresh error per call, as undici produces: the health service counts
+      // one error object once, so a shared instance would report five failures
+      // as one and the breaker would never open.
+      global.fetch = jest.fn(() => Promise.reject(dnsFailure()));
+
+      expect(await service.resolveInstrumentId("AAPL", "NASDAQ")).toBeNull();
+      expect(
+        module.get(ProviderHealthService).snapshot("msn_finance").state,
+      ).toBe("closed");
+
+      global.fetch = jest.fn().mockReturnValue(
+        createResponse({
+          data: {
+            stocks: [{ Symbol: "AAPL", SecId: "a1u3p2", Exchange: "XNAS" }],
+          },
+        }),
+      );
+      expect(await service.resolveInstrumentId("AAPL", "NASDAQ")).toBe(
+        "a1u3p2",
+      );
+    });
+
+    it('still caches a genuine "no such instrument" answer', async () => {
+      // The cache has to keep working, or every unknown symbol re-asks MSN
+      // twice on every price refresh.
+      global.fetch = jest
+        .fn()
+        .mockReturnValue(createResponse({ data: { stocks: [] } }));
+
+      expect(await service.resolveInstrumentId("NOPE", "NASDAQ")).toBeNull();
+      const callsAfterFirst = (global.fetch as jest.Mock).mock.calls.length;
+      expect(await service.resolveInstrumentId("NOPE", "NASDAQ")).toBeNull();
+      expect((global.fetch as jest.Mock).mock.calls.length).toBe(
+        callsAfterFirst,
+      );
     });
 
     it("prefers the exchange match when multiple candidates are returned", async () => {
@@ -898,6 +1002,10 @@ describe("MsnFinanceService", () => {
         providers: [
           MsnFinanceService,
           {
+            provide: ProviderHealthService,
+            useValue: createTestProviderHealth(),
+          },
+          {
             provide: ConfigService,
             useValue: { get: () => "   " },
           },
@@ -909,7 +1017,13 @@ describe("MsnFinanceService", () => {
 
     it("returns false when ConfigService not provided", async () => {
       const module: TestingModule = await Test.createTestingModule({
-        providers: [MsnFinanceService],
+        providers: [
+          MsnFinanceService,
+          {
+            provide: ProviderHealthService,
+            useValue: createTestProviderHealth(),
+          },
+        ],
       }).compile();
       const svc = module.get(MsnFinanceService);
       expect(svc.isApiKeyConfigured()).toBe(false);
@@ -921,6 +1035,10 @@ describe("MsnFinanceService", () => {
       const module: TestingModule = await Test.createTestingModule({
         providers: [
           MsnFinanceService,
+          {
+            provide: ProviderHealthService,
+            useValue: createTestProviderHealth(),
+          },
           {
             provide: ConfigService,
             useValue: { get: () => undefined },

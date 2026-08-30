@@ -38,7 +38,8 @@
     "ambiguousBrokerage": "「{{ query }}」は複数の証券口座に一致します: {{ list }}。正確な口座名を使用してください。",
     "unknownInvestmentAccount": "不明な口座: {{ name }}。ユーザーの口座リストから正確な名前を使用してください。",
     "notACreditCard": "請求サイクルはクレジットカードの勘定科目でのみ利用できます",
-    "noStatementSettlementDay": "このクレジットカードには請求締め日が設定されていません"
+    "noStatementSettlementDay": "このクレジットカードには請求締め日が設定されていません",
+    "loanLedgerUnreadable": "このローンの残高を読み取れませんでした。もう一度お試しください。"
   },
   "actionHistory": {
     "nothingToUndo": "元に戻すものがありません",
@@ -76,8 +77,8 @@
     "crossOwnerTransferUnsupported": "この振替には他のユーザーの口座が関係しており、アシスタントはまだ編集や削除ができません。代わりに取引画面を使用してください。",
     "providerConfigNotFound": "AIプロバイダーの設定が見つかりません",
     "maxProvidersExceeded": "ユーザーあたり最大 {{ maxProvidersPerUser }} 件のAIプロバイダー設定",
-    "encryptionKeyNotConfigured": "AI_ENCRYPTION_KEY が設定されていません。APIキーを安全に保存できません。",
-    "apiKeyUndecryptable": "保存されている API キーをこのサーバーでは読み取れません。バックアップを別のインスタンスに復元した場合や、AI_ENCRYPTION_KEY が変更された場合に発生します。API キーを入力し直すと解消します。",
+    "encryptionKeyNotConfigured": "ENCRYPTION_KEY が設定されていません。APIキーを安全に保存できません。",
+    "apiKeyUndecryptable": "保存されている API キーをこのサーバーでは読み取れません。バックアップを別のインスタンスに復元した場合や、ENCRYPTION_KEY が変更された場合に発生します。API キーを入力し直すと解消します。",
     "noActiveProviders": "有効なAIプロバイダーが設定されていません。AI設定でプロバイダーを設定してください。",
     "allProvidersFailed": "すべてのAIプロバイダーが失敗しました。プロバイダーの設定を確認して再試行してください。",
     "noToolUseProvider": "ツール使用をサポートするAIプロバイダーが設定されていません。自然言語クエリにはAnthropic、OpenAI、またはOllamaが必要です。AI設定で設定してください。",
@@ -187,8 +188,10 @@
     "unsupportedBackupVersion": "サポートされていないバックアップバージョン：{{ version }}。期待値：{{ expected }}",
     "missingExportedAt": "無効なバックアップ形式：exportedAt がありません",
     "tableNotAllowed": "テーブル {{ table }} はバックアップの復元では許可されていません",
-    "encryptionNotConfigured": "サーバーが暗号化用に設定されていません（AI_ENCRYPTION_KEY がありません）",
+    "encryptionNotConfigured": "サーバーは暗号化用に構成されていません（JWT_SECRET が未設定または短すぎます）",
     "backupPasswordOidcOnly": "バックアップパスワードはOIDCユーザーのみ設定可能です。ローカルユーザーはログインパスワードを使用します",
+    "backupPasswordLocalOnly": "このアカウントにはバックアップの暗号化に使えるログインパスワードがありません。代わりにバックアップパスワードを設定してください",
+    "loginPasswordIncorrect": "現在のログインパスワードと一致しません",
     "backupPasswordTooShort": "バックアップパスワードは少なくとも {{ minLength }} 文字必要です",
     "backupPasswordBreached": "このパスワードはデータ侵害で発見されています。別のパスワードを選択してください。",
     "restoreBodyMustBeFile": "リクエストボディはバックアップファイルでなければなりません",
@@ -282,8 +285,8 @@
   },
   "emergencyAccess": {
     "smtpNotConfigured": "メールが設定されていません。SMTPが設定されるまで緊急アクセスは有効にできません。",
-    "encryptionNotConfigured": "暗号化キーが設定されていません。AI_ENCRYPTION_KEY が設定されるまでフリーフォームメッセージを安全に保存できません。",
-    "encryptionRequiredToEnable": "資格情報の暗号化が設定されていません。付与では各連絡先のアクセスリンクを安全に保存する必要があるため、AI_ENCRYPTION_KEY が設定されるまで緊急アクセスは有効にできません。",
+    "encryptionNotConfigured": "暗号化キーが設定されていません。ENCRYPTION_KEY が設定されるまでフリーフォームメッセージを安全に保存できません。",
+    "encryptionRequiredToEnable": "資格情報の暗号化が設定されていません。付与では各連絡先のアクセスリンクを安全に保存する必要があるため、ENCRYPTION_KEY が設定されるまで緊急アクセスは有効にできません。",
     "contactEmailExists": "このメールアドレスの緊急連絡先はすでに存在します。",
     "contactNotFound": "連絡先が見つかりません",
     "notConfigured": "緊急アクセスが設定されていません",
@@ -384,7 +387,8 @@
     "splitOverrideRequiresAmount": "分割上書きを作成するには金額が必要です",
     "overrideNotFound": "ID {{ overrideId }} の上書きが見つかりません",
     "updateSplitOverrideRequiresAmount": "分割上書きには金額が必要です",
-    "dateMustBeYMD": "date は YYYY-MM-DD 形式でなければなりません"
+    "dateMustBeYMD": "date は YYYY-MM-DD 形式でなければなりません",
+    "loanLedgerUnreadable": "元帳の残高を読み取れなかったため、このローン支払いを計算できませんでした。もう一度お試しください。"
   },
   "securities": {
     "exchangeRateUnavailable": "取引日における {{ from }} -> {{ to }} の為替レートを特定できませんでした。現金口座への計上が正しくなるよう、明示的な exchangeRate を指定してください。",

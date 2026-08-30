@@ -163,5 +163,28 @@
     "body1": "[XX-Because your account had been inactive, your designated emergency contacts were sent links to take over your account. You have now signed back in, so <strong>those links have been revoked</strong> and the safeguard has been re-armed.-XX]",
     "body2": "[XX-If this was expected, no action is needed. If you did not expect this, review your sign-in activity and your emergency-access settings.-XX]",
     "button": "[XX-Review Emergency Access-XX]"
+  },
+  "providerOutage": {
+    "subject": "[XX-Monize: {{ provider }} is not responding-XX]",
+    "heading": "[XX-Market data provider unavailable-XX]",
+    "greeting": "[XX-Hi {{ name }},-XX]",
+    "intro": "[XX-Monize has not been able to reach <strong>{{ provider }}</strong> since {{ since }} ({{ duration }}). Requests to it are suspended for now and retried at widening intervals.-XX]",
+    "labelFailures": "[XX-Failed attempts-XX]",
+    "labelLastError": "[XX-Last error-XX]",
+    "labelLastSuccess": "[XX-Last successful response-XX]",
+    "valueNever": "[XX-never-XX]",
+    "valueUnknown": "[XX-unknown-XX]",
+    "impact": "[XX-Prices, charts and index comparisons that depend on this provider may be missing or out of date until it answers again. Nothing recorded in Monize has been lost.-XX]",
+    "whatToCheck": "[XX-If the provider itself is up, check this server's outbound network access and DNS -- a container that cannot resolve or reach the provider fails exactly this way.-XX]",
+    "throttleNote": "[XX-You will get one more email when it recovers. Alerts about the same provider are sent at most once every {{ hours }} hours, so a provider that keeps flapping cannot fill your inbox.-XX]",
+    "durationMinutes": "[XX-{{ minutes }} min-XX]",
+    "durationHoursMinutes": "[XX-{{ hours }} h {{ minutes }} min-XX]"
+  },
+  "providerRecovery": {
+    "subject": "[XX-Monize: {{ provider }} is answering again-XX]",
+    "heading": "[XX-Market data provider is answering again-XX]",
+    "greeting": "[XX-Hi {{ name }},-XX]",
+    "intro": "[XX-<strong>{{ provider }}</strong> answered again at {{ restoredAt }}. The outage lasted {{ duration }}.-XX]",
+    "backfill": "[XX-Prices and index history missed during the outage are picked up by the next scheduled refresh; no action is needed.-XX]"
   }
 }

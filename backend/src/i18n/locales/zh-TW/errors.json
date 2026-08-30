@@ -38,7 +38,8 @@
     "ambiguousBrokerage": "「{{ query }}」符合多個券商帳戶：{{ list }}。請使用準確的帳戶名稱。",
     "unknownInvestmentAccount": "未知帳戶：{{ name }}。請使用使用者帳戶清單中的準確名稱。",
     "notACreditCard": "對帳單週期僅適用於信用卡科目",
-    "noStatementSettlementDay": "此信用卡未設定對帳單結算日"
+    "noStatementSettlementDay": "此信用卡未設定對帳單結算日",
+    "loanLedgerUnreadable": "無法讀取此貸款的餘額。請重試。"
   },
   "actionHistory": {
     "nothingToUndo": "沒有可復原的操作",
@@ -76,8 +77,8 @@
     "crossOwnerTransferUnsupported": "此轉帳涉及其他使用者的科目，助理目前無法編輯或刪除。請改用交易頁面。",
     "providerConfigNotFound": "找不到 AI 提供者設定",
     "maxProvidersExceeded": "每位使用者最多 {{ maxProvidersPerUser }} 個 AI 提供者設定",
-    "encryptionKeyNotConfigured": "未設定 AI_ENCRYPTION_KEY。無法安全儲存 API 金鑰。",
-    "apiKeyUndecryptable": "此伺服器無法讀取已儲存的 API 金鑰。將備份還原到其他執行個體後，或 AI_ENCRYPTION_KEY 變更後，都會發生這種情況。請重新輸入 API 金鑰以解決。",
+    "encryptionKeyNotConfigured": "未設定 ENCRYPTION_KEY。無法安全儲存 API 金鑰。",
+    "apiKeyUndecryptable": "此伺服器無法讀取已儲存的 API 金鑰。將備份還原到其他執行個體後，或 ENCRYPTION_KEY 變更後，都會發生這種情況。請重新輸入 API 金鑰以解決。",
     "noActiveProviders": "未設定任何已啟用的 AI 提供者。請在 AI 設定中設定提供者。",
     "allProvidersFailed": "所有 AI 提供者均失敗。請檢查您的提供者設定後再試。",
     "noToolUseProvider": "未設定支援工具使用的 AI 提供者。自然語言查詢需要 Anthropic、OpenAI 或 Ollama。請在 AI 設定中設定一個。",
@@ -187,8 +188,10 @@
     "unsupportedBackupVersion": "不支援的備份版本：{{ version }}。預期版本：{{ expected }}",
     "missingExportedAt": "無效的備份格式：缺少 exportedAt",
     "tableNotAllowed": "備份還原不允許資料表 {{ table }}",
-    "encryptionNotConfigured": "伺服器未設定加密功能（缺少 AI_ENCRYPTION_KEY）",
+    "encryptionNotConfigured": "伺服器未設定加密（缺少 JWT_SECRET 或長度不足）",
     "backupPasswordOidcOnly": "備份密碼僅適用於 OIDC 使用者；本機使用者使用其登入密碼",
+    "backupPasswordLocalOnly": "此帳戶沒有可用於加密備份的登入密碼；請改為設定備份密碼",
+    "loginPasswordIncorrect": "這不是您目前的登入密碼",
     "backupPasswordTooShort": "備份密碼至少需要 {{ minLength }} 個字元",
     "backupPasswordBreached": "此密碼已出現在資料外洩事件中。請選擇其他密碼。",
     "restoreBodyMustBeFile": "請求主體必須是備份檔案",
@@ -282,8 +285,8 @@
   },
   "emergencyAccess": {
     "smtpNotConfigured": "未設定電子郵件。在設定 SMTP 之前，無法啟用緊急存取。",
-    "encryptionNotConfigured": "未設定加密金鑰。在設定 AI_ENCRYPTION_KEY 之前，無法安全儲存自由格式訊息。",
-    "encryptionRequiredToEnable": "未設定憑證加密。在設定 AI_ENCRYPTION_KEY 之前，無法啟用緊急存取，因為授予存取權時必須安全地儲存每位聯絡人的存取連結。",
+    "encryptionNotConfigured": "未設定加密金鑰。在設定 ENCRYPTION_KEY 之前，無法安全儲存自由格式訊息。",
+    "encryptionRequiredToEnable": "未設定憑證加密。在設定 ENCRYPTION_KEY 之前，無法啟用緊急存取，因為授予存取權時必須安全地儲存每位聯絡人的存取連結。",
     "contactEmailExists": "已有使用此電子郵件的緊急聯絡人。",
     "contactNotFound": "找不到聯絡人",
     "notConfigured": "未設定緊急存取",
@@ -384,7 +387,8 @@
     "splitOverrideRequiresAmount": "建立分割覆蓋時需要金額",
     "overrideNotFound": "找不到 ID 為 {{ overrideId }} 的覆蓋設定",
     "updateSplitOverrideRequiresAmount": "分割覆蓋需要金額",
-    "dateMustBeYMD": "date 必須為 YYYY-MM-DD 格式"
+    "dateMustBeYMD": "date 必須為 YYYY-MM-DD 格式",
+    "loanLedgerUnreadable": "無法計算此貸款還款，因為無法讀取其帳簿餘額。請重試。"
   },
   "securities": {
     "exchangeRateUnavailable": "無法確定交易日 {{ from }} -> {{ to }} 的匯率。請提供明確的 exchangeRate，以便現金帳戶的記帳正確。",

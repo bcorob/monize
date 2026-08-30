@@ -16,7 +16,7 @@ import { BackupRestoreDatabaseService } from "@/backup/backup-restore-database.s
 import { NetWorthService } from "@/net-worth/net-worth.service";
 import { User } from "@/users/entities/user.entity";
 import { OidcReauthService } from "@/auth/oidc/oidc-reauth.service";
-import { AiEncryptionService } from "@/ai/ai-encryption.service";
+import { EncryptionService } from "../../src/common/encryption/encryption.service";
 import { DatabaseStorageProvider } from "@/attachments/storage/database-storage.provider";
 import { ATTACHMENT_STORAGE_PROVIDER } from "@/attachments/storage/attachment-storage.interface";
 import { JobClaimService } from "@/common/jobs/job-claim.service";
@@ -111,7 +111,7 @@ describe("Backup export/restore round-trip (integration)", () => {
         UserMaintenanceService,
         // Only consulted for backups encrypted with a stored password; the
         // round-trip tests supply the password explicitly instead.
-        { provide: AiEncryptionService, useValue: { decrypt: () => "" } },
+        { provide: EncryptionService, useValue: { decrypt: () => "" } },
         // The real database-backed provider, which the completeness cases below
         // need: their whole point is that Postgres computes the digest the
         // export judges, and a double would answer for it. It also needs no

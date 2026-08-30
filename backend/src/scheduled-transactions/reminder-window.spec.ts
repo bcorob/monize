@@ -101,7 +101,7 @@ describe("reminder window", () => {
     it("carries the same ceiling as the code, in both directions", () => {
       // The DTO is the API's door and the CHECK is the column's; a bound written
       // twice drifts, so the number is asserted against the schema rather than
-      // trusted. `database/migrations/165_clamp_reminder_days_before.sql` adds the
+      // trusted. `database/migrations/167_clamp_reminder_days_before.sql` adds the
       // same constraint to an existing database and normalizes the rows written
       // before it -- without that, a legacy row above the ceiling made every later
       // save of that schedule fail validation.
@@ -116,7 +116,7 @@ describe("reminder window", () => {
       const migration = readFileSync(
         join(
           requireRepoRoot(findRepoRoot(__dirname)),
-          "database/migrations/165_clamp_reminder_days_before.sql",
+          "database/migrations/167_clamp_reminder_days_before.sql",
         ),
         "utf8",
       );

@@ -18,7 +18,10 @@ import { sumConverted, combineTotals } from '@/lib/currency-total';
 import { PartialTotal } from '@/components/ui/PartialTotal';
 import { InfoTooltip } from '@/components/ui/InfoTooltip';
 import { useReportData } from '@/hooks/useReportData';
-import { CHART_COLOURS } from '@/lib/chart-colours';
+import {
+  CHART_COLOURS_ASSETS,
+  CHART_COLOURS_LIABILITIES,
+} from '@/lib/chart-colours';
 import { ReportError } from '@/components/reports/ReportError';
 import {
   AccountBalancesControls,
@@ -267,17 +270,25 @@ export function AccountBalancesReport() {
     }));
   }, [accounts, accountTypeLabels]);
 
+  /** The signed value in the display currency; null when unknown. */
+  const signedDisplayValue = useCallback(
+    (entry: LogicalAccount): number | null => {
+      if (entry.combinedValue === null) return null;
+      return convertToDisplay(entry.combinedValue, entry.primary.currencyCode);
+    },
+    [convertToDisplay],
+  );
+
   /** The figure a row prints, in the display currency; null when unknown. */
   const displayValue = useCallback(
     (entry: LogicalAccount): number | null => {
-      if (entry.combinedValue === null) return null;
-      const converted = convertToDisplay(entry.combinedValue, entry.primary.currencyCode);
+      const converted = signedDisplayValue(entry);
       if (converted === null) return null;
       return isLiabilityAccountType(entry.primary.accountType)
         ? Math.abs(converted)
         : converted;
     },
-    [convertToDisplay],
+    [signedDisplayValue],
   );
 
   const groups = useMemo(
@@ -416,40 +427,81 @@ export function AccountBalancesReport() {
     [convertToDisplay],
   );
 
+  /**
+   * A pie can only size a slice from a magnitude, so the sign travels beside
+   * it: `signedValue` is what the slice *is* (a liability slice is money owed,
+   * not money held), and the two sides draw from separate palettes so their
+   * accounting role survives the colour cycling (issue #1243).
+   */
   const chartData = useMemo(() => {
-    const data: Array<{ name: string; value: number; color: string }> = [];
+    const data: Array<{
+      name: string;
+      value: number;
+      signedValue: number;
+      color: string;
+    }> = [];
+    let assetIdx = 0;
+    let liabilityIdx = 0;
+    const push = (name: string, rawSignedValue: number) => {
+      // At the storage precision: a group netting to a floating-point epsilon
+      // is a zero, not a sliver of a slice with a $0.00 legend row.
+      const signedValue = Math.round(rawSignedValue * 10000) / 10000;
+      // A zero-size slice reads as a measured zero, so it is not drawn.
+      if (signedValue === 0) return;
+      const color =
+        signedValue < 0
+          ? CHART_COLOURS_LIABILITIES[liabilityIdx++ % CHART_COLOURS_LIABILITIES.length]
+          : CHART_COLOURS_ASSETS[assetIdx++ % CHART_COLOURS_ASSETS.length];
+      data.push({ name, value: Math.abs(signedValue), signedValue, color });
+    };
     if (groupBy === 'none') {
-      visibleAccounts.forEach((entry, idx) => {
-        const converted = displayValue(entry);
+      for (const entry of visibleAccounts) {
+        const converted = signedDisplayValue(entry);
         // No value, no slice: a slice sized from an unconvertible amount is in
-        // the wrong currency, and a zero-size one reads as a measured zero.
-        if (converted === null || Math.abs(converted) === 0) return;
-        data.push({
-          name: entry.displayName,
-          value: Math.abs(converted),
-          color: CHART_COLOURS[idx % CHART_COLOURS.length],
-        });
-      });
+        // the wrong currency.
+        if (converted === null) continue;
+        push(entry.displayName, converted);
+      }
     } else {
-      groups.forEach((group, idx) => {
-        const total = group.entries.reduce((sum, entry) => {
-          const converted = displayValue(entry);
-          return converted === null ? sum : sum + Math.abs(converted);
+      for (const group of groups) {
+        // A group can hold both signs (an institution with a chequing account
+        // and a mortgage), so its slice is the signed net -- the same figure
+        // the table prints for that group -- never the sum of magnitudes.
+        const signedTotal = group.entries.reduce((sum, entry) => {
+          const converted = signedDisplayValue(entry);
+          return converted === null ? sum : sum + converted;
         }, 0);
-        if (total <= 0) return;
-        data.push({
-          name: groupLabel(group.key),
-          value: total,
-          color: CHART_COLOURS[idx % CHART_COLOURS.length],
-        });
-      });
+        push(groupLabel(group.key), signedTotal);
+      }
     }
     return data.sort((a, b) => b.value - a.value);
-  }, [groupBy, groups, visibleAccounts, displayValue, groupLabel]);
+  }, [groupBy, groups, visibleAccounts, signedDisplayValue, groupLabel]);
 
+  /**
+   * The pie's denominator: the sum of slice magnitudes, which is what each
+   * percentage is a share of. With liabilities on screen this is gross
+   * exposure, not a total of anything -- the footer prints the signed net
+   * worth instead, and this figure stays internal.
+   */
   const chartTotal = useMemo(
     () => chartData.reduce((sum, d) => sum + d.value, 0),
     [chartData],
+  );
+
+  /**
+   * Whether anything on the chart is on the debt side of zero. Decided from
+   * the signed components rather than the slices, because a mixed group can
+   * net positive while still containing a liability -- its slice is then a net
+   * figure, and labelling the footer "Total" over a sum of nets would present
+   * net worth under a name that hides the netting.
+   */
+  const chartHasLiabilities = useMemo(
+    () =>
+      visibleAccounts.some((entry) => {
+        const converted = signedDisplayValue(entry);
+        return converted !== null && converted < 0;
+      }),
+    [visibleAccounts, signedDisplayValue],
   );
 
   const CustomTooltip = ({
@@ -457,7 +509,7 @@ export function AccountBalancesReport() {
     payload,
   }: {
     active?: boolean;
-    payload?: Array<{ payload: { name: string; value: number } }>;
+    payload?: Array<{ payload: { name: string; value: number; signedValue?: number } }>;
   }) => {
     if (active && payload?.length) {
       const data = payload[0].payload;
@@ -466,7 +518,9 @@ export function AccountBalancesReport() {
         <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3">
           <p className="font-medium text-gray-900 dark:text-gray-100">{data.name}</p>
           <p className="text-gray-600 dark:text-gray-400">
-            {formatCurrency(data.value, displayCurrency)} ({pct}%)
+            {/* The signed amount: a liability slice is money owed, and the
+                minus sign is what says so in text. */}
+            {formatCurrency(data.signedValue ?? data.value, displayCurrency)} ({pct}%)
           </p>
         </div>
       );
@@ -692,23 +746,58 @@ export function AccountBalancesReport() {
                 {chartData.map((item, index) => {
                   const pct = chartTotal > 0 ? ((item.value / chartTotal) * 100).toFixed(1) : '0.0';
                   return (
-                    <div key={index} className="flex items-center gap-2 text-sm">
+                    <div
+                      key={index}
+                      className="flex items-center gap-2 text-sm"
+                      data-testid="chart-legend-item"
+                    >
                       <div
                         className="w-3 h-3 rounded-full flex-shrink-0"
                         style={{ backgroundColor: item.color }}
                       />
                       <span className="text-gray-600 dark:text-gray-400 truncate">{item.name}</span>
-                      <span className="text-gray-900 dark:text-gray-100 ml-auto whitespace-nowrap">{pct}%</span>
+                      {/* Signed, so a liability's role is stated in text, not
+                          only in the palette. */}
+                      <span className="text-gray-900 dark:text-gray-100 ml-auto whitespace-nowrap">
+                        {formatCurrency(item.signedValue, displayCurrency)} ({pct}%)
+                      </span>
                     </div>
                   );
                 })}
               </div>
 
+              {/* With liabilities in the mix the sum of slice magnitudes is
+                  gross exposure, not a total -- the honest footer figure is
+                  the signed net worth, matching the summary card above,
+                  partial marker included. */}
               <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 text-center">
-                <div className="text-sm text-gray-500 dark:text-gray-400">{t('accountBalances.total')}</div>
-                <div className="font-semibold text-gray-900 dark:text-gray-100">
-                  {formatCurrency(chartTotal, displayCurrency)}
-                </div>
+                {chartHasLiabilities ? (
+                  <>
+                    <div className="text-sm text-gray-500 dark:text-gray-400">
+                      {t('accountBalances.netWorth')}
+                    </div>
+                    <div
+                      className="font-semibold text-gray-900 dark:text-gray-100"
+                      data-testid="chart-net-worth"
+                    >
+                      <PartialTotal total={totals.netWorth} displayCurrency={displayCurrency}>
+                        {formatCurrency(totals.netWorth.value, displayCurrency)}
+                      </PartialTotal>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-sm text-gray-500 dark:text-gray-400">
+                      {t('accountBalances.total')}
+                    </div>
+                    <div
+                      className="font-semibold text-gray-900 dark:text-gray-100"
+                      data-testid="chart-total"
+                    >
+                      {formatCurrency(chartTotal, displayCurrency)}
+                    </div>
+                  </>
+                )}
               </div>
             </>
           )}

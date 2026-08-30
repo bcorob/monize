@@ -27,6 +27,15 @@ interface LoanSummaryCardsProps {
    * loans that book interest separately holds only the principal part.
    */
   currentInstallment: number | null;
+  /**
+   * The rate in effect, resolved from the rate history the projection also uses
+   * (`resolveCurrentLoanTerms`) -- NOT `account.interestRate`, which recording a
+   * rate change deliberately never writes and which is therefore the OLD rate on
+   * any loan whose rate was changed through the rate-history UI. Showing the
+   * scalar here put "5%" on the card beside a payoff the projection had refused
+   * at the real 12%.
+   */
+  currentAnnualRate: number | null;
   /** Projection from the current balance; null when the loan can't project */
   baseline: LoanScheduleResult | null;
 }
@@ -39,6 +48,7 @@ export function LoanSummaryCards({
   account,
   startingBalance,
   currentInstallment,
+  currentAnnualRate,
   baseline,
 }: LoanSummaryCardsProps) {
   const t = useTranslations('accounts');
@@ -58,13 +68,20 @@ export function LoanSummaryCards({
   // was the worst of both: widen the guard and the call takes the semi-annual
   // branch for a US mortgage, on which the frequency is ignored anyway.
   const isCanadianFixed = account.isCanadianMortgage && !account.isVariableRate;
+  // Both halves of this line were changed independently and both are needed.
+  // From upstream: derive through the shared `effectiveAnnualRate` rather than a
+  // third inline copy of the compounding convention (INV-LOAN-003), and test
+  // `!= null` rather than truthiness so a known 0.000% is not reported as
+  // "could not be worked out". From this branch: the rate is the RESOLVED one,
+  // not `account.interestRate` -- the scalar a rate-change mutation deliberately
+  // never writes, so on any loan whose rate was changed through the rate-history
+  // UI it is the old rate, and the note would compound a rate nobody pays. The
+  // card's own value directly below reads `currentAnnualRate`, so taking the
+  // scalar here would also make the headline and its note disagree.
   const effectiveRate =
-    // `!= null`, not truthiness: the card above prints `0%` from
-    // `account.interestRate != null`, so suppressing the effective-rate note for
-    // a 0% mortgage treated a known 0.000% as "could not be worked out".
-    isCanadianFixed && account.interestRate != null
+    isCanadianFixed && currentAnnualRate != null
       ? effectiveAnnualRate(
-          account.interestRate,
+          currentAnnualRate,
           getPeriodsPerYear((account.paymentFrequency ?? 'MONTHLY') as ScheduleFrequency),
           account.isCanadianMortgage ?? false,
           account.isVariableRate ?? false,
@@ -75,13 +92,20 @@ export function LoanSummaryCards({
     ? t(`loanDetail.frequency.${account.paymentFrequency}` as Parameters<typeof t>[0])
     : null;
 
-  // The stored paymentAmount is often principal-only (separately-booked
-  // interest) and stale; prefer the real installment derived from history.
+  // No `?? account.paymentAmount` here any more, and its absence is the point:
+  // `resolveCurrentLoanTerms` -- which produced `currentInstallment` -- already
+  // ranks that scalar as its last candidate, so a fallback to it here was a
+  // SECOND place the payment gets decided. Provably a no-op today (the resolver
+  // returns null only when the scalar is itself absent or non-positive, and
+  // `deriveLoanFigures` maps a non-positive installment to null regardless), but
+  // one decision in one place is the rule this work exists to establish, and a
+  // redundant fallback reads as a policy the card is entitled to have.
+  //
   // `deriveLoanFigures` decides when each figure is known -- the same decision
   // the transactions Details sidebar shows, made once so the two cannot drift.
   const figures = deriveLoanFigures({
     currentBalance: account.currentBalance,
-    currentInstallment: currentInstallment ?? account.paymentAmount ?? null,
+    currentInstallment,
     baseline,
   });
 
@@ -101,7 +125,10 @@ export function LoanSummaryCards({
     },
     {
       label: t('loanDetail.summary.interestRate'),
-      value: account.interestRate != null ? `${account.interestRate}%` : t('loanDetail.summary.notSet'),
+      value:
+        currentAnnualRate != null
+          ? `${currentAnnualRate}%`
+          : t('loanDetail.summary.notSet'),
       note:
         effectiveRate != null
           ? t('loanDetail.summary.effectiveRate', { rate: effectiveRate.toFixed(3) })

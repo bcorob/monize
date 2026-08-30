@@ -163,5 +163,28 @@
     "body1": "Omdat je account inactief was, zijn je aangewezen noodcontacten links gestuurd om je account over te nemen. Je hebt je nu weer aangemeld, dus <strong>die links zijn ingetrokken</strong> en de beveiliging is opnieuw geactiveerd.",
     "body2": "Als dit verwacht was, hoef je niets te doen. Als je dit niet verwachtte, controleer dan je aanmeldingsactiviteit en je noodtoeganginstellingen.",
     "button": "Noodtoegang bekijken"
+  },
+  "providerOutage": {
+    "subject": "Monize: {{ provider }} reageert niet",
+    "heading": "Marktdataprovider niet beschikbaar",
+    "greeting": "Hoi {{ name }},",
+    "intro": "Monize kan <strong>{{ provider }}</strong> sinds {{ since }} ({{ duration }}) niet bereiken. Aanvragen naar deze provider zijn voorlopig opgeschort en worden met steeds langere tussenpozen opnieuw geprobeerd.",
+    "labelFailures": "Mislukte pogingen",
+    "labelLastError": "Laatste fout",
+    "labelLastSuccess": "Laatste geslaagde reactie",
+    "valueNever": "nooit",
+    "valueUnknown": "onbekend",
+    "impact": "Koersen, grafieken en indexvergelijkingen die van deze provider afhangen kunnen ontbreken of verouderd zijn totdat hij weer reageert. Niets van wat in Monize is vastgelegd, is verloren.",
+    "whatToCheck": "Als de provider zelf werkt, controleer dan de uitgaande netwerktoegang en DNS van deze server -- een container die de provider niet kan opzoeken of bereiken, faalt precies op deze manier.",
+    "throttleNote": "Je krijgt nog één e-mail zodra hij weer werkt. Meldingen over dezelfde provider worden maximaal één keer per {{ hours }} uur verstuurd, zodat een instabiele provider je inbox niet kan vullen.",
+    "durationMinutes": "{{ minutes }} min",
+    "durationHoursMinutes": "{{ hours }} u {{ minutes }} min"
+  },
+  "providerRecovery": {
+    "subject": "Monize: {{ provider }} reageert weer",
+    "heading": "Marktdataprovider reageert weer",
+    "greeting": "Hoi {{ name }},",
+    "intro": "<strong>{{ provider }}</strong> reageerde weer om {{ restoredAt }}. De storing duurde {{ duration }}.",
+    "backfill": "Koersen en indexhistorie die tijdens de storing zijn gemist, worden bij de volgende geplande verversing opgehaald; je hoeft niets te doen."
   }
 }

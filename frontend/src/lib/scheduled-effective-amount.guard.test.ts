@@ -99,6 +99,10 @@ const CLIENT_EXPANDERS = new Map([
     '/src/app/bills/page.tsx',
     'the bills calendar, which draws names on dates and prints no amount per occurrence',
   ],
+  [
+    '/src/lib/loan-overpayments.ts',
+    'counts how many occurrences of a recurring OVERPAYMENT fall due by each amortization row. The cadence is one the user typed into the loan calculator, not a scheduled transaction, so there is no override to look up and no stored amount to re-price -- the amount is the one on screen',
+  ],
 ]);
 
 describe('scheduled occurrence expansion guard', () => {

@@ -8,10 +8,46 @@ import {
   DetectRateChangesResult,
   ScheduledPaymentPreview,
 } from '@/types/loan-rate-change';
+import type { Account } from '@/types/account';
 
 const cachePrefix = (accountId: string) => `loan-rate-changes:${accountId}`;
 
-/** Mutations can move the account's current rate/payment, so both caches go */
+/**
+ * The account types the rate-changes endpoints accept. Every route under
+ * `/accounts/:id/rate-changes` goes through `LoanRateChangesService
+ * .verifyLoanAccount`, which answers **400** for anything else -- so this is not
+ * a display preference, it is the request's precondition, and asking for a line
+ * of credit's rate history is an error rather than an empty list.
+ *
+ * It lives here, beside the client, because the callers are surfaces that list
+ * *debt* accounts (LOAN, MORTGAGE and LINE_OF_CREDIT) and so cannot assume the
+ * selected one qualifies. Both loan reports fetched unconditionally and a
+ * selected line of credit turned the whole report into its error state --
+ * persisted in localStorage, so it stayed broken across reloads with no in-page
+ * way to choose another account.
+ *
+ * Exported because two other lists answer the same question for their own
+ * reasons and must not be spelled a second time: the projection hook's
+ * "amortizing debt" set (a revolving line does not amortize, which is the same
+ * fact that gives it no contractual rate to change) derives from this one, and
+ * `loan-rate-changes.contract.test.ts` checks the derivation, the backend's
+ * copy of the list, and the account page's detail-view registry against it.
+ */
+export const RATE_CHANGE_ACCOUNT_TYPES: ReadonlyArray<Account['accountType']> =
+  ['LOAN', 'MORTGAGE'];
+
+/** Whether `/accounts/:id/rate-changes` will answer for this account at all. */
+export function supportsRateChanges(
+  account: Pick<Account, 'accountType'> | null | undefined,
+): boolean {
+  return !!account && RATE_CHANGE_ACCOUNT_TYPES.includes(account.accountType);
+}
+
+/**
+ * Both caches go: a mutation leaves the account's own rate/payment untouched
+ * (they are user-owned) but can realign its linked scheduled payment, and every
+ * loan projection resolves its current rate from these rows.
+ */
 function invalidateAfterMutation(accountId: string): void {
   invalidateCache(cachePrefix(accountId));
   invalidateCache('accounts:');

@@ -38,7 +38,8 @@
     "ambiguousBrokerage": "„{{ query }}\" pasuje do wielu kont maklerskich: {{ list }}. Użyj dokładnej nazwy konta.",
     "unknownInvestmentAccount": "Nieznane konto: {{ name }}. Użyj dokładnej nazwy z listy kont użytkownika.",
     "notACreditCard": "Cykle rozliczeniowe są dostępne tylko dla kont kart kredytowych",
-    "noStatementSettlementDay": "Ta karta kredytowa nie ma skonfigurowanego dnia rozliczenia wyciągu"
+    "noStatementSettlementDay": "Ta karta kredytowa nie ma skonfigurowanego dnia rozliczenia wyciągu",
+    "loanLedgerUnreadable": "Nie można odczytać salda tego kredytu. Spróbuj ponownie."
   },
   "actionHistory": {
     "nothingToUndo": "Nie ma nic do cofnięcia",
@@ -76,8 +77,8 @@
     "crossOwnerTransferUnsupported": "Ten przelew dotyczy konta innego użytkownika, którego asystent nie może jeszcze edytować ani usunąć. Skorzystaj z ekranu Transakcje.",
     "providerConfigNotFound": "Nie znaleziono konfiguracji dostawcy AI",
     "maxProvidersExceeded": "Maksymalnie {{ maxProvidersPerUser }} konfiguracji dostawców AI na użytkownika",
-    "encryptionKeyNotConfigured": "AI_ENCRYPTION_KEY nie jest skonfigurowany. Nie można bezpiecznie przechowywać kluczy API.",
-    "apiKeyUndecryptable": "Ten serwer nie może odczytać zapisanego klucza API. Dzieje się tak, gdy kopia zapasowa zostanie przywrócona na innej instancji albo po zmianie AI_ENCRYPTION_KEY. Wprowadź klucz API ponownie, aby to naprawić.",
+    "encryptionKeyNotConfigured": "ENCRYPTION_KEY nie jest skonfigurowany. Nie można bezpiecznie przechowywać kluczy API.",
+    "apiKeyUndecryptable": "Ten serwer nie może odczytać zapisanego klucza API. Dzieje się tak, gdy kopia zapasowa zostanie przywrócona na innej instancji albo po zmianie ENCRYPTION_KEY. Wprowadź klucz API ponownie, aby to naprawić.",
     "noActiveProviders": "Nie skonfigurowano żadnych aktywnych dostawców AI. Skonfiguruj dostawcę w Ustawieniach AI.",
     "allProvidersFailed": "Wszyscy dostawcy AI zawiedli. Sprawdź konfigurację dostawcy i spróbuj ponownie.",
     "noToolUseProvider": "Nie skonfigurowano dostawcy AI z obsługą narzędzi. Zapytania w języku naturalnym wymagają Anthropic, OpenAI lub Ollama. Skonfiguruj jednego w Ustawieniach AI.",
@@ -187,8 +188,10 @@
     "unsupportedBackupVersion": "Nieobsługiwana wersja kopii zapasowej: {{ version }}. Oczekiwano {{ expected }}",
     "missingExportedAt": "Nieprawidłowy format kopii zapasowej: brak exportedAt",
     "tableNotAllowed": "Tabela {{ table }} nie jest dozwolona podczas przywracania kopii zapasowej",
-    "encryptionNotConfigured": "Serwer nie jest skonfigurowany do szyfrowania (brak AI_ENCRYPTION_KEY)",
+    "encryptionNotConfigured": "Serwer nie jest skonfigurowany do szyfrowania (brak JWT_SECRET lub jest za krótki)",
     "backupPasswordOidcOnly": "Hasło kopii zapasowej można skonfigurować tylko dla użytkowników OIDC; użytkownicy lokalni używają swojego hasła logowania",
+    "backupPasswordLocalOnly": "To konto nie ma hasła logowania, którym można zaszyfrować kopie zapasowe; ustaw zamiast tego hasło kopii zapasowej",
+    "loginPasswordIncorrect": "To nie jest Twoje aktualne hasło logowania",
     "backupPasswordTooShort": "Hasło kopii zapasowej musi mieć co najmniej {{ minLength }} znaków",
     "backupPasswordBreached": "To hasło zostało znalezione w wycieku danych. Wybierz inne hasło.",
     "restoreBodyMustBeFile": "Treść żądania musi być plikiem kopii zapasowej",
@@ -282,8 +285,8 @@
   },
   "emergencyAccess": {
     "smtpNotConfigured": "E-mail nie jest skonfigurowany. Dostępu awaryjnego nie można włączyć, dopóki nie skonfigurujesz SMTP.",
-    "encryptionNotConfigured": "Klucz szyfrowania nie jest skonfigurowany. Dowolna wiadomość nie może być bezpiecznie przechowywana, dopóki nie ustawisz AI_ENCRYPTION_KEY.",
-    "encryptionRequiredToEnable": "Szyfrowanie poświadczeń nie jest skonfigurowane. Dostępu awaryjnego nie można włączyć, dopóki nie ustawisz AI_ENCRYPTION_KEY, ponieważ przyznanie dostępu musi bezpiecznie przechowywać link dostępowy każdego kontaktu.",
+    "encryptionNotConfigured": "Klucz szyfrowania nie jest skonfigurowany. Dowolna wiadomość nie może być bezpiecznie przechowywana, dopóki nie ustawisz ENCRYPTION_KEY.",
+    "encryptionRequiredToEnable": "Szyfrowanie poświadczeń nie jest skonfigurowane. Dostępu awaryjnego nie można włączyć, dopóki nie ustawisz ENCRYPTION_KEY, ponieważ przyznanie dostępu musi bezpiecznie przechowywać link dostępowy każdego kontaktu.",
     "contactEmailExists": "Kontakt awaryjny z tym adresem e-mail już istnieje.",
     "contactNotFound": "Nie znaleziono kontaktu",
     "notConfigured": "Dostęp awaryjny nie jest skonfigurowany",
@@ -384,7 +387,8 @@
     "splitOverrideRequiresAmount": "Kwota jest wymagana przy tworzeniu nadpisania podziału",
     "overrideNotFound": "Nie znaleziono nadpisania o ID {{ overrideId }}",
     "updateSplitOverrideRequiresAmount": "Kwota jest wymagana dla nadpisania podziału",
-    "dateMustBeYMD": "date musi być w formacie YYYY-MM-DD"
+    "dateMustBeYMD": "date musi być w formacie YYYY-MM-DD",
+    "loanLedgerUnreadable": "Nie można obliczyć tej raty kredytu, ponieważ nie udało się odczytać salda księgi. Spróbuj ponownie."
   },
   "securities": {
     "exchangeRateUnavailable": "Nie można ustalić kursu wymiany dla {{ from }} -> {{ to }} na dzień transakcji. Podaj jawny exchangeRate, aby księgowanie na koncie gotówkowym było poprawne.",

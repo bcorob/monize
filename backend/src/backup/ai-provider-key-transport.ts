@@ -1,7 +1,7 @@
 /**
  * How an AI provider's API key travels in a backup.
  *
- * `ai_provider_configs.api_key_enc` is ciphertext under `AI_ENCRYPTION_KEY`,
+ * `ai_provider_configs.api_key_enc` is ciphertext under `ENCRYPTION_KEY`,
  * which is server configuration: it is not in the backup and cannot be, because
  * shipping the master key beside the ciphertext would make encrypting the column
  * pointless. Exporting the ciphertext verbatim therefore produced a row that
@@ -64,7 +64,7 @@ export interface AiProviderKeyExportResult {
  * rotated) keeps its `api_key_enc` verbatim: that is exactly today's behaviour,
  * so the artifact is never *worse* than the one this replaces, and a restore back
  * onto the instance that originally wrote it still works. The same applies when
- * `AI_ENCRYPTION_KEY` is unset, where there is nothing to decrypt with.
+ * `ENCRYPTION_KEY` is unset, where there is nothing to decrypt with.
  *
  * `decrypt` is attempted once rather than probed with `canDecrypt` and then run:
  * the key derivation is `scryptSync`, tens of milliseconds, and doing it twice
@@ -126,7 +126,7 @@ export interface AiProviderKeyRestoreResult {
  *   instance could not read its own key. Restored verbatim, which succeeds only
  *   if this instance holds the key that produced it; otherwise it is the old
  *   silent failure and the caller reports it (`unusableAiProviderKeys`).
- * - **dropped-unencryptable** -- plaintext arrived but `AI_ENCRYPTION_KEY` is
+ * - **dropped-unencryptable** -- plaintext arrived but `ENCRYPTION_KEY` is
  *   unset here, so there is nothing to store it under. Storing it in the clear
  *   would be worse than losing it: the column is read by everything that builds
  *   a provider, and a plaintext value there would be handed to `decrypt` and

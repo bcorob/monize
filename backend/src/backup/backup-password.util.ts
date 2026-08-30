@@ -1,5 +1,5 @@
 import { Logger } from "@nestjs/common";
-import { AiEncryptionService } from "../ai/ai-encryption.service";
+import { EncryptionService } from "../common/encryption/encryption.service";
 import { User } from "../users/entities/user.entity";
 
 /**
@@ -17,14 +17,14 @@ import { User } from "../users/entities/user.entity";
  */
 export function resolveStoredBackupPassword(
   user: User,
-  aiEncryption: AiEncryptionService,
+  encryption: EncryptionService,
   logger: Logger,
 ): string | null {
   if (!user.backupEncryptionEnabled || !user.backupPasswordEnc) {
     return null;
   }
   try {
-    return aiEncryption.decrypt(user.backupPasswordEnc);
+    return encryption.decrypt(user.backupPasswordEnc);
   } catch (err) {
     logger.error(
       `Failed to decrypt stored backup password for user ${user.id}: ${err.message}`,

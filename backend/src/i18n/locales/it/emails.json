@@ -163,5 +163,28 @@
     "body1": "Poiché il tuo account era inattivo, ai tuoi contatti di emergenza designati sono stati inviati link per rilevare il tuo account. Hai ora effettuato nuovamente l'accesso, quindi <strong>quei link sono stati revocati</strong> e la protezione è stata riattivata.",
     "body2": "Se era previsto, non è necessaria alcuna azione. Se non te lo aspettavi, controlla l'attività di accesso e le impostazioni di accesso di emergenza.",
     "button": "Rivedi accesso di emergenza"
+  },
+  "providerOutage": {
+    "subject": "Monize: {{ provider }} non risponde",
+    "heading": "Fornitore di dati di mercato non disponibile",
+    "greeting": "Ciao {{ name }},",
+    "intro": "Monize non riesce a raggiungere <strong>{{ provider }}</strong> dal {{ since }} ({{ duration }}). Le richieste al fornitore sono sospese per ora e vengono ritentate a intervalli crescenti.",
+    "labelFailures": "Tentativi falliti",
+    "labelLastError": "Ultimo errore",
+    "labelLastSuccess": "Ultima risposta riuscita",
+    "valueNever": "mai",
+    "valueUnknown": "sconosciuto",
+    "impact": "Prezzi, grafici e confronti tra indici che dipendono da questo fornitore possono mancare o non essere aggiornati finché non risponde di nuovo. Nulla di quanto registrato in Monize è andato perduto.",
+    "whatToCheck": "Se il fornitore è attivo, controlla l'accesso di rete in uscita e il DNS di questo server: un container che non riesce a risolvere o raggiungere il fornitore si guasta esattamente così.",
+    "throttleNote": "Riceverai un'altra e-mail quando tornerà disponibile. Gli avvisi sullo stesso fornitore vengono inviati al massimo una volta ogni {{ hours }} ore, così un fornitore instabile non può riempire la tua casella di posta.",
+    "durationMinutes": "{{ minutes }} min",
+    "durationHoursMinutes": "{{ hours }} h {{ minutes }} min"
+  },
+  "providerRecovery": {
+    "subject": "Monize: {{ provider }} risponde di nuovo",
+    "heading": "Il fornitore di dati di mercato risponde di nuovo",
+    "greeting": "Ciao {{ name }},",
+    "intro": "<strong>{{ provider }}</strong> ha risposto di nuovo alle {{ restoredAt }}. L'interruzione è durata {{ duration }}.",
+    "backfill": "Prezzi e storico degli indici mancanti durante l'interruzione vengono recuperati al prossimo aggiornamento pianificato; non è necessario alcun intervento."
   }
 }

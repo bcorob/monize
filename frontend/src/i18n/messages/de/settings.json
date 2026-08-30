@@ -514,15 +514,24 @@
     "encryption": {
       "heading": "Backup-Verschlüsselung",
       "descriptionOidc": "Manuelle und automatische Backups mit einem hier festgelegten Backup-Passwort verschlüsseln. Das Passwort ist für die Wiederherstellung erforderlich.",
-      "loading": "Wird geladen...",
+      "descriptionLocal": "Ihre Backups werden mit Ihrem Anmeldepasswort verschlüsselt. Mehr müssen Sie sich nicht merken -- dasselbe Passwort stellt sie wieder her.",
+      "unavailable": "Dieser Server ist nicht für die Verschlüsselung von Backups konfiguriert, daher werden sie unverschlüsselt geschrieben.",
       "enabledBadge": "Aktiviert",
+      "disabledBadge": "Nicht aktiviert",
+      "enabledLocalNote": "Backups werden mit Ihrem Anmeldepasswort verschlüsselt.",
+      "disabledLocalNote": "Backups werden unverschlüsselt geschrieben, bis Sie Ihr Anmeldepasswort bestätigen.",
+      "enableWithLoginPasswordButton": "Mit meinem Anmeldepasswort aktivieren",
+      "loading": "Wird geladen...",
       "changePasswordButton": "Backup-Passwort ändern",
       "disableButton": "Deaktivieren",
       "setPasswordButton": "Backup-Passwort festlegen",
       "setupModal": {
         "titleOidc": "Backup-Passwort festlegen",
+        "titleLocal": "Verschlüsselte Backups aktivieren",
         "descriptionOidc": "Wählen Sie ein Passwort, das zum Verschlüsseln Ihrer Backups verwendet wird. Bewahren Sie es sicher auf -- Sie benötigen es für die Wiederherstellung.",
+        "descriptionLocal": "Bestätigen Sie Ihr Anmeldepasswort, um verschlüsselte Backups zu aktivieren. Mit diesem Passwort werden Ihre Backups verschlüsselt, und Sie benötigen es für die Wiederherstellung.",
         "placeholderOidc": "Neues Backup-Passwort (mind. 12 Zeichen)",
+        "placeholderLocal": "Ihr Anmeldepasswort",
         "savingButton": "Wird gespeichert...",
         "confirmButton": "Bestätigen"
       },
@@ -768,7 +777,7 @@
     },
     "encryptionNotConfigured": {
       "heading": "Verschlüsselungsschlüssel erforderlich",
-      "body": "Der Notfallzugang benötigt einen auf dem Server gesetzten AI_ENCRYPTION_KEY. Eine Gewährung speichert den Zugangslink jedes Kontakts verschlüsselt, damit ein erneuter Versuch denselben Link noch einmal senden kann, und ohne diesen Schlüssel kann überhaupt kein Link gesendet werden."
+      "body": "Der Notfallzugang benötigt einen auf dem Server gesetzten ENCRYPTION_KEY. Eine Gewährung speichert den Zugangslink jedes Kontakts verschlüsselt, damit ein erneuter Versuch denselben Link noch einmal senden kann, und ohne diesen Schlüssel kann überhaupt kein Link gesendet werden."
     },
     "alreadyGranted": {
       "heading": "Notfallzugang bereits gewährt",
@@ -874,7 +883,7 @@
   "aiProviders": {
     "heading": "KI-Anbieter",
     "addButton": "Anbieter hinzufügen",
-    "encryptionWarning": "AI_ENCRYPTION_KEY ist nicht konfiguriert. Sie können Ollama (lokal, kein API-Schlüssel erforderlich) verwenden, aber Cloud-Anbieter benötigen Verschlüsselung zur sicheren Speicherung von API-Schlüsseln.",
+    "encryptionWarning": "ENCRYPTION_KEY ist nicht konfiguriert. Sie können Ollama (lokal, kein API-Schlüssel erforderlich) verwenden, aber Cloud-Anbieter benötigen Verschlüsselung zur sicheren Speicherung von API-Schlüsseln.",
     "systemDefault": {
       "heading": "System-Standard-KI-Anbieter verfügbar",
       "description": "Ein zentraler KI-Anbieter wurde von Ihrem Administrator konfiguriert",

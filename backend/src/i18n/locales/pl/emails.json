@@ -163,5 +163,28 @@
     "body1": "Ze względu na nieaktywność Twojego konta, Twoi wyznaczeni kontakci awaryjni otrzymali linki do przejęcia konta. Zalogowałeś się ponownie, więc <strong>te linki zostały unieważnione</strong>, a zabezpieczenie zostało ponownie uruchomione.",
     "body2": "Jeśli tego się spodziewałeś, nie musisz podejmować żadnych działań. Jeśli nie, sprawdź aktywność logowania oraz ustawienia dostępu awaryjnego.",
     "button": "Przejrzyj dostęp awaryjny"
+  },
+  "providerOutage": {
+    "subject": "Monize: {{ provider }} nie odpowiada",
+    "heading": "Dostawca danych rynkowych jest niedostępny",
+    "greeting": "Cześć {{ name }},",
+    "intro": "Monize nie może połączyć się z <strong>{{ provider }}</strong> od {{ since }} ({{ duration }}). Zapytania do tego dostawcy są na razie wstrzymane i ponawiane w coraz dłuższych odstępach.",
+    "labelFailures": "Nieudane próby",
+    "labelLastError": "Ostatni błąd",
+    "labelLastSuccess": "Ostatnia poprawna odpowiedź",
+    "valueNever": "nigdy",
+    "valueUnknown": "nieznany",
+    "impact": "Ceny, wykresy i porównania z indeksami zależne od tego dostawcy mogą być niedostępne lub nieaktualne, dopóki nie zacznie znowu odpowiadać. Żadne dane zapisane w Monize nie zostały utracone.",
+    "whatToCheck": "Jeśli dostawca działa, sprawdź wychodzący dostęp sieciowy i DNS tego serwera -- kontener, który nie potrafi rozwiązać nazwy dostawcy albo się z nim połączyć, zawodzi dokładnie w ten sposób.",
+    "throttleNote": "Otrzymasz jeszcze jedną wiadomość, gdy dostawca wróci do działania. Alerty o tym samym dostawcy wysyłamy najwyżej raz na {{ hours }} godz., aby niestabilny dostawca nie zapełnił skrzynki.",
+    "durationMinutes": "{{ minutes }} min",
+    "durationHoursMinutes": "{{ hours }} godz. {{ minutes }} min"
+  },
+  "providerRecovery": {
+    "subject": "Monize: {{ provider }} znowu odpowiada",
+    "heading": "Dostawca danych rynkowych znowu odpowiada",
+    "greeting": "Cześć {{ name }},",
+    "intro": "<strong>{{ provider }}</strong> odpowiedział ponownie o {{ restoredAt }}. Awaria trwała {{ duration }}.",
+    "backfill": "Ceny i historia indeksów pominięte w czasie awarii zostaną uzupełnione przy najbliższym zaplanowanym odświeżeniu; nie musisz nic robić."
   }
 }

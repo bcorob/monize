@@ -86,8 +86,18 @@ const WITH_CONTEXT_ALLOWLIST = [
   // request to inherit an identity from (DR-04-03).
   "src/net-worth/net-worth.service.ts",
   "src/notifications/bill-reminder.service.ts",
+  // Provider outage alerts: a cron sweep over deployment-wide provider_health
+  // rows that belong to no user, whose recipients are every administrator --
+  // cross-user by construction, with no request to inherit an identity from.
+  "src/notifications/provider-outage-alert.service.ts",
   "src/oauth/oauth-interaction.controller.ts",
   "src/oauth/oauth-provider.service.ts",
+  // Provider availability bookkeeping: a global provider_health row written
+  // from whatever code path happened to call the provider, so there is no
+  // caller identity that could own it -- and it is written outside the caller's
+  // transaction on purpose, because an outage is not part of whatever request
+  // discovered it.
+  "src/provider-health/provider-health.service.ts",
   "src/scheduled-transactions/scheduled-transactions.service.ts",
   "src/securities/holdings.service.ts",
   // The market-index refresh is a deployment-wide cron with no request behind

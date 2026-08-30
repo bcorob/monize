@@ -97,14 +97,14 @@ describe('buildPayoffComparisonSeries', () => {
         type: 'OVERPAYMENT' as const,
       },
     ];
-    const { points } = buildPayoffComparisonSeries(history, null, null);
+    const { chartPoints: points } = buildPayoffComparisonSeries(history, null, null);
     const july = points.find((p) => p.monthKey === '2022-07');
     expect(july?.overpayment).toBe(1650);
   });
 
   it('merges history and projections into monthly points', () => {
     const baseline = makeProjection();
-    const { points, projectionStartKey } = buildPayoffComparisonSeries(
+    const { chartPoints: points, projectionStartKey } = buildPayoffComparisonSeries(
       makeHistory(),
       baseline,
       null,
@@ -151,7 +151,7 @@ describe('buildPayoffComparisonSeries', () => {
       firstPaymentDate: new Date(2026, 0, 15),
     });
 
-    const { points } = buildPayoffComparisonSeries(history, null, null, original);
+    const { chartPoints: points } = buildPayoffComparisonSeries(history, null, null, original);
 
     expect(points.find((p) => p.monthKey === '2026-02')?.historicalBalance).toBe(9550);
     expect(points.find((p) => p.monthKey === '2026-03')?.historicalBalance).toBe(9100);
@@ -162,7 +162,7 @@ describe('buildPayoffComparisonSeries', () => {
   it('stitches projections onto the last historical point', () => {
     const baseline = makeProjection();
     const scenario = makeProjection(200);
-    const { points } = buildPayoffComparisonSeries(makeHistory(), baseline, scenario);
+    const { chartPoints: points } = buildPayoffComparisonSeries(makeHistory(), baseline, scenario);
 
     const lastHistorical = points.find((p) => p.monthKey === '2026-02');
     expect(lastHistorical?.baselineBalance).toBe(9100);
@@ -172,7 +172,7 @@ describe('buildPayoffComparisonSeries', () => {
   it('keeps the scenario series shorter than the baseline', () => {
     const baseline = makeProjection();
     const scenario = makeProjection(300);
-    const { points } = buildPayoffComparisonSeries(makeHistory(), baseline, scenario);
+    const { chartPoints: points } = buildPayoffComparisonSeries(makeHistory(), baseline, scenario);
 
     const baselineMonths = points.filter((p) => p.baselineBalance !== undefined).length;
     const scenarioMonths = points.filter((p) => p.scenarioBalance !== undefined).length;
@@ -184,7 +184,7 @@ describe('buildPayoffComparisonSeries', () => {
       { date: '2026-01-05', principal: 100, interest: 10, balance: 900, cumulativePrincipal: 100, cumulativeInterest: 10, type: 'REGULAR' },
       { date: '2026-01-20', principal: 100, interest: 10, balance: 800, cumulativePrincipal: 200, cumulativeInterest: 20, type: 'REGULAR' },
     ];
-    const { points } = buildPayoffComparisonSeries(history, null, null);
+    const { chartPoints: points } = buildPayoffComparisonSeries(history, null, null);
     expect(points).toHaveLength(1);
     expect(points[0].historicalBalance).toBe(800);
   });
@@ -197,7 +197,7 @@ describe('buildPayoffComparisonSeries', () => {
       frequency: 'MONTHLY',
       firstPaymentDate: new Date(2026, 0, 15),
     });
-    const { points } = buildPayoffComparisonSeries([], projection, null);
+    const { chartPoints: points } = buildPayoffComparisonSeries([], projection, null);
 
     expect(points.length).toBeLessThanOrEqual(61);
     const lastRow = projection.rows[projection.rows.length - 1];
@@ -229,7 +229,7 @@ describe('buildPayoffComparisonSeries', () => {
       firstPaymentDate: new Date(2026, 6, 15),
     });
 
-    const { points, projectionStartKey } = buildPayoffComparisonSeries(history, projection, null);
+    const { chartPoints: points, projectionStartKey } = buildPayoffComparisonSeries(history, projection, null);
 
     // The last historical month keeps its balance, and the first projected
     // month is present -- the transition is not dropped.
@@ -240,7 +240,7 @@ describe('buildPayoffComparisonSeries', () => {
 
   it('adds the original contractual series from the fourth argument', () => {
     const original = makeProjection();
-    const { points } = buildPayoffComparisonSeries(makeHistory(), null, null, original);
+    const { chartPoints: points } = buildPayoffComparisonSeries(makeHistory(), null, null, original);
     expect(points.some((p) => p.originalBalance !== undefined)).toBe(true);
   });
 

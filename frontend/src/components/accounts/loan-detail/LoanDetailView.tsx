@@ -27,12 +27,13 @@ import { buildScheduleDisplayRows, type DisplayRow } from '@/lib/loan-schedule-r
 import type { CellValue, PdfTableSection } from '@/lib/pdf-export';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
 import { useChartDateFormat } from '@/hooks/useChartDateFormat';
+import { useFinancialToday } from '@/hooks/useFinancialToday';
 import { PastImpactSection } from '@/components/accounts/loan-detail/PastImpactSection';
 import { useLoanRateEditing } from '@/components/accounts/loan-detail/useLoanRateEditing';
 import {
   buildLoanProjectionInput,
   deriveLoanPaymentHistory,
-  resolveCurrentInstallment,
+  resolveCurrentLoanTerms,
 } from '@/lib/loan-history';
 import { computePastImpact } from '@/lib/loan-past-impact';
 import {
@@ -44,6 +45,7 @@ import {
 } from '@/lib/loan-schedule';
 import { scenarioToPlan } from '@/lib/loan-scenarios';
 import type { Account } from '@/types/account';
+import type { LoanProjectionAnchor } from '@/types/scheduled-transaction';
 import type { Transaction } from '@/types/transaction';
 import type { LoanScenario } from '@/types/loan-scenario';
 import type { LoanRateChange } from '@/types/loan-rate-change';
@@ -53,6 +55,14 @@ interface LoanDetailViewProps {
   transactions: Transaction[];
   scenarios: LoanScenario[];
   rateChanges: LoanRateChange[];
+  /**
+   * The next scheduled installment's boundary (date + ledger debt through it),
+   * from the server. This page's schedule table prints per-installment
+   * interest, so it prices the same installment the amortization report does
+   * and anchors on the same boundary -- INV-LOAN-006. Null when the loan has
+   * no active scheduled payment, which keeps the today-anchored projection.
+   */
+  projectionAnchor?: LoanProjectionAnchor | null;
   /** Separate interest expenses (see fetchLoanInterestTransactions), for exact
    *  per-row interest including overpayments. */
   interestTransactions?: Transaction[];
@@ -80,6 +90,7 @@ export function LoanDetailView({
   transactions,
   scenarios,
   rateChanges,
+  projectionAnchor = null,
   interestTransactions = [],
   onScenariosChanged,
   onRateChangesChanged,
@@ -113,18 +124,41 @@ export function LoanDetailView({
     [account, transactions, rateChanges, interestTransactions],
   );
 
+  // The user's calendar day -- what decides whether the anchor is still ahead
+  // of them. The backend prices the same installment against its own
+  // request-timezone `todayYMD()`, so reading UTC here would put the schedule
+  // table and the bill on two different calendars.
+  const todayYmd = useFinancialToday();
+
   // The borrower's real current installment (principal + interest) from the
   // payment history, shown on the summary card and used to seed the projection.
   // The stored paymentAmount is often principal-only for separately-booked
-  // interest, so it is only a fallback when there is no usable history yet.
-  const currentInstallment = useMemo(
-    () => resolveCurrentInstallment(history, account.paymentAmount),
-    [history, account.paymentAmount],
+  // interest, so it is only a fallback when there is no usable history yet --
+  // and the same resolution the projection is seeded with, so the card and the
+  // payoff beside it cannot describe two different installments.
+  const currentTerms = useMemo(
+    () =>
+      resolveCurrentLoanTerms(
+        account,
+        history,
+        rateChanges,
+        projectionAnchor,
+        todayYmd,
+      ),
+    [account, history, rateChanges, projectionAnchor, todayYmd],
   );
+  const currentInstallment = currentTerms.payment;
 
   const projectionInput = useMemo(
-    () => buildLoanProjectionInput(account, history, rateChanges),
-    [account, history, rateChanges],
+    () =>
+      buildLoanProjectionInput(
+        account,
+        history,
+        rateChanges,
+        projectionAnchor,
+        todayYmd,
+      ),
+    [account, history, rateChanges, projectionAnchor, todayYmd],
   );
 
   const baseline = useMemo(
@@ -248,8 +282,8 @@ export function LoanDetailView({
         {
           label: t('loanDetail.summary.interestRate'),
           value:
-            account.interestRate != null
-              ? `${account.interestRate}%`
+            currentTerms.annualRate != null
+              ? `${currentTerms.annualRate}%`
               : t('loanDetail.summary.notSet'),
           color: '#ea580c',
         },
@@ -291,6 +325,7 @@ export function LoanDetailView({
         account={account}
         startingBalance={history.startingBalance}
         currentInstallment={currentInstallment}
+        currentAnnualRate={currentTerms.annualRate}
         baseline={baseline}
       />
 

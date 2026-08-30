@@ -38,7 +38,8 @@
     "ambiguousBrokerage": "\"{{ query }}\" komt overeen met meerdere effectenrekeningen: {{ list }}. Gebruik de exacte rekeningnaam.",
     "unknownInvestmentAccount": "Onbekende rekening: {{ name }}. Gebruik een exacte naam uit de rekeninglijst van de gebruiker.",
     "notACreditCard": "Afschriftperiodes zijn alleen beschikbaar voor creditcardrekeningen",
-    "noStatementSettlementDay": "Voor deze creditcard is geen afsluitdag van het afschrift ingesteld"
+    "noStatementSettlementDay": "Voor deze creditcard is geen afsluitdag van het afschrift ingesteld",
+    "loanLedgerUnreadable": "Het saldo van deze lening kon niet worden gelezen. Probeer het opnieuw."
   },
   "actionHistory": {
     "nothingToUndo": "Niets om ongedaan te maken",
@@ -76,8 +77,8 @@
     "crossOwnerTransferUnsupported": "Bij deze overboeking is de rekening van een andere gebruiker betrokken, die de assistent nog niet kan bewerken of verwijderen. Gebruik in plaats daarvan het scherm Transacties.",
     "providerConfigNotFound": "AI-providerconfiguratie niet gevonden",
     "maxProvidersExceeded": "Maximaal {{ maxProvidersPerUser }} AI-providerconfiguraties per gebruiker",
-    "encryptionKeyNotConfigured": "AI_ENCRYPTION_KEY is niet geconfigureerd. Kan API-sleutels niet veilig opslaan.",
-    "apiKeyUndecryptable": "De opgeslagen API-sleutel kan niet door deze server worden gelezen. Dit gebeurt wanneer een back-up op een andere instantie wordt teruggezet of nadat AI_ENCRYPTION_KEY is gewijzigd. Voer de API-sleutel opnieuw in om dit op te lossen.",
+    "encryptionKeyNotConfigured": "ENCRYPTION_KEY is niet geconfigureerd. Kan API-sleutels niet veilig opslaan.",
+    "apiKeyUndecryptable": "De opgeslagen API-sleutel kan niet door deze server worden gelezen. Dit gebeurt wanneer een back-up op een andere instantie wordt teruggezet of nadat ENCRYPTION_KEY is gewijzigd. Voer de API-sleutel opnieuw in om dit op te lossen.",
     "noActiveProviders": "Geen actieve AI-providers geconfigureerd. Configureer een provider in AI-instellingen.",
     "allProvidersFailed": "Alle AI-providers zijn mislukt. Controleer je providerconfiguratie en probeer het opnieuw.",
     "noToolUseProvider": "Geen AI-provider met ondersteuning voor toolgebruik geconfigureerd. Zoekopdrachten in gewone taal vereisen Anthropic, OpenAI of Ollama. Configureer er een in AI-instellingen.",
@@ -187,8 +188,10 @@
     "unsupportedBackupVersion": "Niet-ondersteunde back-upversie: {{ version }}. Verwacht {{ expected }}",
     "missingExportedAt": "Ongeldig back-upformaat: exportedAt ontbreekt",
     "tableNotAllowed": "Tabel {{ table }} is niet toegestaan bij het herstellen van back-ups",
-    "encryptionNotConfigured": "Server is niet geconfigureerd voor versleuteling (AI_ENCRYPTION_KEY ontbreekt)",
+    "encryptionNotConfigured": "De server is niet geconfigureerd voor versleuteling (JWT_SECRET ontbreekt of is te kort)",
     "backupPasswordOidcOnly": "Back-upwachtwoord is alleen instelbaar voor OIDC-gebruikers; lokale gebruikers gebruiken hun inlogwachtwoord",
+    "backupPasswordLocalOnly": "Dit account heeft geen aanmeldwachtwoord om back-ups mee te versleutelen; stel in plaats daarvan een back-upwachtwoord in",
+    "loginPasswordIncorrect": "Dat is niet je huidige aanmeldwachtwoord",
     "backupPasswordTooShort": "Back-upwachtwoord moet minimaal {{ minLength }} tekens lang zijn",
     "backupPasswordBreached": "Dit wachtwoord is aangetroffen in een datalek. Kies een ander wachtwoord.",
     "restoreBodyMustBeFile": "De aanvraagtekst moet een back-upbestand zijn",
@@ -282,8 +285,8 @@
   },
   "emergencyAccess": {
     "smtpNotConfigured": "E-mail is niet geconfigureerd. Noodtoegang kan pas worden ingeschakeld als SMTP is ingesteld.",
-    "encryptionNotConfigured": "Versleutelingssleutel is niet geconfigureerd. Het vrije bericht kan pas veilig worden opgeslagen als AI_ENCRYPTION_KEY is ingesteld.",
-    "encryptionRequiredToEnable": "Versleuteling van inloggegevens is niet geconfigureerd. Noodtoegang kan pas worden ingeschakeld als AI_ENCRYPTION_KEY is ingesteld, omdat een toekenning de toegangslink van elk contact veilig moet opslaan.",
+    "encryptionNotConfigured": "Versleutelingssleutel is niet geconfigureerd. Het vrije bericht kan pas veilig worden opgeslagen als ENCRYPTION_KEY is ingesteld.",
+    "encryptionRequiredToEnable": "Versleuteling van inloggegevens is niet geconfigureerd. Noodtoegang kan pas worden ingeschakeld als ENCRYPTION_KEY is ingesteld, omdat een toekenning de toegangslink van elk contact veilig moet opslaan.",
     "contactEmailExists": "Er bestaat al een noodcontact met dit e-mailadres.",
     "contactNotFound": "Contact niet gevonden",
     "notConfigured": "Noodtoegang niet geconfigureerd",
@@ -384,7 +387,8 @@
     "splitOverrideRequiresAmount": "Bedrag is vereist bij het aanmaken van een splitsingsoverschrijving",
     "overrideNotFound": "Overschrijving met ID {{ overrideId }} niet gevonden",
     "updateSplitOverrideRequiresAmount": "Bedrag is vereist voor splitsingsoverschrijving",
-    "dateMustBeYMD": "datum moet in JJJJ-MM-DD-formaat zijn"
+    "dateMustBeYMD": "datum moet in JJJJ-MM-DD-formaat zijn",
+    "loanLedgerUnreadable": "Deze leningbetaling kon niet worden berekend omdat het grootboeksaldo niet kon worden gelezen. Probeer het opnieuw."
   },
   "securities": {
     "exchangeRateUnavailable": "Kon geen wisselkoers bepalen voor {{ from }} -> {{ to }} op de transactiedatum. Geef een expliciete exchangeRate op zodat de boeking op de geldrekening correct is.",

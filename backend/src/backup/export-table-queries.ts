@@ -51,7 +51,7 @@ export interface ExportTableQuery {
    * Rewrites one row on its way into the document, row at a time so the memory
    * ceiling is unchanged. There is exactly one: `ai_provider_configs` swaps its
    * instance-key ciphertext for the plaintext key
-   * (`ai-provider-key-transport.ts`), because `AI_ENCRYPTION_KEY` is server
+   * (`ai-provider-key-transport.ts`), because `ENCRYPTION_KEY` is server
    * configuration and never travels in the file.
    *
    * Applied by both `exportJsonChunks` and `collectExportTables`, so the
@@ -75,6 +75,7 @@ export const INTENTIONALLY_EXCLUDED_TABLES: ReadonlySet<string> = new Set([
   "exchange_rates", // global shared reference data, not per-user
   "market_index_prices", // global market reference data, refetched from the provider
   "market_index_sync", // provider fetch bookkeeping for the above
+  "provider_health", // deployment-wide provider availability + alert bookkeeping
   "account_delegates", // cross-user sharing relationship
   "account_delegate_grants", // cross-user sharing relationship
   "delegate_account_favourites", // cross-user sharing state
@@ -364,7 +365,7 @@ export function buildExportTableQueries(
     {
       key: "ai_provider_configs",
       sql: "SELECT * FROM ai_provider_configs WHERE user_id = $1",
-      // `api_key_enc` is ciphertext under this instance's AI_ENCRYPTION_KEY,
+      // `api_key_enc` is ciphertext under this instance's ENCRYPTION_KEY,
       // which is not in the backup. Exported verbatim it restores onto another
       // instance populated and unreadable, so the key is decrypted here and
       // re-encrypted by the restore. See ai-provider-key-transport.ts for the

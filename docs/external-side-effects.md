@@ -177,6 +177,7 @@ Every caller is a cron, and each has a different amount of protection:
 | `MortgageReminderService` | None -- same shape, no dedup state at all. |
 | `BudgetAlertService` | Partial. It creates the `BudgetAlert` row before sending and dedups candidates against existing rows by `(budgetId, alertType, budgetCategoryId, periodStart)`, so a sequential re-run does not re-notify. But the dedup read and the insert are not one atomic unit and no unique constraint backs them, so two replicas can both pass the check and both insert and send. `isEmailSent` is set after the send, so a crash in between leaves it `false` forever without causing a duplicate. |
 | Emergency-access grant | The one deliberate design. See section 5. |
+| `ProviderOutageAlertService` | Full, and the opposite trade from the reminders. The notice is claimed with a single conditional `UPDATE ... WHERE state = 'down' AND outage_notified_at IS NULL AND outage_started_at <= now() - 15min AND (last_notified_at IS NULL OR last_notified_at <= now() - 6h) RETURNING ...`, so one replica sends per episode and a flapping provider cannot mail its way around the floor. The claim is taken *before* the send, which makes it **at most once**: a process killed in between loses that alert. Deliberate -- a duplicated monitoring email is the failure mode being designed against, the outage is still in the log and in `provider_health`, and a provider still down when the 6-hour floor elapses becomes notifiable again. |
 
 `BudgetAlertService` is a useful illustration of EXT-001: it accidentally has
 most of what the rule asks for -- durable state written before the effect -- and
@@ -224,6 +225,19 @@ the operation rather than silently assuming 1.0)". The provider layer is
 therefore *not* where the missing-rate defects in
 `docs/financial-semantics.md` section 10 come from -- it reports honestly and
 callers discard the honesty.
+
+**Provider *availability* is now durable state, and it is the one place a
+process-local fact and a shared fact are deliberately kept apart.** The circuit
+breaker (`ProviderCircuit`, in memory) decides whether this replica calls out: it
+describes what this container's own sockets and DNS just did, which no shared
+table can know. `provider_health` carries only what memory cannot -- the episode
+start, so a container restarting inside an outage does not reset the clock the
+alert gate reads, and the notification markers, so the alert is claimed once
+across replicas. Writes happen on transitions plus a five-minute heartbeat, never
+per failed request, and they run through `runOutsideActiveScopedManager`: an
+outage is not part of whatever request happened to discover it, so a rollback
+must not erase it. The write is fire-and-forget and swallows its own failures --
+availability bookkeeping must never turn a provider outage into a failed request.
 
 **AI insights are the weak case.** The reentrancy guard is a `Set<userId>` in
 process memory, which coordinates one replica with itself and nothing across

@@ -163,5 +163,28 @@
     "body1": "계정이 비활성 상태였기 때문에 지정된 긴급 연락처에게 계정 인수 링크가 발송되었습니다. 귀하가 다시 로그인하셨으므로 <strong>해당 링크가 취소되었으며</strong> 보안 장치가 다시 활성화되었습니다.",
     "body2": "예상했던 상황이라면 추가 조치가 필요하지 않습니다. 예상치 못한 상황이라면 로그인 활동과 긴급 접근 설정을 검토하세요.",
     "button": "긴급 접근 검토"
+  },
+  "providerOutage": {
+    "subject": "Monize: {{ provider }}이(가) 응답하지 않습니다",
+    "heading": "시장 데이터 공급자를 사용할 수 없습니다",
+    "greeting": "안녕하세요 {{ name }}님,",
+    "intro": "Monize가 {{ since }}부터({{ duration }}) <strong>{{ provider }}</strong>에 연결할 수 없습니다. 이 공급자에 대한 요청은 현재 중단되었으며 간격을 늘려 가며 재시도합니다.",
+    "labelFailures": "실패한 시도",
+    "labelLastError": "마지막 오류",
+    "labelLastSuccess": "마지막 성공 응답",
+    "valueNever": "없음",
+    "valueUnknown": "알 수 없음",
+    "impact": "이 공급자에 의존하는 가격, 차트, 지수 비교는 공급자가 다시 응답할 때까지 누락되거나 최신이 아닐 수 있습니다. Monize에 기록된 데이터는 손실되지 않았습니다.",
+    "whatToCheck": "공급자 자체가 정상이라면 이 서버의 외부 네트워크 접근과 DNS를 확인하세요. 공급자 이름을 확인하지 못하거나 연결할 수 없는 컨테이너는 정확히 이런 형태로 실패합니다.",
+    "throttleNote": "공급자가 복구되면 이메일을 한 번 더 받게 됩니다. 동일한 공급자에 대한 알림은 최대 {{ hours }}시간에 한 번만 발송되므로 불안정한 공급자가 받은 편지함을 채울 수 없습니다.",
+    "durationMinutes": "{{ minutes }}분",
+    "durationHoursMinutes": "{{ hours }}시간 {{ minutes }}분"
+  },
+  "providerRecovery": {
+    "subject": "Monize: {{ provider }}이(가) 다시 응답합니다",
+    "heading": "시장 데이터 공급자가 다시 응답합니다",
+    "greeting": "안녕하세요 {{ name }}님,",
+    "intro": "<strong>{{ provider }}</strong>이(가) {{ restoredAt }}에 다시 응답했습니다. 장애는 {{ duration }} 동안 이어졌습니다.",
+    "backfill": "장애 동안 누락된 가격과 지수 이력은 다음 예정된 새로 고침에서 채워집니다. 별도의 조치는 필요하지 않습니다."
   }
 }

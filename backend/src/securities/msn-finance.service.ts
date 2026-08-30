@@ -13,6 +13,11 @@ import {
   EtfSectorWeighting,
 } from "./providers/quote-provider.interface";
 import { getTradingDateFromQuote } from "./providers/trading-date.util";
+import { ProviderHealthService } from "../provider-health/provider-health.service";
+import { TrackedProviderId } from "../provider-health/providers";
+
+/** This client's id in `provider_health` and in the circuit breaker. */
+const HEALTH_PROVIDER_ID: TrackedProviderId = "msn_finance";
 
 // MSN / Bing Finance API endpoints. The autosuggest and Quotes endpoints are
 // the same ones MSMoneyQuotes.exe uses (reverse-engineered from the v3.0
@@ -250,7 +255,10 @@ export class MsnFinanceService implements QuoteProvider {
    */
   private readonly apiKey: string | null;
 
-  constructor(@Optional() configService?: ConfigService) {
+  constructor(
+    private readonly health: ProviderHealthService,
+    @Optional() configService?: ConfigService,
+  ) {
     const fromEnv = configService?.get<string>("MSN_API_KEY")?.trim();
     this.apiKey = fromEnv && fromEnv.length > 0 ? fromEnv : null;
     if (!this.apiKey) {
@@ -313,6 +321,12 @@ export class MsnFinanceService implements QuoteProvider {
     url: string,
     extraHeaders: Record<string, string> = {},
   ): Promise<T | null> {
+    // Every MSN JSON call comes through here, so the breaker sits here: once the
+    // host is unreachable, a refusal is instant and silent rather than one
+    // 10-second timeout and one log line per symbol (issue #1265's shape, with
+    // this provider's endpoints in place of Yahoo's).
+    const admission = this.health.tryRequest(HEALTH_PROVIDER_ID);
+    if (admission === "refused") return null;
     try {
       const response = await fetch(url, {
         headers: {
@@ -324,13 +338,34 @@ export class MsnFinanceService implements QuoteProvider {
         signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       });
       if (!response.ok) {
+        // The host answered in full; there is no body to stall on.
+        this.health.recordSuccess(HEALTH_PROVIDER_ID);
         this.logger.warn(`MSN Finance GET ${url} returned ${response.status}`);
         return null;
       }
-      return (await response.json()) as T;
+      // Recorded once the body is in hand, not when the headers arrive: a
+      // provider that accepts the connection and then stalls answers headers
+      // every time, and calling that a success closes the breaker on every
+      // probe. `yahoo-finance.service.ts` has the long form.
+      const parsed = (await response.json()) as T;
+      this.health.recordSuccess(HEALTH_PROVIDER_ID);
+      return parsed;
     } catch (error) {
-      this.logger.warn(
-        `MSN Finance GET ${url} failed: ${error instanceof Error ? error.message : String(error)}`,
+      // An uncounted failure is not an outcome. If this call is the one holding
+      // the exclusive half-open slot, hand it back rather than refusing every
+      // MSN call for the probe timeout against a provider nothing has shown to
+      // be down -- and only then, or a straggler frees somebody else's probe.
+      if (
+        !this.health.recordFailure(HEALTH_PROVIDER_ID, error) &&
+        admission === "probe"
+      ) {
+        this.health.releaseProbe(HEALTH_PROVIDER_ID);
+      }
+      this.health.logFailure(
+        this.logger,
+        HEALTH_PROVIDER_ID,
+        `GET ${url}`,
+        error,
       );
       return null;
     }
@@ -348,6 +383,9 @@ export class MsnFinanceService implements QuoteProvider {
     if (cached) return cached.id;
 
     const markets = this.marketOrderFor(exchange, preferredExchanges);
+    // What the breaker knew before we asked, so a null can be told apart from
+    // an answer afterwards (see the negative-cache note below).
+    const before = this.health.snapshot(HEALTH_PROVIDER_ID);
 
     for (const market of markets) {
       const id = await this.queryAutosuggest(
@@ -362,7 +400,14 @@ export class MsnFinanceService implements QuoteProvider {
       }
     }
 
-    this.setCached(key, null);
+    // Cache "MSN has no such instrument" only if MSN actually said so: a
+    // refusal and a transport failure produce the same `null` from
+    // `httpGetJson`, and this cache holds for 24 hours, so caching either turns
+    // a two-minute outage into a day of poisoned lookups for every symbol a
+    // price sweep touched. `answeredSince` owns the test.
+    if (this.health.answeredSince(HEALTH_PROVIDER_ID, before)) {
+      this.setCached(key, null);
+    }
     return null;
   }
 
@@ -1136,6 +1181,8 @@ export class MsnFinanceService implements QuoteProvider {
     // surface for sector data is limited and may not be available for all
     // security types.
     const url = `${STOCK_DETAILS_PAGE}/fi-${encodeURIComponent(instrumentId)}`;
+    const admission = this.health.tryRequest(HEALTH_PROVIDER_ID);
+    if (admission === "refused") return null;
     try {
       const response = await fetch(url, {
         headers: {
@@ -1145,15 +1192,28 @@ export class MsnFinanceService implements QuoteProvider {
         },
         signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       });
-      if (!response.ok) return null;
+      if (!response.ok) {
+        this.health.recordSuccess(HEALTH_PROVIDER_ID);
+        return null;
+      }
       const html = await response.text();
+      this.health.recordSuccess(HEALTH_PROVIDER_ID);
       const sector = matchInText(html, /"sector"\s*:\s*"([^"]+)"/i);
       const industry = matchInText(html, /"industry"\s*:\s*"([^"]+)"/i);
       if (!sector && !industry) return { sector: null, industry: null };
       return { sector, industry };
     } catch (error) {
-      this.logger.warn(
-        `MSN Finance sector fetch for ${symbol} failed: ${error instanceof Error ? error.message : String(error)}`,
+      if (
+        !this.health.recordFailure(HEALTH_PROVIDER_ID, error) &&
+        admission === "probe"
+      ) {
+        this.health.releaseProbe(HEALTH_PROVIDER_ID);
+      }
+      this.health.logFailure(
+        this.logger,
+        HEALTH_PROVIDER_ID,
+        `sector fetch for ${symbol}`,
+        error,
       );
       return null;
     }

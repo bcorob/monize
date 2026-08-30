@@ -85,6 +85,63 @@ export function buildRateTimeline(
   return { startingAnnualRate, startingPaymentAmount, rateChanges };
 }
 
+/**
+ * The loan's terms in effect on `asOfIso`, resolved from the persisted rate
+ * history: the latest row dated at or before that day.
+ *
+ * Deliberately NOT `buildRateTimeline`'s `startingAnnualRate` /
+ * `startingPaymentAmount`, and it lives here so the difference is visible in one
+ * file. Those fields carry a "before the earliest row, the earliest row applies"
+ * fallback, which is right for a schedule anchored at **origination**
+ * (`loan-past-impact.ts` builds the contractual schedule that way, and needs the
+ * origination terms) and wrong for one anchored at a date the history already
+ * covers: under it a change dated next year would become today's terms *and* be
+ * applied again as a future step. A row dated ahead is a step, never the current
+ * state.
+ *
+ * `paymentAmount` is null when no applicable row states one -- which includes a
+ * loan whose only row is `initial`, since that payment may be a copy of the
+ * account field the caller already has. The rate has no such distinction: an
+ * `initial` row's rate is the origination rate, which is a fact about the loan.
+ */
+export interface EffectiveLoanTerms {
+  /** Null only when no row applies and the account carries no rate either. */
+  annualRate: number | null;
+  /** Stated by an applicable `manual` or `inferred` row; authoritative. */
+  paymentAmount: number | null;
+  /**
+   * From an applicable `initial` row. Either a real observed installment or a
+   * stale copy of `account.paymentAmount` -- see `RateTimelineRow.source` -- so a
+   * caller ranks it with the account's own scalar rather than above it.
+   */
+  snapshotPaymentAmount: number | null;
+}
+
+export function resolveEffectiveLoanTerms(
+  rows: RateTimelineRow[],
+  asOfIso: string,
+  fallbackAnnualRate: number | null,
+): EffectiveLoanTerms {
+  const applied = rows
+    .filter((row) => row.effectiveDate <= asOfIso)
+    .sort((a, b) => a.effectiveDate.localeCompare(b.effectiveDate));
+  const latest = applied[applied.length - 1];
+  const byLatest = [...applied].reverse();
+  const statedPayment = byLatest.find(
+    (row) => row.newPaymentAmount != null && row.source !== 'initial',
+  );
+  const snapshotPayment = byLatest.find(
+    (row) => row.newPaymentAmount != null && row.source === 'initial',
+  );
+  return {
+    // `??`, not `||`: a recorded 0% is a rate, and the absence has to survive
+    // to the caller as null rather than becoming a measured zero.
+    annualRate: latest?.annualRate ?? fallbackAnnualRate ?? null,
+    paymentAmount: statedPayment?.newPaymentAmount ?? null,
+    snapshotPaymentAmount: snapshotPayment?.newPaymentAmount ?? null,
+  };
+}
+
 export function compareSchedules(
   baseline: LoanScheduleResult,
   scenario: LoanScheduleResult,

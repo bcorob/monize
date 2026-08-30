@@ -27,7 +27,6 @@
     "manualTitle": "手動での計上が必要です",
     "negativeBalanceWarning": "この取引により勘定科目の残高がマイナスになります",
     "viewAll": "すべての請求書・入金を見る",
-    "totalIncoming": "入金合計",
     "moreItems": "+{count} 件",
     "overdue": "期限超過",
     "today": "今日",

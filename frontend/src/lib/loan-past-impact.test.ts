@@ -46,6 +46,44 @@ function makeHistory(
 }
 
 describe('computePastImpact', () => {
+  it('computes for a loan whose rate is only in its history', () => {
+    // Gating on account.interestRate made this panel vanish for a loan
+    // configured through the rate-history UI, while the cards and the payoff
+    // beside it resolved the same rate from that history and displayed it.
+    const account = makeAccount({
+      interestRate: null as unknown as number,
+    });
+    const impact = computePastImpact(
+      account,
+      makeHistory(account, [500, 500, 800]),
+      null,
+      [{ effectiveDate: '2024-12-15', annualRate: 6, newPaymentAmount: 500 }],
+    );
+    expect(impact).not.toBeNull();
+    // And it reconstructs the baseline at the recorded 6%, not at the 0% that a
+    // `?? 0` fallback for the absent scalar would supply. Asserting only
+    // "not null" leaves that substitution invisible: a 0% baseline still
+    // produces a schedule, it just charges no interest at all.
+    expect(impact!.originalSchedule.totalInterest).toBeGreaterThan(0);
+    // Same loan with the rate on the account instead of in the history: the two
+    // routes to a 6% baseline must agree, which a 0% substitution breaks.
+    const withScalar = computePastImpact(
+      makeAccount({ interestRate: 6 }),
+      makeHistory(account, [500, 500, 800]),
+      null,
+      [],
+    );
+    // Within a few percent rather than equal: the history row also carries its
+    // recorded payment, which enters the schedule as a step, so the two routes
+    // are not byte-identical. A 0% substitution is not a few percent off -- it
+    // charges nothing at all.
+    const ratio =
+      impact!.originalSchedule.totalInterest /
+      withScalar!.originalSchedule.totalInterest;
+    expect(ratio).toBeGreaterThan(0.95);
+    expect(ratio).toBeLessThan(1.05);
+  });
+
   it('returns null without a rate, frequency, or determinable payment', () => {
     const account = makeAccount();
     const history = makeHistory(account, [450]);

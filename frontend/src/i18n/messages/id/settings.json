@@ -514,15 +514,24 @@
     "encryption": {
       "heading": "Enkripsi Cadangan",
       "descriptionOidc": "Enkripsi cadangan manual dan otomatis dengan kata sandi cadangan khusus yang Anda tetapkan di sini. Kata sandi diperlukan untuk pemulihan.",
-      "loading": "Memuat...",
+      "descriptionLocal": "Cadangan Anda dienkripsi dengan kata sandi login Anda. Tidak ada yang perlu diingat lagi: kata sandi yang sama memulihkannya.",
+      "unavailable": "Server ini tidak dikonfigurasi untuk mengenkripsi cadangan, sehingga cadangan ditulis tanpa enkripsi.",
       "enabledBadge": "Aktif",
+      "disabledBadge": "Tidak aktif",
+      "enabledLocalNote": "Cadangan dienkripsi dengan kata sandi login Anda.",
+      "disabledLocalNote": "Cadangan ditulis tanpa enkripsi sampai Anda mengonfirmasi kata sandi login Anda.",
+      "enableWithLoginPasswordButton": "Aktifkan dengan Kata Sandi Login Saya",
+      "loading": "Memuat...",
       "changePasswordButton": "Ubah Kata Sandi Cadangan",
       "disableButton": "Nonaktifkan",
       "setPasswordButton": "Tetapkan Kata Sandi Cadangan",
       "setupModal": {
         "titleOidc": "Tetapkan Kata Sandi Cadangan",
+        "titleLocal": "Aktifkan Cadangan Terenkripsi",
         "descriptionOidc": "Pilih kata sandi yang akan digunakan untuk mengenkripsi cadangan Anda. Simpan di tempat yang aman -- Anda akan membutuhkannya untuk pemulihan.",
+        "descriptionLocal": "Konfirmasikan kata sandi login Anda untuk mengaktifkan cadangan terenkripsi. Kata sandi itulah yang mengenkripsi cadangan Anda dan yang Anda perlukan untuk memulihkannya.",
         "placeholderOidc": "Kata sandi cadangan baru (12+ karakter)",
+        "placeholderLocal": "Kata sandi login Anda",
         "savingButton": "Menyimpan...",
         "confirmButton": "Konfirmasi"
       },
@@ -768,7 +777,7 @@
     },
     "encryptionNotConfigured": {
       "heading": "Kunci enkripsi diperlukan",
-      "body": "Akses darurat memerlukan AI_ENCRYPTION_KEY yang diatur di server. Pemberian akses menyimpan tautan akses setiap kontak secara terenkripsi agar percobaan ulang dapat mengirim ulang tautan yang sama; tanpa kunci itu tidak ada tautan yang dapat dikirim sama sekali."
+      "body": "Akses darurat memerlukan ENCRYPTION_KEY yang diatur di server. Pemberian akses menyimpan tautan akses setiap kontak secara terenkripsi agar percobaan ulang dapat mengirim ulang tautan yang sama; tanpa kunci itu tidak ada tautan yang dapat dikirim sama sekali."
     },
     "alreadyGranted": {
       "heading": "Akses darurat sudah diberikan",
@@ -874,7 +883,7 @@
   "aiProviders": {
     "heading": "Penyedia AI",
     "addButton": "Tambah Penyedia",
-    "encryptionWarning": "AI_ENCRYPTION_KEY tidak dikonfigurasi. Anda dapat menggunakan Ollama (lokal, tidak perlu kunci API) tetapi penyedia cloud memerlukan enkripsi untuk menyimpan kunci API dengan aman.",
+    "encryptionWarning": "ENCRYPTION_KEY tidak dikonfigurasi. Anda dapat menggunakan Ollama (lokal, tidak perlu kunci API) tetapi penyedia cloud memerlukan enkripsi untuk menyimpan kunci API dengan aman.",
     "systemDefault": {
       "heading": "Penyedia AI Bawaan Sistem Tersedia",
       "description": "Penyedia AI pusat telah dikonfigurasi oleh administrator Anda",

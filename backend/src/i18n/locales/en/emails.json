@@ -163,5 +163,28 @@
     "body1": "Because your account had been inactive, your designated emergency contacts were sent links to take over your account. You have now signed back in, so <strong>those links have been revoked</strong> and the safeguard has been re-armed.",
     "body2": "If this was expected, no action is needed. If you did not expect this, review your sign-in activity and your emergency-access settings.",
     "button": "Review Emergency Access"
+  },
+  "providerOutage": {
+    "subject": "Monize: {{ provider }} is not responding",
+    "heading": "Market data provider unavailable",
+    "greeting": "Hi {{ name }},",
+    "intro": "Monize has not been able to reach <strong>{{ provider }}</strong> since {{ since }} ({{ duration }}). Requests to it are suspended for now and retried at widening intervals.",
+    "labelFailures": "Failed attempts",
+    "labelLastError": "Last error",
+    "labelLastSuccess": "Last successful response",
+    "valueNever": "never",
+    "valueUnknown": "unknown",
+    "impact": "Prices, charts and index comparisons that depend on this provider may be missing or out of date until it answers again. Nothing recorded in Monize has been lost.",
+    "whatToCheck": "If the provider itself is up, check this server's outbound network access and DNS -- a container that cannot resolve or reach the provider fails exactly this way.",
+    "throttleNote": "You will get one more email when it recovers. Alerts about the same provider are sent at most once every {{ hours }} hours, so a provider that keeps flapping cannot fill your inbox.",
+    "durationMinutes": "{{ minutes }} min",
+    "durationHoursMinutes": "{{ hours }} h {{ minutes }} min"
+  },
+  "providerRecovery": {
+    "subject": "Monize: {{ provider }} is answering again",
+    "heading": "Market data provider is answering again",
+    "greeting": "Hi {{ name }},",
+    "intro": "<strong>{{ provider }}</strong> answered again at {{ restoredAt }}. The outage lasted {{ duration }}.",
+    "backfill": "Prices and index history missed during the outage are picked up by the next scheduled refresh; no action is needed."
   }
 }

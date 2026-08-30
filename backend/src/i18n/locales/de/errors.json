@@ -38,7 +38,8 @@
     "ambiguousBrokerage": "\"{{ query }}\" entspricht mehreren Brokerage-Konten: {{ list }}. Verwenden Sie den genauen Kontonamen.",
     "unknownInvestmentAccount": "Unbekanntes Konto: {{ name }}. Verwenden Sie einen genauen Namen aus der Kontoliste des Benutzers.",
     "notACreditCard": "Abrechnungszeiträume sind nur für Kreditkartenkonten verfügbar",
-    "noStatementSettlementDay": "Für diese Kreditkarte ist kein Abrechnungstag konfiguriert"
+    "noStatementSettlementDay": "Für diese Kreditkarte ist kein Abrechnungstag konfiguriert",
+    "loanLedgerUnreadable": "Der Saldo dieses Kredits konnte nicht gelesen werden. Bitte erneut versuchen."
   },
   "actionHistory": {
     "nothingToUndo": "Nichts rückgängig zu machen",
@@ -76,8 +77,8 @@
     "crossOwnerTransferUnsupported": "Diese Umbuchung betrifft das Konto eines anderen Benutzers, das der Assistent noch nicht bearbeiten oder löschen kann. Verwenden Sie stattdessen den Transaktionsbildschirm.",
     "providerConfigNotFound": "KI-Anbieterkonfiguration nicht gefunden",
     "maxProvidersExceeded": "Maximal {{ maxProvidersPerUser }} KI-Anbieterkonfigurationen pro Benutzer",
-    "encryptionKeyNotConfigured": "AI_ENCRYPTION_KEY ist nicht konfiguriert. API-Schlüssel können nicht sicher gespeichert werden.",
-    "apiKeyUndecryptable": "Der gespeicherte API-Schlüssel kann von diesem Server nicht gelesen werden. Das passiert, wenn eine Sicherung auf einer anderen Instanz wiederhergestellt wird oder nachdem sich AI_ENCRYPTION_KEY geändert hat. Geben Sie den API-Schlüssel erneut ein, um das zu beheben.",
+    "encryptionKeyNotConfigured": "ENCRYPTION_KEY ist nicht konfiguriert. API-Schlüssel können nicht sicher gespeichert werden.",
+    "apiKeyUndecryptable": "Der gespeicherte API-Schlüssel kann von diesem Server nicht gelesen werden. Das passiert, wenn eine Sicherung auf einer anderen Instanz wiederhergestellt wird oder nachdem sich ENCRYPTION_KEY geändert hat. Geben Sie den API-Schlüssel erneut ein, um das zu beheben.",
     "noActiveProviders": "Keine aktiven KI-Anbieter konfiguriert. Konfigurieren Sie einen Anbieter in den KI-Einstellungen.",
     "allProvidersFailed": "Alle KI-Anbieter sind fehlgeschlagen. Überprüfen Sie Ihre Anbieterkonfiguration und versuchen Sie es erneut.",
     "noToolUseProvider": "Kein KI-Anbieter mit Tool-Unterstützung konfiguriert. Anfragen in natürlicher Sprache erfordern Anthropic, OpenAI oder Ollama. Konfigurieren Sie einen in den KI-Einstellungen.",
@@ -187,8 +188,10 @@
     "unsupportedBackupVersion": "Nicht unterstützte Sicherungsversion: {{ version }}. Erwartet: {{ expected }}",
     "missingExportedAt": "Ungültiges Sicherungsformat: exportedAt fehlt",
     "tableNotAllowed": "Tabelle {{ table }} ist bei der Sicherungswiederherstellung nicht zulässig",
-    "encryptionNotConfigured": "Server ist nicht für Verschlüsselung konfiguriert (AI_ENCRYPTION_KEY fehlt)",
+    "encryptionNotConfigured": "Der Server ist nicht für Verschlüsselung konfiguriert (JWT_SECRET fehlt oder ist zu kurz)",
     "backupPasswordOidcOnly": "Sicherungspasswort ist nur für OIDC-Benutzer konfigurierbar; lokale Benutzer verwenden ihr Anmeldepasswort",
+    "backupPasswordLocalOnly": "Dieses Konto hat kein Anmeldepasswort, mit dem Backups verschlüsselt werden könnten; legen Sie stattdessen ein Backup-Passwort fest",
+    "loginPasswordIncorrect": "Das ist nicht Ihr aktuelles Anmeldepasswort",
     "backupPasswordTooShort": "Sicherungspasswort muss mindestens {{ minLength }} Zeichen lang sein",
     "backupPasswordBreached": "Dieses Passwort wurde in einem Datenleck gefunden. Bitte wählen Sie ein anderes Passwort.",
     "restoreBodyMustBeFile": "Anfrage-Body muss eine Sicherungsdatei sein",
@@ -282,8 +285,8 @@
   },
   "emergencyAccess": {
     "smtpNotConfigured": "E-Mail ist nicht konfiguriert. Notfallzugriff kann erst aktiviert werden, wenn SMTP eingerichtet ist.",
-    "encryptionNotConfigured": "Verschlüsselungsschlüssel ist nicht konfiguriert. Die Freitextnachricht kann erst sicher gespeichert werden, wenn AI_ENCRYPTION_KEY gesetzt ist.",
-    "encryptionRequiredToEnable": "Die Verschlüsselung von Zugangsdaten ist nicht konfiguriert. Notfallzugriff kann erst aktiviert werden, wenn AI_ENCRYPTION_KEY gesetzt ist, denn eine Gewährung muss den Zugangslink jedes Kontakts sicher speichern.",
+    "encryptionNotConfigured": "Verschlüsselungsschlüssel ist nicht konfiguriert. Die Freitextnachricht kann erst sicher gespeichert werden, wenn ENCRYPTION_KEY gesetzt ist.",
+    "encryptionRequiredToEnable": "Die Verschlüsselung von Zugangsdaten ist nicht konfiguriert. Notfallzugriff kann erst aktiviert werden, wenn ENCRYPTION_KEY gesetzt ist, denn eine Gewährung muss den Zugangslink jedes Kontakts sicher speichern.",
     "contactEmailExists": "Ein Notfallkontakt mit dieser E-Mail-Adresse existiert bereits.",
     "contactNotFound": "Kontakt nicht gefunden",
     "notConfigured": "Notfallzugriff nicht konfiguriert",
@@ -384,7 +387,8 @@
     "splitOverrideRequiresAmount": "Betrag ist beim Erstellen einer Buchungsteil-Überschreibung erforderlich",
     "overrideNotFound": "Überschreibung mit ID {{ overrideId }} nicht gefunden",
     "updateSplitOverrideRequiresAmount": "Betrag ist für Buchungsteil-Überschreibung erforderlich",
-    "dateMustBeYMD": "Datum muss im Format YYYY-MM-DD sein"
+    "dateMustBeYMD": "Datum muss im Format YYYY-MM-DD sein",
+    "loanLedgerUnreadable": "Diese Kreditrate konnte nicht berechnet werden, da ihr Kontosaldo nicht gelesen werden konnte. Bitte erneut versuchen."
   },
   "securities": {
     "exchangeRateUnavailable": "Wechselkurs für {{ from }} -> {{ to }} zum Transaktionsdatum konnte nicht ermittelt werden. Geben Sie einen expliziten exchangeRate an, damit die Buchung auf dem Geldkonto korrekt ist.",

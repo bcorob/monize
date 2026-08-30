@@ -71,7 +71,7 @@ The following are **out of scope**:
 
 If you self-host Monize, please follow these guidelines:
 
-- Set `JWT_SECRET` and `AI_ENCRYPTION_KEY` to strong, random values of at least
+- Set `JWT_SECRET` and `ENCRYPTION_KEY` (formerly `AI_ENCRYPTION_KEY`, still accepted) to strong, random values of at least
   32 characters. Never reuse the example values from `.env.example`.
 - Run the application behind HTTPS, with TLS terminated at a trusted reverse
   proxy or load balancer.

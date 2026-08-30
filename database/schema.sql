@@ -44,7 +44,7 @@ CREATE TABLE users (
     pending_oidc_subject VARCHAR(255),
     is_delegate_only BOOLEAN NOT NULL DEFAULT false, -- true when the row exists solely as an owner-managed delegate identity (created via Shared Access, never claimed via /register)
     backup_encryption_enabled BOOLEAN NOT NULL DEFAULT false,
-    backup_password_enc TEXT -- backup password (login password for local, dedicated password for OIDC) encrypted with AI_ENCRYPTION_KEY for auto-backup use
+    backup_password_enc TEXT -- backup password (login password for local, dedicated password for OIDC) encrypted with ENCRYPTION_KEY for auto-backup use
 );
 
 CREATE INDEX IF NOT EXISTS idx_users_reset_token ON users(reset_token) WHERE reset_token IS NOT NULL;
@@ -746,7 +746,7 @@ CREATE TABLE scheduled_transaction_overrides (
     -- An occurrence's IDENTITY is its recurrence slot, so that is what is
     -- unique: `override_date` is the day the occurrence was moved TO, an
     -- attribute of the override rather than its name. Keyed on override_date
-    -- (migration 166) this permitted two overrides for one slot -- the posting
+    -- (migration 168) this permitted two overrides for one slot -- the posting
     -- then used whichever row the reader's map happened to keep -- and refused
     -- two different occurrences moved onto the same day, which is legitimate.
     CONSTRAINT uq_sched_txn_overrides_occurrence
@@ -851,6 +851,27 @@ CREATE TABLE market_index_sync (
     last_success_at TIMESTAMPTZ,
     last_error TEXT
 );
+
+-- Outbound market-data provider availability, and what has already been said
+-- about it by email. The in-process circuit breaker decides whether to call
+-- out; this row is what survives a restart (an outage that restarts the
+-- container must not reset the clock the alert gate reads) and what serializes
+-- the alert across replicas via a conditional UPDATE on the notification
+-- columns. See backend/src/provider-health/ and docs/specs/provider-outage-alerts.md.
+CREATE TABLE provider_health (
+    provider VARCHAR(64) PRIMARY KEY,
+    state VARCHAR(16) NOT NULL DEFAULT 'up',
+    recent_failures INTEGER NOT NULL DEFAULT 0,
+    outage_started_at TIMESTAMPTZ,
+    last_failure_at TIMESTAMPTZ,
+    last_failure_reason TEXT,
+    last_success_at TIMESTAMPTZ,
+    outage_notified_at TIMESTAMPTZ,
+    last_notified_at TIMESTAMPTZ,
+    CONSTRAINT provider_health_state_check CHECK (state IN ('up', 'down'))
+);
+
+CREATE INDEX idx_provider_health_down ON provider_health (provider) WHERE state = 'down';
 
 -- Investment Holdings
 CREATE TABLE holdings (
@@ -1121,7 +1142,7 @@ CREATE INDEX idx_delegate_net_worth_exclusions_user
 -- Emergency Access. Lets the owner pre-designate one or more contacts who
 -- receive a magic link to take over the account after a configurable
 -- period of inactivity. The free-form message body is stored as
--- AES-256-GCM ciphertext (AiEncryptionService, keyed by AI_ENCRYPTION_KEY)
+-- AES-256-GCM ciphertext (EncryptionService, keyed by ENCRYPTION_KEY)
 -- so a database dump cannot leak it; the running app decrypts on demand.
 CREATE TABLE emergency_access_settings (
     owner_user_id         UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
@@ -1170,7 +1191,7 @@ CREATE TABLE emergency_access_contacts (
     -- to say so (audit RRV4-004). NULL means never notified.
     notified_grant_generation INTEGER,
     -- The undelivered credential (migration 149), AES-256-GCM under
-    -- AI_ENCRYPTION_KEY. Written with the hash before the first send, re-read by a
+    -- ENCRYPTION_KEY. Written with the hash before the first send, re-read by a
     -- retry so it re-sends the *same* link rather than minting one that kills the
     -- link already in the recipient's inbox, and cleared in the statement that
     -- records delivery. A credential at rest, so it does not outlive the delivery
@@ -2726,6 +2747,7 @@ CREATE POLICY emergency_access_contacts_isolation ON emergency_access_contacts
 -- rls-exempt: market_index_prices
 -- rls-exempt: market_index_sync
 -- rls-exempt: oauth_payloads
+-- rls-exempt: provider_health
 -- rls-exempt: schema_migrations
 -- ---------------------------------------------------------------------------
 

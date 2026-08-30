@@ -4,7 +4,7 @@ import { ConfigService } from "@nestjs/config";
 import { NotFoundException, BadRequestException } from "@nestjs/common";
 import { AiService } from "./ai.service";
 import { AiProviderConfig } from "./entities/ai-provider-config.entity";
-import { AiEncryptionService } from "./ai-encryption.service";
+import { EncryptionService } from "../common/encryption/encryption.service";
 import { AiProviderFactory } from "./ai-provider.factory";
 import { AiUsageService } from "./ai-usage.service";
 import { AiRelayService, RelayTimeoutError } from "./relay/ai-relay.service";
@@ -19,7 +19,7 @@ describe("AiService", () => {
   let scopedManager: Record<string, jest.Mock>;
   let mockConfigRepository: Record<string, jest.Mock>;
   let mockEncryptionService: Partial<
-    Record<keyof AiEncryptionService, jest.Mock>
+    Record<keyof EncryptionService, jest.Mock>
   >;
   let mockProviderFactory: Partial<Record<keyof AiProviderFactory, jest.Mock>>;
   let mockUsageService: Partial<Record<keyof AiUsageService, jest.Mock>>;
@@ -123,7 +123,7 @@ describe("AiService", () => {
           provide: DataSource,
           useValue: scoped.dataSource,
         },
-        { provide: AiEncryptionService, useValue: mockEncryptionService },
+        { provide: EncryptionService, useValue: mockEncryptionService },
         { provide: AiProviderFactory, useValue: mockProviderFactory },
         { provide: AiUsageService, useValue: mockUsageService },
         { provide: ConfigService, useValue: mockConfigService },

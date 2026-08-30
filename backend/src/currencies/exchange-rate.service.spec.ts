@@ -1,6 +1,8 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { DataSource } from "typeorm";
 import { ExchangeRateService } from "./exchange-rate.service";
+import { ProviderHealthService } from "../provider-health/provider-health.service";
+import { createTestProviderHealth } from "../test-helpers/provider-health-testing";
 import { ExchangeRate } from "./entities/exchange-rate.entity";
 import { Currency } from "./entities/currency.entity";
 import { UserPreference } from "../users/entities/user-preference.entity";
@@ -27,6 +29,7 @@ jest.mock("../common/date-utils", () => ({
 
 describe("ExchangeRateService", () => {
   let service: ExchangeRateService;
+  let health: ProviderHealthService;
   let exchangeRateRepository: Record<string, jest.Mock>;
   /** Rows the single-rate upsert wrote, in order, as the service supplied them. */
   let upsertedRates: Array<{
@@ -161,11 +164,15 @@ describe("ExchangeRateService", () => {
       fetchHistoricalWindow: jest.fn(),
     };
 
+    health = createTestProviderHealth();
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ExchangeRateService,
         { provide: DataSource, useValue: dataSource },
         { provide: YahooFinanceService, useValue: yahooFinanceService },
+        // The real breaker, so a spec that drives the provider to failure sees
+        // what production sees.
+        { provide: ProviderHealthService, useValue: health },
       ],
     }).compile();
 
@@ -1516,7 +1523,11 @@ describe("ExchangeRateService", () => {
     // The one case the fetch can never satisfy is the one that would otherwise
     // repeat on every page load: a date before the pair's history begins.
     it("does not ask again for a pair-month the provider had nothing for", async () => {
-      yahooFinanceService.fetchHistoricalWindow.mockResolvedValue(null);
+      // `[]`, not `null`: an answered-empty window is what may be remembered.
+      // `null` means no answer -- a failure, or a call the breaker refused --
+      // and remembering that leaves every foreign-currency total in the report
+      // null for half an hour after the provider came back.
+      yahooFinanceService.fetchHistoricalWindow.mockResolvedValue([]);
 
       await service.ensureRatesForDate(
         [{ from: "USD", to: "CAD" }],
@@ -1609,6 +1620,84 @@ describe("ExchangeRateService", () => {
       expect(loaded).toBe(0);
       expect(yahooFinanceService.fetchHistoricalWindow).not.toHaveBeenCalled();
       expect(dataSource.query).not.toHaveBeenCalled();
+    });
+  });
+  describe("ensureRatesForDate and the empty-window memory", () => {
+    const dnsFailure = () =>
+      Object.assign(new TypeError("fetch failed"), {
+        cause: Object.assign(new Error("getaddrinfo EAI_AGAIN"), {
+          code: "EAI_AGAIN",
+        }),
+      });
+
+    it("does not remember a window the provider never answered", async () => {
+      // A refusal and a transport failure both persist zero rates, and this
+      // memory holds for 30 minutes: remembering one leaves every
+      // foreign-currency total in the report null long after a two-minute
+      // outage ended.
+      yahooFinanceService.fetchHistoricalWindow.mockImplementation(async () => {
+        health.recordFailure("yahoo_finance", dnsFailure());
+        return null;
+      });
+
+      await service.ensureRatesForDate(
+        [{ from: "USD", to: "CAD" }],
+        "2026-03-15",
+      );
+      const callsAfterFirst =
+        yahooFinanceService.fetchHistoricalWindow.mock.calls.length;
+
+      await service.ensureRatesForDate(
+        [{ from: "USD", to: "CAD" }],
+        "2026-03-16",
+      );
+      expect(
+        yahooFinanceService.fetchHistoricalWindow.mock.calls.length,
+      ).toBeGreaterThan(callsAfterFirst);
+    });
+
+    it("does not remember a pair only one direction answered for", async () => {
+      // `USDCAD=X` answering "no bars" says nothing about `CADUSD=X`, and this
+      // memory holds for 30 minutes: half-knowledge is what used to be cached.
+      let call = 0;
+      yahooFinanceService.fetchHistoricalWindow.mockImplementation(() => {
+        call++;
+        return Promise.resolve(call === 1 ? [] : null);
+      });
+
+      await service.ensureRatesForDate(
+        [{ from: "USD", to: "CAD" }],
+        "2026-03-15",
+      );
+      const callsAfterFirst =
+        yahooFinanceService.fetchHistoricalWindow.mock.calls.length;
+
+      await service.ensureRatesForDate(
+        [{ from: "USD", to: "CAD" }],
+        "2026-03-16",
+      );
+      expect(
+        yahooFinanceService.fetchHistoricalWindow.mock.calls.length,
+      ).toBeGreaterThan(callsAfterFirst);
+    });
+
+    it("still remembers a window the provider answered as empty", async () => {
+      yahooFinanceService.fetchHistoricalWindow.mockResolvedValue([]);
+
+      await service.ensureRatesForDate(
+        [{ from: "USD", to: "CAD" }],
+        "2026-03-15",
+      );
+      const callsAfterFirst =
+        yahooFinanceService.fetchHistoricalWindow.mock.calls.length;
+
+      await service.ensureRatesForDate(
+        [{ from: "USD", to: "CAD" }],
+        "2026-03-16",
+      );
+      expect(yahooFinanceService.fetchHistoricalWindow.mock.calls.length).toBe(
+        callsAfterFirst,
+      );
     });
   });
 });

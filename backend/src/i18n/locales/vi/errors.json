@@ -38,7 +38,8 @@
     "ambiguousBrokerage": "\"{{ query }}\" khớp với nhiều tài khoản môi giới: {{ list }}. Hãy dùng tên tài khoản chính xác.",
     "unknownInvestmentAccount": "Tài khoản không xác định: {{ name }}. Hãy dùng tên chính xác từ danh sách tài khoản của người dùng.",
     "notACreditCard": "Chu kỳ sao kê chỉ khả dụng cho tài khoản thẻ tín dụng",
-    "noStatementSettlementDay": "Thẻ tín dụng này chưa được cấu hình ngày chốt sao kê"
+    "noStatementSettlementDay": "Thẻ tín dụng này chưa được cấu hình ngày chốt sao kê",
+    "loanLedgerUnreadable": "Không thể đọc số dư của khoản vay này. Vui lòng thử lại."
   },
   "actionHistory": {
     "nothingToUndo": "Không có gì để hoàn tác",
@@ -76,8 +77,8 @@
     "crossOwnerTransferUnsupported": "Khoản chuyển khoản này liên quan đến tài khoản của người dùng khác mà trợ lý chưa thể chỉnh sửa hoặc xóa. Hãy sử dụng màn hình Giao dịch.",
     "providerConfigNotFound": "Không tìm thấy cấu hình nhà cung cấp AI",
     "maxProvidersExceeded": "Tối đa {{ maxProvidersPerUser }} cấu hình nhà cung cấp AI mỗi người dùng",
-    "encryptionKeyNotConfigured": "AI_ENCRYPTION_KEY chưa được cấu hình. Không thể lưu trữ khóa API một cách an toàn.",
-    "apiKeyUndecryptable": "Máy chủ này không đọc được khóa API đã lưu. Điều này xảy ra khi bản sao lưu được khôi phục trên một phiên bản khác, hoặc sau khi AI_ENCRYPTION_KEY thay đổi. Hãy nhập lại khóa API để khắc phục.",
+    "encryptionKeyNotConfigured": "ENCRYPTION_KEY chưa được cấu hình. Không thể lưu trữ khóa API một cách an toàn.",
+    "apiKeyUndecryptable": "Máy chủ này không đọc được khóa API đã lưu. Điều này xảy ra khi bản sao lưu được khôi phục trên một phiên bản khác, hoặc sau khi ENCRYPTION_KEY thay đổi. Hãy nhập lại khóa API để khắc phục.",
     "noActiveProviders": "Không có nhà cung cấp AI nào đang hoạt động. Vui lòng cấu hình nhà cung cấp trong Cài đặt AI.",
     "allProvidersFailed": "Tất cả nhà cung cấp AI đều thất bại. Vui lòng kiểm tra cấu hình nhà cung cấp và thử lại.",
     "noToolUseProvider": "Không có nhà cung cấp AI nào hỗ trợ sử dụng công cụ. Truy vấn bằng ngôn ngữ tự nhiên yêu cầu Anthropic, OpenAI hoặc Ollama. Vui lòng cấu hình một nhà cung cấp trong Cài đặt AI.",
@@ -187,8 +188,10 @@
     "unsupportedBackupVersion": "Phiên bản sao lưu không được hỗ trợ: {{ version }}. Dự kiến {{ expected }}",
     "missingExportedAt": "Định dạng sao lưu không hợp lệ: thiếu exportedAt",
     "tableNotAllowed": "Bảng {{ table }} không được phép trong khôi phục sao lưu",
-    "encryptionNotConfigured": "Máy chủ chưa được cấu hình cho mã hóa (thiếu AI_ENCRYPTION_KEY)",
+    "encryptionNotConfigured": "Máy chủ chưa được cấu hình để mã hóa (thiếu JWT_SECRET hoặc quá ngắn)",
     "backupPasswordOidcOnly": "Mật khẩu sao lưu chỉ có thể cấu hình cho người dùng OIDC; người dùng cục bộ sử dụng mật khẩu đăng nhập của họ",
+    "backupPasswordLocalOnly": "Tài khoản này không có mật khẩu đăng nhập để mã hóa bản sao lưu; hãy đặt mật khẩu sao lưu thay thế",
+    "loginPasswordIncorrect": "Đó không phải mật khẩu đăng nhập hiện tại của bạn",
     "backupPasswordTooShort": "Mật khẩu sao lưu phải có ít nhất {{ minLength }} ký tự",
     "backupPasswordBreached": "Mật khẩu này đã bị phát hiện trong một vụ rò rỉ dữ liệu. Vui lòng chọn mật khẩu khác.",
     "restoreBodyMustBeFile": "Nội dung yêu cầu phải là tệp sao lưu",
@@ -282,8 +285,8 @@
   },
   "emergencyAccess": {
     "smtpNotConfigured": "Email chưa được cấu hình. Không thể bật truy cập khẩn cấp cho đến khi SMTP được thiết lập.",
-    "encryptionNotConfigured": "Khóa mã hóa chưa được cấu hình. Tin nhắn văn bản tự do không thể được lưu trữ an toàn cho đến khi AI_ENCRYPTION_KEY được thiết lập.",
-    "encryptionRequiredToEnable": "Mã hóa thông tin xác thực chưa được cấu hình. Không thể bật truy cập khẩn cấp cho đến khi AI_ENCRYPTION_KEY được thiết lập, vì việc cấp quyền phải lưu trữ an toàn liên kết truy cập của từng liên hệ.",
+    "encryptionNotConfigured": "Khóa mã hóa chưa được cấu hình. Tin nhắn văn bản tự do không thể được lưu trữ an toàn cho đến khi ENCRYPTION_KEY được thiết lập.",
+    "encryptionRequiredToEnable": "Mã hóa thông tin xác thực chưa được cấu hình. Không thể bật truy cập khẩn cấp cho đến khi ENCRYPTION_KEY được thiết lập, vì việc cấp quyền phải lưu trữ an toàn liên kết truy cập của từng liên hệ.",
     "contactEmailExists": "Đã có liên hệ khẩn cấp với email này.",
     "contactNotFound": "Không tìm thấy liên hệ",
     "notConfigured": "Quyền truy cập khẩn cấp chưa được cấu hình",
@@ -384,7 +387,8 @@
     "splitOverrideRequiresAmount": "Số tiền là bắt buộc khi tạo ghi đè chia nhỏ",
     "overrideNotFound": "Không tìm thấy ghi đè với ID {{ overrideId }}",
     "updateSplitOverrideRequiresAmount": "Số tiền là bắt buộc cho ghi đè chia nhỏ",
-    "dateMustBeYMD": "date phải có định dạng YYYY-MM-DD"
+    "dateMustBeYMD": "date phải có định dạng YYYY-MM-DD",
+    "loanLedgerUnreadable": "Không thể tính khoản thanh toán vay này vì không thể đọc số dư sổ cái của nó. Vui lòng thử lại."
   },
   "securities": {
     "exchangeRateUnavailable": "Không thể xác định tỷ giá hối đoái cho {{ from }} -> {{ to }} vào ngày giao dịch. Hãy cung cấp exchangeRate rõ ràng để bút toán vào tài khoản tiền mặt được chính xác.",

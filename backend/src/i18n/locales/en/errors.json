@@ -47,7 +47,8 @@
     "ambiguousBrokerage": "\"{{ query }}\" matches multiple brokerage accounts: {{ list }}. Use the exact account name.",
     "unknownInvestmentAccount": "Unknown account: {{ name }}. Use an exact name from the user's account list.",
     "notACreditCard": "Statement cycles are only available for credit card accounts",
-    "noStatementSettlementDay": "This credit card has no statement settlement day configured"
+    "noStatementSettlementDay": "This credit card has no statement settlement day configured",
+    "loanLedgerUnreadable": "This loan's balance could not be read. Try again."
   },
   "actionHistory": {
     "nothingToUndo": "Nothing to undo",
@@ -85,8 +86,8 @@
     "crossOwnerTransferUnsupported": "This transfer involves another user's account, which the assistant can't edit or delete yet. Use the Transactions screen instead.",
     "providerConfigNotFound": "AI provider configuration not found",
     "maxProvidersExceeded": "Maximum of {{ maxProvidersPerUser }} AI provider configurations per user",
-    "encryptionKeyNotConfigured": "AI_ENCRYPTION_KEY is not configured. Cannot store API keys securely.",
-    "apiKeyUndecryptable": "The stored API key cannot be read by this server. This happens when a backup is restored onto a different instance, or after AI_ENCRYPTION_KEY changes. Enter the API key again to fix it.",
+    "encryptionKeyNotConfigured": "ENCRYPTION_KEY is not configured. Cannot store API keys securely.",
+    "apiKeyUndecryptable": "The stored API key cannot be read by this server. This happens when a backup is restored onto a different instance, or after ENCRYPTION_KEY changes. Enter the API key again to fix it.",
     "noActiveProviders": "No active AI providers configured. Please configure a provider in AI Settings.",
     "allProvidersFailed": "All AI providers failed. Please check your provider configuration and try again.",
     "noToolUseProvider": "No AI provider with tool use support configured. Natural language queries require Anthropic, OpenAI, or Ollama. Please configure one in AI Settings.",
@@ -196,8 +197,10 @@
     "unsupportedBackupVersion": "Unsupported backup version: {{ version }}. Expected {{ expected }}",
     "missingExportedAt": "Invalid backup format: missing exportedAt",
     "tableNotAllowed": "Table {{ table }} is not allowed in backup restore",
-    "encryptionNotConfigured": "Server is not configured for encryption (AI_ENCRYPTION_KEY missing)",
+    "encryptionNotConfigured": "Server is not configured for encryption (ENCRYPTION_KEY missing or too short)",
     "backupPasswordOidcOnly": "Backup password is only configurable for OIDC users; local users use their login password",
+    "backupPasswordLocalOnly": "This account has no login password to encrypt backups with; set a backup password instead",
+    "loginPasswordIncorrect": "That is not your current login password",
     "backupPasswordTooShort": "Backup password must be at least {{ minLength }} characters",
     "backupPasswordBreached": "This password has been found in a data breach. Please choose a different password.",
     "restoreBodyMustBeFile": "Request body must be a backup file",
@@ -291,8 +294,8 @@
   },
   "emergencyAccess": {
     "smtpNotConfigured": "Email is not configured. Emergency access cannot be enabled until SMTP is set up.",
-    "encryptionNotConfigured": "Encryption key is not configured. The free-form message cannot be stored securely until AI_ENCRYPTION_KEY is set.",
-    "encryptionRequiredToEnable": "Credential encryption is not configured. Emergency access cannot be enabled until AI_ENCRYPTION_KEY is set, because a grant has to store each contact's access link securely.",
+    "encryptionNotConfigured": "Encryption key is not configured. The free-form message cannot be stored securely until ENCRYPTION_KEY is set.",
+    "encryptionRequiredToEnable": "Credential encryption is not configured. Emergency access cannot be enabled until ENCRYPTION_KEY is set, because a grant has to store each contact's access link securely.",
     "contactEmailExists": "An emergency contact with this email already exists.",
     "contactNotFound": "Contact not found",
     "notConfigured": "Emergency access not configured",
@@ -393,7 +396,8 @@
     "splitOverrideRequiresAmount": "Amount is required when creating split override",
     "overrideNotFound": "Override with ID {{ overrideId }} not found",
     "updateSplitOverrideRequiresAmount": "Amount is required for split override",
-    "dateMustBeYMD": "date must be in YYYY-MM-DD format"
+    "dateMustBeYMD": "date must be in YYYY-MM-DD format",
+    "loanLedgerUnreadable": "This loan payment could not be priced because its ledger balance could not be read. Try again."
   },
   "securities": {
     "accountMustBeInvestment": "Account must be of type INVESTMENT",

@@ -38,7 +38,8 @@
     "ambiguousBrokerage": "\"{{ query }}\"이(가) 여러 증권 계좌와 일치합니다: {{ list }}. 정확한 계좌 이름을 사용하세요.",
     "unknownInvestmentAccount": "알 수 없는 계좌: {{ name }}. 사용자의 계좌 목록에서 정확한 이름을 사용하세요.",
     "notACreditCard": "명세서 주기는 신용카드 계정에서만 사용할 수 있습니다",
-    "noStatementSettlementDay": "이 신용카드에는 명세서 결제일이 설정되어 있지 않습니다"
+    "noStatementSettlementDay": "이 신용카드에는 명세서 결제일이 설정되어 있지 않습니다",
+    "loanLedgerUnreadable": "이 대출의 잔액을 읽을 수 없습니다. 다시 시도하세요."
   },
   "actionHistory": {
     "nothingToUndo": "실행 취소할 항목이 없습니다",
@@ -76,8 +77,8 @@
     "crossOwnerTransferUnsupported": "이 이체에는 다른 사용자의 계좌가 포함되어 있어 어시스턴트가 아직 편집하거나 삭제할 수 없습니다. 대신 거래 화면을 사용하세요.",
     "providerConfigNotFound": "AI 공급자 구성을 찾을 수 없습니다",
     "maxProvidersExceeded": "사용자당 최대 {{ maxProvidersPerUser }}개의 AI 공급자 구성을 설정할 수 있습니다",
-    "encryptionKeyNotConfigured": "AI_ENCRYPTION_KEY가 구성되지 않았습니다. API 키를 안전하게 저장할 수 없습니다.",
-    "apiKeyUndecryptable": "저장된 API 키를 이 서버에서 읽을 수 없습니다. 백업을 다른 인스턴스에 복원했거나 AI_ENCRYPTION_KEY가 변경된 경우에 발생합니다. API 키를 다시 입력하면 해결됩니다.",
+    "encryptionKeyNotConfigured": "ENCRYPTION_KEY가 구성되지 않았습니다. API 키를 안전하게 저장할 수 없습니다.",
+    "apiKeyUndecryptable": "저장된 API 키를 이 서버에서 읽을 수 없습니다. 백업을 다른 인스턴스에 복원했거나 ENCRYPTION_KEY가 변경된 경우에 발생합니다. API 키를 다시 입력하면 해결됩니다.",
     "noActiveProviders": "활성화된 AI 공급자가 구성되어 있지 않습니다. AI 설정에서 공급자를 구성하세요.",
     "allProvidersFailed": "모든 AI 공급자가 실패했습니다. 공급자 구성을 확인한 후 다시 시도하세요.",
     "noToolUseProvider": "도구 사용을 지원하는 AI 공급자가 구성되어 있지 않습니다. 자연어 쿼리에는 Anthropic, OpenAI 또는 Ollama가 필요합니다. AI 설정에서 하나를 구성하세요.",
@@ -187,8 +188,10 @@
     "unsupportedBackupVersion": "지원되지 않는 백업 버전입니다: {{ version }}. 예상 버전: {{ expected }}",
     "missingExportedAt": "유효하지 않은 백업 형식입니다: exportedAt이 없습니다",
     "tableNotAllowed": "테이블 {{ table }}은(는) 백업 복원에서 허용되지 않습니다",
-    "encryptionNotConfigured": "서버가 암호화를 위해 구성되지 않았습니다 (AI_ENCRYPTION_KEY 누락)",
+    "encryptionNotConfigured": "서버가 암호화용으로 구성되어 있지 않습니다(JWT_SECRET이 없거나 너무 짧습니다)",
     "backupPasswordOidcOnly": "백업 비밀번호는 OIDC 사용자에게만 구성할 수 있습니다. 로컬 사용자는 로그인 비밀번호를 사용합니다",
+    "backupPasswordLocalOnly": "이 계정에는 백업을 암호화할 로그인 비밀번호가 없습니다. 대신 백업 비밀번호를 설정하세요",
+    "loginPasswordIncorrect": "현재 로그인 비밀번호가 아닙니다",
     "backupPasswordTooShort": "백업 비밀번호는 최소 {{ minLength }}자 이상이어야 합니다",
     "backupPasswordBreached": "이 비밀번호는 데이터 유출에서 발견되었습니다. 다른 비밀번호를 선택하세요.",
     "restoreBodyMustBeFile": "요청 본문은 백업 파일이어야 합니다",
@@ -282,8 +285,8 @@
   },
   "emergencyAccess": {
     "smtpNotConfigured": "이메일이 구성되지 않았습니다. SMTP가 설정될 때까지 긴급 접근을 활성화할 수 없습니다.",
-    "encryptionNotConfigured": "암호화 키가 구성되지 않았습니다. AI_ENCRYPTION_KEY가 설정될 때까지 자유 형식 메시지를 안전하게 저장할 수 없습니다.",
-    "encryptionRequiredToEnable": "자격 증명 암호화가 구성되지 않았습니다. 부여 시 각 연락처의 접근 링크를 안전하게 저장해야 하므로, AI_ENCRYPTION_KEY가 설정될 때까지 긴급 접근을 활성화할 수 없습니다.",
+    "encryptionNotConfigured": "암호화 키가 구성되지 않았습니다. ENCRYPTION_KEY가 설정될 때까지 자유 형식 메시지를 안전하게 저장할 수 없습니다.",
+    "encryptionRequiredToEnable": "자격 증명 암호화가 구성되지 않았습니다. 부여 시 각 연락처의 접근 링크를 안전하게 저장해야 하므로, ENCRYPTION_KEY가 설정될 때까지 긴급 접근을 활성화할 수 없습니다.",
     "contactEmailExists": "이 이메일을 가진 긴급 연락처가 이미 존재합니다.",
     "contactNotFound": "연락처를 찾을 수 없습니다",
     "notConfigured": "긴급 접근이 구성되지 않았습니다",
@@ -384,7 +387,8 @@
     "splitOverrideRequiresAmount": "분할 재정의를 생성할 때는 금액이 필요합니다",
     "overrideNotFound": "ID가 {{ overrideId }}인 재정의를 찾을 수 없습니다",
     "updateSplitOverrideRequiresAmount": "분할 재정의에는 금액이 필요합니다",
-    "dateMustBeYMD": "date는 YYYY-MM-DD 형식이어야 합니다"
+    "dateMustBeYMD": "date는 YYYY-MM-DD 형식이어야 합니다",
+    "loanLedgerUnreadable": "원장 잔액을 읽을 수 없어 이 대출 상환액을 계산할 수 없습니다. 다시 시도하세요."
   },
   "securities": {
     "exchangeRateUnavailable": "거래일의 {{ from }} -> {{ to }} 환율을 확인할 수 없습니다. 현금 계좌 기록이 정확하도록 명시적인 exchangeRate를 입력하세요.",

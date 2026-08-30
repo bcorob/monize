@@ -10,6 +10,8 @@ import {
 } from "./dto/price-history-query.dto";
 import { Security } from "./entities/security.entity";
 import { YahooFinanceService } from "./yahoo-finance.service";
+import { createTestProviderHealth } from "../test-helpers/provider-health-testing";
+import { ProviderHealthService } from "../provider-health/provider-health.service";
 import { QuoteProviderRegistry } from "./providers/quote-provider.registry";
 import { UserPreference } from "../users/entities/user-preference.entity";
 import { createScopedDbMocks } from "../test-helpers/scoped-db-testing";
@@ -87,6 +89,7 @@ describe("SecurityPriceService", () => {
   let msnFinanceService: Record<string, jest.Mock>;
   /** The real Yahoo provider the registry is built with, so tests can spy on it. */
   let yahoo: YahooFinanceService;
+  let health: ProviderHealthService;
   let originalFetch: typeof global.fetch;
 
   const mockSecurity: Security = {
@@ -364,7 +367,8 @@ describe("SecurityPriceService", () => {
       },
     );
 
-    yahoo = new YahooFinanceService();
+    health = createTestProviderHealth();
+    yahoo = new YahooFinanceService(health);
     const providers = new QuoteProviderRegistry(
       yahoo,
       msnFinanceService as never,
@@ -3546,7 +3550,10 @@ describe("SecurityPriceService", () => {
     // The one case the fetch can never satisfy is the one that would otherwise
     // repeat on every page load.
     it("does not ask again for a security-month that came back empty", async () => {
-      windowSpy.mockResolvedValue(null);
+      // `[]`, not `null`: the provider answering "no bars in that window" is
+      // what may be remembered. `null` is no answer at all -- a failure or a
+      // refusal -- and remembering that poisons the month for everyone.
+      windowSpy.mockResolvedValue([]);
 
       await service.ensurePricesForDate(["sec-1"], "2017-08-18");
       const afterFirst = windowSpy.mock.calls.length;
@@ -3559,7 +3566,7 @@ describe("SecurityPriceService", () => {
     });
 
     it("does ask again for a different month", async () => {
-      windowSpy.mockResolvedValue(null);
+      windowSpy.mockResolvedValue([]);
 
       await service.ensurePricesForDate(["sec-1"], "2017-08-18");
       const afterFirst = windowSpy.mock.calls.length;
@@ -3598,6 +3605,64 @@ describe("SecurityPriceService", () => {
       expect(loaded).toBe(0);
       expect(securitiesRepository.find).not.toHaveBeenCalled();
       expect(windowSpy).not.toHaveBeenCalled();
+    });
+  });
+  describe("ensurePricesForDate and the empty-window memory", () => {
+    /** One security the fill will ask the provider about. */
+    const seedSecurity = () => {
+      securitiesRepository.find.mockResolvedValue([
+        {
+          id: "sec-1",
+          userId: "user-1",
+          symbol: "AAPL",
+          exchange: "NASDAQ",
+          currencyCode: "USD",
+          isActive: true,
+          skipPriceUpdates: false,
+        },
+      ]);
+    };
+
+    const dnsFailure = () =>
+      Object.assign(new TypeError("fetch failed"), {
+        cause: Object.assign(new Error("getaddrinfo EAI_AGAIN"), {
+          code: "EAI_AGAIN",
+        }),
+      });
+
+    it("does not remember an empty window the provider never answered", async () => {
+      // A refusal and a transport failure both produce zero stored bars, and
+      // this memory holds for 30 minutes across every security in the report:
+      // remembering one leaves a whole portfolio unpriced long after a
+      // two-minute outage ended.
+      seedSecurity();
+      jest
+        .spyOn(yahoo, "fetchHistoricalWindow")
+        .mockImplementation(async () => {
+          health.recordFailure("yahoo_finance", dnsFailure());
+          return null;
+        });
+
+      await service.ensurePricesForDate(["sec-1"], "2026-03-15");
+
+      // Asked again in the same month: the provider is asked again, not
+      // written off.
+      securitiesRepository.find.mockClear();
+      await service.ensurePricesForDate(["sec-1"], "2026-03-16");
+      expect(securitiesRepository.find).toHaveBeenCalled();
+    });
+
+    it("still remembers a window the provider answered as empty", async () => {
+      // The memory has to keep working, or a report reloaded on the same date
+      // re-asks the provider for every security it has no history for.
+      seedSecurity();
+      jest.spyOn(yahoo, "fetchHistoricalWindow").mockResolvedValue([]);
+
+      await service.ensurePricesForDate(["sec-1"], "2026-03-15");
+
+      securitiesRepository.find.mockClear();
+      await service.ensurePricesForDate(["sec-1"], "2026-03-16");
+      expect(securitiesRepository.find).not.toHaveBeenCalled();
     });
   });
 });

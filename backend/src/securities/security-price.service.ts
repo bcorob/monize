@@ -1644,17 +1644,29 @@ export class SecurityPriceService {
           return 0;
         }
         try {
-          const stored = await this.fillPriceWindow(
+          // `answered` is the fill's own report of whether a provider replied
+          // at all, which is the only precise version of the question: it knows
+          // which providers this security routes to and which of them it
+          // actually reached. Asking the breakers instead was either too narrow
+          // (Yahoo only, while the fill falls back to MSN) or too broad (any
+          // provider down anywhere disables the cache for everyone).
+          const { stored, answered } = await this.fillPriceWindow(
             security,
             contexts.get(security.userId),
             start,
             end,
             date,
           );
-          if (stored === 0) {
+          if (stored === 0 && answered) {
             // No history for this symbol in this era -- an instrument that did
             // not trade yet, or one the provider does not carry. Note it, so a
             // report reloaded on the same date does not re-ask.
+            //
+            // Only when a provider actually answered: a refusal and a transport
+            // failure produce the same zero, and this memory holds for 30
+            // minutes across every security in the report -- so caching one
+            // would leave a whole portfolio unpriced long after a two-minute
+            // outage ended.
             this.emptyPriceWindows.remember(security.id, month);
             this.logger.warn(
               `No historical prices available for ${security.symbol} over ${start} to ${end}`,
@@ -1695,13 +1707,16 @@ export class SecurityPriceService {
     start: string,
     end: string,
     date: string,
-  ): Promise<number> {
+  ): Promise<{ stored: number; answered: boolean }> {
     const userCtx = ctx || {
       defaultQuoteProvider: DEFAULT_QUOTE_PROVIDER,
       preferredExchanges: [],
     };
     const fromDate = new Date(`${start}T00:00:00.000Z`);
     const toDate = new Date(`${end}T23:59:59.999Z`);
+    // Whether any provider gave an answer, as opposed to failing or being
+    // refused by its breaker.
+    let answered = false;
 
     for (const provider of this.providers.resolveForSecurity(
       security,
@@ -1730,6 +1745,11 @@ export class SecurityPriceService {
         );
         continue;
       }
+      // `[]` is an answer -- the provider has no bars in this window -- while
+      // `null` is no answer at all. The difference is what decides whether the
+      // caller may remember the window as empty, so it is tracked rather than
+      // collapsed into "nothing came back".
+      if (prices !== null) answered = true;
       if (!prices || prices.length === 0) continue;
 
       await this.bulkUpsertPrices(
@@ -1740,10 +1760,10 @@ export class SecurityPriceService {
       this.logger.log(
         `Filled ${prices.length} prices for ${security.symbol} around ${date} via ${provider.name}`,
       );
-      return prices.length;
+      return { stored: prices.length, answered: true };
     }
 
-    return 0;
+    return { stored: 0, answered };
   }
 
   /**

@@ -19,7 +19,7 @@ import {
 } from "@/backup/support-backup/support-backup-integrity";
 import { User } from "@/users/entities/user.entity";
 import { OidcReauthService } from "@/auth/oidc/oidc-reauth.service";
-import { AiEncryptionService } from "@/ai/ai-encryption.service";
+import { EncryptionService } from "../../src/common/encryption/encryption.service";
 import { DatabaseStorageProvider } from "@/attachments/storage/database-storage.provider";
 import { ATTACHMENT_STORAGE_PROVIDER } from "@/attachments/storage/attachment-storage.interface";
 import { JobClaimService } from "@/common/jobs/job-claim.service";
@@ -69,7 +69,7 @@ describe("Support backup (integration)", () => {
         // Real, for the reason the sibling suite gives: a mocked step-up would
         // keep this suite green through the removal of the check it gates.
         OidcReauthService,
-        { provide: AiEncryptionService, useValue: { decrypt: () => "" } },
+        { provide: EncryptionService, useValue: { decrypt: () => "" } },
         // The real database-backed provider: BackupService's constructor
         // requires the token to be resolvable regardless of whether a given
         // test seeds an attachment, and this needs no extra config.

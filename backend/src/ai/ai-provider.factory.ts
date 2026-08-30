@@ -1,6 +1,6 @@
 import { Injectable, BadRequestException } from "@nestjs/common";
 import { tr } from "../i18n/translate";
-import { AiEncryptionService } from "./ai-encryption.service";
+import { EncryptionService } from "../common/encryption/encryption.service";
 import { AiProviderConfig } from "./entities/ai-provider-config.entity";
 import { AiProvider } from "./providers/ai-provider.interface";
 import { AnthropicProvider } from "./providers/anthropic.provider";
@@ -11,7 +11,7 @@ import { OpenAiCompatibleProvider } from "./providers/openai-compatible.provider
 
 @Injectable()
 export class AiProviderFactory {
-  constructor(private readonly encryptionService: AiEncryptionService) {}
+  constructor(private readonly encryptionService: EncryptionService) {}
 
   createProvider(config: AiProviderConfig): AiProvider {
     const apiKey = config.apiKeyEnc

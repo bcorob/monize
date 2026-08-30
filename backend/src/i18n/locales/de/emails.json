@@ -163,5 +163,28 @@
     "body1": "Da Ihr Konto inaktiv war, wurden Ihren designierten Notfallkontakten Links zur Übernahme Ihres Kontos zugeschickt. Da Sie sich nun wieder angemeldet haben, <strong>wurden diese Links widerrufen</strong> und die Schutzfunktion wurde neu aktiviert.",
     "body2": "Wenn dies erwartet war, sind keine weiteren Maßnahmen erforderlich. Wenn Sie dies nicht erwartet haben, überprüfen Sie Ihre Anmeldeaktivität und Ihre Notfallzugriffseinstellungen.",
     "button": "Notfallzugriff überprüfen"
+  },
+  "providerOutage": {
+    "subject": "Monize: {{ provider }} antwortet nicht",
+    "heading": "Marktdatenanbieter nicht erreichbar",
+    "greeting": "Hallo {{ name }},",
+    "intro": "Monize kann <strong>{{ provider }}</strong> seit {{ since }} ({{ duration }}) nicht erreichen. Anfragen an den Anbieter sind vorerst ausgesetzt und werden in immer größeren Abständen wiederholt.",
+    "labelFailures": "Fehlgeschlagene Versuche",
+    "labelLastError": "Letzter Fehler",
+    "labelLastSuccess": "Letzte erfolgreiche Antwort",
+    "valueNever": "nie",
+    "valueUnknown": "unbekannt",
+    "impact": "Kurse, Diagramme und Indexvergleiche, die von diesem Anbieter abhängen, können bis zur Wiederherstellung fehlen oder veraltet sein. In Monize erfasste Daten sind nicht verloren.",
+    "whatToCheck": "Wenn der Anbieter selbst erreichbar ist, prüfen Sie den ausgehenden Netzwerkzugang und das DNS dieses Servers -- ein Container, der den Anbieter nicht auflösen oder erreichen kann, fällt genau so aus.",
+    "throttleNote": "Sie erhalten eine weitere E-Mail, sobald der Anbieter wieder antwortet. Warnungen zum selben Anbieter werden höchstens einmal alle {{ hours }} Stunden verschickt, damit ein instabiler Anbieter Ihr Postfach nicht füllen kann.",
+    "durationMinutes": "{{ minutes }} Min.",
+    "durationHoursMinutes": "{{ hours }} Std. {{ minutes }} Min."
+  },
+  "providerRecovery": {
+    "subject": "Monize: {{ provider }} antwortet wieder",
+    "heading": "Marktdatenanbieter antwortet wieder",
+    "greeting": "Hallo {{ name }},",
+    "intro": "<strong>{{ provider }}</strong> hat um {{ restoredAt }} wieder geantwortet. Die Störung dauerte {{ duration }}.",
+    "backfill": "Kurse und Indexverläufe, die während der Störung fehlten, werden bei der nächsten geplanten Aktualisierung nachgeholt; es ist nichts zu tun."
   }
 }

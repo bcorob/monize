@@ -348,7 +348,7 @@ npm run dev
 | `SMTP_USER` | SMTP username | - |
 | `SMTP_PASSWORD` | SMTP password | - |
 | `EMAIL_FROM` | Email sender address | - |
-| `AI_ENCRYPTION_KEY` | Encryption key for AI API keys (`openssl rand -hex 32`) | - |
+| `ENCRYPTION_KEY` | **Set this.** Encrypts AI provider keys, emergency-access credentials and the password your backups are encrypted with (`openssl rand -hex 32`). Without it, backups are written unencrypted and no secret can be stored; the server warns on every boot and will require it in a future release. Keep it safe and keep it unchanged -- losing it makes every stored secret unreadable. Formerly `AI_ENCRYPTION_KEY`, which is still accepted | - |
 | `AI_DEFAULT_PROVIDER` | System-level default AI provider (the centrally managed AI) | - |
 | `AI_DEFAULT_MODEL` | Default model for the provider | - |
 | `AI_DEFAULT_API_KEY` | System-wide AI API key | - |

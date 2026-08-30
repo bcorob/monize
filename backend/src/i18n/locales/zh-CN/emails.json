@@ -163,5 +163,28 @@
     "body1": "由于您的账户已处于不活跃状态，您指定的紧急联系人收到了接管账户的链接。您现在已重新登录，因此<strong>这些链接已被撤销</strong>，安全保障已重新启动。",
     "body2": "如果这是预期的，则无需采取任何行动。如果您未预料到此情况，请检查您的登录活动和紧急访问设置。",
     "button": "查看紧急访问"
+  },
+  "providerOutage": {
+    "subject": "Monize：{{ provider }} 无响应",
+    "heading": "市场数据提供方不可用",
+    "greeting": "您好，{{ name }}，",
+    "intro": "自 {{ since }} 起（{{ duration }}），Monize 一直无法连接 <strong>{{ provider }}</strong>。对该提供方的请求已暂停，并会以逐渐延长的间隔重试。",
+    "labelFailures": "失败尝试次数",
+    "labelLastError": "最近一次错误",
+    "labelLastSuccess": "最近一次成功响应",
+    "valueNever": "从未",
+    "valueUnknown": "未知",
+    "impact": "依赖该提供方的价格、图表和指数对比在其恢复响应前可能缺失或过时。Monize 中记录的数据没有丢失。",
+    "whatToCheck": "如果提供方本身正常，请检查此服务器的出站网络访问和 DNS——无法解析或无法连接提供方的容器正是以这种方式失败的。",
+    "throttleNote": "提供方恢复后你会再收到一封邮件。关于同一提供方的告警最多每 {{ hours }} 小时发送一次，因此反复抖动的提供方不会填满你的收件箱。",
+    "durationMinutes": "{{ minutes }} 分钟",
+    "durationHoursMinutes": "{{ hours }} 小时 {{ minutes }} 分钟"
+  },
+  "providerRecovery": {
+    "subject": "Monize：{{ provider }} 已恢复响应",
+    "heading": "市场数据提供方已恢复响应",
+    "greeting": "您好，{{ name }}，",
+    "intro": "<strong>{{ provider }}</strong> 已于 {{ restoredAt }} 恢复响应，本次故障持续了 {{ duration }}。",
+    "backfill": "故障期间缺失的价格和指数历史会在下一次计划刷新时补齐，无需任何操作。"
   }
 }

@@ -38,7 +38,8 @@
     "ambiguousBrokerage": "\"{{ query }}\" birden fazla aracı kurum hesabıyla eşleşiyor: {{ list }}. Tam hesap adını kullanın.",
     "unknownInvestmentAccount": "Bilinmeyen hesap: {{ name }}. Kullanıcının hesap listesinden tam bir ad kullanın.",
     "notACreditCard": "Ekstre dönemleri yalnızca kredi kartı hesapları için kullanılabilir",
-    "noStatementSettlementDay": "Bu kredi kartı için yapılandırılmış bir ekstre kesim günü yok"
+    "noStatementSettlementDay": "Bu kredi kartı için yapılandırılmış bir ekstre kesim günü yok",
+    "loanLedgerUnreadable": "Bu kredinin bakiyesi okunamadı. Tekrar deneyin."
   },
   "actionHistory": {
     "nothingToUndo": "Geri alınacak işlem yok",
@@ -76,8 +77,8 @@
     "crossOwnerTransferUnsupported": "Bu transfer, asistanın henüz düzenleyemediği veya silemediği başka bir kullanıcının hesabını içeriyor. Bunun yerine İşlemler ekranını kullanın.",
     "providerConfigNotFound": "Yapay zeka sağlayıcısı yapılandırması bulunamadı",
     "maxProvidersExceeded": "Kullanıcı başına en fazla {{ maxProvidersPerUser }} yapay zeka sağlayıcısı yapılandırması",
-    "encryptionKeyNotConfigured": "AI_ENCRYPTION_KEY yapılandırılmamış. API anahtarları güvenli şekilde saklanamıyor.",
-    "apiKeyUndecryptable": "Kayıtlı API anahtarı bu sunucu tarafından okunamıyor. Bu, bir yedek başka bir örneğe geri yüklendiğinde veya AI_ENCRYPTION_KEY değiştiğinde olur. Sorunu gidermek için API anahtarını yeniden girin.",
+    "encryptionKeyNotConfigured": "ENCRYPTION_KEY yapılandırılmamış. API anahtarları güvenli şekilde saklanamıyor.",
+    "apiKeyUndecryptable": "Kayıtlı API anahtarı bu sunucu tarafından okunamıyor. Bu, bir yedek başka bir örneğe geri yüklendiğinde veya ENCRYPTION_KEY değiştiğinde olur. Sorunu gidermek için API anahtarını yeniden girin.",
     "noActiveProviders": "Yapılandırılmış etkin yapay zeka sağlayıcısı yok. Lütfen Yapay Zeka Ayarları'nda bir sağlayıcı yapılandırın.",
     "allProvidersFailed": "Tüm yapay zeka sağlayıcıları başarısız oldu. Lütfen sağlayıcı yapılandırmanızı kontrol edip tekrar deneyin.",
     "noToolUseProvider": "Araç kullanım desteğine sahip yapay zeka sağlayıcısı yapılandırılmamış. Doğal dil sorguları Anthropic, OpenAI veya Ollama gerektirir. Lütfen Yapay Zeka Ayarları'nda birini yapılandırın.",
@@ -187,8 +188,10 @@
     "unsupportedBackupVersion": "Desteklenmeyen yedek sürümü: {{ version }}. Beklenen: {{ expected }}",
     "missingExportedAt": "Geçersiz yedek biçimi: exportedAt eksik",
     "tableNotAllowed": "{{ table }} tablosuna yedek geri yüklemede izin verilmiyor",
-    "encryptionNotConfigured": "Sunucu şifreleme için yapılandırılmamış (AI_ENCRYPTION_KEY eksik)",
+    "encryptionNotConfigured": "Sunucu şifreleme için yapılandırılmamış (JWT_SECRET eksik veya çok kısa)",
     "backupPasswordOidcOnly": "Yedek şifresi yalnızca OIDC kullanıcıları için yapılandırılabilir; yerel kullanıcılar giriş şifrelerini kullanır",
+    "backupPasswordLocalOnly": "Bu hesabın yedekleri şifreleyecek bir oturum açma parolası yok; bunun yerine bir yedekleme parolası belirleyin",
+    "loginPasswordIncorrect": "Bu, mevcut oturum açma parolanız değil",
     "backupPasswordTooShort": "Yedek şifresi en az {{ minLength }} karakter olmalıdır",
     "backupPasswordBreached": "Bu şifre bir veri ihlalinde bulundu. Lütfen farklı bir şifre seçin.",
     "restoreBodyMustBeFile": "İstek gövdesi bir yedek dosyası olmalıdır",
@@ -282,8 +285,8 @@
   },
   "emergencyAccess": {
     "smtpNotConfigured": "E-posta yapılandırılmamış. SMTP kurulana kadar acil erişim etkinleştirilemiyor.",
-    "encryptionNotConfigured": "Şifreleme anahtarı yapılandırılmamış. AI_ENCRYPTION_KEY ayarlanana kadar serbest biçimli mesaj güvenli şekilde saklanamıyor.",
-    "encryptionRequiredToEnable": "Kimlik bilgisi şifrelemesi yapılandırılmamış. Bir erişim verme işlemi her kişinin erişim bağlantısını güvenli şekilde saklamak zorunda olduğundan, AI_ENCRYPTION_KEY ayarlanana kadar acil erişim etkinleştirilemiyor.",
+    "encryptionNotConfigured": "Şifreleme anahtarı yapılandırılmamış. ENCRYPTION_KEY ayarlanana kadar serbest biçimli mesaj güvenli şekilde saklanamıyor.",
+    "encryptionRequiredToEnable": "Kimlik bilgisi şifrelemesi yapılandırılmamış. Bir erişim verme işlemi her kişinin erişim bağlantısını güvenli şekilde saklamak zorunda olduğundan, ENCRYPTION_KEY ayarlanana kadar acil erişim etkinleştirilemiyor.",
     "contactEmailExists": "Bu e-postaya sahip acil durum kişisi zaten mevcut.",
     "contactNotFound": "Kişi bulunamadı",
     "notConfigured": "Acil erişim yapılandırılmamış",
@@ -384,7 +387,8 @@
     "splitOverrideRequiresAmount": "Bölünmüş geçersiz kılma oluştururken tutar gereklidir",
     "overrideNotFound": "{{ overrideId }} kimliğine sahip geçersiz kılma bulunamadı",
     "updateSplitOverrideRequiresAmount": "Bölünmüş geçersiz kılma için tutar gereklidir",
-    "dateMustBeYMD": "tarih YYYY-AA-GG biçiminde olmalıdır"
+    "dateMustBeYMD": "tarih YYYY-AA-GG biçiminde olmalıdır",
+    "loanLedgerUnreadable": "Defter bakiyesi okunamadığı için bu kredi ödemesi hesaplanamadı. Tekrar deneyin."
   },
   "securities": {
     "exchangeRateUnavailable": "İşlem tarihinde {{ from }} -> {{ to }} için bir döviz kuru belirlenemedi. Nakit hesabına kaydın doğru olması için açık bir exchangeRate girin.",

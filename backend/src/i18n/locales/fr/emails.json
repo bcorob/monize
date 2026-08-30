@@ -163,5 +163,28 @@
     "body1": "En raison de l'inactivité de votre compte, vos contacts d'urgence désignés ont reçu des liens pour reprendre votre compte. Vous vous êtes à présent reconnecté(e), de sorte que <strong>ces liens ont été révoqués</strong> et la protection a été réarmée.",
     "body2": "Si cela était prévu, aucune action n'est nécessaire. Dans le cas contraire, vérifiez votre activité de connexion et vos paramètres d'accès d'urgence.",
     "button": "Consulter l'accès d'urgence"
+  },
+  "providerOutage": {
+    "subject": "Monize : {{ provider }} ne répond pas",
+    "heading": "Fournisseur de données de marché indisponible",
+    "greeting": "Bonjour {{ name }},",
+    "intro": "Monize n'arrive plus à joindre <strong>{{ provider }}</strong> depuis {{ since }} ({{ duration }}). Les requêtes vers ce fournisseur sont suspendues pour le moment et réessayées à intervalles croissants.",
+    "labelFailures": "Tentatives échouées",
+    "labelLastError": "Dernière erreur",
+    "labelLastSuccess": "Dernière réponse réussie",
+    "valueNever": "jamais",
+    "valueUnknown": "inconnu",
+    "impact": "Les cours, les graphiques et les comparaisons d'indices qui dépendent de ce fournisseur peuvent être absents ou obsolètes jusqu'à son rétablissement. Rien de ce qui est enregistré dans Monize n'a été perdu.",
+    "whatToCheck": "Si le fournisseur fonctionne, vérifiez l'accès réseau sortant et le DNS de ce serveur : un conteneur qui ne peut pas résoudre ni joindre le fournisseur échoue exactement de cette manière.",
+    "throttleNote": "Vous recevrez un dernier e-mail dès le rétablissement. Les alertes concernant le même fournisseur sont envoyées au maximum une fois toutes les {{ hours }} heures, afin qu'un fournisseur instable ne remplisse pas votre boîte de réception.",
+    "durationMinutes": "{{ minutes }} min",
+    "durationHoursMinutes": "{{ hours }} h {{ minutes }} min"
+  },
+  "providerRecovery": {
+    "subject": "Monize : {{ provider }} répond à nouveau",
+    "heading": "Le fournisseur de données de marché répond à nouveau",
+    "greeting": "Bonjour {{ name }},",
+    "intro": "<strong>{{ provider }}</strong> a répondu à nouveau à {{ restoredAt }}. La panne a duré {{ duration }}.",
+    "backfill": "Les cours et l'historique d'indices manquants pendant la panne sont récupérés lors de la prochaine actualisation planifiée ; aucune action n'est nécessaire."
   }
 }

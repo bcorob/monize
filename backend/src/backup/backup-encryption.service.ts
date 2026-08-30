@@ -3,12 +3,13 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  UnauthorizedException,
 } from "@nestjs/common";
 import { DataSource, EntityTarget, ObjectLiteral, Repository } from "typeorm";
 import { withScopedDb } from "../common/db/scoped-db";
 import * as bcrypt from "bcryptjs";
 import { User } from "../users/entities/user.entity";
-import { AiEncryptionService } from "../ai/ai-encryption.service";
+import { EncryptionService } from "../common/encryption/encryption.service";
 import { PasswordBreachService } from "../auth/password-breach.service";
 import { tr } from "../i18n/translate";
 
@@ -22,6 +23,22 @@ const MIN_BACKUP_PASSWORD_LENGTH = 12;
  * that must not quietly start writing plaintext where it used to write
  * ciphertext.
  */
+/**
+ * What Settings and the export screen are told about a user's backup
+ * encryption. Mirrored by `BackupEncryptionStatus` in
+ * `frontend/src/lib/backupApi.ts`.
+ */
+export interface BackupEncryptionStatus {
+  /** A usable password is stored, so backups are written encrypted. */
+  enabled: boolean;
+  /** The dedicated backup-password controls belong to this user (OIDC only). */
+  manageable: boolean;
+  /** Which password opens this user's backups. */
+  method: "login-password" | "backup-password";
+  /** Whether this server holds key material to store a password at all. */
+  available: boolean;
+}
+
 export type BackupPasswordResolution =
   | { status: "none" }
   | { status: "password"; password: string }
@@ -31,22 +48,31 @@ export type BackupPasswordResolution =
  * Owns the stored copy of a user's backup password that the auto-backup cron
  * needs in order to encrypt what it writes.
  *
- * For a local-auth account there is nothing to switch on. A backup is encrypted
+ * For a local-auth account there is nothing to configure. A backup is encrypted
  * with the password they already have, and the only moment the server ever sees
  * that password in plaintext is when they type it -- so it is captured there
  * (`rememberLoginPassword`, called on registration, login and password change)
- * rather than asked for a second time in Settings.
+ * rather than being a password they have to invent and remember separately.
+ *
+ * That capture is opportunistic, and opportunistic is not the same as reliable:
+ * a user who was already signed in when the feature shipped never types their
+ * password again, and their backups stay in plaintext for as long as their
+ * session lives. So Settings offers local accounts one control --
+ * `enableWithLoginPassword`, which asks them to confirm the login password they
+ * already have and captures it on the spot (issue #1269). It is the same
+ * password, so it neither invents a second secret nor conflicts with the next
+ * sign-in.
  *
  * An OIDC account has no password of ours to capture, so nothing can be
  * automatic: those users set a dedicated backup password in Settings
- * (`setBackupPasswordForOidcUser`), or leave their backups unencrypted. Both
- * management methods refuse a local-auth account rather than pretending -- a
- * local user who "disabled" encryption would have it back at their next login,
- * because that is where the copy is captured.
+ * (`setBackupPasswordForOidcUser`), or leave their backups unencrypted. The
+ * dedicated-password methods refuse a local-auth account rather than pretending
+ * -- a local user who "disabled" encryption would have it back at their next
+ * login, because that is where the copy is captured.
  *
  * Storage shape: `users.backup_password_enc` holds the password ciphertext
- * encrypted with AI_ENCRYPTION_KEY, and `backup_encryption_enabled` records
- * that a usable copy is there.
+ * written by `EncryptionService` under `ENCRYPTION_KEY`, and
+ * `backup_encryption_enabled` records that a usable copy is there.
  */
 @Injectable()
 export class BackupEncryptionService {
@@ -54,7 +80,7 @@ export class BackupEncryptionService {
 
   constructor(
     private readonly dataSource: DataSource,
-    private readonly aiEncryption: AiEncryptionService,
+    private readonly encryption: EncryptionService,
     private readonly passwordBreach: PasswordBreachService,
   ) {}
 
@@ -74,19 +100,79 @@ export class BackupEncryptionService {
   }
 
   /**
-   * Whether this user's backups are encrypted, and whether they are the one who
-   * decides. The export screen needs the first to know whether to ask for the
-   * password before downloading; Settings needs the second to know whether to
-   * offer the controls at all, since a local-auth account is managed for them.
+   * What Settings and the export screen need to know about this user's backup
+   * encryption: whether it is on, which password it uses, whether the server can
+   * encrypt at all, and whether a dedicated password is theirs to manage.
+   *
+   * `enabled` alone was what the screen had, and "off" rendered as nothing at
+   * all for a local account -- the state issue #1269 was reported from, where
+   * the answer to "why are my backups not encrypted?" was not on the page in any
+   * form. Every field here exists so that state can be shown and acted on:
+   * `method` says which password would open the file, `available` distinguishes
+   * "off" from "this server cannot", and `manageable` stays what it always was
+   * -- whether the dedicated backup-password controls belong on the page.
    */
-  async getStatus(
-    userId: string,
-  ): Promise<{ enabled: boolean; manageable: boolean }> {
+  async getStatus(userId: string): Promise<BackupEncryptionStatus> {
     const user = await this.requireUser(userId);
     return {
       enabled: user.backupEncryptionEnabled,
       manageable: user.authProvider === "oidc",
+      method:
+        user.authProvider === "oidc" ? "backup-password" : "login-password",
+      available: this.encryption.isConfigured(),
     };
+  }
+
+  /**
+   * Local accounts: capture the login password from Settings, by asking the user
+   * to confirm the one they already have.
+   *
+   * The sign-in capture is the primary path and this does not replace it. It
+   * exists because that path only fires when somebody types their password, and
+   * a session outlives the deploy that shipped the feature: a user signed in
+   * since before it existed has no stored copy and no way to get one without
+   * signing out (issue #1269). The password is verified against the account's
+   * own hash rather than trusted from the form, so this is not a way to encrypt
+   * a backup under a string the user misremembered -- the file it produces opens
+   * with their login password or the request is refused.
+   *
+   * The comparison runs inside the transaction that writes, against the hash it
+   * read there. bcrypt costs about 100ms of a pooled connection, which is the
+   * price of the check refusing against the state the write lands on rather than
+   * against a snapshot a concurrent password change has already replaced.
+   */
+  async enableWithLoginPassword(
+    userId: string,
+    loginPassword: string,
+  ): Promise<void> {
+    await withScopedDb(this.dataSource, async (manager) => {
+      const repo = manager.getRepository(User);
+      const user = await repo.findOne({ where: { id: userId } });
+      if (!user) {
+        throw new NotFoundException(
+          tr("errors.backup.userNotFoundRestore", "User not found"),
+        );
+      }
+      if (user.authProvider !== "local" || !user.passwordHash) {
+        throw new BadRequestException(
+          tr(
+            "errors.backup.backupPasswordLocalOnly",
+            "This account has no login password to encrypt backups with; set a backup password instead",
+          ),
+        );
+      }
+      this.requireEncryptionConfigured();
+      const matches = await bcrypt.compare(loginPassword, user.passwordHash);
+      if (!matches) {
+        throw new UnauthorizedException(
+          tr(
+            "errors.backup.loginPasswordIncorrect",
+            "That is not your current login password",
+          ),
+        );
+      }
+      await this.storeBackupPassword(repo, userId, loginPassword);
+    });
   }
 
   /**
@@ -109,14 +195,7 @@ export class BackupEncryptionService {
       // Re-read inside the transaction the write runs in: the manageability
       // check has to hold against the state the write lands on.
       await this.requireManageableUser(repo, userId);
-      if (!this.aiEncryption.isConfigured()) {
-        throw new BadRequestException(
-          tr(
-            "errors.backup.encryptionNotConfigured",
-            "Server is not configured for encryption (AI_ENCRYPTION_KEY missing)",
-          ),
-        );
-      }
+      this.requireEncryptionConfigured();
       await this.storeBackupPassword(repo, userId, newBackupPassword);
     });
   }
@@ -145,7 +224,17 @@ export class BackupEncryptionService {
    */
   async rememberLoginPassword(userId: string, password: string): Promise<void> {
     try {
-      if (!password || !this.aiEncryption.isConfigured()) return;
+      if (!password) return;
+      if (!this.encryption.isConfigured()) {
+        // Unreachable on a booted server (`JWT_SECRET` is enforced at startup),
+        // and logged rather than swallowed because this returning quietly is the
+        // exact shape of issue #1269: the capture stopped happening and every
+        // surface still said "encrypted by default".
+        this.logger.warn(
+          `No encryption key available; backups for user ${userId} will be written unencrypted`,
+        );
+        return;
+      }
       await withScopedDb(this.dataSource, async (manager) => {
         const repo = manager.getRepository(User);
         const user = await repo.findOne({ where: { id: userId } });
@@ -190,9 +279,9 @@ export class BackupEncryptionService {
 
     let password: string;
     try {
-      password = this.aiEncryption.decrypt(user.backupPasswordEnc);
+      password = this.encryption.decrypt(user.backupPasswordEnc);
     } catch (err) {
-      // Typically AI_ENCRYPTION_KEY was rotated. The user's other backups are
+      // Typically ENCRYPTION_KEY was rotated. The user's other backups are
       // encrypted, so writing this one in plaintext instead would be a silent
       // downgrade: report it and let the caller refuse.
       this.logger.error(
@@ -252,7 +341,7 @@ export class BackupEncryptionService {
     await repo.update(
       { id: userId },
       {
-        backupPasswordEnc: this.aiEncryption.encrypt(password),
+        backupPasswordEnc: this.encryption.encrypt(password),
         backupEncryptionEnabled: true,
       },
     );
@@ -287,6 +376,23 @@ export class BackupEncryptionService {
       );
     }
     return user;
+  }
+
+  /**
+   * Refuse rather than store a password this server cannot read back. Only
+   * reachable on a server with no usable `JWT_SECRET`, which startup already
+   * refuses to boot -- it is here so the two write paths cannot drift into
+   * storing a value that `resolveBackupPassword` would later call unrecoverable.
+   */
+  private requireEncryptionConfigured(): void {
+    if (!this.encryption.isConfigured()) {
+      throw new BadRequestException(
+        tr(
+          "errors.backup.encryptionNotConfigured",
+          "Server is not configured for encryption (JWT_SECRET missing or too short)",
+        ),
+      );
+    }
   }
 
   private async validatePasswordStrength(password: string): Promise<void> {

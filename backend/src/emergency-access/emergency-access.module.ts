@@ -5,10 +5,10 @@ import { EmergencyAccessController } from "./emergency-access.controller";
 import { EmergencyAccessClaimController } from "./emergency-access-claim.controller";
 import { AuthModule } from "../auth/auth.module";
 import { NotificationsModule } from "../notifications/notifications.module";
-import { AiModule } from "../ai/ai.module";
+import { EncryptionModule } from "../common/encryption/encryption.module";
 
 @Module({
-  imports: [AuthModule, NotificationsModule, AiModule],
+  imports: [AuthModule, NotificationsModule, EncryptionModule],
   providers: [EmergencyAccessService, EmergencyAccessMonitorService],
   controllers: [EmergencyAccessController, EmergencyAccessClaimController],
 })

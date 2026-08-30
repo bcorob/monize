@@ -46,6 +46,7 @@ import { withSystemContext } from "../common/db/with-context";
 import { withScopedDb } from "../common/db/scoped-db";
 import { lockAccountsForBalanceWrite } from "../common/db/locks";
 import { affectedRowCount } from "../common/db/query-result";
+import { LEDGER_MOVEMENT_PREDICATE } from "../common/ledger-balance.sql";
 
 @Injectable()
 export class AccountsService {
@@ -270,8 +271,7 @@ export class AccountsService {
          FROM transactions t
          WHERE t.account_id = ANY($1)
            AND t.transaction_date > $2
-           AND (t.status IS NULL OR t.status != 'VOID')
-           AND t.parent_transaction_id IS NULL
+           AND ${LEDGER_MOVEMENT_PREDICATE}
          GROUP BY t.account_id`,
             [accountIds, today],
           ) as Promise<Array<{ accountId: string; futureSum: string }>>,
@@ -286,8 +286,7 @@ export class AccountsService {
                 COALESCE(a.opening_balance, 0) + COALESCE(SUM(t.amount), 0) as "currentBalance"
          FROM accounts a
          LEFT JOIN transactions t ON t.account_id = a.id
-           AND (t.status IS NULL OR t.status != 'VOID')
-           AND t.parent_transaction_id IS NULL
+           AND ${LEDGER_MOVEMENT_PREDICATE}
            AND t.transaction_date <= $2
          WHERE a.id = ANY($1)
          GROUP BY a.id, a.opening_balance`,
@@ -1137,8 +1136,7 @@ export class AccountsService {
     const balanceSql = `SELECT COALESCE(a.opening_balance, 0) + COALESCE(SUM(t.amount), 0) as balance
        FROM accounts a
        LEFT JOIN transactions t ON t.account_id = a.id
-         AND (t.status IS NULL OR t.status != 'VOID')
-         AND t.parent_transaction_id IS NULL
+         AND ${LEDGER_MOVEMENT_PREDICATE}
          AND t.transaction_date <= $2
       WHERE a.id = $1
       GROUP BY a.id, a.opening_balance`;
@@ -1193,8 +1191,7 @@ export class AccountsService {
          FROM accounts a
          LEFT JOIN transactions t ON t.account_id = a.id
            AND t.user_id = $2
-           AND (t.status IS NULL OR t.status != 'VOID')
-           AND t.parent_transaction_id IS NULL
+           AND ${LEDGER_MOVEMENT_PREDICATE}
         WHERE a.id = $1 AND a.user_id = $2
         GROUP BY a.id, a.opening_balance`,
           [accountId, userId],
@@ -1590,8 +1587,7 @@ export class AccountsService {
          JOIN accounts a ON a.id = t.account_id
          WHERE (a.user_id = $1 OR a.id = ANY($4::UUID[]))
            AND ($2::UUID[] IS NULL OR t.account_id = ANY($2::UUID[]))
-           AND (t.status IS NULL OR t.status != 'VOID')
-           AND t.parent_transaction_id IS NULL
+           AND ${LEDGER_MOVEMENT_PREDICATE}
            AND t.transaction_date > $3`,
           [userId, accountIdsParam, end, jointIdsParam],
         ),
@@ -1627,8 +1623,7 @@ export class AccountsService {
          JOIN accounts a ON a.id = t.account_id
          WHERE (a.user_id = $1 OR a.id = ANY($3::UUID[]))
            AND ($2::UUID[] IS NULL OR t.account_id = ANY($2::UUID[]))
-           AND (t.status IS NULL OR t.status != 'VOID')
-           AND t.parent_transaction_id IS NULL`,
+           AND ${LEDGER_MOVEMENT_PREDICATE}`,
           [userId, accountIdsParam, jointIdsParam],
         ),
       );
@@ -1674,8 +1669,7 @@ export class AccountsService {
                  SUM(t.amount) as total
           FROM transactions t
           JOIN target_accounts ta ON ta.id = t.account_id
-          WHERE (t.status IS NULL OR t.status != 'VOID')
-            AND t.parent_transaction_id IS NULL
+          WHERE ${LEDGER_MOVEMENT_PREDICATE}
             AND t.transaction_date < $3
           GROUP BY t.account_id
         ),
@@ -1685,8 +1679,7 @@ export class AccountsService {
                  SUM(t.amount) as total
           FROM transactions t
           JOIN target_accounts ta ON ta.id = t.account_id
-          WHERE (t.status IS NULL OR t.status != 'VOID')
-            AND t.parent_transaction_id IS NULL
+          WHERE ${LEDGER_MOVEMENT_PREDICATE}
             AND t.transaction_date >= $3
             AND t.transaction_date <= $4
           GROUP BY t.account_id, t.transaction_date::DATE
@@ -1782,8 +1775,7 @@ export class AccountsService {
                JOIN accounts a ON a.id = t.account_id
                WHERE a.user_id = ANY($1)
                  AND t.transaction_date = $2
-                 AND (t.status IS NULL OR t.status != 'VOID')
-                 AND t.parent_transaction_id IS NULL`,
+                 AND ${LEDGER_MOVEMENT_PREDICATE}`,
             [userIds, today],
           );
 
@@ -1798,8 +1790,7 @@ export class AccountsService {
                     COALESCE(a.opening_balance, 0) + COALESCE(SUM(t.amount), 0) as balance
                FROM accounts a
                LEFT JOIN transactions t ON t.account_id = a.id
-                 AND (t.status IS NULL OR t.status != 'VOID')
-                 AND t.parent_transaction_id IS NULL
+                 AND ${LEDGER_MOVEMENT_PREDICATE}
                  AND t.transaction_date <= $2
                WHERE a.id = ANY($1)
                GROUP BY a.id, a.opening_balance`,

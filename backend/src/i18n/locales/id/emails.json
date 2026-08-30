@@ -163,5 +163,28 @@
     "body1": "Karena akun Anda tidak aktif, kontak darurat yang Anda tentukan dikirim tautan untuk mengambil alih akun Anda. Anda sekarang telah masuk kembali, jadi <strong>tautan-tautan tersebut telah dicabut</strong> dan perlindungan telah dipasang kembali.",
     "body2": "Jika ini diharapkan, tidak diperlukan tindakan. Jika Anda tidak mengharapkan ini, tinjau aktivitas masuk Anda dan pengaturan akses darurat Anda.",
     "button": "Tinjau Akses Darurat"
+  },
+  "providerOutage": {
+    "subject": "Monize: {{ provider }} tidak merespons",
+    "heading": "Penyedia data pasar tidak tersedia",
+    "greeting": "Hai {{ name }},",
+    "intro": "Monize tidak dapat menghubungi <strong>{{ provider }}</strong> sejak {{ since }} ({{ duration }}). Permintaan ke penyedia ini dihentikan sementara dan dicoba ulang dengan jeda yang makin panjang.",
+    "labelFailures": "Percobaan gagal",
+    "labelLastError": "Kesalahan terakhir",
+    "labelLastSuccess": "Respons berhasil terakhir",
+    "valueNever": "belum pernah",
+    "valueUnknown": "tidak diketahui",
+    "impact": "Harga, grafik, dan perbandingan indeks yang bergantung pada penyedia ini mungkin hilang atau kedaluwarsa hingga penyedia merespons kembali. Tidak ada data yang tercatat di Monize yang hilang.",
+    "whatToCheck": "Jika penyedia sendiri berjalan normal, periksa akses jaringan keluar dan DNS server ini -- kontainer yang tidak bisa meresolusi atau menjangkau penyedia gagal dengan cara seperti ini.",
+    "throttleNote": "Anda akan menerima satu email lagi saat penyedia pulih. Peringatan tentang penyedia yang sama dikirim maksimal sekali setiap {{ hours }} jam, sehingga penyedia yang tidak stabil tidak memenuhi kotak masuk Anda.",
+    "durationMinutes": "{{ minutes }} mnt",
+    "durationHoursMinutes": "{{ hours }} jam {{ minutes }} mnt"
+  },
+  "providerRecovery": {
+    "subject": "Monize: {{ provider }} merespons kembali",
+    "heading": "Penyedia data pasar merespons kembali",
+    "greeting": "Hai {{ name }},",
+    "intro": "<strong>{{ provider }}</strong> merespons kembali pada {{ restoredAt }}. Gangguan berlangsung {{ duration }}.",
+    "backfill": "Harga dan riwayat indeks yang terlewat selama gangguan akan diambil pada penyegaran terjadwal berikutnya; tidak ada tindakan yang diperlukan."
   }
 }

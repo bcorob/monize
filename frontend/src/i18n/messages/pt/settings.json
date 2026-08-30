@@ -514,15 +514,24 @@
     "encryption": {
       "heading": "Encriptação de Cópia de Segurança",
       "descriptionOidc": "Encripte cópias de segurança manuais e automáticas com uma palavra-passe de cópia de segurança dedicada que define aqui. A palavra-passe é necessária para o restauro.",
-      "loading": "A carregar...",
+      "descriptionLocal": "As suas cópias de segurança são cifradas com a sua palavra-passe de início de sessão. Não há mais nada para memorizar: a mesma palavra-passe restaura-as.",
+      "unavailable": "Este servidor não está configurado para cifrar cópias de segurança, pelo que são escritas sem cifra.",
       "enabledBadge": "Ativada",
+      "disabledBadge": "Não ativado",
+      "enabledLocalNote": "As cópias de segurança são cifradas com a sua palavra-passe de início de sessão.",
+      "disabledLocalNote": "As cópias de segurança são escritas sem cifra até confirmar a sua palavra-passe de início de sessão.",
+      "enableWithLoginPasswordButton": "Ativar com a minha palavra-passe de início de sessão",
+      "loading": "A carregar...",
       "changePasswordButton": "Alterar Palavra-passe de Cópia de Segurança",
       "disableButton": "Desativar",
       "setPasswordButton": "Definir Palavra-passe de Cópia de Segurança",
       "setupModal": {
         "titleOidc": "Definir Palavra-passe de Cópia de Segurança",
+        "titleLocal": "Ativar cópias de segurança cifradas",
         "descriptionOidc": "Escolha uma palavra-passe que será utilizada para encriptar as suas cópias de segurança. Guarde-a num local seguro -- precisará dela para o restauro.",
+        "descriptionLocal": "Confirme a sua palavra-passe de início de sessão para ativar as cópias de segurança cifradas. É a palavra-passe com que serão cifradas e a que necessitará para as restaurar.",
         "placeholderOidc": "Nova palavra-passe de cópia de segurança (12+ caracteres)",
+        "placeholderLocal": "A sua palavra-passe de início de sessão",
         "savingButton": "A guardar...",
         "confirmButton": "Confirmar"
       },
@@ -768,7 +777,7 @@
     },
     "encryptionNotConfigured": {
       "heading": "Chave de encriptação necessária",
-      "body": "O acesso de emergência precisa de AI_ENCRYPTION_KEY definida no servidor. Uma concessão armazena encriptada a ligação de acesso de cada contacto para que uma nova tentativa possa reenviar a mesma ligação; sem essa chave não é possível enviar ligação nenhuma."
+      "body": "O acesso de emergência precisa de ENCRYPTION_KEY definida no servidor. Uma concessão armazena encriptada a ligação de acesso de cada contacto para que uma nova tentativa possa reenviar a mesma ligação; sem essa chave não é possível enviar ligação nenhuma."
     },
     "alreadyGranted": {
       "heading": "Acesso de emergência já concedido",
@@ -874,7 +883,7 @@
   "aiProviders": {
     "heading": "Fornecedores de IA",
     "addButton": "Adicionar Fornecedor",
-    "encryptionWarning": "AI_ENCRYPTION_KEY não está configurada. Pode utilizar o Ollama (local, sem necessidade de chave de API), mas os fornecedores na nuvem requerem encriptação para armazenar chaves de API de forma segura.",
+    "encryptionWarning": "ENCRYPTION_KEY não está configurada. Pode utilizar o Ollama (local, sem necessidade de chave de API), mas os fornecedores na nuvem requerem encriptação para armazenar chaves de API de forma segura.",
     "systemDefault": {
       "heading": "Fornecedor de IA Predefinido do Sistema Disponível",
       "description": "Um fornecedor de IA central foi configurado pelo seu administrador",

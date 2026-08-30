@@ -163,5 +163,28 @@
     "body1": "Hesabınız etkisiz olduğu için belirlediğiniz acil durum kişilerine hesabınızı devralmaları için bağlantılar gönderildi. Şimdi yeniden oturum açtığınız için <strong>bu bağlantılar iptal edildi</strong> ve güvenlik önlemi yeniden etkinleştirildi.",
     "body2": "Bu bekleniyorsa herhangi bir işlem yapmanıza gerek yoktur. Beklenmedik bir durumsa, giriş etkinliğinizi ve acil erişim ayarlarınızı inceleyin.",
     "button": "Acil Erişimi İncele"
+  },
+  "providerOutage": {
+    "subject": "Monize: {{ provider }} yanıt vermiyor",
+    "heading": "Piyasa verisi sağlayıcısı kullanılamıyor",
+    "greeting": "Merhaba {{ name }},",
+    "intro": "Monize, {{ since }} tarihinden beri ({{ duration }}) <strong>{{ provider }}</strong> sağlayıcısına ulaşamıyor. Bu sağlayıcıya yapılan istekler şimdilik durduruldu ve giderek artan aralıklarla yeniden denenecek.",
+    "labelFailures": "Başarısız denemeler",
+    "labelLastError": "Son hata",
+    "labelLastSuccess": "Son başarılı yanıt",
+    "valueNever": "hiç",
+    "valueUnknown": "bilinmiyor",
+    "impact": "Bu sağlayıcıya bağlı fiyatlar, grafikler ve endeks karşılaştırmaları, sağlayıcı yeniden yanıt verene kadar eksik veya güncel olmayabilir. Monize'de kayıtlı hiçbir veri kaybolmadı.",
+    "whatToCheck": "Sağlayıcı çalışıyorsa bu sunucunun giden ağ erişimini ve DNS'ini kontrol edin -- sağlayıcının adını çözemeyen veya ona ulaşamayan bir kapsayıcı tam olarak böyle hata verir.",
+    "throttleNote": "Sağlayıcı yeniden çalışmaya başladığında bir e-posta daha alacaksınız. Aynı sağlayıcıyla ilgili uyarılar en fazla {{ hours }} saatte bir gönderilir; böylece kararsız bir sağlayıcı gelen kutunuzu doldurmaz.",
+    "durationMinutes": "{{ minutes }} dk",
+    "durationHoursMinutes": "{{ hours }} sa {{ minutes }} dk"
+  },
+  "providerRecovery": {
+    "subject": "Monize: {{ provider }} yeniden yanıt veriyor",
+    "heading": "Piyasa verisi sağlayıcısı yeniden yanıt veriyor",
+    "greeting": "Merhaba {{ name }},",
+    "intro": "<strong>{{ provider }}</strong> {{ restoredAt }} itibarıyla yeniden yanıt verdi. Kesinti {{ duration }} sürdü.",
+    "backfill": "Kesinti sırasında alınamayan fiyatlar ve endeks geçmişi, bir sonraki planlı yenilemede tamamlanır; yapmanız gereken bir şey yok."
   }
 }

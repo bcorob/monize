@@ -39,6 +39,7 @@ import { CurrenciesModule } from "../currencies/currencies.module";
 import { NetWorthModule } from "../net-worth/net-worth.module";
 import { ActionHistoryModule } from "../action-history/action-history.module";
 import { DelegationModule } from "../delegation/delegation.module";
+import { ProviderHealthModule } from "../provider-health/provider-health.module";
 
 @Module({
   imports: [
@@ -56,6 +57,7 @@ import { DelegationModule } from "../delegation/delegation.module";
       Tag,
       UserPreference,
     ]),
+    ProviderHealthModule,
     forwardRef(() => AccountsModule),
     forwardRef(() => TransactionsModule),
     forwardRef(() => CurrenciesModule),

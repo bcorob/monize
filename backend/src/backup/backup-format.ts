@@ -49,11 +49,11 @@ export interface RestoreResult {
    * AI provider configurations restored without a usable API key.
    *
    * Keys travel decrypted and are re-encrypted under the receiving instance's
-   * `AI_ENCRYPTION_KEY` (`ai-provider-key-transport.ts`), so the ordinary
+   * `ENCRYPTION_KEY` (`ai-provider-key-transport.ts`), so the ordinary
    * cross-instance restore has nothing to report. Two cases remain: an artifact
    * written before keys travelled that way, carrying ciphertext under an
-   * `AI_ENCRYPTION_KEY` this server does not hold, and a server with no
-   * `AI_ENCRYPTION_KEY` configured, which has nothing to store a key under.
+   * `ENCRYPTION_KEY` this server does not hold, and a server with no
+   * `ENCRYPTION_KEY` configured, which has nothing to store a key under.
    *
    * Both leave a provider row that looks configured and fails on every call --
    * the column is either populated-and-unreadable or empty, and nothing else on

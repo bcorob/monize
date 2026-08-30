@@ -1,3 +1,16 @@
+-- Renumbered from prefix 166 to 168. Two merged pull requests each claimed 166,
+-- and a duplicate prefix leaves apply order to alphabetical tie-breaking rather
+-- than to the number that is supposed to decide it.
+--
+-- `schema_migrations` keys on filename, so a rename makes this file run once
+-- more on any database that already applied it. That is safe here, and it is why
+-- this is the half of the pair that moved: the DELETE keeps the newest row per
+-- slot and so matches nothing on a second pass, and every DDL statement below is
+-- guarded. Its former pair, `166_heal_loan_schedule_end_dates.sql`, must NEVER
+-- be renamed: it steps a loan's end_date back one interval and cannot exclude
+-- its own result, so a second run would retire the schedule a payment early. It
+-- is registered in NON_RERUNNABLE_DATA_MIGRATIONS under that filename.
+--
 -- Issue #1247 re-audit: the override table's uniqueness described the wrong
 -- column, and was therefore wrong in both directions at once.
 --
@@ -116,7 +129,7 @@ BEGIN
               ) = ARRAY['override_date', 'scheduled_transaction_id']
     ) THEN
         RAISE EXCEPTION
-            'migration 166: a unique constraint on (scheduled_transaction_id, override_date) is still attached to scheduled_transaction_overrides';
+            'migration 168: a unique constraint on (scheduled_transaction_id, override_date) is still attached to scheduled_transaction_overrides';
     END IF;
 END
 $$;

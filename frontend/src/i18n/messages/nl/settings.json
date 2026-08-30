@@ -514,15 +514,24 @@
     "encryption": {
       "heading": "Back-upversleuteling",
       "descriptionOidc": "Versleutel handmatige en automatische back-ups met een speciaal back-upwachtwoord dat je hier instelt. Het wachtwoord is vereist voor herstel.",
-      "loading": "Laden...",
+      "descriptionLocal": "Je back-ups worden versleuteld met je aanmeldwachtwoord. Verder hoef je niets te onthouden: hetzelfde wachtwoord herstelt ze.",
+      "unavailable": "Deze server is niet geconfigureerd om back-ups te versleutelen, dus ze worden onversleuteld weggeschreven.",
       "enabledBadge": "Ingeschakeld",
+      "disabledBadge": "Niet ingeschakeld",
+      "enabledLocalNote": "Back-ups worden versleuteld met je aanmeldwachtwoord.",
+      "disabledLocalNote": "Back-ups worden onversleuteld weggeschreven totdat je je aanmeldwachtwoord bevestigt.",
+      "enableWithLoginPasswordButton": "Inschakelen met mijn aanmeldwachtwoord",
+      "loading": "Laden...",
       "changePasswordButton": "Back-upwachtwoord wijzigen",
       "disableButton": "Uitschakelen",
       "setPasswordButton": "Back-upwachtwoord instellen",
       "setupModal": {
         "titleOidc": "Back-upwachtwoord instellen",
+        "titleLocal": "Versleutelde back-ups inschakelen",
         "descriptionOidc": "Kies een wachtwoord dat wordt gebruikt om jouw back-ups te versleutelen. Bewaar het op een veilige plek -- je hebt het nodig voor herstel.",
+        "descriptionLocal": "Bevestig je aanmeldwachtwoord om versleutelde back-ups in te schakelen. Met dat wachtwoord worden je back-ups versleuteld en het is ook het wachtwoord dat je nodig hebt om ze te herstellen.",
         "placeholderOidc": "Nieuw back-upwachtwoord (12+ tekens)",
+        "placeholderLocal": "Je aanmeldwachtwoord",
         "savingButton": "Opslaan...",
         "confirmButton": "Bevestigen"
       },
@@ -768,7 +777,7 @@
     },
     "encryptionNotConfigured": {
       "heading": "Versleutelingssleutel vereist",
-      "body": "Noodtoegang vereist dat AI_ENCRYPTION_KEY op de server is ingesteld. Een toekenning slaat de toegangslink van elk contact versleuteld op zodat een nieuwe poging dezelfde link opnieuw kan versturen; zonder die sleutel kan er helemaal geen link worden verstuurd."
+      "body": "Noodtoegang vereist dat ENCRYPTION_KEY op de server is ingesteld. Een toekenning slaat de toegangslink van elk contact versleuteld op zodat een nieuwe poging dezelfde link opnieuw kan versturen; zonder die sleutel kan er helemaal geen link worden verstuurd."
     },
     "alreadyGranted": {
       "heading": "Noodtoegang al verleend",
@@ -874,7 +883,7 @@
   "aiProviders": {
     "heading": "AI-providers",
     "addButton": "Provider toevoegen",
-    "encryptionWarning": "AI_ENCRYPTION_KEY is niet geconfigureerd. Je kunt Ollama gebruiken (lokaal, geen API-sleutel nodig), maar cloudproviders vereisen versleuteling om API-sleutels veilig op te slaan.",
+    "encryptionWarning": "ENCRYPTION_KEY is niet geconfigureerd. Je kunt Ollama gebruiken (lokaal, geen API-sleutel nodig), maar cloudproviders vereisen versleuteling om API-sleutels veilig op te slaan.",
     "systemDefault": {
       "heading": "Standaard AI-provider beschikbaar",
       "description": "Een centrale AI-provider is geconfigureerd door jouw beheerder",

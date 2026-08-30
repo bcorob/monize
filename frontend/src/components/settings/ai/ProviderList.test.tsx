@@ -85,7 +85,7 @@ describe('ProviderList', () => {
 
   it('shows encryption warning when not available', () => {
     render(<ProviderList configs={[]} encryptionAvailable={false} onConfigsChanged={onConfigsChanged} />);
-    expect(screen.getByText(/AI_ENCRYPTION_KEY is not configured/)).toBeInTheDocument();
+    expect(screen.getByText(/ENCRYPTION_KEY is not configured/)).toBeInTheDocument();
   });
 
   it('renders Add Provider button', () => {

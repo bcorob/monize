@@ -514,15 +514,24 @@
     "encryption": {
       "heading": "Crittografia backup",
       "descriptionOidc": "Cifra i backup manuali e automatici con una password dedicata che imposti qui. La password è necessaria per il ripristino.",
-      "loading": "Caricamento...",
+      "descriptionLocal": "I tuoi backup sono cifrati con la tua password di accesso. Nient'altro da ricordare: la stessa password li ripristina.",
+      "unavailable": "Questo server non è configurato per cifrare i backup, quindi vengono scritti in chiaro.",
       "enabledBadge": "Attiva",
+      "disabledBadge": "Non attivo",
+      "enabledLocalNote": "I backup sono cifrati con la tua password di accesso.",
+      "disabledLocalNote": "I backup vengono scritti in chiaro finché non confermi la tua password di accesso.",
+      "enableWithLoginPasswordButton": "Attiva con la mia password di accesso",
+      "loading": "Caricamento...",
       "changePasswordButton": "Cambia password backup",
       "disableButton": "Disattiva",
       "setPasswordButton": "Imposta password backup",
       "setupModal": {
         "titleOidc": "Imposta password backup",
+        "titleLocal": "Attiva i backup cifrati",
         "descriptionOidc": "Scegli una password per cifrare i tuoi backup. Salvala in un posto sicuro -- ti servirà per il ripristino.",
+        "descriptionLocal": "Conferma la tua password di accesso per attivare i backup cifrati. È la password con cui verranno cifrati e quella che ti servirà per ripristinarli.",
         "placeholderOidc": "Nuova password backup (12+ caratteri)",
+        "placeholderLocal": "La tua password di accesso",
         "savingButton": "Salvataggio...",
         "confirmButton": "Conferma"
       },
@@ -768,7 +777,7 @@
     },
     "encryptionNotConfigured": {
       "heading": "Chiave di cifratura richiesta",
-      "body": "L'accesso di emergenza richiede che AI_ENCRYPTION_KEY sia impostata sul server. Una concessione archivia cifrato il link di accesso di ogni contatto così che un nuovo tentativo possa reinviare lo stesso link; senza quella chiave non è possibile inviare alcun link."
+      "body": "L'accesso di emergenza richiede che ENCRYPTION_KEY sia impostata sul server. Una concessione archivia cifrato il link di accesso di ogni contatto così che un nuovo tentativo possa reinviare lo stesso link; senza quella chiave non è possibile inviare alcun link."
     },
     "alreadyGranted": {
       "heading": "Accesso di emergenza già concesso",
@@ -874,7 +883,7 @@
   "aiProviders": {
     "heading": "Provider AI",
     "addButton": "Aggiungi provider",
-    "encryptionWarning": "AI_ENCRYPTION_KEY non è configurata. Puoi usare Ollama (locale, nessuna chiave API necessaria) ma i provider cloud richiedono la crittografia per archiviare le chiavi API in modo sicuro.",
+    "encryptionWarning": "ENCRYPTION_KEY non è configurata. Puoi usare Ollama (locale, nessuna chiave API necessaria) ma i provider cloud richiedono la crittografia per archiviare le chiavi API in modo sicuro.",
     "systemDefault": {
       "heading": "Provider AI predefinito di sistema disponibile",
       "description": "Un provider AI centrale è stato configurato dal tuo amministratore",

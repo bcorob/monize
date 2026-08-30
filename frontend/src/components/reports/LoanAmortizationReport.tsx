@@ -4,6 +4,10 @@ import { useState, useMemo, Fragment } from 'react';
 import { Skeleton } from '@/components/ui/LoadingSkeleton';
 import { format, parseISO } from 'date-fns';
 import { accountsApi } from '@/lib/accounts';
+import { loanRateChangesApi, supportsRateChanges } from '@/lib/loan-rate-changes';
+import { scheduledTransactionsApi } from '@/lib/scheduled-transactions';
+import type { LoanRateChange } from '@/types/loan-rate-change';
+import type { LoanProjectionAnchor } from '@/types/scheduled-transaction';
 import { Transaction } from '@/types/transaction';
 import { generateLoanSchedule } from '@/lib/loan-schedule';
 import {
@@ -11,8 +15,11 @@ import {
   deriveLoanPaymentHistory,
   fetchAllAccountTransactions,
   fetchLoanInterestTransactions,
+  historicalPaymentCount,
+  resolveCurrentLoanTerms,
 } from '@/lib/loan-history';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
+import { useFinancialToday } from '@/hooks/useFinancialToday';
 import { exportToCsv } from '@/lib/csv-export';
 import { ExportDropdown } from '@/components/ui/ExportDropdown';
 import { SortableHeader } from '@/components/ui/SortableHeader';
@@ -36,6 +43,10 @@ interface PaymentRow {
 }
 
 const ACCOUNT_STORAGE_KEY = 'monize-reports-loan-amortization-account';
+
+/** Stable empty lists, so "nothing loaded yet" is not a new dependency each render. */
+const NO_TRANSACTIONS: Transaction[] = [];
+const NO_RATE_CHANGES: LoanRateChange[] = [];
 
 export function LoanAmortizationReport() {
   const t = useTranslations('reports');
@@ -97,30 +108,94 @@ export function LoanAmortizationReport() {
   // dataset; the report has an error-and-retry state and this now reaches it.
   const {
     data: historyData,
+    dataKey: historyKey,
     isLoading: historyLoading,
     error: historyError,
     reload: reloadHistory,
   } = useReportData(
     async () => {
       if (!selectedAccountId) {
-        return { transactions: [] as Transaction[], interest: [] as Transaction[] };
+        return {
+          transactions: [] as Transaction[],
+          interest: [] as Transaction[],
+          rateChanges: [] as LoanRateChange[],
+          anchor: null as LoanProjectionAnchor | null,
+        };
       }
       const account = accounts.find((a) => a.id === selectedAccountId);
-      const [transactions, interest] = await Promise.all([
+      // The rate history rides in the same request key as the rest. It is not
+      // decoration: recording a rate change never writes the account's own
+      // interestRate, so projecting without these rows uses a stale scalar and
+      // gives the same loan a different payoff date here than on its detail page.
+      const [transactions, interest, rateChanges, anchor] = await Promise.all([
         fetchAllAccountTransactions(selectedAccountId),
         account ? fetchLoanInterestTransactions(account) : Promise.resolve([] as Transaction[]),
+        // A line of credit is in this report's account list and the endpoint
+        // answers 400 for one, which would replace the report with its error
+        // state -- persisted, so it would stay broken across reloads with no
+        // in-page way to pick another account.
+        supportsRateChanges(account)
+          ? loanRateChangesApi.getAll(selectedAccountId)
+          : Promise.resolve([] as LoanRateChange[]),
+        // The projection anchor is a prerequisite, not decoration, for the
+        // same reason as the rate history: without it the schedule projects
+        // from today's balance while the next bill prices the ledger through
+        // its due date, and the two disagree for exactly the future-dated
+        // principal payments issue #1253 is about. A failed fetch reaches the
+        // report's error-and-retry state rather than degrading to "no anchor".
+        scheduledTransactionsApi.getLoanProjectionAnchor(selectedAccountId),
       ]);
-      return { transactions, interest };
+      return { transactions, interest, rateChanges, anchor };
     },
     [selectedAccountId, accounts],
+    { requestKey: selectedAccountId },
+  );
+
+  // The payload and the request it answers travel together: until the held data
+  // belongs to the loan on screen there is nothing to draw for this selection.
+  // Without this, the one render between a selection change and the refetch drew
+  // the previous loan's rows -- and for the rate history that means projecting
+  // one loan's rate onto another.
+  const historyForSelection = useMemo(
+    () => (historyKey === selectedAccountId ? historyData : null),
+    [historyData, historyKey, selectedAccountId],
   );
   const transactions = useMemo<Transaction[]>(
-    () => historyData?.transactions ?? [],
-    [historyData],
+    () => historyForSelection?.transactions ?? NO_TRANSACTIONS,
+    [historyForSelection],
   );
   const interestTransactions = useMemo<Transaction[]>(
-    () => historyData?.interest ?? [],
-    [historyData],
+    () => historyForSelection?.interest ?? NO_TRANSACTIONS,
+    [historyForSelection],
+  );
+  const rateChanges = useMemo<LoanRateChange[]>(
+    () => historyForSelection?.rateChanges ?? NO_RATE_CHANGES,
+    [historyForSelection],
+  );
+  const projectionAnchor = useMemo<LoanProjectionAnchor | null>(
+    () => historyForSelection?.anchor ?? null,
+    [historyForSelection],
+  );
+  // The user's calendar day, which is what decides whether the anchor above is
+  // still ahead of them -- the backend prices the same installment against its
+  // own request-timezone `todayYMD()`, so a UTC reading here is a disagreement
+  // about money for as long as the two calendars differ.
+  const todayYmd = useFinancialToday();
+
+  // One derivation, shared by the schedule and the terms shown above it. It was
+  // computed twice per render, which is both wasted work over the whole ledger
+  // and two chances for the two to disagree.
+  const history = useMemo(
+    () =>
+      selectedAccount
+        ? deriveLoanPaymentHistory(
+            selectedAccount,
+            transactions,
+            rateChanges,
+            interestTransactions,
+          )
+        : null,
+    [selectedAccount, transactions, rateChanges, interestTransactions],
   );
 
   // Build payment history from actual transactions + projected future payments.
@@ -132,11 +207,11 @@ export function LoanAmortizationReport() {
     paymentHistory: PaymentRow[];
     projectionPaidOff: boolean;
   } => {
-    if (!selectedAccount) return { paymentHistory: [], projectionPaidOff: false };
+    if (!selectedAccount || !history)
+      return { paymentHistory: [], projectionPaidOff: false };
     let projectionPaidOff = false;
 
-    // --- Historical payments from actual transactions ---
-    const history = deriveLoanPaymentHistory(selectedAccount, transactions, [], interestTransactions);
+    // --- Historical payments from the hoisted derivation above ---
     const payments: PaymentRow[] = history.events.map((event, index) => ({
       paymentNumber: index + 1,
       date: event.date,
@@ -148,7 +223,16 @@ export function LoanAmortizationReport() {
     }));
 
     // --- Project future payments ---
-    const projectionInput = buildLoanProjectionInput(selectedAccount, history);
+    // Anchored on the next scheduled installment (date + ledger debt through
+    // it) so the first projected row and the next bill price the same balance
+    // (issue #1253); a loan with no scheduled payment projects from today.
+    const projectionInput = buildLoanProjectionInput(
+      selectedAccount,
+      history,
+      rateChanges,
+      projectionAnchor,
+      todayYmd,
+    );
     if (projectionInput) {
       const projection = generateLoanSchedule(projectionInput);
       projectionPaidOff = projection.paidOff;
@@ -167,9 +251,34 @@ export function LoanAmortizationReport() {
     }
 
     return { paymentHistory: payments, projectionPaidOff };
-  }, [selectedAccount, transactions, interestTransactions]);
+  }, [selectedAccount, history, rateChanges, projectionAnchor, todayYmd]);
 
-  const historicalCount = useMemo(() => paymentHistory.filter((r) => !r.isProjected).length, [paymentHistory]);
+  // The terms in effect, from the same history the schedule above is built from.
+  // `selectedAccount.interestRate` / `.paymentAmount` are the scalars a
+  // rate-change mutation deliberately never writes, so printing them put
+  // "5% / $500" directly above a projection withheld because the real rate is 12%.
+  const currentTerms = useMemo(
+    () =>
+      selectedAccount && history
+        ? resolveCurrentLoanTerms(
+            selectedAccount,
+            history,
+            rateChanges,
+            projectionAnchor,
+            todayYmd,
+          )
+        : { annualRate: null, payment: null },
+    [selectedAccount, history, rateChanges, projectionAnchor, todayYmd],
+  );
+
+  // The shared derivation, so this report and the Debt Payoff Timeline cannot
+  // give one loan two answers to "Payments Made". A no-op here -- this report
+  // already lists one row per event -- and the point of moving it: the count
+  // now comes from the events rather than from whatever the rows happen to be.
+  const historicalCount = useMemo(
+    () => (history ? historicalPaymentCount(history) : 0),
+    [history],
+  );
   const hasProjection = useMemo(() => paymentHistory.some((r) => r.isProjected), [paymentHistory]);
 
   const summary = useMemo(() => {
@@ -241,7 +350,7 @@ export function LoanAmortizationReport() {
       cards.push(
         { label: t('loanAmortization.currentBalance'), value: formatCurrency(Math.abs(selectedAccount.currentBalance), currency), color: '#dc2626' },
         { label: t('loanAmortization.originalAmount'), value: formatCurrency(summary?.originalBalance || Math.abs(selectedAccount.openingBalance), currency), color: '#111827' },
-        { label: t('loanAmortization.interestRate'), value: selectedAccount.interestRate ? `${selectedAccount.interestRate}%` : t('loanAmortization.notSet'), color: '#111827' },
+        { label: t('loanAmortization.interestRate'), value: currentTerms.annualRate != null ? `${currentTerms.annualRate}%` : t('loanAmortization.notSet'), color: '#111827' },
         { label: interestLabel(summary), value: formatCurrency(summary?.totalInterest || 0, currency), color: '#ea580c' },
         { label: t('loanAmortization.paymentsMade'), value: String(historicalCount), color: '#16a34a' },
       );
@@ -307,7 +416,14 @@ export function LoanAmortizationReport() {
     ? sortedPaymentHistory
     : sortedPaymentHistory.slice(0, 24);
 
-  if (error || historyError) {
+  // Two error scopes, because they need different screens. Without the ACCOUNT
+  // LIST there is no report at all, so that one replaces it. A failure loading
+  // ONE loan's data must keep the picker on screen instead: the selection is
+  // persisted, so replacing the whole report leaves that loan's error restored
+  // on every visit with no way to choose another account -- which is exactly the
+  // trap the line-of-credit 400 fell into. `historyError` is rendered inline
+  // below, beneath the picker.
+  if (error) {
     return (
       <ReportError
         onRetry={() => {
@@ -369,8 +485,12 @@ export function LoanAmortizationReport() {
         </div>
       </div>
 
+      {/* A failure loading THIS loan's history keeps the picker above it usable,
+          so the user can select a different account. */}
+      {historyError && <ReportError onRetry={reloadHistory} />}
+
       {/* Summary Cards */}
-      {selectedAccount && (
+      {!historyError && selectedAccount && (
         // The sixth column exists only when the sixth card does; sizing on
         // `hasProjection` alone left a blank column for a truncated projection.
         <div
@@ -393,7 +513,9 @@ export function LoanAmortizationReport() {
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-4">
             <div className="text-sm text-gray-500 dark:text-gray-400">{t('loanAmortization.interestRate')}</div>
             <div className="text-lg font-bold text-gray-900 dark:text-gray-100">
-              {selectedAccount.interestRate ? `${selectedAccount.interestRate}%` : t('loanAmortization.notSet')}
+              {currentTerms.annualRate != null
+                ? `${currentTerms.annualRate}%`
+                : t('loanAmortization.notSet')}
             </div>
           </div>
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-4">
@@ -422,7 +544,7 @@ export function LoanAmortizationReport() {
       )}
 
       {/* Account Details */}
-      {selectedAccount && (
+      {!historyError && selectedAccount && (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
             <div>
@@ -442,7 +564,7 @@ export function LoanAmortizationReport() {
             <div>
               <span className="text-gray-500 dark:text-gray-400">{t('loanAmortization.paymentAmount')}</span>
               <p className="font-medium text-gray-900 dark:text-gray-100">
-                {selectedAccount.paymentAmount ? formatCurrency(selectedAccount.paymentAmount) : t('loanAmortization.notSet')}
+                {currentTerms.payment ? formatCurrency(currentTerms.payment) : t('loanAmortization.notSet')}
               </p>
             </div>
             <div>
@@ -455,7 +577,10 @@ export function LoanAmortizationReport() {
         </div>
       )}
 
-      {/* Payment History Table */}
+      {/* Payment History Table -- withheld while this loan's history failed to
+          load, so an empty schedule is never mistaken for a loan that has made
+          no payments. */}
+      {!historyError && (
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
@@ -603,6 +728,7 @@ export function LoanAmortizationReport() {
           </>
         )}
       </div>
+      )}
     </div>
   );
 }

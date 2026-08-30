@@ -84,11 +84,14 @@ INV-LOAN-002's entry names the missing source scan while its row said `--`.
 | INV-RECONCILE-001 reconciled lock | supporting | **required** | required | required | -- | -- | -- | optional |
 | INV-FX-001 no 1:1 fallback | **required** | **required** | required | -- | -- | required | optional | required |
 | INV-REPORT-001 report account scope | supporting | **required** | **required** | -- | -- | -- | -- | optional |
+| INV-REPORT-002 chart reduction | **required** | **required** | -- | -- | -- | -- | -- | -- |
 | INV-LOAN-001 overpayment cadence | **required** | -- | -- | -- | -- | -- | -- | optional |
 | INV-LOAN-002 no truncated total | **required** | **required** (not yet met) | -- | -- | -- | -- | -- | optional |
 | INV-LOAN-003 compounding convention | **required** | **required** | -- | -- | -- | -- | -- | -- |
 | INV-LOAN-004 residual final payment | **required** | -- | -- | -- | -- | -- | -- | -- |
 | INV-LOAN-005 first payment is payment 1 | **required** | **required** | -- | -- | -- | -- | -- | -- |
+| INV-LOAN-006 dated installment pricing | **required** | **required** | required | -- | -- | -- | -- | optional |
+| INV-LOAN-HISTORY-001 ledger-backed loan interest | **required** | required | -- | -- | -- | -- | -- | optional |
 | INV-OCCURRENCE-001 one effect | supporting | -- | required | required | **required** | required | -- | required |
 | INV-OCCURRENCE-002 override price | required | -- | -- | -- | -- | -- | -- | required |
 | INV-OCCURRENCE-003 one effective occurrence | **required** | **required** | -- | -- | -- | -- | optional | optional |
@@ -104,6 +107,7 @@ INV-LOAN-002's entry names the missing source scan while its row said `--`.
 | INV-ATTACHMENT-001 bytes present | supporting | -- | required | optional | -- | **required** | **required** | required |
 | INV-BACKUP-001 backup complete | supporting | -- | required | -- | optional | **required** | **required** | required |
 | INV-CRON-001 one effect per tick | supporting | -- | required | required | **required** | optional | -- | -- |
+| INV-PROVIDER-001 outage reported once | required | **required** | required | optional | required | -- | required | -- |
 | INV-RLS-001 role privilege | supporting | -- | **required** | -- | required | -- | -- | -- |
 | INV-CACHE-001 cache invalidation | required | **required** | -- | -- | -- | -- | -- | required |
 | INV-RELEASE-001 one revision | required | -- | -- | -- | -- | -- | -- | workflow self-test |
@@ -121,6 +125,27 @@ kind, not any one service test. `INV-REDEEM-001` too: proceeds and accrued
 interest are added in exactly one place, and `accrued-interest.guard.spec.ts`
 failing a hand-rolled addition anywhere else is what keeps the cash from being
 moved twice.
+
+`INV-LOAN-HISTORY-001` is the opposite arrangement, and worth stating because it
+is the exception the previous paragraph would lead you to guess wrong. Its
+load-bearing kind is the **unit** test, not the scan: there is exactly one
+producer of historical loan interest (`deriveLoanPaymentHistory`, in the
+frontend), so the defect cannot arrive from a second call site, and what has
+actually gone wrong every time is the *arithmetic decision* inside it -- an
+estimate substituted for an absent ledger fact, then a rate dropped along with
+the interest, then escrow read as interest because it was listed first. Those are
+caught by a case, not by a pattern. The scans
+(`loan-history.guard.test.ts`) are `required` rather than load-bearing because
+each proves a narrower thing: that no `catch` reappears in the module, since a
+swallowed lookup resolves to `[]` and `[]` is read as "no interest was booked";
+and that no surface reads a resolved annual rate for truthiness, since `0` is a
+rate and five sites reported a recorded 0% as "Not set". That second one is the
+shape where a scan *is* the right instrument -- one mechanical mistake repeated
+across five files -- and it carries a self-test over known good and bad lines,
+because a pattern that has silently stopped matching still passes.
+The unit matrix is what has to be exhaustive -- every account type, compounding
+flag, frequency and timeline combination was a separate door into the estimate,
+and a single-fixture test closed only one of them.
 
 `INV-IMPORT-002`'s load-bearing kind is a **failpoint**, and it is worth
 understanding why the other columns cannot substitute. The MNY import has real
@@ -195,21 +220,31 @@ asserting the violation and correct them in the same change -- they are why the
 defect survived.
 ```
 
-### Located in the current suites -- both since corrected
+### Located in the current suites -- all since corrected
 
-Two known-wrong tests were found here and have since been corrected, in the same
-work that moved their invariants to `enforced`. They are recorded rather than
-deleted, because the rule they illustrate (VER-004) is the point, and a reader
-should be able to confirm the correction rather than take it on trust.
+Four known-wrong tests were found here and have since been corrected, in the same
+work that moved their invariants to `enforced` (or, for the loan ones, to
+`partial`). They are recorded rather than deleted, because the rule they
+illustrate (VER-004) is the point, and a reader should be able to confirm the
+correction rather than take it on trust.
 
 | Test | Asserted (now corrected) | Was protecting |
 | --- | --- | --- |
+| `backend/src/scheduled-transactions/scheduled-transaction-loan.service.spec.ts` | That the loan recalculation **rewrites** a template it cannot account for. Two of these asserted the rewrite for a template carrying an unmanaged line, which leaves the parent unequal to the sum of its children -- so the posting path's exact-4dp validator refuses every occurrence and the schedule stops posting silently. They now assert the decline. | INV-LOAN-HISTORY-001 |
+| `frontend/src/components/reports/LoanAmortizationReport.test.tsx` | That the account picker **disappears** when one loan's data fails to load (`queryByText('Select Loan')).not.toBeInTheDocument()`). The selection is persisted, so replacing the whole report restores that loan's error on every visit with no in-page way to choose another account. It now asserts the schedule is withheld and the picker stays. | INV-LOAN-HISTORY-001 |
 | `backend/src/net-worth/net-worth.service.spec.ts` | Additive stock-split replay (`... + SPLIT 90 = 180 shares`). The suite now applies the **multiplicative** rule -- a 2-for-1 split multiplies the position (50 shares -> 100), and the comment records that the old additive fixture was replaced. | INV-HOLDING-002 |
 | `frontend/src/components/settings/BackupRestoreSection.test.tsx`, `frontend/src/components/settings/DangerZoneSection.test.tsx`, `backend/src/users/users.service.spec.ts`, `backend/src/backup/backup.service.spec.ts` | `oidcIdToken: 'oidc-session-confirmed'` accepted as proof. The suites now send the real signed reauth artifact and **reject** the sentinel (and any non-empty string); the literal survives only in comments describing the old defect. | INV-AUTH-003 |
 
 The AUTH-003 case is the clearest of the category: the sentinel was asserted on
 both sides, so the tests did not merely tolerate the defect -- they specified it,
 and a real OIDC round trip could not land until they changed.
+
+The two LOAN-HISTORY cases are the youngest, and both were written by the same
+work that then had to correct them -- which is the honest version of how this
+category arises. Neither was careless: each asserted, precisely, what the code
+did one commit earlier. That is exactly VER-004's warning, and the reason the
+rule is "search the suites when an invariant is found violated" rather than
+"trust that a green suite means the invariant holds".
 
 The HOLDING-002 case is the more instructive one. It read as a careful test: five
 actions, three months, arithmetic worked out in a comment -- and the arithmetic

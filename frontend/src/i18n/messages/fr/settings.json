@@ -514,15 +514,24 @@
     "encryption": {
       "heading": "Chiffrement des sauvegardes",
       "descriptionOidc": "Chiffrez les sauvegardes manuelles et automatiques avec un mot de passe de sauvegarde dédié que vous définissez ici. Le mot de passe est requis pour la restauration.",
-      "loading": "Chargement...",
+      "descriptionLocal": "Vos sauvegardes sont chiffrées avec votre mot de passe de connexion. Rien d'autre à retenir : le même mot de passe permet de les restaurer.",
+      "unavailable": "Ce serveur n'est pas configuré pour chiffrer les sauvegardes ; elles sont donc écrites en clair.",
       "enabledBadge": "Activé",
+      "disabledBadge": "Non activé",
+      "enabledLocalNote": "Les sauvegardes sont chiffrées avec votre mot de passe de connexion.",
+      "disabledLocalNote": "Les sauvegardes sont écrites en clair tant que vous n'avez pas confirmé votre mot de passe de connexion.",
+      "enableWithLoginPasswordButton": "Activer avec mon mot de passe de connexion",
+      "loading": "Chargement...",
       "changePasswordButton": "Changer le mot de passe de sauvegarde",
       "disableButton": "Désactiver",
       "setPasswordButton": "Définir le mot de passe de sauvegarde",
       "setupModal": {
         "titleOidc": "Définir le mot de passe de sauvegarde",
+        "titleLocal": "Activer les sauvegardes chiffrées",
         "descriptionOidc": "Choisissez un mot de passe qui sera utilisé pour chiffrer vos sauvegardes. Conservez-le dans un endroit sûr — vous en aurez besoin pour restaurer.",
+        "descriptionLocal": "Confirmez votre mot de passe de connexion pour activer les sauvegardes chiffrées. C'est le mot de passe qui chiffrera vos sauvegardes et dont vous aurez besoin pour les restaurer.",
         "placeholderOidc": "Nouveau mot de passe de sauvegarde (12+ caractères)",
+        "placeholderLocal": "Votre mot de passe de connexion",
         "savingButton": "Enregistrement...",
         "confirmButton": "Confirmer"
       },
@@ -768,7 +777,7 @@
     },
     "encryptionNotConfigured": {
       "heading": "Clé de chiffrement requise",
-      "body": "L'accès d'urgence nécessite que AI_ENCRYPTION_KEY soit défini sur le serveur. Un octroi stocke le lien d'accès de chaque contact sous forme chiffrée afin qu'une nouvelle tentative puisse renvoyer le même lien ; sans cette clé, aucun lien ne peut être envoyé."
+      "body": "L'accès d'urgence nécessite que ENCRYPTION_KEY soit défini sur le serveur. Un octroi stocke le lien d'accès de chaque contact sous forme chiffrée afin qu'une nouvelle tentative puisse renvoyer le même lien ; sans cette clé, aucun lien ne peut être envoyé."
     },
     "alreadyGranted": {
       "heading": "Accès d'urgence déjà accordé",
@@ -874,7 +883,7 @@
   "aiProviders": {
     "heading": "Fournisseurs d'IA",
     "addButton": "Ajouter un fournisseur",
-    "encryptionWarning": "AI_ENCRYPTION_KEY n'est pas configurée. Vous pouvez utiliser Ollama (local, sans clé API) mais les fournisseurs cloud nécessitent le chiffrement pour stocker les clés API en toute sécurité.",
+    "encryptionWarning": "ENCRYPTION_KEY n'est pas configurée. Vous pouvez utiliser Ollama (local, sans clé API) mais les fournisseurs cloud nécessitent le chiffrement pour stocker les clés API en toute sécurité.",
     "systemDefault": {
       "heading": "Fournisseur d'IA par défaut du système disponible",
       "description": "Un fournisseur d'IA central a été configuré par votre administrateur",

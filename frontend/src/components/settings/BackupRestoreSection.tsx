@@ -94,10 +94,14 @@ export function BackupRestoreSection({ user }: BackupRestoreSectionProps) {
   const [restoreResult, setRestoreResult] = useState<RestoreResult | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Backup password setup. Only reachable for an account the server reports as
-  // manageable: a local-auth user's backups are encrypted with the login
-  // password it captured at sign-in, so there is nothing here for them.
+  // The password modal, shared by both accounts: an OIDC account chooses a
+  // dedicated backup password here, a local account confirms the login password
+  // its backups are already encrypted with.
   const [showEncryptionSetup, setShowEncryptionSetup] = useState(false);
+  // Which password opens this account's backups. Read from the server's status
+  // rather than from `isOidc`, so the screen cannot disagree with the service
+  // that decides it.
+  const usesLoginPassword = encryption?.method === 'login-password';
   const [setupPassword, setSetupPassword] = useState('');
   const [setupSaving, setSetupSaving] = useState(false);
 
@@ -200,10 +204,18 @@ export function BackupRestoreSection({ user }: BackupRestoreSectionProps) {
     setSetupPassword('');
   };
 
+  // One handler for both accounts: which password is being confirmed differs,
+  // what happens after it does not. A local account confirms the login password
+  // it already has and the server verifies it against the account's own hash; an
+  // OIDC account chooses a dedicated one.
   const handleSetBackupPassword = async () => {
     setSetupSaving(true);
     try {
-      await backupApi.setBackupPassword(setupPassword);
+      if (usesLoginPassword) {
+        await backupApi.enableWithLoginPassword(setupPassword);
+      } else {
+        await backupApi.setBackupPassword(setupPassword);
+      }
       setEncryption(await backupApi.getEncryptionStatus());
       closeEncryptionSetup();
       toast.success(t('encryption.toasts.enabled'));
@@ -301,9 +313,54 @@ export function BackupRestoreSection({ user }: BackupRestoreSectionProps) {
         {t('heading')}
       </h2>
 
-      {/* Backup password -- OIDC accounts only. A local-auth account's backups
-          are encrypted with the login password the server captured at sign-in,
-          so there is nothing to set, change or switch off. */}
+      {/* Backup encryption. A local-auth account's backups are encrypted with
+          the login password the server captured when they last typed it, so
+          there is no second password to invent -- but the state is shown either
+          way, because "off" rendering as an empty space is how a deployment
+          wrote plaintext backups for months without anyone being able to see it
+          on this page (issue #1269). */}
+      {encryption && usesLoginPassword && (
+        <div className="mb-6 pb-6 border-b border-gray-200 dark:border-gray-700">
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-1">
+            {t('encryption.heading')}
+          </h3>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+            {t('encryption.descriptionLocal')}
+          </p>
+
+          {!encryption.available ? (
+            <p className="text-sm text-amber-700 dark:text-amber-400">
+              {t('encryption.unavailable')}
+            </p>
+          ) : encryption.enabled ? (
+            <div className="flex items-center gap-3">
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
+                {t('encryption.enabledBadge')}
+              </span>
+              <span className="text-sm text-gray-600 dark:text-gray-400">
+                {t('encryption.enabledLocalNote')}
+              </span>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center gap-3">
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+                  {t('encryption.disabledBadge')}
+                </span>
+                <span className="text-sm text-gray-600 dark:text-gray-400">
+                  {t('encryption.disabledLocalNote')}
+                </span>
+              </div>
+              <div>
+                <Button onClick={() => setShowEncryptionSetup(true)}>
+                  {t('encryption.enableWithLoginPasswordButton')}
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {encryption?.manageable && (
         <div className="mb-6 pb-6 border-b border-gray-200 dark:border-gray-700">
           <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-1">
@@ -498,17 +555,27 @@ export function BackupRestoreSection({ user }: BackupRestoreSectionProps) {
       >
         <div className="p-6">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
-            {t('encryption.setupModal.titleOidc')}
+            {usesLoginPassword
+              ? t('encryption.setupModal.titleLocal')
+              : t('encryption.setupModal.titleOidc')}
           </h2>
           <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-            {t('encryption.setupModal.descriptionOidc')}
+            {usesLoginPassword
+              ? t('encryption.setupModal.descriptionLocal')
+              : t('encryption.setupModal.descriptionOidc')}
           </p>
           <Input
             type="password"
-            autoComplete="new-password"
+            // The local flow confirms an existing credential, so the browser is
+            // told which one it is; the OIDC flow invents a new secret.
+            autoComplete={usesLoginPassword ? 'current-password' : 'new-password'}
             value={setupPassword}
             onChange={(e) => setSetupPassword(e.target.value)}
-            placeholder={t('encryption.setupModal.placeholderOidc')}
+            placeholder={
+              usesLoginPassword
+                ? t('encryption.setupModal.placeholderLocal')
+                : t('encryption.setupModal.placeholderOidc')
+            }
           />
           <div className="mt-4 flex justify-end gap-2">
             <Button

@@ -514,15 +514,24 @@
     "encryption": {
       "heading": "백업 암호화",
       "descriptionOidc": "여기서 설정한 전용 백업 비밀번호로 수동 및 자동 백업을 암호화합니다. 복원 시 비밀번호가 필요합니다.",
-      "loading": "로딩 중...",
+      "descriptionLocal": "백업은 로그인 비밀번호로 암호화됩니다. 따로 기억할 것은 없습니다. 같은 비밀번호로 복원합니다.",
+      "unavailable": "이 서버는 백업 암호화가 구성되어 있지 않아 백업이 암호화되지 않은 상태로 기록됩니다.",
       "enabledBadge": "활성화됨",
+      "disabledBadge": "사용 안 함",
+      "enabledLocalNote": "백업은 로그인 비밀번호로 암호화됩니다.",
+      "disabledLocalNote": "로그인 비밀번호를 확인하기 전까지 백업은 암호화되지 않은 상태로 기록됩니다.",
+      "enableWithLoginPasswordButton": "내 로그인 비밀번호로 사용 설정",
+      "loading": "로딩 중...",
       "changePasswordButton": "백업 비밀번호 변경",
       "disableButton": "비활성화",
       "setPasswordButton": "백업 비밀번호 설정",
       "setupModal": {
         "titleOidc": "백업 비밀번호 설정",
+        "titleLocal": "암호화 백업 사용 설정",
         "descriptionOidc": "백업 암호화에 사용할 비밀번호를 선택하세요. 안전한 곳에 저장해 두세요 -- 복원 시 필요합니다.",
+        "descriptionLocal": "암호화 백업을 켜려면 로그인 비밀번호를 확인하세요. 이 비밀번호로 백업이 암호화되며 복원할 때도 같은 비밀번호가 필요합니다.",
         "placeholderOidc": "새 백업 비밀번호 (12자 이상)",
+        "placeholderLocal": "로그인 비밀번호",
         "savingButton": "저장 중...",
         "confirmButton": "확인"
       },
@@ -768,7 +777,7 @@
     },
     "encryptionNotConfigured": {
       "heading": "암호화 키가 필요합니다",
-      "body": "긴급 접근에는 서버에 AI_ENCRYPTION_KEY가 설정되어 있어야 합니다. 부여 시 각 연락처의 접근 링크를 암호화하여 저장하므로 재시도 시 같은 링크를 다시 보낼 수 있으며, 이 키가 없으면 링크를 전혀 보낼 수 없습니다."
+      "body": "긴급 접근에는 서버에 ENCRYPTION_KEY가 설정되어 있어야 합니다. 부여 시 각 연락처의 접근 링크를 암호화하여 저장하므로 재시도 시 같은 링크를 다시 보낼 수 있으며, 이 키가 없으면 링크를 전혀 보낼 수 없습니다."
     },
     "alreadyGranted": {
       "heading": "긴급 접근이 이미 부여됨",
@@ -874,7 +883,7 @@
   "aiProviders": {
     "heading": "AI 제공자",
     "addButton": "제공자 추가",
-    "encryptionWarning": "AI_ENCRYPTION_KEY가 구성되지 않았습니다. Ollama (로컬, API 키 불필요)는 사용할 수 있지만 클라우드 제공자는 API 키를 안전하게 저장하기 위해 암호화가 필요합니다.",
+    "encryptionWarning": "ENCRYPTION_KEY가 구성되지 않았습니다. Ollama (로컬, API 키 불필요)는 사용할 수 있지만 클라우드 제공자는 API 키를 안전하게 저장하기 위해 암호화가 필요합니다.",
     "systemDefault": {
       "heading": "시스템 기본 AI 제공자 사용 가능",
       "description": "관리자가 중앙 AI 제공자를 구성했습니다",

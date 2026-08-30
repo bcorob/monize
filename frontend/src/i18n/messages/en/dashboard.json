@@ -27,7 +27,6 @@
     "manualTitle": "Requires manual posting",
     "negativeBalanceWarning": "This transaction will cause the account balance to go below zero",
     "viewAll": "View all bills & deposits",
-    "totalIncoming": "Total incoming",
     "moreItems": "+{count} more",
     "overdue": "Overdue",
     "today": "Today",

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, fireEvent, act } from '@/test/render';
 import { LoanAmortizationReport } from './LoanAmortizationReport';
 
@@ -28,10 +28,28 @@ vi.mock('@/lib/accounts', () => ({
   },
 }));
 
+const mockGetRateChanges = vi.fn();
+// Only the API is mocked; supportsRateChanges is the predicate under test here,
+// so it stays real rather than being restated in the mock.
+vi.mock('@/lib/loan-rate-changes', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/loan-rate-changes')>()),
+  loanRateChangesApi: {
+    getAll: (...args: any[]) => mockGetRateChanges(...args),
+  },
+}));
+
 vi.mock('@/lib/transactions', () => ({
   transactionsApi: {
     getAll: (...args: any[]) => mockGetAllTransactions(...args),
     getAllPages: (...args: any[]) => mockGetAllPages(...args),
+  },
+}));
+
+const mockGetLoanProjectionAnchor = vi.fn();
+vi.mock('@/lib/scheduled-transactions', () => ({
+  scheduledTransactionsApi: {
+    getLoanProjectionAnchor: (...args: any[]) =>
+      mockGetLoanProjectionAnchor(...args),
   },
 }));
 
@@ -47,11 +65,11 @@ vi.mock('@/lib/logger', () => ({
 /**
  * Render the report and let its two loaders settle inside `act`.
  *
- * The report fetches on mount -- the accounts list and, keyed off it, the
- * selected loan's transactions plus its booked interest -- so a bare
- * `render(...)` leaves those updates landing outside `act` and the assertions
- * run against a tree React has not finished. `frontend/CLAUDE.md`: give the file
- * one helper and use it everywhere.
+ * The report fetches on mount -- the accounts list and, keyed off the resulting
+ * selection, that loan's transactions, booked interest and rate history -- so a
+ * bare `render(...)` leaves those updates landing outside `act` and the
+ * assertions run against a tree React has not finished. `frontend/CLAUDE.md`:
+ * give the file one helper and use it everywhere.
  */
 async function renderReport() {
   let result: ReturnType<typeof render>;
@@ -66,33 +84,29 @@ async function renderReport() {
   return result!;
 }
 
-const loanWithSeparateInterest = {
-  id: 'loan-1',
-  name: 'Mortgage',
-  accountType: 'MORTGAGE',
-  currentBalance: -100000,
-  openingBalance: -120000,
-  interestRate: 5.0,
-  paymentAmount: 800,
-  paymentFrequency: 'MONTHLY',
-  interestCategoryId: 'cat-int',
-  sourceAccountId: 'src-1',
-  isCanadianMortgage: false,
-  isVariableRate: false,
-  isClosed: false,
-};
-
 describe('LoanAmortizationReport', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Most cases have no recorded rate history; the ones that do override it.
+    mockGetRateChanges.mockResolvedValue([]);
+    // Most cases have no scheduled payment, so the projection keeps its
+    // today-anchored fallback; the anchored cases override this.
+    mockGetLoanProjectionAnchor.mockResolvedValue({
+      nextDueDate: null,
+      debt: null,
+    });
   });
 
   it('shows loading state initially', async () => {
-    // The accounts fetch never settles, so the skeleton stays -- but the HISTORY
-    // loader resolves immediately with nothing selected, and that update landed
-    // outside `act` when this rendered synchronously. Flushing it does not hide
-    // the first paint: the report is still loading on the half that matters.
     mockGetAllAccounts.mockReturnValue(new Promise(() => {}));
+    // The report has a SECOND loader beside the account list -- this loan's
+    // transactions, interest and rate history -- and with no account selected
+    // yet it resolves immediately with empty lists. That resolution is a state
+    // update, so a synchronous `render` leaves it to land after the test body,
+    // which is the act() warning the guard fails on (`src/test/act-guard.ts`).
+    // Wrapping the render is the file's own convention for a component that
+    // fetches on mount; the assertion is unchanged, because the account list
+    // never resolves and the report therefore cannot leave its loading state.
     await renderReport();
     expect(document.querySelector('.animate-pulse')).toBeTruthy();
   });
@@ -124,10 +138,6 @@ describe('LoanAmortizationReport', () => {
       },
     ]);
     mockGetAllTransactions.mockResolvedValue({
-      // `fetchAllAccountTransactions` pages on `result.pagination.hasMore`, so a
-      // fixture without it throws. It used to be omitted here and nothing
-      // noticed: the report caught every history failure and rendered an empty
-      // one, so this test was green against an error screen.
       data: [{ id: 'p1', transactionDate: '2024-06-01', amount: 500, linkedTransaction: null }],
       pagination: { hasMore: false },
     });
@@ -137,65 +147,14 @@ describe('LoanAmortizationReport', () => {
 
     await renderReport();
 
-    // The report now pulls the loan's interest expenses, scoped to its
-    // configured interest category + source account, so its interest matches
-    // the loan detail page instead of an analytic estimate.
+    // The report pulls the loan's interest expenses, scoped to its configured
+    // interest category + source account, so its interest matches the loan
+    // detail page.
     await waitFor(() =>
       expect(mockGetAllPages).toHaveBeenCalledWith({
         categoryIds: ['cat-int'],
         accountIds: ['src-1'],
       }),
-    );
-  });
-
-  it('shows a retriable error when the interest lookup fails, not a zero-interest history', async () => {
-    // The failure this surface used to swallow. Its loader caught the rejection
-    // and replaced BOTH arrays with `[]`, so a transient 500 on the interest
-    // query rendered a complete-looking loan history -- and with the interest
-    // list empty, every row took the analytic estimate rather than the booked
-    // interest. A failed lookup is not an empty dataset: the report has an
-    // error-and-retry state and this is what reaches it.
-    mockGetAllAccounts.mockResolvedValue([loanWithSeparateInterest]);
-    mockGetAllTransactions.mockResolvedValue({
-      data: [{ id: 'p1', transactionDate: '2024-06-01', amount: 500, linkedTransaction: null }],
-      pagination: { hasMore: false },
-    });
-    mockGetAllPages.mockRejectedValue(new Error('interest lookup failed'));
-
-    await renderReport();
-
-    await waitFor(() =>
-      expect(screen.getByText(/Failed to load report data/)).toBeInTheDocument(),
-    );
-    expect(screen.getByRole('button', { name: /Try again/ })).toBeInTheDocument();
-    // And nothing that looks like a history: no table, no summary figure.
-    expect(screen.queryByText(/Payment History/)).not.toBeInTheDocument();
-  });
-
-  it('retries the history load, not only the accounts list', async () => {
-    // Both loaders sit behind one button, so a retry that reloaded only the
-    // accounts would leave the surface in the error state for ever.
-    mockGetAllAccounts.mockResolvedValue([loanWithSeparateInterest]);
-    mockGetAllTransactions.mockResolvedValue({
-      data: [{ id: 'p1', transactionDate: '2024-06-01', amount: 500, linkedTransaction: null }],
-      pagination: { hasMore: false },
-    });
-    mockGetAllPages.mockRejectedValue(new Error('interest lookup failed'));
-
-    await renderReport();
-    await waitFor(() =>
-      expect(screen.getByText(/Failed to load report data/)).toBeInTheDocument(),
-    );
-
-    mockGetAllPages.mockResolvedValue([
-      { id: 'i1', transactionDate: '2024-06-01', amount: -300, categoryId: 'cat-int', isTransfer: false },
-    ]);
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /Try again/ }));
-    });
-
-    await waitFor(() =>
-      expect(screen.queryByText(/Failed to load report data/)).not.toBeInTheDocument(),
     );
   });
 
@@ -379,6 +338,32 @@ describe('LoanAmortizationReport', () => {
     });
   });
 
+  it('shows 0% -- not "Not set" -- for an interest-free loan', async () => {
+    // The resolved rate is `number | null` precisely so absence travels; reading
+    // it for truthiness throws that away again and reports a recorded 0% as
+    // unconfigured. 0 is a rate.
+    mockGetAllAccounts.mockResolvedValue([
+      {
+        id: 'loan-0', name: 'Interest-free loan', accountType: 'LOAN',
+        currentBalance: -900, openingBalance: -1200, interestRate: 0,
+        paymentAmount: 150, paymentFrequency: 'MONTHLY',
+        isCanadianMortgage: false, isVariableRate: false, isClosed: false,
+      },
+    ]);
+    mockGetAllTransactions.mockResolvedValue({
+      data: [
+        { id: 'tx-1', transactionDate: '2026-01-15', amount: 150, linkedTransaction: null },
+        { id: 'tx-2', transactionDate: '2026-02-15', amount: 150, linkedTransaction: null },
+      ],
+      pagination: { hasMore: false },
+    });
+    await renderReport();
+    await waitFor(() => {
+      expect(screen.getByText('0%')).toBeInTheDocument();
+    });
+    expect(screen.queryByText('Not set')).not.toBeInTheDocument();
+  });
+
   it('displays account details section with correct type labels', async () => {
     mockGetAllAccounts.mockResolvedValue([
       {
@@ -547,6 +532,56 @@ describe('LoanAmortizationReport', () => {
     });
   });
 
+  describe('anchored projection (issue #1253)', () => {
+    // Whether the anchor is USED is decided by its position relative to TODAY
+    // -- an overdue one is refused -- so the clock is pinned rather than read.
+    // Without this the case passes until 2026-08-15 drifts into the past and
+    // then fails with nothing changed. Only `Date` is faked: RTL's `waitFor`
+    // cannot drive Vitest's fake timers.
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2026-08-01T12:00:00Z'));
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('prices the first projected row from the anchored ledger debt, matching the next bill (issue #1253)', async () => {
+      // Today's balance is -200,000, but a 1,500 principal-only payment already
+      // posted for a date before the next installment: the scheduled bill prices
+      // 198,500 * 0.005 = 992.50 of interest, and the report's first projected
+      // row must show the same figure -- not 1,000.00 from the stale balance.
+      mockGetAllAccounts.mockResolvedValue([
+        {
+          id: 'loan-1', name: 'Mortgage', accountType: 'LOAN',
+          currentBalance: -200000, openingBalance: -210000, interestRate: 6,
+          paymentAmount: 1500, paymentFrequency: 'MONTHLY',
+          isCanadianMortgage: false, isVariableRate: false, isClosed: false,
+        },
+      ]);
+      mockGetAllTransactions.mockResolvedValue({
+        data: [
+          { id: 'tx-1', transactionDate: '2026-07-15', amount: 1500, linkedTransaction: null },
+        ],
+        pagination: { hasMore: false },
+      });
+      mockGetLoanProjectionAnchor.mockResolvedValue({
+        nextDueDate: '2026-08-15',
+        debt: 198500,
+      });
+
+      await renderReport();
+
+      await waitFor(() => {
+        expect(screen.getByText('Projected Future Payments')).toBeInTheDocument();
+      });
+      expect(mockGetLoanProjectionAnchor).toHaveBeenCalledWith('loan-1');
+      // First projected row: the bill's own interest for the installment.
+      expect(screen.getAllByText('$992.50').length).toBeGreaterThan(0);
+      expect(screen.queryByText('$1000.00')).not.toBeInTheDocument();
+    });
+  });
+
   it('shows Est. Payoff card when projections exist', async () => {
     mockGetAllAccounts.mockResolvedValue([
       {
@@ -660,15 +695,7 @@ describe('LoanAmortizationReport', () => {
     });
   });
 
-  it('shows a retryable error when loading the payment history fails', async () => {
-    // This asserted the opposite until the loader stopped swallowing failures:
-    // it expected the report chrome ("Select Loan") to render on a failed
-    // transactions load, which is what the old `catch` produced -- a report that
-    // looks usable over a history that never arrived, and whose rows then take
-    // the analytic interest estimate. "Gracefully" meant "silently".
-    //
-    // A failed lookup is not an empty dataset, so the failure lands on the
-    // report's own error-and-retry state, exactly as an accounts failure does.
+  it('shows a retryable error when loading the loan transactions fails', async () => {
     mockGetAllAccounts.mockResolvedValue([
       {
         id: 'loan-1', name: 'Loan', accountType: 'LOAN',
@@ -682,7 +709,161 @@ describe('LoanAmortizationReport', () => {
     await waitFor(() => {
       expect(screen.getByText('Try again')).toBeInTheDocument();
     });
-    expect(screen.queryByText('Select Loan')).not.toBeInTheDocument();
+    // The schedule must not be drawn from a history that failed to load: an
+    // empty one projects a plausible payoff from no payments at all.
+    expect(screen.queryByText(/payments made/)).not.toBeInTheDocument();
+    // But the picker stays: the selection is persisted, so replacing the whole
+    // report would restore this loan's error on every visit with no way to
+    // choose another account.
+    expect(screen.getByText('Select Loan')).toBeInTheDocument();
+  });
+
+  it('shows a retryable error when the interest lookup fails, not a zero-interest schedule', async () => {
+    // The loan books interest as separate expenses. The payments load, the
+    // interest lookup does not -- and an empty interest list is exactly what
+    // tells the derivation that these payments carried no interest. Rendering
+    // Interest $0.00 here is a plausible, wrong figure the user cannot tell from
+    // a real one (audit of PR #1258).
+    mockGetAllAccounts.mockResolvedValue([
+      {
+        id: 'loan-1', name: 'Mortgage', accountType: 'MORTGAGE',
+        currentBalance: -100000, openingBalance: -120000, interestRate: 5.0,
+        paymentAmount: 800, paymentFrequency: 'MONTHLY',
+        interestCategoryId: 'cat-int', sourceAccountId: 'src-1',
+        isCanadianMortgage: false, isVariableRate: false, isClosed: false,
+      },
+    ]);
+    mockGetAllTransactions.mockResolvedValue({
+      data: [{ id: 'p1', transactionDate: '2024-06-01', amount: 500, linkedTransaction: null }],
+      pagination: { hasMore: false },
+    });
+    mockGetAllPages.mockRejectedValue(new Error('timeout'));
+
+    await renderReport();
+
+    await waitFor(() => {
+      expect(screen.getByText('Try again')).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/payments made/)).not.toBeInTheDocument();
+  });
+
+  it('recovers the schedule when the retry succeeds', async () => {
+    // The whole point of surfacing the failure is that the user can ask again,
+    // so Try again has to re-issue both fetches -- a retry that only re-renders
+    // is the swallowed error with an extra button.
+    mockGetAllAccounts.mockResolvedValue([
+      {
+        id: 'loan-1', name: 'Mortgage', accountType: 'MORTGAGE',
+        currentBalance: -100000, openingBalance: -120000, interestRate: 5.0,
+        paymentAmount: 800, paymentFrequency: 'MONTHLY',
+        interestCategoryId: 'cat-int', sourceAccountId: 'src-1',
+        isCanadianMortgage: false, isVariableRate: false, isClosed: false,
+      },
+    ]);
+    mockGetAllTransactions.mockResolvedValue({
+      data: [{ id: 'p1', transactionDate: '2024-06-01', amount: 500, linkedTransaction: null }],
+      pagination: { hasMore: false },
+    });
+    mockGetAllPages.mockRejectedValueOnce(new Error('timeout')).mockResolvedValue([
+      { id: 'i1', transactionDate: '2024-06-01', amount: -300, categoryId: 'cat-int', isTransfer: false },
+    ]);
+
+    await renderReport();
+    await waitFor(() => {
+      expect(screen.getByText('Try again')).toBeInTheDocument();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('Try again'));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText(/1 payments made/)).toBeInTheDocument();
+    });
+    // The booked $300 is on screen because the retry actually re-fetched it,
+    // not because the report settled for an empty interest list.
+    expect(screen.getByText('$300.00')).toBeInTheDocument();
+  });
+
+  // The report used to pass [] as the rate history, so its projection ran at
+  // whatever stale scalar the account still held while the loan detail page ran
+  // at the real timeline rate -- the same loan, two payoff dates. These two
+  // cases differ ONLY in the recorded rate history.
+  const divergentRateAccount = [
+    {
+      id: 'loan-1', name: 'Mortgage', accountType: 'MORTGAGE',
+      currentBalance: -100000, openingBalance: -100000, interestRate: 5,
+      paymentAmount: 500, paymentFrequency: 'MONTHLY',
+      isCanadianMortgage: false, isVariableRate: false, isClosed: false,
+    },
+  ];
+  const onePayment = {
+    data: [{ id: 'tx-1', transactionDate: '2024-01-15', amount: 500, linkedTransaction: null }],
+    pagination: { hasMore: false },
+  };
+
+  it('loads the loan rate history for the selected account', async () => {
+    mockGetAllAccounts.mockResolvedValue(divergentRateAccount);
+    mockGetAllTransactions.mockResolvedValue(onePayment);
+    await renderReport();
+    await waitFor(() => expect(mockGetRateChanges).toHaveBeenCalledWith('loan-1'));
+  });
+
+  it('projects at the scalar rate when no rate change has been recorded', async () => {
+    // 100000 at 5% costs 416.67 a month, so the 500 payment amortizes.
+    mockGetAllAccounts.mockResolvedValue(divergentRateAccount);
+    mockGetAllTransactions.mockResolvedValue(onePayment);
+    mockGetRateChanges.mockResolvedValue([]);
+    await renderReport();
+    await waitFor(() => {
+      expect(screen.getByText('Projected Future Payments')).toBeInTheDocument();
+    });
+  });
+
+  it('withholds the projection when the recorded rate makes the payment non-amortizing', async () => {
+    // Same fixture, but a recorded rate change to 12%: 100000 now costs 1000 a
+    // month and the 500 payment does not amortize, so there is no payoff to
+    // show. Reading the stale 5% scalar instead would print a plausible one.
+    mockGetAllAccounts.mockResolvedValue(divergentRateAccount);
+    mockGetAllTransactions.mockResolvedValue(onePayment);
+    mockGetRateChanges.mockResolvedValue([
+      { id: 'r1', effectiveDate: '2024-02-01', annualRate: 12, newPaymentAmount: null },
+    ]);
+    await renderReport();
+    await waitFor(() => {
+      expect(screen.getByText('Select Loan')).toBeInTheDocument();
+    });
+    expect(screen.queryByText('Projected Future Payments')).not.toBeInTheDocument();
+  });
+
+  it('does not ask for a line of credit\'s rate history, which the API rejects', async () => {
+    // /accounts/:id/rate-changes answers 400 for a LINE_OF_CREDIT
+    // (LoanRateChangesService.verifyLoanAccount), and this report lists LOCs. A
+    // rejection here lands in the shared error state and replaces the whole
+    // report -- selector included -- and because the selection is persisted it
+    // stays broken across reloads. The mocks resolving [] for every account type
+    // is why this went unnoticed: a fixture the API cannot produce.
+    mockGetRateChanges.mockRejectedValue(new Error('400 not a loan account'));
+    mockGetAllAccounts.mockResolvedValue([
+      {
+        id: 'loc-1', name: 'LOC', accountType: 'LINE_OF_CREDIT',
+        currentBalance: -3000, openingBalance: -5000, interestRate: 8,
+        paymentAmount: 200, paymentFrequency: 'MONTHLY',
+        isCanadianMortgage: false, isVariableRate: false, isClosed: false,
+      },
+    ]);
+    mockGetAllTransactions.mockResolvedValue({
+      data: [{ id: 'tx-1', transactionDate: '2024-01-15', amount: 200, linkedTransaction: null }],
+      pagination: { hasMore: false },
+    });
+
+    await renderReport();
+
+    await waitFor(() => {
+      expect(screen.getByText('Select Loan')).toBeInTheDocument();
+    });
+    expect(mockGetRateChanges).not.toHaveBeenCalled();
+    expect(screen.queryByText('Try again')).not.toBeInTheDocument();
   });
 
   it('exports CSV and PDF', async () => {

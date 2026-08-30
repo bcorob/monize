@@ -9,9 +9,11 @@ vi.mock('@/lib/backupApi', () => ({
     restoreBackup: vi.fn(),
     getEncryptionStatus: vi.fn().mockResolvedValue({
       enabled: false,
-      needsBackupPassword: false,
+      manageable: false,
+      method: 'login-password',
+      available: true,
     }),
-    enableLocalEncryption: vi.fn(),
+    enableWithLoginPassword: vi.fn(),
     setBackupPassword: vi.fn(),
     disableEncryption: vi.fn(),
   },
@@ -86,7 +88,9 @@ describe('BackupRestoreSection', () => {
     // mockResolvedValue overrides survive clearAllMocks.
     (backupApi.getEncryptionStatus as ReturnType<typeof vi.fn>).mockResolvedValue({
       enabled: false,
-      needsBackupPassword: false,
+      manageable: false,
+      method: 'login-password',
+      available: true,
     });
   });
 
@@ -526,29 +530,112 @@ describe('BackupRestoreSection', () => {
   });
 
   describe('backup password section', () => {
-    it('offers a local-auth user nothing to configure', async () => {
-      (backupApi.getEncryptionStatus as ReturnType<typeof vi.fn>).mockResolvedValue({
-        enabled: true,
-        manageable: false,
-      });
+    const localStatus = (
+      overrides: Record<string, unknown> = {},
+    ): Record<string, unknown> => ({
+      enabled: false,
+      manageable: false,
+      method: 'login-password',
+      available: true,
+      ...overrides,
+    });
+
+    it('tells a local-auth user their backups are encrypted, with nothing to set', async () => {
+      (backupApi.getEncryptionStatus as ReturnType<typeof vi.fn>).mockResolvedValue(
+        localStatus({ enabled: true }),
+      );
 
       await renderSection(localUser);
 
-      // Their backups are encrypted with the login password the server
-      // captured at sign-in, so there is nothing to switch on, off or change.
+      // Their backups are encrypted with the login password the server captured
+      // when they last typed it, so there is no second password to invent -- but
+      // the state is on the page, which is what issue #1269 found missing.
       await waitFor(() =>
-        expect(screen.getByText('Download Backup')).toBeInTheDocument(),
+        expect(screen.getByText('Backup Encryption')).toBeInTheDocument(),
       );
-      expect(screen.queryByText('Backup Encryption')).toBeNull();
+      expect(screen.getByText('Enabled')).toBeInTheDocument();
       expect(screen.queryByText('Set Backup Password')).toBeNull();
       expect(screen.queryByText('Change Backup Password')).toBeNull();
       expect(screen.queryByText('Disable')).toBeNull();
+    });
+
+    it('tells a local-auth user when their backups are NOT encrypted', async () => {
+      (backupApi.getEncryptionStatus as ReturnType<typeof vi.fn>).mockResolvedValue(
+        localStatus(),
+      );
+
+      await renderSection(localUser);
+
+      // The reported state: automatic backups going out in plaintext while every
+      // other surface said they were encrypted by default. Rendering nothing for
+      // it is what made the defect invisible.
+      await waitFor(() =>
+        expect(screen.getByText('Not enabled')).toBeInTheDocument(),
+      );
+      expect(
+        screen.getByText('Enable with My Login Password'),
+      ).toBeInTheDocument();
+    });
+
+    it('enables encryption from the login password a local user confirms', async () => {
+      (backupApi.getEncryptionStatus as ReturnType<typeof vi.fn>)
+        .mockResolvedValueOnce(localStatus())
+        .mockResolvedValueOnce(localStatus({ enabled: true }));
+      (
+        backupApi.enableWithLoginPassword as ReturnType<typeof vi.fn>
+      ).mockResolvedValue(undefined);
+
+      await renderSection(localUser);
+      await waitFor(() =>
+        expect(
+          screen.getByText('Enable with My Login Password'),
+        ).toBeInTheDocument(),
+      );
+      fireEvent.click(screen.getByText('Enable with My Login Password'));
+
+      fireEvent.change(screen.getByPlaceholderText(/Your login password/), {
+        target: { value: 'hunter2hunter2' },
+      });
+      fireEvent.click(screen.getByText('Confirm'));
+
+      // The login-password endpoint, not the OIDC dedicated-password one: the
+      // server verifies it against the account's own hash.
+      await waitFor(() =>
+        expect(backupApi.enableWithLoginPassword).toHaveBeenCalledWith(
+          'hunter2hunter2',
+        ),
+      );
+      expect(backupApi.setBackupPassword).not.toHaveBeenCalled();
+      await waitFor(() =>
+        expect(screen.getByText('Enabled')).toBeInTheDocument(),
+      );
+    });
+
+    it('says so when the server cannot encrypt backups at all', async () => {
+      (backupApi.getEncryptionStatus as ReturnType<typeof vi.fn>).mockResolvedValue(
+        localStatus({ available: false }),
+      );
+
+      await renderSection(localUser);
+
+      // "This server holds no key" and "you have not turned it on" have
+      // different fixes, so they cannot render as the same blank.
+      await waitFor(() =>
+        expect(
+          screen.getByText(/not configured to encrypt backups/),
+        ).toBeInTheDocument(),
+      );
+      expect(
+        screen.queryByText('Enable with My Login Password'),
+      ).toBeNull();
     });
 
     it('offers an OIDC user a password to set', async () => {
       (backupApi.getEncryptionStatus as ReturnType<typeof vi.fn>).mockResolvedValue({
         enabled: false,
         manageable: true,
+        method: 'backup-password',
+        available: true,
       });
 
       await renderSection(oidcUser);
@@ -562,8 +649,8 @@ describe('BackupRestoreSection', () => {
 
     it('sets the password an OIDC user types', async () => {
       (backupApi.getEncryptionStatus as ReturnType<typeof vi.fn>)
-        .mockResolvedValueOnce({ enabled: false, manageable: true })
-        .mockResolvedValueOnce({ enabled: true, manageable: true });
+        .mockResolvedValueOnce({ enabled: false, manageable: true, method: 'backup-password', available: true })
+        .mockResolvedValueOnce({ enabled: true, manageable: true, method: 'backup-password', available: true });
       (backupApi.setBackupPassword as ReturnType<typeof vi.fn>).mockResolvedValue(
         undefined,
       );
@@ -593,6 +680,8 @@ describe('BackupRestoreSection', () => {
       (backupApi.getEncryptionStatus as ReturnType<typeof vi.fn>).mockResolvedValue({
         enabled: false,
         manageable: true,
+        method: 'backup-password',
+        available: true,
       });
       (backupApi.setBackupPassword as ReturnType<typeof vi.fn>).mockRejectedValue(
         new Error('breached'),
@@ -615,8 +704,8 @@ describe('BackupRestoreSection', () => {
 
     it('lets an OIDC user change the password or turn it off', async () => {
       (backupApi.getEncryptionStatus as ReturnType<typeof vi.fn>)
-        .mockResolvedValueOnce({ enabled: true, manageable: true })
-        .mockResolvedValueOnce({ enabled: false, manageable: true });
+        .mockResolvedValueOnce({ enabled: true, manageable: true, method: 'backup-password', available: true })
+        .mockResolvedValueOnce({ enabled: false, manageable: true, method: 'backup-password', available: true });
       (backupApi.disableEncryption as ReturnType<typeof vi.fn>).mockResolvedValue(
         undefined,
       );
@@ -637,6 +726,8 @@ describe('BackupRestoreSection', () => {
       (backupApi.getEncryptionStatus as ReturnType<typeof vi.fn>).mockResolvedValue({
         enabled: true,
         manageable: true,
+        method: 'backup-password',
+        available: true,
       });
       (backupApi.disableEncryption as ReturnType<typeof vi.fn>).mockRejectedValue(
         new Error('boom'),
@@ -655,6 +746,8 @@ describe('BackupRestoreSection', () => {
       (backupApi.getEncryptionStatus as ReturnType<typeof vi.fn>).mockResolvedValue({
         enabled: false,
         manageable: true,
+        method: 'backup-password',
+        available: true,
       });
 
       await renderSection(oidcUser);

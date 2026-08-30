@@ -10,6 +10,7 @@ import { roundMoney } from "../common/round.util";
 import { todayYMD } from "../common/date-utils";
 import { tr } from "../i18n/translate";
 import { withScopedDb } from "../common/db/scoped-db";
+import { LEDGER_MOVEMENT_PREDICATE } from "../common/ledger-balance.sql";
 
 export interface StatementCycleResult {
   accountId: string;
@@ -133,8 +134,7 @@ export class StatementCycleService {
          FROM accounts a
          LEFT JOIN transactions t ON t.account_id = a.id
            AND t.user_id = $2
-           AND (t.status IS NULL OR t.status != 'VOID')
-           AND t.parent_transaction_id IS NULL
+           AND ${LEDGER_MOVEMENT_PREDICATE}
          WHERE a.id = $1 AND a.user_id = $2
          GROUP BY a.id, a.opening_balance`,
         [accountId, userId],
@@ -186,8 +186,7 @@ export class StatementCycleService {
        JOIN categories c ON c.id = t.category_id
        WHERE t.account_id = $1
          AND t.user_id = $2
-         AND (t.status IS NULL OR t.status != 'VOID')
-         AND t.parent_transaction_id IS NULL
+         AND ${LEDGER_MOVEMENT_PREDICATE}
          AND t.amount < 0
          AND t.transaction_date >= $3
          AND t.transaction_date <= $4

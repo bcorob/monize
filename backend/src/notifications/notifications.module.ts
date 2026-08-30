@@ -1,6 +1,7 @@
 import { Module, forwardRef } from "@nestjs/common";
 import { EmailService } from "./email.service";
 import { BillReminderService } from "./bill-reminder.service";
+import { ProviderOutageAlertService } from "./provider-outage-alert.service";
 import { NotificationsController } from "./notifications.controller";
 import { UsersModule } from "../users/users.module";
 import { ScheduledTransactionsModule } from "../scheduled-transactions/scheduled-transactions.module";
@@ -14,7 +15,7 @@ import { ScheduledTransactionsModule } from "../scheduled-transactions/scheduled
     // which import this one -- see `src/module-graph.spec.ts`.
     forwardRef(() => ScheduledTransactionsModule),
   ],
-  providers: [EmailService, BillReminderService],
+  providers: [EmailService, BillReminderService, ProviderOutageAlertService],
   controllers: [NotificationsController],
   exports: [EmailService],
 })
